@@ -7,9 +7,9 @@ This library provides a lightweight, query-time knowledge-graph layer over an OM
 * path scoring and explanation, and
 * presentation / inspection utilities.
 
-# kg-core
+# omop-graph
 
-**kg-core** is a lightweight, opinionated knowledge-graph traversal and path-analysis library built on top of the OMOP vocabulary model.
+**omop-graph** is a lightweight, opinionated knowledge-graph traversal and path-analysis library built on top of the OMOP vocabulary model.
 
 It provides:
 - a stable **KnowledgeGraph façade** over OMOP concepts and relationships
@@ -28,7 +28,7 @@ The library is designed for:
 ## Installation
 
 ```bash
-pip install kg-core
+pip install omop-graph
 ```
 
 ## Core Concepts
@@ -38,7 +38,7 @@ pip install kg-core
 KnowledgeGraph is the main entry point. It wraps an existing SQLAlchemy session connected to an OMOP vocabulary schema. kg-core assumes OMOP semantics and tables.
 
 ```python
-from kg_core.omop.session import OmopKnowledgeGraph as KnowledgeGraph
+from from omop_graph.graph.kg import KnowledgeGraph
 ```
 
 ### Nodes and Edges
@@ -55,7 +55,7 @@ Relationships are classified into semantic kinds:
 
 This classification drives traversal and scoring.
 
-### Traversal
+### Traversal, Paths and Scoring
 
 You can:
 
@@ -63,19 +63,36 @@ You can:
 * extract subgraphs
 * trace traversal decisions
 * control which relationship kinds are followed
+* discover multiple candidate paths between concepts and rank them
+* render simple HTML cards for easy interactive exploration
 
 ```python
-from kg_core.graph.predicates import PredicateKind
+from omop_graph.graph.scoring import find_shortest_paths
+from omop_graph.graph.edges import PredicateKind
 
-sg, trace = kg.extract_subgraph_traced(
-    seeds=[concept_id],
-    predicate_kinds={PredicateKind.ONTOLOGICAL},
-    max_depth=2,
+ingredient = kg.concept_id_by_code("RxNorm", "6809") # Metformin
+drug = kg.concept_id_by_code("RxNorm", "860975") # Metformin 500 MG Oral Tablet
+
+kg.concept_view(drug) # ConceptView(id=40163924, RxNorm:860975, name='24 HR metformin hydrochloride 500 MG Extended Release Oral Tablet')
+kg.concept_view(ingredient) # ConceptView(id=1503297, RxNorm:6809, name='metformin')
+
+paths, trace = find_shortest_paths(
+    kg,
+    source=drug,
+    target=ingredient,
+    predicate_kinds={
+        PredicateKind.ONTOLOGICAL,
+        PredicateKind.MAPPING,
+    },
+    max_depth=6,
+    traced=True,
 )
+
+ranked = rank_paths(kg, paths)
+
 ```
 
-### Paths and Scoring
-kg-core can discover multiple candidate paths between concepts and rank them.
+### 
 
 ```python
 paths = kg.find_shortest_paths(
@@ -85,8 +102,6 @@ paths = kg.find_shortest_paths(
 )
 ranked = kg.rank_paths(paths)
 ```
-
-Scoring is configurable and explainable.
 
 ### Rendering
 
@@ -99,20 +114,22 @@ Outputs can be rendered as:
 Rendering auto-detects the environment.
 
 ```python 
-from kg_core.render import render_path
+from IPython.display import HTML, display
+from kg_core.render import render_trace
 
-render_path(kg, path)          # auto
-render_path(kg, path, format="mmd")
+display(HTML(render_trace(kg, trace)))
 ```
 
 ## Project Structure
 ```graphql
 
-kg_core/
-├── graph/        # graph logic, traversal, paths, scoring
-├── omop/         # OMOP-specific models, queries, session
-├── render/       # HTML / text / Mermaid renderers
-├── api.py        # stable public API surface
-└── db/           # session helpers
+omop_graph/
+├── graph/          # graph logic, traversal, paths, scoring
+├── render/         # HTML / text / Mermaid renderers
+├── reasoning/      # Ontology traversal methods for specific reasoner tasks
+├────── resolvers/  # Resolve labels for exact / fuzzy / synonym matches - TODO: embedding matches
+├────── phenotypes/ # Set operations to build efficient hierarchical groupings for reasoning
+├── api.py          # stable public API surface
+└── db/             # session helpers
 
 ```
