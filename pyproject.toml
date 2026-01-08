@@ -1,6 +1,6 @@
 [project]
 name = "omop-graph"
-version = "0.1.0"
+version = "0.1.1"
 description = "Explainable, OMOP-native knowledge graph traversal and pathfinding"
 readme = "README.md"
 requires-python = ">=3.11"

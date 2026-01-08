@@ -1,3 +1,9 @@
+from .phenotype_simplifier import find_common_parents
+
+__all__ = [
+    "find_common_parents",
+]
+
 """
 For phenotype development, we want to identify sets of concepts that are optimally situated in the semantic hierarchy.
 
