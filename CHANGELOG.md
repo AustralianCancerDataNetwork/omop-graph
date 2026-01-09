@@ -3,3 +3,6 @@
 
 ## 0.1.2
 - added roots, leaves, singletons and altlabel queries to knowledge graph to support oaklib interface methods downstream
+
+## 0.1.3
+- bugfix for synonym labels

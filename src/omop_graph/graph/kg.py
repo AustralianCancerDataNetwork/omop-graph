@@ -258,9 +258,9 @@ class KnowledgeGraph(GraphBackend):
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
         rows = self.session.execute(
             q_concept_synonym_filtered(concept_id)
-        ).scalars()
+        ).all()
 
-        return tuple(rows)
+        return tuple(row.concept_synonym_name for row in rows)
 
     def rollback_session(self) -> None:
         try:
