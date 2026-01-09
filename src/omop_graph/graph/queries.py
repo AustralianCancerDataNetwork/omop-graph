@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, func, case, literal
+from sqlalchemy import select, func, case, literal, exists, and_
 from sqlalchemy.sql import Select
 
 from omop_alchemy.cdm.model.vocabulary import (
@@ -189,4 +189,83 @@ def q_ancestors(concept_id: int) -> Select:
     return (
         select(Concept_Ancestor.ancestor_concept_id)
         .where(Concept_Ancestor.descendant_concept_id == concept_id)
+    )
+
+
+def q_concept_filtered(vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+    stmt = (
+        select(Concept.concept_id)
+        .where(Concept.standard_concept.is_not(None))
+    )
+    if domain_id:
+        stmt = stmt.where(Concept.domain_id == domain_id)
+    if vocabulary_id:
+        stmt = stmt.where(Concept.vocabulary_id == vocabulary_id)
+    return stmt
+
+def q_concept_synonym_filtered(concept_id: int) -> Select:
+    stmt = q_concept_synonym()
+    return (
+        stmt
+        .where(Concept_Synonym.concept_id == concept_id)
+    )
+
+
+def q_singletons(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
+
+    return (
+        stmt
+        .where(
+            ~exists(
+                select(1).where(
+                    and_(
+                        Concept_Ancestor.descendant_concept_id == Concept.concept_id,
+                        Concept_Ancestor.min_levels_of_separation == 1,
+                    )
+                )
+            )
+        )
+        .where(
+            ~exists(
+                select(1).where(
+                    and_(
+                        Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
+                        Concept_Ancestor.min_levels_of_separation == 1,
+                    )
+                )
+            )
+        )
+    )
+
+def q_roots(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
+    return (
+        stmt
+        .where(
+            ~exists(
+                select(1).where(
+                    and_(
+                        Concept_Ancestor.descendant_concept_id == Concept.concept_id,
+                        Concept_Ancestor.min_levels_of_separation == 1,
+                    )
+                )
+            )
+        )
+    )
+
+def q_leaves(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
+    return (
+        stmt
+        .where(
+            ~exists(
+                select(1).where(
+                    and_(
+                        Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
+                        Concept_Ancestor.min_levels_of_separation == 1,
+                    )
+                )
+            )
+        )
     )

@@ -24,6 +24,10 @@ from .queries import (
     q_concept_name_ilike,
     q_concept_synonym_match,
     q_concept_synonym_ilike,
+    q_roots,
+    q_leaves,
+    q_singletons,
+    q_concept_synonym_filtered
 )
 
 """
@@ -225,6 +229,38 @@ class KnowledgeGraph(GraphBackend):
                 q_parents(concept_id)
             ).scalars()
         )
+    
+    @lru_cache(maxsize=20_000)
+    def roots(self, domain_id: str | None = None, vocabulary_id: str | None = None) -> tuple[int, ...]:
+        return tuple(
+            self.session.execute(
+                q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
+            ).scalars()
+        )
+    
+    @lru_cache(maxsize=20_000)
+    def leaves(self, domain_id: str | None = None, vocabulary_id: str | None = None) -> tuple[int, ...]:
+        return tuple(
+            self.session.execute(
+                q_leaves(domain_id=domain_id, vocabulary_id=vocabulary_id)
+            ).scalars()
+        )
+
+    @lru_cache(maxsize=20_000)
+    def singletons(self, domain_id: str | None = None, vocabulary_id: str | None = None) -> tuple[int, ...]:
+        return tuple(
+            self.session.execute(
+                q_singletons(domain_id=domain_id, vocabulary_id=vocabulary_id)
+            ).scalars()
+        )
+
+    @lru_cache(maxsize=50_000)
+    def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
+        rows = self.session.execute(
+            q_concept_synonym_filtered(concept_id)
+        ).scalars()
+
+        return tuple(rows)
 
     def rollback_session(self) -> None:
         try:
