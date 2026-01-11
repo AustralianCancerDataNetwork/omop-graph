@@ -6,3 +6,6 @@
 
 ## 0.1.3
 - bugfix for synonym labels
+
+## 0.2.0
+- update to use refactored omop-alchemy base
