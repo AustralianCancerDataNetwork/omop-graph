@@ -33,7 +33,6 @@ class PathProfile:
     invalid_concepts: int
     non_standard_concepts: int
     vocab_switches: int
-
     ontological_edges: int
     mapping_edges: int
     metadata_edges: int
@@ -47,8 +46,9 @@ class PathProfile:
             self.non_standard_concepts,   # prefer standard
             self.metadata_edges,          # noisy
             self.mapping_edges,           # allowed but less ideal
-            self.vocab_switches,           # continuity matters
-            self.hops,                    # finally: shortest
+            self.vocab_switches,          # continuity matters
+            # -avg_specificity,           # prefer specific concepts (NOTE: Costly to compute so removed for now  )
+            self.hops,                    # shortest path
             -self.ontological_edges,      # prefer structure if tied
         )
 

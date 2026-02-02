@@ -165,6 +165,16 @@ class KnowledgeGraph(GraphBackend):
             for row in self.session.execute(stmt).all()
         )
     
+    def specificity(self, concept_id: int) -> float:
+        """
+        Compute specificity as the inverse of out-degree.
+        Higher is more specific.
+        """
+        out_edges = self.outgoing_edges(concept_id)
+        if not out_edges:
+            return 1.0
+        return 1.0 / len(out_edges)
+    
     def _same_domain(self, e: EdgeView) -> bool:
         subj = self.concept_view(e.subject_id)
         obj = self.concept_view(e.object_id)

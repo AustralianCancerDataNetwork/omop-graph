@@ -23,11 +23,8 @@ from .reasoning.resolvers import (
     CandidateResolver,
     ExactLabelResolver,
     ResolverPipeline,
-)
-from .reasoning.term_grounding import (
-    GroundingConstraints,
     GroundingCandidate,
-    ground_term,
+    GroundingConstraints
 )
 
 __all__ = [
@@ -43,6 +40,5 @@ __all__ = [
     "ExactLabelResolver",
     "GroundingConstraints",
     "GroundingCandidate",
-    "ground_term",
     "ResolverPipeline",
 ]

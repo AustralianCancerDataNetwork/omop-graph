@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from collections import deque, defaultdict
 from typing import Optional
+import itertools
+import heapq
 
 from omop_graph.graph import kg
 
@@ -32,6 +34,12 @@ class GraphPath:
         if not self.steps:
             return ()
         return (self.steps[0].subject,) + tuple(s.object for s in self.steps)
+    
+    def __getitem__(self, index):
+        return self.steps[index]
+    
+    def __len__(self):
+        return len(self.steps)
 
 def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
     def left(n):
@@ -209,3 +217,48 @@ def find_shortest_paths(
 
     return paths[:max_paths], graph_trace
 
+
+def find_shortest_paths_dijkstra(
+    kg,
+    source: int,
+    target: int,
+    max_weight: float = 10.0,
+    predicate_kinds: set[PredicateKind] | None = None,
+    max_paths: int = 20,
+    on=None,
+):
+    # Tie-breaker for when weights are identical (prevents PathStep comparison error)
+    counter = itertools.count()
+    
+    pq = [(0.0, next(counter), source, [])]
+    visited: dict[int, float] = {}
+
+    while pq:
+        current_w, _, u, path = heapq.heappop(pq)
+
+        if u == target:
+            assert all(isinstance(step, PathStep) for step in path), "PathStep expected"
+            return GraphPath(path), current_w  # type: ignore
+
+        if u in visited and visited[u] <= current_w:
+            continue
+        visited[u] = current_w
+
+        edges = list(kg.iter_edges(u, direction="out", predicate_kinds=predicate_kinds, on=on))
+        
+        # Calculate the penalty ONCE for this source node
+        # Logarithmic scaling is usually better so weights don't explode
+        # weight_penalty = 0.1 * len(edges) 
+        import math
+        weight_penalty = math.log1p(len(edges)) # log(1 + degree) is a standard NLP/Graph approach
+        edge_weight = 1.0 + weight_penalty
+
+        for e in edges:
+            v = e.object_id
+            new_w = current_w + edge_weight
+            
+            if new_w <= max_weight:
+                new_step = PathStep(subject=u, predicate=e.predicate_id, object=v)
+                heapq.heappush(pq, (new_w, next(counter), v, path + [new_step]))
+
+    return None, None
