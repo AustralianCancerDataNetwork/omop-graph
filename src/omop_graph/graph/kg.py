@@ -19,6 +19,8 @@ from .queries import (
     q_predicate_name,
     q_outgoing_edges,
     q_incoming_edges,
+    q_outgoing_edges_batch,
+    q_incoming_edges_batch,
     q_parents,
     q_concept_name_match,
     q_concept_name_ilike,
@@ -27,7 +29,7 @@ from .queries import (
     q_roots,
     q_leaves,
     q_singletons,
-    q_concept_synonym_filtered
+    q_concept_synonym_filtered,
 )
 
 """
@@ -165,6 +167,20 @@ class KnowledgeGraph(GraphBackend):
             for row in self.session.execute(stmt).all()
         )
     
+    @lru_cache(maxsize=500_000)
+    def outgoing_edges_batch(
+        self,
+        concept_ids: tuple[int, ...],
+        relationship_id: str | None = None,
+    ) -> tuple[EdgeView, ...]:
+
+        stmt = q_outgoing_edges_batch(concept_ids, relationship_id)
+
+        return tuple(
+            EdgeView(*row)
+            for row in self.session.execute(stmt).all()
+        )
+    
     def specificity(self, concept_id: int) -> float:
         """
         Compute specificity as the inverse of out-degree.
@@ -194,6 +210,20 @@ class KnowledgeGraph(GraphBackend):
             for row in self.session.execute(stmt).all()
         )
     
+    @lru_cache(maxsize=500_000)
+    def incoming_edges_batch(
+        self,
+        concept_ids: tuple[int, ...],
+        relationship_id: str | None = None,
+    ) -> tuple[EdgeView, ...]:
+
+        stmt = q_incoming_edges_batch(concept_ids, relationship_id)
+
+        return tuple(
+            EdgeView(*row)
+            for row in self.session.execute(stmt).all()
+        )
+    
     def iter_edges(
         self,
         concept_id: int,
@@ -213,6 +243,50 @@ class KnowledgeGraph(GraphBackend):
             else self.incoming_edges(concept_id, pred_id)
         )
 
+        for e in edges:
+            if active_only and not is_active(
+                e.valid_start_date,
+                e.valid_end_date,
+                e.invalid_reason,
+                on=on,
+            ):
+                continue
+
+            if within_domain and not self._same_domain(e):
+                continue
+
+            if predicate_kinds and (
+                self.predicate_kind(e.predicate_id) not in predicate_kinds
+            ):
+                continue
+
+            yield e
+
+    def iter_edges_batch(
+        self,
+        concept_ids: tuple[int, ...],
+        *,
+        direction: str = "out",
+        predicate=None,
+        predicate_kinds: set[PredicateKind] | None = None,
+        active_only: bool = True,
+        on: date | None = None,
+        within_domain: bool = True,
+    ) -> Iterable[EdgeView]:
+        
+        if not concept_ids:
+            return []
+
+        pred_id = _pred_id(predicate)
+
+        # 1. Fetch ALL raw edges for this batch from DB
+        # We assume you implement these helpers using the SQL you shared earlier
+        if direction == "out":
+            edges = self.outgoing_edges_batch(concept_ids, pred_id)
+        else:
+            edges = self.incoming_edges_batch(concept_ids, pred_id)
+
+        # 2. Filter them in memory (Python is fast enough for this)
         for e in edges:
             if active_only and not is_active(
                 e.valid_start_date,

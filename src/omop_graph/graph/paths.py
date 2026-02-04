@@ -218,6 +218,133 @@ def find_shortest_paths(
     return paths[:max_paths], graph_trace
 
 
+from collections import deque, defaultdict
+from typing import Optional
+
+def find_shortest_paths_batch(
+    kg,
+    source: int,
+    target: int,
+    *,
+    predicate_kinds: set[PredicateKind] | None = None,
+    max_depth: int = 6,
+    on=None,
+    max_paths: int = 20,
+) -> list[GraphPath]:
+    
+    if source == target:
+        return [GraphPath(steps=())]
+
+    # Frontiers: The set of nodes we are currently expanding
+    fwd_frontier = {source}
+    bwd_frontier = {target}
+
+    # Visited/Depth tracking
+    depth_fwd = {source: 0}
+    depth_bwd = {target: 0}
+
+    # Parents for path reconstruction
+    parents_fwd: dict[int, list[tuple[int, str]]] = defaultdict(list)
+    parents_bwd: dict[int, list[tuple[int, str]]] = defaultdict(list)
+
+    best_total_depth: Optional[int] = None
+    meeting_nodes: set[int] = set()
+
+    # Loop until frontiers are empty
+    while fwd_frontier and bwd_frontier:
+        
+        # 1. Expand the smaller frontier (Optimization: Balanced Bi-BFS)
+        expand_forward = len(fwd_frontier) <= len(bwd_frontier)
+        
+        # Setup variables based on direction
+        if expand_forward:
+            current_layer_nodes = tuple(fwd_frontier)
+            other_frontier = bwd_frontier
+            direction = "out"
+            current_depth_map = depth_fwd
+            other_depth_map = depth_bwd
+            current_parents = parents_fwd
+        else:
+            current_layer_nodes = tuple(bwd_frontier)
+            other_frontier = fwd_frontier
+            direction = "in"
+            current_depth_map = depth_bwd
+            other_depth_map = depth_fwd
+            current_parents = parents_bwd
+        
+        # 2. Batch Query: Get all edges for the current layer in ONE shot
+        batch_edges = kg.iter_edges_batch(
+            current_layer_nodes,
+            direction=direction,
+            predicate_kinds=frozenset(predicate_kinds) if predicate_kinds else None,
+            on=on
+        )
+
+        next_frontier = set()
+        
+        # 3. Process edges in memory
+        for e in batch_edges:
+            # Identify Start (u) and End (v) relative to traversal direction
+            u = e.subject_id if expand_forward else e.object_id
+            v = e.object_id if expand_forward else e.subject_id
+            
+            d = current_depth_map[u]
+            nd = d + 1
+
+            if nd > max_depth:
+                continue
+
+            # Update visited/parents
+            if v not in current_depth_map:
+                current_depth_map[v] = nd
+                next_frontier.add(v)
+                current_parents[v].append((u, e.predicate_id))
+            elif current_depth_map[v] == nd:
+                # Found another path to the same node at the same optimal depth
+                current_parents[v].append((u, e.predicate_id))
+
+            # Check for collision (Did we meet the other side?)
+            if v in other_depth_map:
+                total = nd + other_depth_map[v]
+                if best_total_depth is None or total < best_total_depth:
+                    best_total_depth = total
+                    meeting_nodes = {v}
+                elif total == best_total_depth:
+                    meeting_nodes.add(v)
+
+        # 4. Stop Condition check
+        if best_total_depth is not None:
+            # Shallowest possible node in the NEXT layer we just built
+            min_current = min((current_depth_map[n] for n in next_frontier), default=999)
+            
+            # Shallowest possible node waiting in the OTHER frontier
+            min_other = min((other_depth_map[n] for n in other_frontier), default=999)
+            
+            # If the best potential new path is already worse than what we found, stop.
+            if min_current + min_other >= best_total_depth:
+                break
+
+        # Move to next layer
+        if expand_forward:
+            fwd_frontier = next_frontier
+        else:
+            bwd_frontier = next_frontier
+
+    # Reconstruct paths
+    if not meeting_nodes:
+        return []
+
+    paths: list[GraphPath] = []
+    for meet in meeting_nodes:
+        paths.extend(
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd)
+        )
+        if len(paths) >= max_paths:
+            break
+            
+    return paths[:max_paths]
+
+
 def find_shortest_paths_dijkstra(
     kg,
     source: int,

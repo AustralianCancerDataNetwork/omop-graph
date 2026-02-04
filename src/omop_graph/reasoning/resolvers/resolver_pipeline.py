@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from omop_graph.graph.kg import KnowledgeGraph
 
 from dataclasses import dataclass
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Generator
 from .resolvers import CandidateResolver, ResolverConfidence, CandidateHit
-from ...graph.paths import GraphPath, find_shortest_paths, find_shortest_paths_dijkstra
+from ...graph.paths import GraphPath, find_shortest_paths, find_shortest_paths_dijkstra, find_shortest_paths_batch
 from ...graph.kg import KnowledgeGraph
 from ...graph.edges import PredicateKind
 from ...graph.scoring import PathProfile, get_best_path_profile
@@ -64,13 +64,12 @@ class ResolverPipeline:
         text: str,
         *,
         limit_per_resolver: int | None = None,
-    ) -> list[CandidateHit]:
+    ) -> Generator[CandidateHit, None, None]:
         seen = set()
-        results: list[CandidateHit] = []
 
         for resolver in self.resolvers:
             if (
-                len(results) > 0 
+                len(seen) > 0 
                 and self.stop_after_confidence is not None
                 and resolver.confidence.value > self.stop_after_confidence.value
             ):
@@ -84,9 +83,7 @@ class ResolverPipeline:
             for hit in hits:
                 if hit.concept_id not in seen:
                     seen.add(hit.concept_id)
-                    results.append(hit)
-
-        return results
+                    yield hit
     
     def ground_term(
         self,
@@ -98,7 +95,8 @@ class ResolverPipeline:
 
         results: list[GroundingCandidate] = []
 
-        for hit in self.resolve(kg, text):
+        resolved = self.resolve(kg, text)
+        for hit in resolved:
             ok, reasons = self._passes_constraints(kg, hit.concept_id, constraints)
             if not ok:
                 continue
@@ -148,7 +146,8 @@ class ResolverPipeline:
         paths = []
 
         for parent in parent_ids:
-            found, trace = find_shortest_paths(
+            # found, trace = find_shortest_paths(
+            found = find_shortest_paths_batch(
                 kg,
                 source=concept_id,
                 target=parent,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import select, func, case, literal, exists, and_
-from sqlalchemy.sql import Select
+from sqlalchemy import select, literal, case, cast, ARRAY, Integer, String, Text, and_, func, exists
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql import Select, cte
+from sqlalchemy.dialects.postgresql import array
 
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
@@ -131,7 +133,7 @@ def q_outgoing_edges(concept_id: int, relationship_id: str | None = None) -> Sel
     return stmt
 
 
-def q_outgoing_edges_batch(concept_ids: list[int], relationship_id: str | None = None) -> Select:
+def q_outgoing_edges_batch(concept_ids: tuple[int, ...], relationship_id: str | None = None) -> Select:
     stmt = (
         select(
             Concept_Relationship.concept_id_1,
@@ -159,6 +161,22 @@ def q_incoming_edges(concept_id: int, relationship_id: str | None = None) -> Sel
             Concept_Relationship.invalid_reason,
         )
         .where(Concept_Relationship.concept_id_2 == concept_id)
+    )
+    if relationship_id is not None:
+        stmt = stmt.where(Concept_Relationship.relationship_id == relationship_id)
+    return stmt
+
+def q_incoming_edges_batch(concept_ids: tuple[int, ...], relationship_id: str | None = None) -> Select:
+    stmt = (
+        select(
+            Concept_Relationship.concept_id_1,
+            Concept_Relationship.relationship_id,
+            Concept_Relationship.concept_id_2,
+            Concept_Relationship.valid_start_date,
+            Concept_Relationship.valid_end_date,
+            Concept_Relationship.invalid_reason,
+        )
+        .where(Concept_Relationship.concept_id_2.in_(concept_ids))
     )
     if relationship_id is not None:
         stmt = stmt.where(Concept_Relationship.relationship_id == relationship_id)
