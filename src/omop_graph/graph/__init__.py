@@ -1,6 +1,6 @@
 from .traverse import traverse
 from .paths import find_shortest_paths, GraphPath, PathStep
-from .scoring import explain_path, rank_paths, path_profile
+from .scoring import rank_paths, PathExplanation, PathProfile
 from .kg import KnowledgeGraph
 from .edges import PredicateKind
 
@@ -9,9 +9,9 @@ __all__ = [
     "find_shortest_paths",
     "GraphPath",
     "PathStep",
-    "path_profile",
     "KnowledgeGraph",
-    "explain_path",
+    "PathExplanation",
+    "PathProfile",
     "rank_paths",
     "PredicateKind",
 ]

@@ -1,22 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Iterable, Tuple
 from dataclasses import dataclass
-from enum import Enum
+
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch
+from omop_graph.utils.types import ResolverConfidence
 
 from dataclasses import dataclass
 from typing import Optional, Iterable
 
-class ResolverConfidence(Enum):
-    EXACT = 0
-    EXACT_SYNONYM = 1
-    PARTIAL = 2
-    EMBEDDING = 3
-    EXTERNAL = 4
 
-    def __lt__(self, other: "ResolverConfidence") -> bool:
-        return self.value < other.value
 
 @dataclass(frozen=True)
 class CandidateHit:

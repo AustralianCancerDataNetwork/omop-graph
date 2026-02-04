@@ -15,9 +15,8 @@ from omop_graph.graph.edges import PredicateKind
 from omop_graph.graph.traverse import Subgraph, GraphTrace
 from omop_graph.graph.scoring import (
     PathProfile,
-    explain_path,
+    PathExplanation,
     rank_paths,
-    path_profile,
 )
 from .reasoning.resolvers import (
     CandidateResolver,
@@ -33,9 +32,8 @@ __all__ = [
     "Subgraph",
     "GraphTrace",
     "PathProfile",
-    "explain_path",
+    "PathExplanation",
     "rank_paths",
-    "path_profile",
     "CandidateResolver",
     "ExactLabelResolver",
     "GroundingConstraints",

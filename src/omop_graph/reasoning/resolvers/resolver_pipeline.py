@@ -7,7 +7,7 @@ from .resolvers import CandidateResolver, ResolverConfidence, CandidateHit
 from ...graph.paths import GraphPath, find_shortest_paths, find_shortest_paths_dijkstra
 from ...graph.kg import KnowledgeGraph
 from ...graph.edges import PredicateKind
-from ...graph.scoring import PathProfile, rank_paths, path_profile
+from ...graph.scoring import PathProfile, get_best_path_profile
 
 import logging
 logger = logging.getLogger(__name__)
@@ -24,16 +24,17 @@ class GroundingCandidate:
     paths: Optional[tuple[GraphPath, ...]]
 
     @property
-    def rank(self) -> tuple:
-        # Lower is better 
-
-        # Rank first based on confidence and whether the concept is a standard concept
-        rank = (self.confidence, not self.is_standard)
+    def score(self) -> float:
+        # Higher Score is better
 
         if self.best_path_profile is not None:
-            rank += self.best_path_profile.path_rank()
-
-        return rank
+            path_profile_score =  self.best_path_profile.score
+        else:
+            raise NotImplementedError
+            path_profile_score = rank = (self.confidence, not self.is_standard)
+        
+        assert path_profile_score is not None, "Path profile score should not be None"
+        return path_profile_score
 
 @dataclass(frozen=True)
 class GroundingConstraints:
@@ -111,7 +112,7 @@ class ResolverPipeline:
                 )
                 if not paths:
                     continue  # fails hierarchy constraint
-                best_path_profile = self._best_profile(kg=kg, paths=paths)
+                best_path_profile = get_best_path_profile(path_profiles=[PathProfile.from_path(kg, p, search_term=text, confidence=hit.resolver_confidence) for p in paths])
                 paths = tuple(paths)
             else:
                 # Placeholder with dummy values?
@@ -132,17 +133,8 @@ class ResolverPipeline:
                 )
             )
 
-        results.sort(key=lambda r: r.rank)
+        results.sort(key=lambda r: r.score, reverse=True)  # Sort descending
         return results
- 
-    
-    @staticmethod
-    def _best_profile(
-        kg: KnowledgeGraph,
-        paths: list[GraphPath],
-    ) -> PathProfile:
-        profiles = [path_profile(kg, p) for p in paths]
-        return min(profiles)
     
     @staticmethod
     def _find_hierarchy_paths(
