@@ -17,7 +17,8 @@ keywords = [
   "sqlalchemy",
   "knowledge-graph",
   "LLM-grounding",
-  "real-world-evidence"
+  "real-world-evidence",
+  "rapidfuzz"
 ]
 
 
