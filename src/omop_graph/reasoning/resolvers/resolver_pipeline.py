@@ -127,7 +127,7 @@ class ResolverPipeline:
                     reasons=tuple(reasons),
                     paths=paths,
                     confidence=hit.resolver_confidence,
-                    is_standard=c.standard_concept == "S",
+                    is_standard=c.standard_concept,
                 )
             )
 
@@ -184,7 +184,7 @@ class ResolverPipeline:
                 ]
 
         # standardness
-        if constraints.require_standard and c.standard_concept is None:
+        if constraints.require_standard and not c.standard_concept:
             return False, ["concept is non-standard"]
 
         return True, reasons

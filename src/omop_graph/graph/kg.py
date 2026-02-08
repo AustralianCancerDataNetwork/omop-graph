@@ -14,6 +14,7 @@ from .nodes import ConceptView, LabelMatch, LabelMatchKind
 from omop_graph.db.session import safe_execute
 from .queries import (
     q_concept_view,
+    q_concept_views,
     q_concept_id_by_code,
     q_predicate_row,
     q_predicate_name,
@@ -53,7 +54,16 @@ class KnowledgeGraph(GraphBackend):
         row = self.session.execute(
             q_concept_view(concept_id)
         ).one()
-        return ConceptView(*row)
+        return ConceptView.from_row(row)
+    
+    @lru_cache(maxsize=200_000)
+    def concept_views(self, concept_ids: tuple[int, ...]) -> tuple[ConceptView, ...]:
+        return tuple(
+            ConceptView.from_row(row)
+            for row in self.session.execute(
+                q_concept_views(concept_ids)
+            ).all()
+        )
 
     @lru_cache(maxsize=200_000)
     def concept_id_by_code(self, vocabulary_id: str, concept_code: str) -> int:

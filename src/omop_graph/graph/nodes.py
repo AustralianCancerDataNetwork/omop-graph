@@ -4,6 +4,8 @@ from datetime import date
 from typing import Optional
 from enum import Enum, auto
 
+from sqlalchemy import Row
+
 
 @dataclass(frozen=True)
 class ConceptView:
@@ -13,7 +15,7 @@ class ConceptView:
     vocabulary_id: str
     domain_id: str
     concept_class_id: str
-    standard_concept: Optional[str]
+    standard_concept: bool
     valid_start_date: date
     valid_end_date: date
     invalid_reason: Optional[str]
@@ -25,6 +27,12 @@ class ConceptView:
             f"{self.vocabulary_id}:{self.concept_code}, "
             f"name={self.concept_name!r})"
         )
+    
+    @classmethod
+    def from_row(cls, row: Row) -> "ConceptView":
+        data = dict(row._mapping)
+        data['standard_concept'] = data.pop('standard_concept') == "S"
+        return cls(**data)
     
 class LabelMatchKind(Enum):
     DIRECT = auto()

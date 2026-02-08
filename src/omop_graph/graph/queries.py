@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from sqlalchemy import select, literal, case, cast, ARRAY, Integer, String, Text, and_, func, exists
-from sqlalchemy.orm import aliased
-from sqlalchemy.sql import Select, cte
-from sqlalchemy.dialects.postgresql import array
+from sqlalchemy import select, literal, case, and_, func, exists
+from sqlalchemy.sql import Select
 
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
@@ -28,6 +26,25 @@ def q_concept_view(concept_id: int) -> Select:
             Concept.invalid_reason,
         )
         .where(Concept.concept_id == concept_id)
+    )
+
+def q_concept_views(concept_ids: tuple[int, ...]) -> Select:
+    order_map = {cid: index for index, cid in enumerate(concept_ids)}
+    return (
+        select(
+            Concept.concept_id,
+            Concept.concept_name,
+            Concept.concept_code,
+            Concept.vocabulary_id,
+            Concept.domain_id,
+            Concept.concept_class_id,
+            Concept.standard_concept,
+            Concept.valid_start_date,
+            Concept.valid_end_date,
+            Concept.invalid_reason,
+        )
+        .where(Concept.concept_id.in_(concept_ids))
+        .order_by(case(order_map, value=Concept.concept_id))
     )
 
 def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:

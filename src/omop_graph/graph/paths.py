@@ -226,7 +226,7 @@ def find_shortest_paths_batch(
     source: int,
     target: int,
     *,
-    predicate_kinds: set[PredicateKind] | None = None,
+    predicate_kinds: set[PredicateKind] | frozenset[PredicateKind] | None = None,
     max_depth: int = 6,
     on=None,
     max_paths: int = 20,
