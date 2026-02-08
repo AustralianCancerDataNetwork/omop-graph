@@ -4,6 +4,7 @@ from collections import deque
 from typing import Iterable
 from datetime import date
 from .edges import EdgeView, PredicateKind
+from .kg import KnowledgeGraph
 
 
 """
@@ -31,6 +32,19 @@ class GraphTrace:
     seeds: tuple[int, ...]
     steps: list[TraceStep]
     terminated_reason: str | None = None
+
+    def summary(self, kg: "KnowledgeGraph", max_steps: int = 10) -> str:
+        lines = [f"Seeds: {self.seeds}"]
+        for i, step in enumerate(self.steps[:max_steps]):
+            concept = kg.concept_view(step.node)
+            lines.append(
+                f"[depth={step.depth}] expanded {concept.concept_name} "
+                f"({len(step.expanded_edges)} edges)"
+            )
+        if len(self.steps) > max_steps:
+            lines.append(f"... ({len(self.steps) - max_steps} more steps)")
+        lines.append(f"Terminated: {self.terminated_reason}")
+        return "\n".join(lines)
 
 
 def traverse(

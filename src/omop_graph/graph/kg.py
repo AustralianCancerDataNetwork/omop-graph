@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import PendingRollbackError, InvalidRequestError
 
 from .base import GraphBackend
-from .edges import EdgeView, Predicate, PredicateKind, is_active, _pred_id
-from .nodes import ConceptView, LabelMatch, LabelMatchKind
+from .edges import EdgeView, Predicate, PredicateKind, is_active, PredicateSummary
+from .nodes import ConceptView, LabelMatch, LabelMatchKind, LabelMatchGroupView
 
 from omop_graph.db.session import safe_execute
 from .queries import (
@@ -27,7 +27,8 @@ from .queries import (
     q_roots,
     q_leaves,
     q_singletons,
-    q_concept_synonym_filtered
+    q_concept_synonym_filtered,
+    q_all_predicates
 )
 
 """
@@ -40,6 +41,14 @@ Responsibilities:
 - edge / node retrieval
 """
 
+def _pred_id(pred: Predicate | str | None) -> str | None:
+    if pred is None:
+        return None
+    if isinstance(pred, Predicate):
+        return pred.relationship_id
+    if isinstance(pred, str):
+        return pred
+    raise TypeError(f"Unsupported predicate type: {type(pred)}")
 
 class KnowledgeGraph(GraphBackend):
 
@@ -62,7 +71,7 @@ class KnowledgeGraph(GraphBackend):
         )
     
     @lru_cache(maxsize=200_000)
-    def synonym_lookup(self, label: str, fuzzy: bool = False) -> Tuple[LabelMatch, ...]:
+    def _synonym_lookup_raw(self, label: str, fuzzy: bool = False) -> Tuple[LabelMatch, ...]:
         """
         Resolve a synonym label to concept_id(s).
 
@@ -89,7 +98,7 @@ class KnowledgeGraph(GraphBackend):
         )
     
     @lru_cache(maxsize=200_000)
-    def label_lookup(self, label: str, fuzzy: bool = False) -> Tuple[LabelMatch, ...]:
+    def _label_lookup_raw(self, label: str, fuzzy: bool = False) -> Tuple[LabelMatch, ...]:
         """
         Resolve a label to concept_id(s), preferring Concept.concept_name matches.
         Returns matches annotated with LabelMatchKind for downstream explanations.
@@ -113,6 +122,26 @@ class KnowledgeGraph(GraphBackend):
             )
             for cid, name, is_standard, is_active in direct_rows
         )
+
+
+    def synonym_lookup(self, label: str, fuzzy: bool = False, sort: bool = True) -> LabelMatchGroupView:
+        """
+        Resolve a synonym label to grouped concept matches.
+        """
+        raw = self._synonym_lookup_raw(label, fuzzy=fuzzy)
+        if sort:
+            raw = sorted(raw)
+        return LabelMatchGroupView.from_matches(raw)
+
+    def label_lookup(self, label: str, fuzzy: bool = False, sort: bool = True) -> LabelMatchGroupView:
+        """
+        Resolve a label to grouped concept matches, preferring direct name matches.
+        """
+        raw = self._label_lookup_raw(label, fuzzy=fuzzy)
+        if sort:
+            raw = sorted(raw)
+        return LabelMatchGroupView.from_matches(raw)
+
 
     @lru_cache(maxsize=200_000)
     def concept_ids_by_label(self, label: str) -> Tuple[int, ...]:
@@ -195,6 +224,7 @@ class KnowledgeGraph(GraphBackend):
         on: date | None = None,
         within_domain: bool = True,
     )  -> Iterable[EdgeView]:
+        
         pred_id = _pred_id(predicate)
 
         edges = (
@@ -268,10 +298,40 @@ class KnowledgeGraph(GraphBackend):
         except (PendingRollbackError, InvalidRequestError):
             pass
 
+
+    def predicates(self) -> tuple[Predicate, ...]:
+        """
+        Return all predicates known to the knowledge graph.
+        """
+        rows = self.session.execute(q_all_predicates()).all()
+
+        return tuple(
+            Predicate(
+                relationship_id=row.relationship_id,
+                name=row.relationship_name,
+                reverse_id=row.reverse_relationship_id,
+                is_hierarchical=bool(int(row.is_hierarchical)),
+                defines_ancestry=bool(int(row.defines_ancestry)),
+            )
+            for row in rows
+        )
+
+    def predicate_summary(self) -> PredicateSummary:
+        groups: dict[PredicateKind, list[Predicate]] = defaultdict(list)
+
+        for pred in self.predicates():   
+            kind = pred.classify_predicate(kg=self)
+            groups[kind].append(pred)
+
+        return PredicateSummary(
+            groups={k: tuple(v) for k, v in groups.items()}
+        )
+
     def clear_caches(self) -> None:
         self.concept_view.cache_clear()
         self.concept_id_by_code.cache_clear()
-        self.label_lookup.cache_clear()
+        self._label_lookup_raw.cache_clear()
+        self._synonym_lookup_raw.cache_clear()
         self.concept_ids_by_label.cache_clear()
         self.predicate.cache_clear()
         self.predicate_name.cache_clear()

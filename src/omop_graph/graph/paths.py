@@ -7,6 +7,7 @@ from omop_graph.graph import kg
 
 from .edges import PredicateKind, EdgeView
 from .traverse import traverse, GraphTrace, TraceStep
+from .kg import KnowledgeGraph
 
 
 """
@@ -32,6 +33,30 @@ class GraphPath:
         if not self.steps:
             return ()
         return (self.steps[0].subject,) + tuple(s.object for s in self.steps)
+
+
+    def __repr__(self) -> str:
+        if not self.steps:
+            return "GraphPath(<empty>)"
+        return f"GraphPath(len={len(self.steps)})"
+
+    def explain(self, kg: "KnowledgeGraph") -> str:
+        if not self.steps:
+            return "source == target"
+
+        parts = []
+        for s in self.steps:
+            subj = kg.concept_view(s.subject)
+            obj = kg.concept_view(s.object)
+            pred = kg.predicate(s.predicate)
+
+            parts.append(
+                f"{subj.concept_name} "
+                f"-[{pred.name}]-> "
+                f"{obj.concept_name}"
+            )
+
+        return "\n  ↳ ".join(parts)
 
 def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
     def left(n):
@@ -91,8 +116,6 @@ def find_shortest_paths(
 
     while q_fwd and q_bwd:
         expand_forward = len(q_fwd) <= len(q_bwd)
-
-
         expanded: list[EdgeView] = []
         if expand_forward:
             cur = q_fwd.popleft()

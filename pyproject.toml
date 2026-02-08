@@ -1,6 +1,6 @@
 [project]
 name = "omop-graph"
-version = "0.2.0"
+version = "0.2.1"
 description = "Explainable, OMOP-native knowledge graph traversal and pathfinding"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -34,7 +34,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "omop-alchemy>=0.5.0",
+    "omop-alchemy>=0.5.7",
+    "orm-loader>=0.3.15",
+    "psycopg2-binary>=2.9.11",
     "sqlalchemy>=2.0.45",
     "typing-extensions>=4.15.0",
 ]
