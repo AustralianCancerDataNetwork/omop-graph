@@ -119,6 +119,14 @@ def q_predicate_name(relationship_id: str) -> Select:
         .where(Relationship.relationship_id == relationship_id)
     )
 
+def q_all_predicates():
+    return select(
+        Relationship.relationship_id,
+        Relationship.relationship_name,
+        Relationship.reverse_relationship_id,
+        Relationship.is_hierarchical,
+        Relationship.defines_ancestry,
+    )
 
 def q_predicate_row(relationship_id: str) -> Select:
     return (

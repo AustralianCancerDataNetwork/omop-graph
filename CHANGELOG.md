@@ -9,3 +9,6 @@
 
 ## 0.2.0
 - update to use refactored omop-alchemy base
+
+## 0.2.1
+- predicate types need to be actual booleans why are they coming from strings in relationship table?
