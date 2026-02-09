@@ -5,6 +5,7 @@ from typing import Optional, Iterable
 from enum import Enum, auto
 from html import escape
 from collections import defaultdict
+from itertools import chain
 
 from sqlalchemy import Row
 
@@ -165,6 +166,9 @@ class LabelMatchGroupView:
                 f"{'active' if best.is_active else 'inactive'})"
             )
         return "LabelMatchGroupView(" + ", ".join(parts) + ")"
+    
+    def __iter__(self):
+        return chain.from_iterable(self.groups.values())
 
     def _repr_html_(self) -> str:
         rows = []

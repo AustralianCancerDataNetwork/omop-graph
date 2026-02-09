@@ -50,13 +50,13 @@ class ExactLabelResolver(CandidateResolver):
     confidence = ResolverConfidence.EXACT
 
     def get_matches(self, kg: KnowledgeGraph, text: str) -> Tuple[LabelMatch, ...]:
-        return kg.label_lookup(text)
+        return tuple([match for match in kg.label_lookup(text)])    
 
 class ExactSynonymResolver(ExactLabelResolver):
     confidence = ResolverConfidence.EXACT_SYNONYM
     
     def get_matches(self, kg: KnowledgeGraph, text: str) -> Tuple[LabelMatch, ...]:
-        return kg.synonym_lookup(text)
+        return tuple([match for match in kg.synonym_lookup(text)])
     
 
 class PartialLabelResolver(CandidateResolver):
