@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from omop_graph.graph.kg import KnowledgeGraph
 
-from dataclasses import dataclass
-from typing import Optional, Iterable, Generator
+from dataclasses import dataclass, field
+from typing import Optional, Iterable, Generator, Union
 from .resolvers import CandidateResolver, ResolverConfidence, CandidateHit
 from ...graph.paths import GraphPath, find_shortest_paths, find_shortest_paths_dijkstra, find_shortest_paths_batch
 from ...graph.kg import KnowledgeGraph
-from ...graph.edges import PredicateKind
+from ...graph.edges import PredicateKind, HIERARCHICAL_PREDICATE_KINDS
 from ...graph.scoring import PathProfile, get_best_path_profile
 
 import logging
@@ -22,6 +22,9 @@ class GroundingCandidate:
 
     best_path_profile: Optional[PathProfile]
     paths: Optional[tuple[GraphPath, ...]]
+
+    def __repr__(self) -> str:
+        return f"GroundingCandidate(concept_id={self.concept_id} [{self.label}, score={self.score:.2f}])"
 
     @property
     def score(self) -> float:
@@ -43,6 +46,8 @@ class GroundingConstraints:
     allowed_vocabularies: Optional[tuple[str, ...]] = None
     require_standard: bool = False
     max_depth: int = 6
+    predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS
+
 
 @dataclass
 class ResolverPipeline:
@@ -99,6 +104,8 @@ class ResolverPipeline:
         for hit in resolved:
             ok, reasons = self._passes_constraints(kg, hit.concept_id, constraints)
             if not ok:
+                concept_name = kg.concept_view(hit.concept_id).concept_name
+                logger.debug(f"Candidate {hit.concept_id} ({concept_name}) failed constraints: {reasons}")
                 continue
             
             if constraints.parent_ids is not None:
@@ -107,27 +114,47 @@ class ResolverPipeline:
                     hit.concept_id,
                     constraints.parent_ids,
                     max_depth=constraints.max_depth,
+                    predicate_kinds=constraints.predicate_kinds,
+                    #max_paths=5,  # Arbitrary limit to avoid combinatorial explosion - maybe make this configurable or remove it and just rely on the embedding similarity to rank them well?
                 )
-                if not paths:
-                    continue  # fails hierarchy constraint
-                best_path_profile = get_best_path_profile(path_profiles=[PathProfile.from_path(kg, p, search_term=text, confidence=hit.resolver_confidence) for p in paths])
-                paths = tuple(paths)
-            else:
-                # Placeholder with dummy values?
-                best_path_profile = None
-                paths = None
 
-            c = kg.concept_view(hit.concept_id)
+                if not paths:
+                    concept_name = kg.concept_view(hit.concept_id).concept_name
+                    logger.debug(f"Candidate {hit.concept_id} ({concept_name}) failed hierarchy constraint: no paths to parents {constraints.parent_ids}")
+                    continue  # fails hierarchy constraint
+                path_profiles = [
+                    profile 
+                    for p in paths
+                    if (profile := PathProfile.from_path(
+                        kg, p, confidence=hit.resolver_confidence
+                    )) is not None
+                ]
+                if not path_profiles:
+                    logger.debug(f"Candidate {hit.concept_id} has no valid path profiles that reach a standard concept")
+                    continue
+                best_path_profile = get_best_path_profile(path_profiles=path_profiles)
+                paths = tuple(paths)
+                
+                concept_id = best_path_profile.concept_id
+                concept_name = best_path_profile.concept_name
+                is_standard = best_path_profile.is_standard
+            else:
+                # Placeholder with dummy values? Maybe start a search upwards from here until we reach the next best standard concept?
+                c = kg.concept_view(hit.concept_id)
+                concept_id = c.concept_id
+                concept_name = c.concept_name
+                is_standard = c.standard_concept
+                paths = None
 
             results.append(
                 GroundingCandidate(
-                    concept_id=hit.concept_id,
-                    label=c.concept_name,
+                    concept_id=concept_id,
+                    label=concept_name,
                     best_path_profile=best_path_profile,
                     reasons=tuple(reasons),
                     paths=paths,
                     confidence=hit.resolver_confidence,
-                    is_standard=c.standard_concept,
+                    is_standard=is_standard,
                 )
             )
 
@@ -142,6 +169,7 @@ class ResolverPipeline:
         *,
         max_depth: int,
         max_paths: int = 3,
+        predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS,
     ) -> list[GraphPath]:
         paths = []
 
@@ -151,7 +179,7 @@ class ResolverPipeline:
                 kg,
                 source=concept_id,
                 target=parent,
-                predicate_kinds={PredicateKind.ONTOLOGICAL},
+                predicate_kinds=predicate_kinds,
                 max_depth=max_depth,
                 max_paths=max_paths,
             )

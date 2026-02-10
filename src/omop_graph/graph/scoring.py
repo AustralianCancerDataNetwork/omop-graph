@@ -1,16 +1,19 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, ClassVar
+from collections import Counter
 
 from .edges import PredicateKind
 from .paths import GraphPath, PathStep
 from .traverse import GraphTrace, TraceStep
-from .kg import KnowledgeGraph
+from .kg import KnowledgeGraph, ConceptView
 from .paths import find_shortest_paths
 
 from omop_graph.utils.types import ResolverConfidence
 
-import rapidfuzz
+import logging
+import numpy as np
+logger = logging.getLogger(__name__)
 
 """
 Path scoring and explanation.
@@ -38,11 +41,10 @@ class PathExplanation:
         kg: KnowledgeGraph,
         path: GraphPath,
         trace: GraphTrace,
-        search_term: str,
         confidence: ResolverConfidence,
     ) -> "PathExplanation":
         steps: list[PathExplanationStep] = []
-        profile = PathProfile.from_path(kg, path, search_term=search_term, confidence=confidence)
+        profile = PathProfile.from_path(kg, path, confidence=confidence)
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)
@@ -62,185 +64,241 @@ class PathExplanation:
             steps=tuple(steps),
         )
 
+        
 @dataclass(frozen=True)
-class PathProfile:
-    r"""
-    Profile of a graph path connecting a candidate concept to a restricting ancestor.
+class PathScore:
+    """
+    Immutable scoring record for a graph path traversal.
 
-    This class encapsulates the topological and semantic features of a path in the 
-    Knowledge Graph (KG) and computes a scalar quality score. This score is used 
-    to rank competing grounding candidates, prioritizing paths that are semantically 
-    "pure" (standard concepts, consistent vocabulary, ontological edges) over 
-    paths that rely on loose mappings or non-standard terms.
+    Unlike previous iterations which used a multiplicative decay model ($S \\in [0,1]$),
+    this class implements an **additive point system**. It starts with a base score 
+    derived from the initial text match confidence and adjusts it based on topological 
+    moves in the graph.
 
-    Parameters
+    The final score represents a trade-off between **Trust** (is this a Standard Concept?) 
+    and **Specificity** (how specific is this term compared to the root?).
+
+    Attributes
     ----------
-    hops : int
-        The total number of edges in the path.
-    invalid_concepts : int
-        Count of nodes in the path that are flagged as invalid/deprecated.
-    non_standard_concepts : int
-        Count of nodes that are not Standard OMOP concepts (e.g., source codes).
-    vocab_switches : int
-        Count of transitions between different vocabularies (e.g., SNOMED -> LOINC).
-    ontological_edges : int
-        Count of strict 'Is A' or 'Subsumes' relationships.
-    mapping_edges : int
-        Count of 'Maps to' relationships.
-    metadata_edges : int
-        Count of loose or metadata-based relationships (e.g., 'Has domain').
-    confidence : ResolverConfidence
-        The initial confidence level of the text match (e.g., EXACT, EXACT_SYNONYM).
-    search_term : str
-        The raw text extracted by the LLM.
-    matched_concept_name : str
-        The official name of the concept found in the KG.
+    confidence_score : float
+        The starting points awarded based on the initial LLM text match quality. 
+        (e.g., Exact match = 10.0, Fuzzy = 6.0).
+    depth_bonus : float
+        Accumulated points for traversing `Is A` (ONTO_UP) edges. 
+        Rewards specificity (deeper concepts are more valuable).
+    drift_penalty : float
+        Accumulated penalty points for "noisy" transitions. 
+        Includes non-ontological mappings, composition edges, or traversing down 
+        the hierarchy (generalization).
 
     Notes
     -----
-    **Scoring Algorithm**
+    **Scoring Formula**
+    
+    $$ S_{total} = S_{confidence} + S_{depth} - P_{drift} $$
 
-    The `score` property calculates a quality metric ($S \in [0.0, 1.0]$) using a 
-    multiplicative penalty model. The scoring logic follows this intuition:
-
-    1.  **Base Score**:
-        - If `confidence` is EXACT or EXACT_SYNONYM, $S_{base} = 1.0$.
-        - Otherwise, the lexical similarity (Jaro-Winkler) between 
-          the `search_term` and `matched_concept_name`.
-
-    2.  **Hard Constraints**:
-        - If `invalid_concepts > 0`, the score is strictly $0.0$.
-
-    3.  **Structural Penalties (Multipliers)**:
-        The base score is degraded by graph imperfections. We use multipliers rather 
-        than subtraction to ensure that a perfect text match on a "bad" concept 
-        can still be outranked by a decent match on a "good" concept, but never 
-        drops below zero.
-
-        - **Non-Standard Concepts**: We strongly prefer Standard OMOP concepts. A Standard concept with a 60% text match ($0.6$) 
-          will beat a Non-Standard concept with a 100% text match (using penalty_non_standard=0.5). Strong penalty.
-        
-        - **Vocabulary Switches**: Jumping between vocabularies (e.g., SNOMED to ICD10) introduces semantic drift risk. Mild penalty.
-        
-        - **Mapping Edges**: 'Maps to' is generally trusted but implies a translation rather than a direct ontological parent. Very slight penalty.
-         
-        - **Metadata Edges**: These edges are often associative rather than hierarchical. Moderate penalty.
-
-    4.  **Path Length Decay**: We prefer the shortest *valid* path. The decay is very slow to ensure that specific (deep) concepts are not 
-        unfairly penalised against generic (shallow) ones.
+    **Scoring Intuition**
+    
+    1.  **Base Trust**: We start with a high score if the text match is exact.
+    2.  **The "Standard" Gate**: If the path fails to anchor to a Standard OMOP Concept, 
+        a massive penalty (`_PENALTY_NON_STANDARD`) is applied, effectively disqualifying 
+        the result.
+    3.  **Drift vs. Depth**: 
+        - We punish lateral moves (mappings) and generalizations (downward steps).
+        - We reward specialization (upward steps). 
+        - This encourages the algorithm to find the most specific Standard Concept 
+          closest to the original search term.
     """
-    hops: int
-    invalid_concepts: int
-    non_standard_concepts: int
-    vocab_switches: int
-    ontological_edges: int
-    mapping_edges: int
-    metadata_edges: int
-    confidence: "ResolverConfidence"
-    search_term: str
-    matched_concept_name: str
-    _score: Optional[float] = field(default=None)
+    confidence_score: float
+    depth_bonus: float
+    drift_penalty: float
+    predicate_kind_indices: Optional[dict[PredicateKind, list[int]]] = field(default=None, compare=False)
 
-    # Penalty class vars
-    penalty_non_standard: ClassVar[float] = 0.5
-    penalty_vocab_switch: ClassVar[float] = 0.9
-    penalty_mapping_switch: ClassVar[float] = 0.95
-    penalty_metadata_edges: ClassVar[float] = 0.8
-    penalty_hops: ClassVar[float] = 0.98
+    _BASE_EXACT: ClassVar[float] = 10.0
+    _BASE_SYNONYM: ClassVar[float] = 9.0
+    _BASE_FUZZY: ClassVar[float] = 6.0
+    _BONUS_PER_UP_STEP: ClassVar[float] = 1.0
+    _PENALTY_DOWN_STEP: ClassVar[float] = 2.0 # Not sure if that should be even penalised as we become more specific
+    _PENALTY_NON_STANDARD: ClassVar[float] = 10.0  # Heavy penalty
+    _PENALTY_EXTRA_MAPPING: ClassVar[float] = 3.0
+    _PENALTY_COMPOSITION: ClassVar[float] = 1.0
 
-    def __post_init__(self):
-        # Calculate and cache the score immediately.
-        # Uses object.__setattr__ to bypass frozen=True constraint for caching.
-        object.__setattr__(self, "_score", self.score) 
+    @property
+    def total_score(self) -> float:
+        return self.confidence_score + self.depth_bonus - self.drift_penalty
+    
+    def __lt__(self, other: "PathScore") -> bool:
+        return self.total_score < other.total_score
+    
+    def __eq__(self, other: "PathScore") -> bool:
+        return self.total_score == other.total_score
+    
+    def __repr__(self) -> str:
+        return f"PathScore(total={self.total_score:.2f}, confidence={self.confidence_score:.2f}, depth_bonus={self.depth_bonus:.2f}, drift_penalty={self.drift_penalty:.2f})"
 
-    @property     
-    def score(self) -> float:
-        if self._score is not None:
-            return self._score
-            
-        # 1. Hard Rejects
-        if self.invalid_concepts > 0:
-            return 0.0
-            
-        # 2. Base Score Calculation
-        if self.confidence == ResolverConfidence.EXACT:
-            score = 1.0
-        elif self.confidence == ResolverConfidence.EXACT_SYNONYM:
-            score = 1.0  # NOTE: could also be something less
+    @classmethod
+    def from_predicate_indices(
+        cls, 
+        confidence: ResolverConfidence,
+        predicate_kind_indices: dict[PredicateKind, list[int]],
+        standard_anchor_found: bool
+    ) -> "PathScore":
+        
+        # 1. Base Score
+        if confidence == ResolverConfidence.EXACT:
+            confidence_score = cls._BASE_EXACT
+        elif confidence == ResolverConfidence.EXACT_SYNONYM:
+            confidence_score = cls._BASE_SYNONYM
         else:
-            score = lexical_similarity(self.matched_concept_name, self.search_term)
+            confidence_score = cls._BASE_FUZZY
+                
+        depth_bonus = 0.0
+        drift_penalty = 0.0
 
-        # 3. Structural Penalties
-        if self.non_standard_concepts > 0:
-            score *= self.penalty_non_standard ** self.non_standard_concepts
+        for predicate_kind, indices in predicate_kind_indices.items():
+            if predicate_kind == PredicateKind.MAPPING or predicate_kind == PredicateKind.VERSIONING:
+                drift_penalty += cls._PENALTY_EXTRA_MAPPING * len(indices)
+            elif predicate_kind == PredicateKind.ONTO_UP:
+                depth_bonus += cls._BONUS_PER_UP_STEP * len(indices)
+            elif predicate_kind == PredicateKind.ONTO_DOWN:
+                drift_penalty += cls._PENALTY_DOWN_STEP * len(indices)
+            elif predicate_kind == PredicateKind.COMPOSITION:
+                drift_penalty += cls._PENALTY_COMPOSITION * len(indices)
 
-        if self.vocab_switches > 0:
-            score *= self.penalty_vocab_switch ** self.vocab_switches
+        if not standard_anchor_found:
+            drift_penalty += cls._PENALTY_NON_STANDARD
+        
+        return cls(
+            confidence_score=confidence_score,
+            depth_bonus=depth_bonus,
+            drift_penalty=drift_penalty,
+            predicate_kind_indices=predicate_kind_indices,
+        )
 
-        if self.mapping_edges > 0:
-            score *= self.penalty_mapping_switch ** self.mapping_edges
-            
-        if self.metadata_edges > 0:
-            score *= self.penalty_metadata_edges ** self.metadata_edges
 
-        # 4. Path Length Decay
-        if self.hops > 0:
-            score *= self.penalty_hops ** self.hops
+@dataclass(frozen=True)
+class PathProfile:
+    """
+    Represents the resolved 'Anchor Concept' discovered along a graph path.
 
-        return score
+    This class fundamentally changes the resolution logic from "scoring a whole path" 
+    to "finding a trusted anchor." It traverses the path starting from the LLM's 
+    candidate term and stops at the **first Standard OMOP Concept** it encounters.
+
+    - **If a Standard Concept is found**: It becomes the `concept_id` for this profile. 
+      The path to reach it is scored for 'drift' (distance/noise).
+    - **If NO Standard Concept is found**: The profile reverts to the original 
+      candidate ID but applies a heavy 'Non-Standard' penalty to the score.
+
+    Attributes
+    ----------
+    score : PathScore
+        The calculated score object containing the breakdown of points (trust, depth, drift).
+    concept_id : int
+        The ID of the *resolved* concept. This is either the Standard Concept found 
+        mid-path, or the original concept if no standard anchor was found.
+    concept_name : str
+        The name of the resolved concept.
+    is_standard : bool
+        True if `concept_id` is a Standard OMOP Concept. If False, this profile 
+        will likely have a very low score.
+    original_concept_id : int
+        The ID of the starting node (the raw candidate from the LLM/Search).
+    path : GraphPath
+        The full topological path from the original candidate to the root (or end of traversal).
+
+    Methods
+    -------
+    from_path(...)
+        Factory method that traverses the path to identify the 'Standard Anchor'. 
+        It promotes the specific `MAPPING` or `VERSIONING` edge that leads to a 
+        Standard Concept as the 'Anchor Step' (exempt from penalty), while treating 
+        all other edges as scoring modifiers.
+    """
+    
+    path_score: PathScore
+    concept_id: int
+    concept_name: str
+    is_standard: bool
+    original_concept_id: int
+    original_concept_name: str
+    path: GraphPath
+
 
     def __lt__(self, other: "PathProfile") -> bool:
         return self.score < other.score
     
-    def __gt__(self, other: "PathProfile") -> bool:
-        return self.score > other.score
-    
     def __eq__(self, other: "PathProfile") -> bool:
         return self.score == other.score
     
+    def __repr__(self) -> str:
+        return f"PathProfile(score={self.score:.2f}, concept_id={self.concept_id} [{self.concept_name}])"
+    
+    @property
+    def score(self) -> float:
+        return self.path_score.total_score
+
     @classmethod
-    def from_path(cls, kg: KnowledgeGraph, path: GraphPath, search_term: str, confidence: ResolverConfidence) -> "PathProfile":
-        invalid = 0
-        non_standard = 0
-        vocab_switches = 0
-
-        prev_vocab = None
-        for cid in path.nodes():
-            c = kg.concept_view(cid)
-            if c.invalid_reason:
-                invalid += 1
-            if c.standard_concept is None:
-                non_standard += 1
-            if prev_vocab and c.vocabulary_id != prev_vocab:
-                vocab_switches += 1
-            prev_vocab = c.vocabulary_id
-
-        ont = map_ = meta = 0
-        for step in path.steps:
-            kind = kg.predicate_kind(step.predicate)
-            if kind == PredicateKind.ONTOLOGICAL:
-                ont += 1
-            elif kind == PredicateKind.MAPPING:
-                map_ += 1
-            else:
-                meta += 1
-
-        # The starting point of the graph corresponds to the concept ID predicted by the LLM
-        c = kg.concept_view(path[0].subject)  
+    def from_path(
+        cls, 
+        kg: KnowledgeGraph, 
+        path: GraphPath, 
+        confidence: ResolverConfidence,
+        embedding_sims: np.ndarray | None = None
+    ) -> "PathProfile":
         
-        return cls(
-            hops=len(path.steps),
-            invalid_concepts=invalid,
-            non_standard_concepts=non_standard,
-            vocab_switches=vocab_switches,
-            ontological_edges=ont,
-            mapping_edges=map_,
-            metadata_edges=meta,
+        # Path Traversal
+        standard_anchor: Optional[tuple[int, str]] = None
+        
+        # Pre-fetch views to check standard status
+        concept_views = kg.concept_views(path.nodes())
+        predicate_kinds = kg.predicate_kinds(tuple(p.predicate for p in path.steps))
+
+        predicate_kind_indices = {}
+        for step_idx in range(len(path.steps)):
+            predicate_kind = predicate_kinds[step_idx]
+
+            # We promote the first swap to a standard concept as the anchor point
+            if (
+                (
+                    predicate_kind == PredicateKind.MAPPING or 
+                    predicate_kind == PredicateKind.VERSIONING
+                ) and (  # Leads to standard concept and standard_anchor not been found yet
+                    not standard_anchor and concept_views[step_idx + 1].standard_concept
+                )
+            ):
+                standard_anchor = (concept_views[step_idx + 1].concept_id, concept_views[step_idx + 1].concept_name)
+
+            else:
+                if predicate_kind not in predicate_kind_indices:
+                    predicate_kind_indices[predicate_kind] = []
+                predicate_kind_indices[predicate_kind].append(step_idx)
+
+        path_score = PathScore.from_predicate_indices(
             confidence=confidence,
-            search_term=search_term,
-            matched_concept_name=c.concept_name
+            predicate_kind_indices=predicate_kind_indices,
+            standard_anchor_found=standard_anchor is not None
         )
     
+        if standard_anchor is None:
+            concept_id = concept_views[0].concept_id
+            concept_name = concept_views[0].concept_name
+            is_standard = concept_views[0].standard_concept
+        else:
+            concept_id, concept_name = standard_anchor
+            is_standard = True
+
+        return cls(
+            path_score=path_score,
+            concept_id=concept_id,
+            concept_name=concept_name,
+            is_standard=is_standard,
+            original_concept_id=concept_views[0].concept_id,
+            original_concept_name=concept_views[0].concept_name,
+            path=path,
+        )
+
+
 def rank_path_profiles(path_profiles: list[PathProfile]) -> list[PathProfile]:
     """Ranks path profiles by their path score in descending order."""
     return sorted(path_profiles, key=lambda p: p.score, reverse=True)
@@ -264,11 +322,10 @@ def trace_contains_step(trace: GraphTrace, step: PathStep) -> TraceStep | None:
 def rank_paths(
     kg: KnowledgeGraph,
     paths: list[GraphPath],
-    search_term: str,
     confidence: ResolverConfidence,
 ) -> list[GraphPath]:
     profiles = {
-        path: PathProfile.from_path(kg, path, search_term=search_term, confidence=confidence)
+        path: PathProfile.from_path(kg, path, confidence=confidence)
         for path in paths
     }
     return sorted(paths, key=lambda p: profiles[p].score, reverse=True)
@@ -299,18 +356,9 @@ def find_ranked_paths_with_explanations(
     if not paths:
         return []
 
-    ranked = rank_paths(kg, paths, search_term=search_term, confidence=confidence)
+    ranked = rank_paths(kg, paths, confidence=confidence)
 
     return [
         PathExplanation.from_path(kg, path, trace) # type: ignore
         for path in ranked
     ]
-
-
-def lexical_similarity(a: str, b: str) -> float:
-    """
-    Simple lexical similarity metric between two strings.
-
-    Returns a value between 0 and 1, where 1 means identical strings.
-    """
-    return rapidfuzz.distance.JaroWinkler.similarity(a.lower(), b.lower())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select, literal, case, and_, func, exists
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from omop_alchemy.cdm.model.vocabulary import (
@@ -138,6 +139,38 @@ def q_predicate_row(relationship_id: str) -> Select:
             Relationship.defines_ancestry,
         )
         .where(Relationship.relationship_id == relationship_id)
+    )
+
+def q_predicate_row_with_direction(relationship_id: str) -> Select:
+    """Same as q_predicate_row but also queries the reverse predicate to determine directionality
+    of the predicate if either is `defines_ancestry`
+    
+    Returns
+    --------
+    Select statement returning columns:
+    - relationship_id: str (unique string label for the relationship, e.g. "is a", "maps to", etc.)
+    - relationship_name: str (name of the relationship)
+    - reverse_relationship_id: Optional[str] (unique string label for the reverse relationship if it exists, e.g. "has" is reverse of "is a")
+    - is_hierarchical: str (0 or 1)
+    - defines_ancestry: str (0 or 1)
+    - is_upward: str (0 or 1)
+    - is_downward: str (0 or 1)
+    """
+
+    Rel = Relationship
+    Rev = aliased(Relationship)
+
+    return (
+        select(
+            Rel.relationship_id,  # This is not an id but a unique label string...
+            Rel.relationship_name,
+            Rel.reverse_relationship_id,
+            Rel.is_hierarchical,
+            Rel.defines_ancestry.label("is_downward"),
+            Rev.defines_ancestry.label("is_upward"),
+        )
+        .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)  # This is not really joining IDs but matching the relationship_id string to the reverse_relationship_id string
+        .where(Rel.relationship_id == relationship_id)
     )
 
 

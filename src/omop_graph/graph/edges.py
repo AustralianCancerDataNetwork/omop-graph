@@ -7,6 +7,9 @@ from html import escape
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
 
+import logging
+logger = logging.getLogger(__name__)
+
 """
 Definitions for graph edges and predicates.
 
@@ -24,20 +27,79 @@ Supported relationships include:
 """
 
 class PredicateKind(Enum):
-    ONTOLOGICAL = auto()
-    ATTRIBUTE = auto()
+    # Vertical Hierarchy
+    ONTO_UP = auto()
+    ONTO_DOWN = auto()
+    
+    # Horizontal & Translation
     MAPPING = auto()
     VERSIONING = auto()
+    
+    # Semantic Enrichment
+    COMPOSITION = auto()
+    INTERACTION = auto()
+    ATTRIBUTE = auto()
+    
+    # Noise
     METADATA = auto()
 
     def label(self) -> str:
         return {
-            PredicateKind.ONTOLOGICAL: "ontological relationship (preferred structure)",
-            PredicateKind.MAPPING: "mapping relationship (cross-vocabulary)",
-            PredicateKind.ATTRIBUTE: "attribute enrichment",
-            PredicateKind.VERSIONING: "versioning relationship",
-            PredicateKind.METADATA: "metadata relationship (low semantic value)",
+            PredicateKind.ONTO_UP: "ontological relationship (upwards, generalization)",
+            PredicateKind.ONTO_DOWN: "ontological relationship (downwards, specialization)",
+            
+            PredicateKind.MAPPING: "mapping relationship (cross-vocabulary translation)",
+            PredicateKind.VERSIONING: "versioning relationship (lifecycle/deprecation)",
+            
+            PredicateKind.COMPOSITION: "compositional relationship (part-whole structure)",
+            PredicateKind.INTERACTION: "interaction relationship (causal/clinical logic)",
+            PredicateKind.ATTRIBUTE: "attribute enrichment (descriptive property)",
+            
+            PredicateKind.METADATA: "metadata relationship (administrative/low semantic value)",
         }[self]
+
+HIERARCHICAL_PREDICATE_KINDS = frozenset({
+    PredicateKind.ONTO_UP, 
+    PredicateKind.ONTO_DOWN, 
+    PredicateKind.MAPPING,
+    PredicateKind.VERSIONING,
+    PredicateKind.COMPOSITION
+})
+
+PREDICATE_VERSIONING_KEYWORDS = frozenset([
+    "replaced", "replaces", "revision", "discontinued", "invalid", "was_a"
+])
+
+PREDICATE_MAPPING_KEYWORDS = frozenset([
+    "maps to", "mapped from", "equivalent", " eq", "same_as", 
+    "alt_to", "poss_eq", " - ", " to ",
+    "brand", "tradename"
+])
+
+PREDICATE_COMPOSITION_KEYWORDS = frozenset([
+    "component", "consist", "constitut", "contain",
+    "part of", "ingredient", " ing", "panel", "includes"
+])
+
+PREDICATE_INTERACTION_KEYWORDS = frozenset([
+    "causes", "caused", "due to", "induces", "induced", 
+    "treat", "prevent", "contraindicat", " ci ", " ci",
+    "interact", "affected", "etiology", "manifestation"
+])
+
+PREDICATE_ATTRIBUTE_KEYWORDS = frozenset([
+    "property", "value", "unit", "range", "measure", "scale", "method", "mode"
+])
+
+PREDICATE_METADATA_KEYWORDS = frozenset([
+    "asso with",
+    "occurs after",
+    "occurs before",
+    "followed by",
+    "follows"
+
+])
+
 
 @dataclass(frozen=True)
 class EdgeView:
@@ -69,32 +131,47 @@ class EdgeView:
 
 @dataclass(frozen=True)
 class Predicate:
-    relationship_id: str
+    relationship_id: str  # Not really an ID but a unique string label for the relationship, e.g. "is a", "maps to", etc.
     name: str
-    reverse_id: Optional[str]
+    reverse_id: Optional[str]  # Same here, unique string label for the reverse relationship if it exists, e.g. "has" is reverse of "is a"
     is_hierarchical: bool
-    defines_ancestry: bool
+    upwards: bool
+    downwards: bool
+
+    @property
+    def defines_ancestry(self) -> bool:
+        return self.upwards or self.downwards
 
     def classify_predicate(self, *, kg) -> PredicateKind:
-        if self.defines_ancestry:
-            return PredicateKind.ONTOLOGICAL
+        # 1. Structural Hierarchy (The Spine)
+        if self.upwards and self.downwards:
+            raise ValueError(f"Predicate {self.relationship_id} cannot be both upwards and downwards")
+        if self.upwards:
+            return PredicateKind.ONTO_UP
+        elif self.downwards:
+            return PredicateKind.ONTO_DOWN
+        
+        rid = self.relationship_id.lower()
 
-        name = self.name.lower()
-
-        if "maps to" in name or "mapped from" in name or "equivalent" in name:
-            return PredicateKind.MAPPING
-
-        if "replaced" in name or "replaces" in name:
+        if any(kw in rid for kw in PREDICATE_VERSIONING_KEYWORDS):
             return PredicateKind.VERSIONING
 
-        if name.startswith("has "):
+        if any(kw in rid for kw in PREDICATE_MAPPING_KEYWORDS):
+            return PredicateKind.MAPPING
+
+        if any(kw in rid for kw in PREDICATE_COMPOSITION_KEYWORDS):
+            return PredicateKind.COMPOSITION
+
+        if any(kw in rid for kw in PREDICATE_INTERACTION_KEYWORDS):
+            return PredicateKind.INTERACTION
+
+        if rid.startswith("has ") or rid.endswith(" of") or any(kw in rid for kw in PREDICATE_ATTRIBUTE_KEYWORDS):
             return PredicateKind.ATTRIBUTE
+        
+        if any(kw in rid for kw in PREDICATE_METADATA_KEYWORDS):
+            return PredicateKind.METADATA
 
-        if self.reverse_id:
-            rev = kg.predicate(self.reverse_id)
-            if rev.name.lower().startswith("has "):
-                return PredicateKind.METADATA
-
+        logger.debug(f"Predicate classified as METADATA: {self.relationship_id}")
         return PredicateKind.METADATA
     
 

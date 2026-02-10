@@ -17,6 +17,7 @@ from .queries import (
     q_concept_views,
     q_concept_id_by_code,
     q_predicate_row,
+    q_predicate_row_with_direction,
     q_predicate_name,
     q_outgoing_edges,
     q_incoming_edges,
@@ -166,7 +167,7 @@ class KnowledgeGraph(GraphBackend):
     @lru_cache(maxsize=10_000)
     def predicate(self, relationship_id: str) -> Predicate:
         row = self.session.execute(
-            q_predicate_row(relationship_id)
+            q_predicate_row_with_direction(relationship_id)
         ).one()
 
         return Predicate(
@@ -174,7 +175,8 @@ class KnowledgeGraph(GraphBackend):
             name=row.relationship_name,
             reverse_id=row.reverse_relationship_id,
             is_hierarchical=bool(row.is_hierarchical),
-            defines_ancestry=bool(row.defines_ancestry),
+            upwards=bool(int(row.is_upward)),
+            downwards=bool(int(row.is_downward)),
         )
 
     @lru_cache(maxsize=10_000)
@@ -185,6 +187,12 @@ class KnowledgeGraph(GraphBackend):
 
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
         return self.predicate(relationship_id).classify_predicate(kg=self)
+    
+    def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> Tuple[PredicateKind, ...]:
+        return tuple(
+            self.predicate_kind(rel_id)
+            for rel_id in relationship_ids
+        )
 
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
         return self.predicate(relationship_id).reverse_id
@@ -398,14 +406,14 @@ class KnowledgeGraph(GraphBackend):
         Return all predicates known to the knowledge graph.
         """
         rows = self.session.execute(q_all_predicates()).all()
-
         return tuple(
             Predicate(
                 relationship_id=row.relationship_id,
                 name=row.relationship_name,
                 reverse_id=row.reverse_relationship_id,
                 is_hierarchical=bool(int(row.is_hierarchical)),
-                defines_ancestry=bool(int(row.defines_ancestry)),
+                upwards=bool(int(row.is_upward)),
+                downwards=bool(int(row.is_downward)),
             )
             for row in rows
         )

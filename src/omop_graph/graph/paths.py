@@ -31,6 +31,12 @@ class PathStep:
 class GraphPath:
     steps: tuple[PathStep, ...]
 
+    @property
+    def start_concept_id(self) -> int:
+        if not self.steps:
+            raise ValueError("Empty path has no start concept")
+        return self.steps[0].subject
+
     def nodes(self):
         if not self.steps:
             return ()
