@@ -227,3 +227,9 @@ class LabelMatchGroupView:
           </table>
         </div>
         """
+    
+@dataclass(frozen=True)
+class AncestorMatch:
+    ancestor_concept_id: int
+    descendant_concept_id: int
+    min_levels_of_separation: int
