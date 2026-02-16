@@ -1,2 +1,2 @@
 from .resolvers import CandidateHit, ExactLabelResolver, ExactSynonymResolver, PartialLabelResolver, ResolverConfidence, CandidateResolver
-from .resolver_pipeline import ResolverPipeline, GroundingConstraints, GroundingCandidate
+from .resolver_pipeline import ResolverPipeline
