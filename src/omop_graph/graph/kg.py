@@ -9,7 +9,7 @@ from sqlalchemy.exc import PendingRollbackError, InvalidRequestError
 
 from .base import GraphBackend
 from .edges import EdgeView, Predicate, PredicateKind, is_active, PredicateSummary
-from .nodes import ConceptView, LabelMatch, LabelMatchKind, LabelMatchGroupView
+from .nodes import ConceptView, LabelMatch, LabelMatchKind, LabelMatchGroupView, AncestorMatch
 
 from omop_graph.db.session import safe_execute
 from .queries import (
@@ -17,7 +17,7 @@ from .queries import (
     q_concept_views,
     q_concept_id_by_code,
     q_predicate_row,
-    q_predicate_row_with_direction,
+    q_predicate_row_with_ancestry,
     q_predicate_name,
     q_outgoing_edges,
     q_incoming_edges,
@@ -34,6 +34,15 @@ from .queries import (
     q_concept_synonym_filtered,
     q_all_predicates,
     q_all_predicates_with_ancestry,
+    q_concept_domain_ids,
+    q_concept_vocabulary_ids,
+    q_concept_potential_ancestor,
+    q_concept_num_ancestors,
+)
+from .constraints import SearchConstraintConcept
+
+import logging
+logger = logging.getLogger(__name__)
 
 """
 OMOP-backed graph facade.
@@ -84,7 +93,12 @@ class KnowledgeGraph(GraphBackend):
         )
     
     @lru_cache(maxsize=200_000)
-    def _synonym_lookup_raw(self, label: str, fuzzy: bool = False) -> Tuple[LabelMatch, ...]:
+    def _synonym_lookup_raw(
+        self, 
+        label: str, 
+        fuzzy: bool = False,
+        search_constraint: Optional[SearchConstraintConcept] = None
+    ) -> Tuple[LabelMatch, ...]:
         """
         Resolve a synonym label to concept_id(s).
 
@@ -94,8 +108,8 @@ class KnowledgeGraph(GraphBackend):
         if not input_label:
             return ()
         
-        cs = q_concept_synonym_ilike(input_label) if fuzzy else q_concept_synonym_match(input_label)
-
+        fn = q_concept_synonym_ilike if fuzzy else q_concept_synonym_match
+        cs = fn(input_label, search_constraint=search_constraint)
         syn_rows = self.session.execute(cs).all()
 
         return tuple(
@@ -111,7 +125,12 @@ class KnowledgeGraph(GraphBackend):
         )
     
     @lru_cache(maxsize=200_000)
-    def _label_lookup_raw(self, label: str, fuzzy: bool = False) -> Tuple[LabelMatch, ...]:
+    def _label_lookup_raw(
+        self, 
+        label: str, 
+        fuzzy: bool = False,
+        search_constraint: Optional[SearchConstraintConcept] = None
+    ) -> Tuple[LabelMatch, ...]:
         """
         Resolve a label to concept_id(s), preferring Concept.concept_name matches.
         Returns matches annotated with LabelMatchKind for downstream explanations.
@@ -120,7 +139,8 @@ class KnowledgeGraph(GraphBackend):
         if not input_label:
             return ()
         
-        cn = q_concept_name_ilike(input_label) if fuzzy else q_concept_name_match(input_label)
+        fn = q_concept_name_ilike if fuzzy else q_concept_name_match
+        cn = fn(input_label, search_constraint=search_constraint)
 
         direct_rows = self.session.execute(cn).all()
 
@@ -137,20 +157,32 @@ class KnowledgeGraph(GraphBackend):
         )
 
 
-    def synonym_lookup(self, label: str, fuzzy: bool = False, sort: bool = True) -> LabelMatchGroupView:
+    def synonym_lookup(
+        self, 
+        label: str, 
+        fuzzy: bool = False, 
+        sort: bool = True,
+        search_constraint: Optional[SearchConstraintConcept] = None
+    ) -> LabelMatchGroupView:
         """
         Resolve a synonym label to grouped concept matches.
         """
-        raw = self._synonym_lookup_raw(label, fuzzy=fuzzy)
+        raw = self._synonym_lookup_raw(label, fuzzy=fuzzy, search_constraint=search_constraint)
         if sort:
             raw = sorted(raw)
         return LabelMatchGroupView.from_matches(raw)
 
-    def label_lookup(self, label: str, fuzzy: bool = False, sort: bool = True) -> LabelMatchGroupView:
+    def label_lookup(
+        self, 
+        label: str, 
+        fuzzy: bool = False, 
+        sort: bool = True,
+        search_constraint: Optional[SearchConstraintConcept] = None
+    ) -> LabelMatchGroupView:
         """
         Resolve a label to grouped concept matches, preferring direct name matches.
         """
-        raw = self._label_lookup_raw(label, fuzzy=fuzzy)
+        raw = self._label_lookup_raw(label, fuzzy=fuzzy, search_constraint=search_constraint)
         if sort:
             raw = sorted(raw)
         return LabelMatchGroupView.from_matches(raw)
@@ -422,12 +454,39 @@ class KnowledgeGraph(GraphBackend):
         groups: dict[PredicateKind, list[Predicate]] = defaultdict(list)
 
         for pred in self.predicates():   
-            kind = pred.classify_predicate(kg=self)
+            kind = pred.classify_predicate()
             groups[kind].append(pred)
 
         return PredicateSummary(
             groups={k: tuple(v) for k, v in groups.items()}
         )
+    
+    def get_all_concept_domain_ids(self) -> tuple[str, ...]:
+        rows = self.session.execute(q_concept_domain_ids()).all()
+        return tuple(row.domain_id for row in rows)
+    
+    def get_all_concept_vocabulary_ids(self) -> tuple[str, ...]:
+        rows = self.session.execute(q_concept_vocabulary_ids()).all()
+        return tuple(row.vocabulary_id for row in rows)
+    
+    def get_potential_ancestor(self, child_id: int, parent_id: int) -> Optional[AncestorMatch]:
+        rows = self.session.execute(q_concept_potential_ancestor(child_id, parent_id)).all()
+
+        if not rows:
+            return None
+        else:
+            if len(rows) > 1:
+                logger.warning(f"Multiple potential ancestor rows found for child_id={child_id} and parent_id={parent_id}. This should not happen. Returning the first match.")
+            return AncestorMatch( 
+                ancestor_concept_id=rows[0].ancestor_concept_id, 
+                descendant_concept_id=rows[0].descendant_concept_id,
+                min_levels_of_separation=rows[0].min_levels_of_separation
+            )
+
+        
+    def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> dict[int, int]:
+        rows = self.session.execute(q_concept_num_ancestors(concept_ids)).all()
+        return {row.concept_id: row.num_ancestors for row in rows}
 
     def clear_caches(self) -> None:
         self.concept_view.cache_clear()

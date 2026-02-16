@@ -12,6 +12,9 @@ from omop_alchemy.cdm.model.vocabulary import (
     Concept_Synonym,
 )
 
+from typing import Optional
+from .constraints import SearchConstraintConcept
+
 def q_concept_view(concept_id: int) -> Select:
     return (
         select(
@@ -73,17 +76,30 @@ def q_concept_name() -> Select:
         )
     )
 
-def q_concept_name_match(name: str) -> Select:
-    return (
+def q_concept_name_match(name: str, search_constraint: Optional[SearchConstraintConcept] = None) -> Select:
+    base_stmt = (
         q_concept_name()
         .where(func.lower(Concept.concept_name) == func.lower(name))
     )
+    if search_constraint:
+        assert isinstance(search_constraint, SearchConstraintConcept), "search_constraint must be an instance of SearchConstraintConcept"
+        base_stmt = search_constraint.apply(base_stmt)
+    return base_stmt
 
-def q_concept_name_ilike(term: str) -> Select:
-    return (
+def q_concept_name_ilike(
+    term: str, 
+    search_constraint: Optional[SearchConstraintConcept] = None
+) -> Select:
+    base_stmt = (
         q_concept_name()
         .where(Concept.concept_name.ilike(f"%{term}%"))
     )
+    if search_constraint:
+        assert isinstance(search_constraint, SearchConstraintConcept), "search_constraint must be an instance of SearchConstraintConcept"
+        base_stmt = search_constraint.apply(base_stmt)
+    return base_stmt
+
+
 
 def q_concept_synonym() -> Select:
     return (
@@ -102,17 +118,25 @@ def q_concept_synonym() -> Select:
         .join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
     )
 
-def q_concept_synonym_match(label: str) -> Select:
-    return (
+def q_concept_synonym_match(label: str, search_constraint: Optional[SearchConstraintConcept] = None) -> Select:
+    base_stmt = (
         q_concept_synonym()
         .where(func.lower(Concept_Synonym.concept_synonym_name) == func.lower(label))
     )
+    if search_constraint:
+        assert isinstance(search_constraint, SearchConstraintConcept), "search_constraint must be an instance of SearchConstraintConcept"
+        base_stmt = search_constraint.apply(base_stmt)
+    return base_stmt
 
-def q_concept_synonym_ilike(label: str) -> Select:
-    return (
+def q_concept_synonym_ilike(label: str, search_constraint: Optional[SearchConstraintConcept] = None) -> Select:
+    base_stmt = (
         q_concept_synonym()
         .where(Concept_Synonym.concept_synonym_name.ilike(f"%{label}%"))
     )
+    if search_constraint:
+        assert isinstance(search_constraint, SearchConstraintConcept), "search_constraint must be an instance of SearchConstraintConcept"
+        base_stmt = search_constraint.apply(base_stmt)
+    return base_stmt
 
 def q_predicate_name(relationship_id: str) -> Select:
     return (
@@ -359,4 +383,44 @@ def q_leaves(*, vocabulary_id: str | None = None, domain_id: str | None = None) 
                 )
             )
         )
+    )
+
+def q_concept_domain_ids() -> Select:
+    return (
+        select(Concept.domain_id)
+        .distinct()
+        .where(Concept.domain_id.is_not(None))
+    )
+
+def q_concept_vocabulary_ids() -> Select:
+    return (
+        select(Concept.vocabulary_id)
+        .distinct()
+        .where(Concept.vocabulary_id.is_not(None))
+    )
+
+def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
+    return (
+        select(
+            Concept_Ancestor.ancestor_concept_id,
+            Concept_Ancestor.descendant_concept_id,
+            Concept_Ancestor.min_levels_of_separation
+        ).where(
+            and_(
+                Concept_Ancestor.ancestor_concept_id == parent_id,
+                Concept_Ancestor.descendant_concept_id == child_id,
+                Concept_Ancestor.min_levels_of_separation > 1
+            )
+        )
+    )
+
+def q_concept_num_ancestors(concept_ids: tuple[int, ...]) -> Select:
+    return (
+        select(
+            Concept.concept_id,
+            func.count(Concept_Ancestor.descendant_concept_id).label("num_ancestors")
+        )
+        .join(Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id)
+        .where(Concept.concept_id.in_(concept_ids))
+        .group_by(Concept.concept_id)
     )
