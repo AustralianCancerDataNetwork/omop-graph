@@ -1,15 +1,16 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import deque, defaultdict
-from typing import Optional
-import itertools
+from typing import Optional, Any, Tuple, List, Dict, Literal
 import heapq
 
-from omop_graph.graph import kg
-
 from .edges import PredicateKind, EdgeView
-from .traverse import traverse, GraphTrace, TraceStep
+from .traverse import GraphTrace, TraceStep
 from .kg import KnowledgeGraph
+from ..reasoning.resolvers import ResolverConfidence
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 """
@@ -22,10 +23,15 @@ i.e. What paths exist between nodes (does not yet score or explain them)
 """
 
 @dataclass(frozen=True)
+class Node:
+    concept_id: int
+    is_standard: bool
+
+@dataclass(frozen=True)
 class PathStep:
-    subject: int
+    subject: Node
     predicate: str
-    object: int
+    object: Node
 
 @dataclass(frozen=True)
 class GraphPath:
@@ -35,7 +41,15 @@ class GraphPath:
     def start_concept_id(self) -> int:
         if not self.steps:
             raise ValueError("Empty path has no start concept")
-        return self.steps[0].subject
+        return self.steps[0].subject.concept_id
+    
+    def get_first_standard_concept_id(self) -> Optional[int]:
+        for step in self.steps:
+            if step.subject.is_standard:
+                return step.subject.concept_id
+            if step.object.is_standard:
+                return step.object.concept_id
+        return None
 
     def nodes(self):
         if not self.steps:
@@ -246,10 +260,6 @@ def find_shortest_paths(
 
     return paths[:max_paths], graph_trace
 
-
-from collections import deque, defaultdict
-from typing import Optional
-
 def find_shortest_paths_batch(
     kg,
     source: int,
@@ -374,47 +384,150 @@ def find_shortest_paths_batch(
     return paths[:max_paths]
 
 
-def find_shortest_paths_dijkstra(
-    kg,
+@dataclass(order=True)
+class QueueItem:
+    cost: float
+    node: Node = field(compare=False)
+    rc: ResolverConfidence = field(compare=False)
+    iterations: int = field(default=0, compare=False)
+
+@dataclass(frozen=True)
+class StandardConcept:
+    concept_id: int
+    concept_name: str
+    separation: int
+    original_id: int
+    original_name: str
+    resolver_confidence: ResolverConfidence
+    hierarchy_cost: float = 0.0
+
+
+def get_unique_standard_concepts(concepts: list[StandardConcept]) -> list[StandardConcept]:
+    sorted_concepts = sorted(
+        concepts,
+        key=lambda x: (
+            x.separation,           # Lower is better (Ascending)
+            x.resolver_confidence.value, # Lower is better (this is the ranking in the enum)
+            x.hierarchy_cost        # Lower is better (Ascending)
+        )
+    )
+
+    # 2. Use a dictionary to pick the first one seen for each ID
+    unique_best_concepts = {}
+    for concept in sorted_concepts:
+        if concept.concept_id not in unique_best_concepts:
+            unique_best_concepts[concept.concept_id] = concept
+
+    result = list(unique_best_concepts.values())
+    return result
+
+
+def find_standard_paths(
+    kg: KnowledgeGraph,
     source: int,
     target: int,
-    max_weight: float = 10.0,
-    predicate_kinds: set[PredicateKind] | None = None,
-    max_paths: int = 20,
-    on=None,
-):
-    # Tie-breaker for when weights are identical (prevents PathStep comparison error)
-    counter = itertools.count()
+    resolver_confidence: ResolverConfidence,
+    predicate_kinds: Optional[frozenset[Any]] = None,
+    max_depth: int = 6,
+    max_concepts: Optional[int] = None,
+    num_hops: int = 1,
+    *args,
+    **kwargs
+) -> List[StandardConcept]:
+    """Alternative search for standard concepts w.r.t target concepts. The idea
+    is to translate as past as possible to a standard-concept and then use the
+    `concept_ancestor` table to create paths and rank them accordingly.
+    This way, we don't need to traverse EVERY path possible but instead only go
+    to paths that are worthwhile exploring while accelerating the retrieval.
     
-    pq = [(0.0, next(counter), source, [])]
-    visited: dict[int, float] = {}
+    """
+    # --- COST CONFIGURATION ---
+    #COST_NS_TO_STD = 1
+    #COST_STD_TO_STD = 0 # No cost traversing between standard concepts
+    #COST_NS_TO_NS = 5
+    #COST_PREDICATES = {
+    #    PredicateKind.ONTO_UP: 2,
+    #    PredicateKind.ONTO_DOWN: 2,
+    #    PredicateKind.MAPS_TO: 1,
+    #}
+    # -------------------------------
 
-    while pq:
-        current_w, _, u, path = heapq.heappop(pq)
+    source_view = kg.concept_view(source)
+    source_is_std = source_view.standard_concept if source_view else False
 
-        if u == target:
-            assert all(isinstance(step, PathStep) for step in path), "PathStep expected"
-            return GraphPath(path), current_w  # type: ignore
+    # Initialise the queue
+    queue = [QueueItem(cost=0, node=Node(source, source_is_std), rc=resolver_confidence, iterations=0)]
+    visited: Dict[Tuple[int, bool], int] = {}
 
-        if u in visited and visited[u] <= current_w:
-            continue
-        visited[u] = current_w
+    found_standard_concepts = []
 
-        edges = list(kg.iter_edges(u, direction="out", predicate_kinds=predicate_kinds, on=on))
+    max_concepts_provided = max_concepts is not None
+    
+    while queue:
+        item = heapq.heappop(queue)  # type: ignore
+        subject_node = item.node
+        cost = item.cost
+        rc = item.rc
+        iterations = item.iterations
+
+        if max_concepts_provided and len(found_standard_concepts) > max_concepts:
+            break
         
-        # Calculate the penalty ONCE for this source node
-        # Logarithmic scaling is usually better so weights don't explode
-        # weight_penalty = 0.1 * len(edges) 
-        import math
-        weight_penalty = math.log1p(len(edges)) # log(1 + degree) is a standard NLP/Graph approach
-        edge_weight = 1.0 + weight_penalty
+        # Prevent infinite loops
+        if iterations > num_hops:
+            continue
 
-        for e in edges:
-            v = e.object_id
-            new_w = current_w + edge_weight
+        if subject_node.is_standard:
+            # We found a standard concept
+            potential_ancestor = kg.get_potential_ancestor(child_id=subject_node.concept_id, parent_id=target)
+            if potential_ancestor is not None:
+                if potential_ancestor.min_levels_of_separation > max_depth:
+                    continue
+
+                found_standard_concepts.append(StandardConcept(
+                    hierarchy_cost=cost,
+                    concept_id=subject_node.concept_id,
+                    concept_name=kg.concept_view(subject_node.concept_id).concept_name,
+                    separation=potential_ancestor.min_levels_of_separation,
+                    original_id=source,
+                    original_name=source_view.concept_name,
+                    resolver_confidence=rc,
+                ))
+                continue
+
+        # We have not found anything so we need to get to the next best concept_id as fast as it goes.
+        edges = list(kg.iter_edges_batch(
+            (subject_node.concept_id,), 
+            direction="out", 
+            predicate_kinds=predicate_kinds
+        ))
+        if not edges:
+            continue
+        
+        # Singular trip to the DB
+        object_views = kg.concept_views(tuple(e.object_id for e in edges))
+
+        for edge, object_view in zip(edges, object_views):
+            object_id = edge.object_id 
+            predicate_id = edge.predicate_id
+            converted_predicate_kind = kg.predicate_kind(predicate_id)
+
+            object_is_std = object_view.standard_concept
+            if not object_is_std:
+                continue # This is for now. Only allow one hope as most concepts have a direct Non-Std to Std hop
             
-            if new_w <= max_weight:
-                new_step = PathStep(subject=u, predicate=e.predicate_id, object=v)
-                heapq.heappush(pq, (new_w, next(counter), v, path + [new_step]))
+            # Not punishing doing the mapping hop from NS to STD as that is the whole point of this function
+            new_cost = cost
+            #new_cost = cost + COST_PREDICATES[converted_predicate_kind]  # Could fail but I am willing to take that risk for now
 
-    return None, None
+            heapq.heappush(queue,  # type: ignore
+                QueueItem( # type: ignore
+                    cost=new_cost,
+                    node=Node(concept_id=object_id, is_standard=object_is_std),
+                    rc=ResolverConfidence.PARTIAL,  # We mapped so we gotta reduce the confidence
+                    iterations=iterations + 1
+                )
+            )
+
+    return found_standard_concepts
+
