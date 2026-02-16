@@ -141,7 +141,7 @@ def q_predicate_row(relationship_id: str) -> Select:
         .where(Relationship.relationship_id == relationship_id)
     )
 
-def q_predicate_row_with_direction(relationship_id: str) -> Select:
+def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
     """Same as q_predicate_row but also queries the reverse predicate to determine directionality
     of the predicate if either is `defines_ancestry`
     
@@ -166,11 +166,26 @@ def q_predicate_row_with_direction(relationship_id: str) -> Select:
             Rel.relationship_name,
             Rel.reverse_relationship_id,
             Rel.is_hierarchical,
-            Rel.defines_ancestry.label("is_downward"),
-            Rev.defines_ancestry.label("is_upward"),
+            Rel.defines_ancestry.label("anc_down"),
+            Rev.defines_ancestry.label("anc_up"),
         )
         .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)  # This is not really joining IDs but matching the relationship_id string to the reverse_relationship_id string
         .where(Rel.relationship_id == relationship_id)
+    )
+
+def q_all_predicates_with_ancestry():
+    Rel = Relationship
+    Rev = aliased(Relationship)
+    return (
+        select(
+            Rel.relationship_id,  # This is not an id but a unique label string...
+            Rel.relationship_name,
+            Rel.reverse_relationship_id,
+            Rel.is_hierarchical,
+            Rel.defines_ancestry.label("anc_down"),
+            Rev.defines_ancestry.label("anc_up"),
+        )
+        .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
     )
 
 

@@ -2,8 +2,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum, auto
-from typing import Optional, TYPE_CHECKING, Mapping
+from typing import Optional, TYPE_CHECKING, Mapping, ClassVar
 from html import escape
+import re
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
 
@@ -32,7 +33,8 @@ class PredicateKind(Enum):
     ONTO_DOWN = auto()
     
     # Horizontal & Translation
-    MAPPING = auto()
+    MAPS_TO = auto()
+    MAPS_FROM = auto()
     VERSIONING = auto()
     
     # Semantic Enrichment
@@ -48,7 +50,8 @@ class PredicateKind(Enum):
             PredicateKind.ONTO_UP: "ontological relationship (upwards, generalization)",
             PredicateKind.ONTO_DOWN: "ontological relationship (downwards, specialization)",
             
-            PredicateKind.MAPPING: "mapping relationship (cross-vocabulary translation)",
+            PredicateKind.MAPS_TO: "mapping relationship (cross-vocabulary translation)",
+            PredicateKind.MAPS_FROM: "reverse mapping relationship (cross-vocabulary translation)",
             PredicateKind.VERSIONING: "versioning relationship (lifecycle/deprecation)",
             
             PredicateKind.COMPOSITION: "compositional relationship (part-whole structure)",
@@ -61,44 +64,10 @@ class PredicateKind(Enum):
 HIERARCHICAL_PREDICATE_KINDS = frozenset({
     PredicateKind.ONTO_UP, 
     PredicateKind.ONTO_DOWN, 
-    PredicateKind.MAPPING,
+    PredicateKind.MAPS_TO,
     PredicateKind.VERSIONING,
     PredicateKind.COMPOSITION
 })
-
-PREDICATE_VERSIONING_KEYWORDS = frozenset([
-    "replaced", "replaces", "revision", "discontinued", "invalid", "was_a"
-])
-
-PREDICATE_MAPPING_KEYWORDS = frozenset([
-    "maps to", "mapped from", "equivalent", " eq", "same_as", 
-    "alt_to", "poss_eq", " - ", " to ",
-    "brand", "tradename"
-])
-
-PREDICATE_COMPOSITION_KEYWORDS = frozenset([
-    "component", "consist", "constitut", "contain",
-    "part of", "ingredient", " ing", "panel", "includes"
-])
-
-PREDICATE_INTERACTION_KEYWORDS = frozenset([
-    "causes", "caused", "due to", "induces", "induced", 
-    "treat", "prevent", "contraindicat", " ci ", " ci",
-    "interact", "affected", "etiology", "manifestation"
-])
-
-PREDICATE_ATTRIBUTE_KEYWORDS = frozenset([
-    "property", "value", "unit", "range", "measure", "scale", "method", "mode"
-])
-
-PREDICATE_METADATA_KEYWORDS = frozenset([
-    "asso with",
-    "occurs after",
-    "occurs before",
-    "followed by",
-    "follows"
-
-])
 
 
 @dataclass(frozen=True)
@@ -128,51 +97,59 @@ class EdgeView:
             f"{o.concept_name}"
         )
 
+# Can be adapted using self.kg.predicate_summary() as it queries all unique predicates
+PREDICATE_RULES: tuple[tuple[PredicateKind, re.Pattern], ...] = (
+    # "ATC - RxNorm eq", "ATC to NDFRT eq", "RxNorm - CVX"
+    (PredicateKind.ONTO_UP, re.compile(r".*\b(is a)\b.*", re.I)),
+    (PredicateKind.ONTO_DOWN, re.compile(r"(subsumes)$", re.I)),
+    (PredicateKind.MAPS_TO, re.compile(r"^[A-Z0-9 -/]+ (to|-) [A-Z0-9 -/]+( (eq|name))?$", re.I)),
+    (PredicateKind.MAPS_TO, re.compile(r".*(maps to|same_as to|alt_to to|poss_eq to)$", re.I)),
+    (PredicateKind.MAPS_FROM, re.compile(r".*(mapped from|same_as from|alt_to from|poss_eq from)$", re.I)),
+    (PredicateKind.VERSIONING, re.compile(r".*(replaced|replaces|revision|discontinued|invalid|was_a|historic).*", re.I)),
+    (PredicateKind.COMPOSITION, re.compile(r".*(component|consist|constitut|contain|part of|ingredient|\bing\b|panel|includes).*", re.I)),
+    (PredicateKind.INTERACTION, re.compile(r".*(cause|due to|induce|treat|prevent|contraindicat|\bci\b|interact|affected|etiology|manifestation|inhibit|diagnose|acts on).*", re.I)),
+    (PredicateKind.ATTRIBUTE, re.compile(r".*\b(has | of$|property|value|unit|range|measure|scale|method|mode|available|sterile|dose form|character).*", re.I)),
+    (PredicateKind.METADATA, re.compile(r".*(asso with|occurs |follow|reformulated|physiol effect|during|before|after|towards|temp related).*", re.I)),
+    (PredicateKind.METADATA, re.compile(r".*\b(using|used|uses)\b.*", re.I)),
+)
 
 @dataclass(frozen=True)
 class Predicate:
-    relationship_id: str  # Not really an ID but a unique string label for the relationship, e.g. "is a", "maps to", etc.
-    name: str
-    reverse_id: Optional[str]  # Same here, unique string label for the reverse relationship if it exists, e.g. "has" is reverse of "is a"
+    relationship_id: str  # string ID (e.g. `maps to`)
+    name: str # human readable label (e.g. `Non-standard to Standard Mapping`)
+    reverse_id: Optional[str]  # string ID reverse relationship (e.g. `mapped from`)
     is_hierarchical: bool
-    upwards: bool
-    downwards: bool
+    anc_up: bool
+    anc_down: bool
+
 
     @property
     def defines_ancestry(self) -> bool:
-        return self.upwards or self.downwards
+        return self.anc_up or self.anc_down
 
-    def classify_predicate(self, *, kg) -> PredicateKind:
-        # 1. Structural Hierarchy (The Spine)
-        if self.upwards and self.downwards:
-            raise ValueError(f"Predicate {self.relationship_id} cannot be both upwards and downwards")
-        if self.upwards:
-            return PredicateKind.ONTO_UP
-        elif self.downwards:
-            return PredicateKind.ONTO_DOWN
+    def classify_predicate(self) -> PredicateKind:       
         
-        rid = self.relationship_id.lower()
+        rid = self.relationship_id.strip()
+        predicate_kind = self._get_regex_kind(rid)
 
-        if any(kw in rid for kw in PREDICATE_VERSIONING_KEYWORDS):
-            return PredicateKind.VERSIONING
+        # Defines ancestry is not really used so could be removed eventually
+        # NOTE: This is for debugging only
+        #if self.defines_ancestry:
+        #    if predicate_kind in (PredicateKind.ONTO_UP, PredicateKind.ONTO_DOWN):
+        #        return predicate_kind
+        #    logger.debug(f"Predicate {self.relationship_id} [{self.name}] has ancestry and is of type {predicate_kind}")
 
-        if any(kw in rid for kw in PREDICATE_MAPPING_KEYWORDS):
-            return PredicateKind.MAPPING
+        if predicate_kind is not None:
+            return predicate_kind
 
-        if any(kw in rid for kw in PREDICATE_COMPOSITION_KEYWORDS):
-            return PredicateKind.COMPOSITION
-
-        if any(kw in rid for kw in PREDICATE_INTERACTION_KEYWORDS):
-            return PredicateKind.INTERACTION
-
-        if rid.startswith("has ") or rid.endswith(" of") or any(kw in rid for kw in PREDICATE_ATTRIBUTE_KEYWORDS):
-            return PredicateKind.ATTRIBUTE
-        
-        if any(kw in rid for kw in PREDICATE_METADATA_KEYWORDS):
-            return PredicateKind.METADATA
-
-        logger.debug(f"Predicate classified as METADATA: {self.relationship_id}")
+        logger.debug(f"Defaults to METADATA: {rid}")
         return PredicateKind.METADATA
+    
+    def _get_regex_kind(self, rid) -> Optional[PredicateKind]:
+        for kind, pattern in PREDICATE_RULES:
+            if pattern.match(rid):
+                return kind
+        return None
     
 
     def __repr__(self) -> str:

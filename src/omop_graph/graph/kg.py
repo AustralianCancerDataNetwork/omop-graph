@@ -32,8 +32,8 @@ from .queries import (
     q_leaves,
     q_singletons,
     q_concept_synonym_filtered,
-    q_all_predicates
-)
+    q_all_predicates,
+    q_all_predicates_with_ancestry,
 
 """
 OMOP-backed graph facade.
@@ -167,7 +167,7 @@ class KnowledgeGraph(GraphBackend):
     @lru_cache(maxsize=10_000)
     def predicate(self, relationship_id: str) -> Predicate:
         row = self.session.execute(
-            q_predicate_row_with_direction(relationship_id)
+            q_predicate_row_with_ancestry(relationship_id)
         ).one()
 
         return Predicate(
@@ -175,8 +175,8 @@ class KnowledgeGraph(GraphBackend):
             name=row.relationship_name,
             reverse_id=row.reverse_relationship_id,
             is_hierarchical=bool(row.is_hierarchical),
-            upwards=bool(int(row.is_upward)),
-            downwards=bool(int(row.is_downward)),
+            anc_up=bool(int(row.anc_up)),
+            anc_down=bool(int(row.anc_up)),
         )
 
     @lru_cache(maxsize=10_000)
@@ -186,7 +186,7 @@ class KnowledgeGraph(GraphBackend):
         ).scalar_one()
 
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
-        return self.predicate(relationship_id).classify_predicate(kg=self)
+        return self.predicate(relationship_id).classify_predicate()
     
     def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> Tuple[PredicateKind, ...]:
         return tuple(
@@ -316,7 +316,7 @@ class KnowledgeGraph(GraphBackend):
         *,
         direction: str = "out",
         predicate=None,
-        predicate_kinds: set[PredicateKind] | None = None,
+        predicate_kinds: set[PredicateKind] | frozenset[PredicateKind] | None = None,
         active_only: bool = True,
         on: date | None = None,
         within_domain: bool = True,
@@ -405,15 +405,15 @@ class KnowledgeGraph(GraphBackend):
         """
         Return all predicates known to the knowledge graph.
         """
-        rows = self.session.execute(q_all_predicates()).all()
+        rows = self.session.execute(q_all_predicates_with_ancestry()).all()
         return tuple(
             Predicate(
                 relationship_id=row.relationship_id,
                 name=row.relationship_name,
                 reverse_id=row.reverse_relationship_id,
                 is_hierarchical=bool(int(row.is_hierarchical)),
-                upwards=bool(int(row.is_upward)),
-                downwards=bool(int(row.is_downward)),
+                anc_up=bool(int(row.anc_up)),
+                anc_down=bool(int(row.anc_down)),
             )
             for row in rows
         )
