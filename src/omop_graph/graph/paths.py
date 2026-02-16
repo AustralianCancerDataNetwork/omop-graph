@@ -9,7 +9,7 @@ import numpy as np
 from .edges import PredicateKind, EdgeView
 from .traverse import GraphTrace, TraceStep
 from .kg import KnowledgeGraph
-from ..reasoning.resolvers import ResolverConfidence
+from ..reasoning.resolvers import ResolverConfidence, CandidateHit
 
 import logging
 logger = logging.getLogger(__name__)
@@ -391,7 +391,7 @@ class QueueItem:
     cost: float
     node: Node = field(compare=False)
     rc: ResolverConfidence = field(compare=False)
-    iterations: int = field(default=0, compare=False)
+    iterations: int = field(default=0, compare=False) 
 
 @dataclass(frozen=True)
 class StandardConcept:
@@ -400,6 +400,7 @@ class StandardConcept:
     separation: int
     original_id: int
     original_name: str
+    matched_label: str
     resolver_confidence: ResolverConfidence
     hierarchy_cost: float = 0.0
 
@@ -426,9 +427,8 @@ def get_unique_standard_concepts(concepts: list[StandardConcept]) -> list[Standa
 
 def find_standard_paths(
     kg: KnowledgeGraph,
-    source: int,
     target: int,
-    resolver_confidence: ResolverConfidence,
+    candidate: CandidateHit,
     predicate_kinds: Optional[frozenset[Any]] = None,
     max_depth: int = 6,
     max_concepts: Optional[int] = None,
@@ -454,11 +454,16 @@ def find_standard_paths(
     #}
     # -------------------------------
 
-    source_view = kg.concept_view(source)
+    source_view = kg.concept_view(candidate.concept_id)
     source_is_std = source_view.standard_concept if source_view else False
 
     # Initialise the queue
-    queue = [QueueItem(cost=0, node=Node(source, source_is_std), rc=resolver_confidence, iterations=0)]
+    queue = [QueueItem(
+        cost=0, 
+        node=Node(candidate.concept_id, source_is_std), 
+        rc=candidate.resolver_confidence, 
+        iterations=0
+    )]
     visited: Dict[Tuple[int, bool], int] = {}
 
     found_standard_concepts = []
@@ -491,8 +496,9 @@ def find_standard_paths(
                     concept_id=subject_node.concept_id,
                     concept_name=kg.concept_view(subject_node.concept_id).concept_name,
                     separation=potential_ancestor.min_levels_of_separation,
-                    original_id=source,
+                    original_id=candidate.concept_id,
                     original_name=source_view.concept_name,
+                    matched_label=candidate.matched_label,
                     resolver_confidence=rc,
                 ))
                 continue

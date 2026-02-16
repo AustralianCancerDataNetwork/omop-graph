@@ -16,6 +16,7 @@ from typing import Optional, Iterable
 class CandidateHit:
     concept_id: int
     resolver_confidence: ResolverConfidence
+    matched_label: str
 
 class CandidateResolver(ABC):
     """
@@ -43,7 +44,7 @@ class CandidateResolver(ABC):
     ) -> Iterable[CandidateHit]:
         matches = self.get_matches(kg, text, constraints=constraints)
         hits = [
-            CandidateHit(m.concept_id, self.confidence)
+            CandidateHit(m.concept_id, self.confidence, matched_label=m.matched_label)
             for m in matches
         ]
         return hits[:limit] if limit else hits
@@ -59,6 +60,38 @@ class ExactSynonymResolver(ExactLabelResolver):
     
     def get_matches(self, kg: KnowledgeGraph, text: str, constraints: Optional[SearchConstraintConcept] = None) -> Tuple[LabelMatch, ...]:
         return tuple([match for match in kg.synonym_lookup(text, search_constraint=constraints)])
+    
+class FullTextResolver(CandidateResolver):
+    """
+    Matches terms irrespective of word order (Bag of Words).
+    e.g. "Kidney Cancer" -> "Cancer of Kidney"
+    """
+    confidence = ResolverConfidence.FULLTEXT
+
+    def get_matches(
+        self, 
+        kg: KnowledgeGraph, 
+        text: str, 
+        constraints: Optional[SearchConstraintConcept] = None
+    ) -> Tuple[LabelMatch, ...]:
+        # You'll need to expose the fulltext query in your KG class
+        return tuple([
+            match for match in kg.fulltext_lookup(text, search_constraint=constraints, fuzzy=False)
+        ])
+    
+class FullTextSynonymResolver(CandidateResolver):
+    confidence = ResolverConfidence.FULLTEXT_SYNONYM
+
+    def get_matches(
+        self, 
+        kg: KnowledgeGraph, 
+        text: str, 
+        constraints: Optional[SearchConstraintConcept] = None
+    ) -> Tuple[LabelMatch, ...]:
+        # You'll need to expose the fulltext query in your KG class
+        return tuple([
+            match for match in kg.fulltext_lookup(text, search_constraint=constraints, fuzzy=True)
+        ])
     
 
 class PartialLabelResolver(CandidateResolver):
@@ -100,4 +133,6 @@ ALL_RESOLVERS = (
     ExactSynonymResolver(),
     PartialLabelResolver(),
     PartialSynonymResolver(),
+    FullTextResolver(),
+    FullTextSynonymResolver(),
 )

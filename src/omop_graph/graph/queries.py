@@ -99,8 +99,6 @@ def q_concept_name_ilike(
         base_stmt = search_constraint.apply(base_stmt)
     return base_stmt
 
-
-
 def q_concept_synonym() -> Select:
     return (
         select(
@@ -137,6 +135,42 @@ def q_concept_synonym_ilike(label: str, search_constraint: Optional[SearchConstr
         assert isinstance(search_constraint, SearchConstraintConcept), "search_constraint must be an instance of SearchConstraintConcept"
         base_stmt = search_constraint.apply(base_stmt)
     return base_stmt
+
+def q_concept_name_fulltext(
+    term: str, 
+    search_constraint: Optional[SearchConstraintConcept] = None
+) -> Select:
+    
+    vector = func.to_tsvector('english', func.coalesce(Concept.concept_name, ''))
+    query = func.plainto_tsquery('english', term)
+    stmt = (
+        q_concept_name()
+        .where(vector.op('@@')(query))  # The Match Operator
+        .order_by(func.ts_rank(vector, query).desc())
+    )
+
+    if search_constraint:
+        stmt = search_constraint.apply(stmt)
+
+    return stmt
+
+def q_concept_synonym_fulltext(
+    term: str, 
+    search_constraint: Optional[SearchConstraintConcept] = None
+) -> Select:
+    
+    vector = func.to_tsvector('english', func.coalesce(Concept_Synonym.concept_synonym_name, ''))
+    query = func.plainto_tsquery('english', term)
+    stmt = (
+        q_concept_synonym()
+        .where(vector.op('@@')(query))  # The Match Operator
+        .order_by(func.ts_rank(vector, query).desc())
+    )
+
+    if search_constraint:
+        stmt = search_constraint.apply(stmt)
+
+    return stmt
 
 def q_predicate_name(relationship_id: str) -> Select:
     return (

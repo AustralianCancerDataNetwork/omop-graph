@@ -38,6 +38,8 @@ from .queries import (
     q_concept_vocabulary_ids,
     q_concept_potential_ancestor,
     q_concept_num_ancestors,
+    q_concept_name_fulltext,
+    q_concept_synonym_fulltext,
 )
 from .constraints import SearchConstraintConcept
 
@@ -155,6 +157,31 @@ class KnowledgeGraph(GraphBackend):
             )
             for cid, name, is_standard, is_active in direct_rows
         )
+    
+    @lru_cache(maxsize=200_000)
+    def _fulltext_lookup_raw(
+        self,
+        label: str,
+        fuzzy: bool = False,
+        search_constraint: Optional[SearchConstraintConcept] = None
+    ) -> Tuple[LabelMatch, ...]:
+        """
+        Resolve a label using fulltext search (bag of words, ignoring word order).
+        """
+        q = q_concept_synonym_fulltext if fuzzy else q_concept_name_fulltext
+        rows = self.session.execute(q(label, search_constraint=search_constraint)).all()
+
+        return tuple(
+            LabelMatch(
+                input_label=label,
+                matched_label=name,
+                concept_id=int(cid),
+                match_kind=LabelMatchKind.FULLTEXT,
+                is_standard=is_standard,
+                is_active=is_active,
+            )
+            for cid, name, is_standard, is_active in rows
+        )
 
 
     def synonym_lookup(
@@ -185,6 +212,22 @@ class KnowledgeGraph(GraphBackend):
         raw = self._label_lookup_raw(label, fuzzy=fuzzy, search_constraint=search_constraint)
         if sort:
             raw = sorted(raw)
+        return LabelMatchGroupView.from_matches(raw)
+    
+    def fulltext_lookup(
+        self,
+        label: str,
+        sort: bool = True,
+        fuzzy: bool = False,
+        search_constraint: Optional[SearchConstraintConcept] = None
+    ) -> LabelMatchGroupView:
+        """
+        Resolve a label using fulltext search (bag of words, ignoring word order).
+        """
+        raw = self._fulltext_lookup_raw(label, fuzzy=fuzzy, search_constraint=search_constraint)
+        if sort:
+            raw = sorted(raw)
+
         return LabelMatchGroupView.from_matches(raw)
 
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Iterable, Generator, Union
 
-from omop_graph.reasoning.resolvers import ResolverConfidence, ResolverPipeline
+from omop_graph.reasoning.resolvers import ResolverConfidence, ResolverPipeline, CandidateHit
 from omop_graph.graph.paths import find_standard_paths, StandardConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.constraints import SearchConstraintConcept
@@ -44,17 +44,14 @@ def ground_term(
     for hit in resolved:
         if constraints.parent_ids is not None:
             # NOTE: Rename the function?
-            candidate_standard_concepts = find_hierarchy_paths(
-                kg,
-                hit.concept_id,
-                constraints.parent_ids,
+            candidate_standard_concepts = find_standard_concepts(
+                kg=kg,
+                candidate=hit,
+                parent_ids=constraints.parent_ids,
                 max_depth=constraints.max_depth,
+                max_paths=None,
                 predicate_kinds=constraints.predicate_kinds,
-                max_paths=5,
-                resolver_confidence=hit.resolver_confidence,
             )
-            # TODO: Filter exact smae concepts so we don't do the scoring multiple times?
-            # This is important when we do embeddings as they are costly
 
             if not candidate_standard_concepts:
                 concept_name = kg.concept_view(hit.concept_id).concept_name
@@ -87,6 +84,7 @@ def ground_term(
     similarity_scores = embedding_client.cosine_similarity(input_embedding, standard_concept_embeddings)[0] # Shape (num_concepts,)
 
     ranked_standard_concepts = score_standard_concepts(
+        text=text, 
         standard_concepts=tuple(unique_standard_concepts),
         kg=kg,
         # NOTE: Could do these eventually
@@ -96,13 +94,11 @@ def ground_term(
     ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)
     return ranked_standard_concepts
     
-def find_hierarchy_paths(
+def find_standard_concepts(
     kg: KnowledgeGraph,
-    concept_id: int,
+    candidate: CandidateHit,
     parent_ids: tuple[int, ...],
-    *,
     max_depth: int,
-    resolver_confidence: ResolverConfidence,
     max_paths: int = 3,
     predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS,
     lowest_cost: Optional[float] = None,
@@ -112,14 +108,13 @@ def find_hierarchy_paths(
     for parent in parent_ids:
         # found, trace = find_shortest_paths(
         found = find_standard_paths(
-            kg,
-            source=concept_id,
+            kg=kg,
+            candidate=candidate,
             target=parent,
             predicate_kinds=predicate_kinds,
             max_depth=max_depth,
-            max_paths=max_paths,
+            max_concepts=max_paths,
             lowest_cost=lowest_cost,
-            resolver_confidence=resolver_confidence,
         )
         paths.extend(found)
 

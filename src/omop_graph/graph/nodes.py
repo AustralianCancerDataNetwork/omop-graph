@@ -76,8 +76,10 @@ class ConceptView:
         return cls(**data)
     
 class LabelMatchKind(Enum):
+    # Order matters as it ranks the kinds of matches
     DIRECT = auto()
     SYNONYM = auto()
+    FULLTEXT = auto()
 
 @dataclass(frozen=True)
 class LabelMatch:
@@ -94,6 +96,7 @@ class LabelMatch:
         kind_badge = {
             LabelMatchKind.DIRECT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>direct</span>",
             LabelMatchKind.SYNONYM: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>synonym</span>",
+            LabelMatchKind.FULLTEXT: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
         }[self.match_kind]
 
         std_badge = (
@@ -130,7 +133,8 @@ def label_match_rank(m: LabelMatch) -> tuple:
     return (
         not m.is_standard,          # prefer standard
         not m.is_active,            # prefer active
-        m.match_kind is LabelMatchKind.SYNONYM,  # prefer direct
+        m.match_kind.value,  # prefer direct
+        len(m.matched_label), # prefer shorter matches
     )
 
 
@@ -179,8 +183,12 @@ class LabelMatchGroupView:
             reasons = []
             if best.match_kind is LabelMatchKind.DIRECT:
                 reasons.append("direct name match")
-            else:
+            elif best.match_kind is LabelMatchKind.SYNONYM:
                 reasons.append("synonym match")
+            elif best.match_kind is LabelMatchKind.FULLTEXT:
+                reasons.append("fulltext match")
+            else:
+                raise ValueError(f"Unknown match kind: {best.match_kind}")
 
             if best.is_standard:
                 reasons.append("standard")
