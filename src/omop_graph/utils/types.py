@@ -1,11 +1,10 @@
-from enum import Enum
+from enum import Enum, auto
 
 class ResolverConfidence(Enum):
-    EXACT = 0
-    EXACT_SYNONYM = 1
-    PARTIAL = 2
-    EMBEDDING = 3
-    EXTERNAL = 4
+    EXACT = auto()
+    EXACT_SYNONYM = auto()
+    PARTIAL = auto()
+    PARTIAL_SYNONYM = auto()
 
     def __lt__(self, other: "ResolverConfidence") -> bool:
         return self.value < other.value

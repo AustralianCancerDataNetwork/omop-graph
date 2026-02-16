@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch
 from omop_graph.utils.types import ResolverConfidence
+from omop_graph.graph.constraints import SearchConstraintConcept
 
 from dataclasses import dataclass
 from typing import Optional, Iterable
@@ -29,6 +30,7 @@ class CandidateResolver(ABC):
         self,
         kg: KnowledgeGraph,
         text: str,
+        constraints: Optional[SearchConstraintConcept] = None,
     ) -> Tuple[LabelMatch, ...]:
         ...
 
@@ -36,10 +38,10 @@ class CandidateResolver(ABC):
         self,
         kg: KnowledgeGraph,
         text: str,
-        *,
+        constraints: Optional[SearchConstraintConcept] = None,
         limit: int | None = None,
     ) -> Iterable[CandidateHit]:
-        matches = self.get_matches(kg, text)
+        matches = self.get_matches(kg, text, constraints=constraints)
         hits = [
             CandidateHit(m.concept_id, self.confidence)
             for m in matches
@@ -49,21 +51,21 @@ class CandidateResolver(ABC):
 class ExactLabelResolver(CandidateResolver):
     confidence = ResolverConfidence.EXACT
 
-    def get_matches(self, kg: KnowledgeGraph, text: str) -> Tuple[LabelMatch, ...]:
-        return tuple([match for match in kg.label_lookup(text)])    
+    def get_matches(self, kg: KnowledgeGraph, text: str, constraints: Optional[SearchConstraintConcept] = None) -> Tuple[LabelMatch, ...]:
+        return tuple([match for match in kg.label_lookup(text, search_constraint=constraints)])    
 
 class ExactSynonymResolver(ExactLabelResolver):
     confidence = ResolverConfidence.EXACT_SYNONYM
     
-    def get_matches(self, kg: KnowledgeGraph, text: str) -> Tuple[LabelMatch, ...]:
-        return tuple([match for match in kg.synonym_lookup(text)])
+    def get_matches(self, kg: KnowledgeGraph, text: str, constraints: Optional[SearchConstraintConcept] = None) -> Tuple[LabelMatch, ...]:
+        return tuple([match for match in kg.synonym_lookup(text, search_constraint=constraints)])
     
 
 class PartialLabelResolver(CandidateResolver):
     confidence = ResolverConfidence.PARTIAL
 
-    def get_matches(self, kg: KnowledgeGraph, text: str) -> Tuple[LabelMatch, ...]:
-        matches = kg.label_lookup(text, fuzzy=True)
+    def get_matches(self, kg: KnowledgeGraph, text: str, constraints: Optional[SearchConstraintConcept] = None) -> Tuple[LabelMatch, ...]:
+        matches = kg.label_lookup(text, fuzzy=True, search_constraint=constraints)
         ranked = sorted(
             matches,
             key=lambda m: self._similarity_score(text, m.matched_label)
@@ -80,3 +82,22 @@ class PartialLabelResolver(CandidateResolver):
             l.count(" "),               # fewer words
             abs(len(l) - len(q)),       # length difference
         )
+    
+class PartialSynonymResolver(PartialLabelResolver):
+    confidence = ResolverConfidence.PARTIAL_SYNONYM
+
+    def get_matches(self, kg: KnowledgeGraph, text: str, constraints: Optional[SearchConstraintConcept] = None) -> Tuple[LabelMatch, ...]:
+        matches = kg.synonym_lookup(text, fuzzy=True, search_constraint=constraints)
+        ranked = sorted(
+            matches,
+            key=lambda m: self._similarity_score(text, m.matched_label)
+        )
+        return tuple(ranked)
+    
+
+ALL_RESOLVERS = (
+    ExactLabelResolver(),
+    ExactSynonymResolver(),
+    PartialLabelResolver(),
+    PartialSynonymResolver(),
+)
