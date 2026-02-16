@@ -1,4 +1,4 @@
-from .api import KnowledgeGraph, GraphPath, Subgraph, GraphTrace, PathExplanation, rank_paths, PathProfile
+from .api import KnowledgeGraph, GraphPath, Subgraph, GraphTrace, PathExplanation, PathProfile
 
 __all__ = [
     "KnowledgeGraph",
@@ -6,6 +6,5 @@ __all__ = [
     "Subgraph",
     "GraphTrace",
     "PathExplanation",
-    "rank_paths",
     "PathProfile",
 ]

@@ -10,7 +10,7 @@ Structural plausibility
 """
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.paths import GraphPath
+from omop_graph.graph.paths import GraphPath, PathExplanation, PathProfile
 from omop_graph.graph.traverse import Subgraph, GraphTrace
 from .reasoning.resolvers import (
     CandidateResolver,
@@ -31,4 +31,6 @@ __all__ = [
     "ExactLabelResolver",
     "GroundingConstraints",
     "ResolverPipeline",
+    "PathExplanation",
+    "PathProfile",
 ]

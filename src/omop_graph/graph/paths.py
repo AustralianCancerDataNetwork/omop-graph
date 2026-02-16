@@ -4,6 +4,8 @@ from collections import deque, defaultdict
 from typing import Optional, Any, Tuple, List, Dict, Literal
 import heapq
 
+import numpy as np
+
 from .edges import PredicateKind, EdgeView
 from .traverse import GraphTrace, TraceStep
 from .kg import KnowledgeGraph
@@ -531,3 +533,161 @@ def find_standard_paths(
 
     return found_standard_concepts
 
+@dataclass(frozen=True)
+class PathProfile:
+    """
+    Represents the resolved 'Anchor Concept' discovered along a graph path.
+
+    This class fundamentally changes the resolution logic from "scoring a whole path" 
+    to "finding a trusted anchor." It traverses the path starting from the LLM's 
+    candidate term and stops at the **first Standard OMOP Concept** it encounters.
+
+    - **If a Standard Concept is found**: It becomes the `concept_id` for this profile. 
+      The path to reach it is scored for 'drift' (distance/noise).
+    - **If NO Standard Concept is found**: The profile reverts to the original 
+      candidate ID but applies a heavy 'Non-Standard' penalty to the score.
+
+    Attributes
+    ----------
+    score : PathScore
+        The calculated score object containing the breakdown of points (trust, depth, drift).
+    concept_id : int
+        The ID of the *resolved* concept. This is either the Standard Concept found 
+        mid-path, or the original concept if no standard anchor was found.
+    concept_name : str
+        The name of the resolved concept.
+    is_standard : bool
+        True if `concept_id` is a Standard OMOP Concept. If False, this profile 
+        will likely have a very low score.
+    original_concept_id : int
+        The ID of the starting node (the raw candidate from the LLM/Search).
+    path : GraphPath
+        The full topological path from the original candidate to the root (or end of traversal).
+
+    Methods
+    -------
+    from_path(...)
+        Factory method that traverses the path to identify the 'Standard Anchor'. 
+        It promotes the specific `MAPPING` or `VERSIONING` edge that leads to a 
+        Standard Concept as the 'Anchor Step' (exempt from penalty), while treating 
+        all other edges as scoring modifiers.
+    """
+    concept_id: int
+    concept_name: str
+    is_standard: bool
+    original_concept_id: int
+    original_concept_name: str
+    path: GraphPath
+    
+    def __repr__(self) -> str:
+        return f"PathProfile(concept_id={self.concept_id} [{self.concept_name}])"
+    
+
+    @classmethod
+    def from_path(
+        cls, 
+        kg: KnowledgeGraph, 
+        path: GraphPath, 
+        confidence: ResolverConfidence,
+        embedding_sims: np.ndarray | None = None
+    ) -> "PathProfile":
+        
+        # Path Traversal
+        standard_anchor: Optional[tuple[int, str]] = None
+        
+        # Pre-fetch views to check standard status
+        concept_views = kg.concept_views(path.nodes())
+        predicate_kinds = kg.predicate_kinds(tuple(p.predicate for p in path.steps))
+
+        predicate_kind_indices = {}
+        for step_idx in range(len(path.steps)):
+            predicate_kind = predicate_kinds[step_idx]
+
+            # We promote the first swap to a standard concept as the anchor point
+            if (
+                (
+                    predicate_kind == PredicateKind.MAPS_TO or 
+                    predicate_kind == PredicateKind.VERSIONING or 
+                    predicate_kind == PredicateKind.MAPS_FROM
+                ) and (  # Leads to standard concept and standard_anchor not been found yet
+                    not standard_anchor and concept_views[step_idx + 1].standard_concept
+                )
+            ):
+                standard_anchor = (concept_views[step_idx + 1].concept_id, concept_views[step_idx + 1].concept_name)
+
+            else:
+                if predicate_kind not in predicate_kind_indices:
+                    predicate_kind_indices[predicate_kind] = []
+                predicate_kind_indices[predicate_kind].append(step_idx)
+    
+        if standard_anchor is None:
+            concept_id = concept_views[0].concept_id
+            concept_name = concept_views[0].concept_name
+            is_standard = concept_views[0].standard_concept
+        else:
+            concept_id, concept_name = standard_anchor
+            is_standard = True
+
+        return cls(
+            concept_id=concept_id,
+            concept_name=concept_name,
+            is_standard=is_standard,
+            original_concept_id=concept_views[0].concept_id,
+            original_concept_name=concept_views[0].concept_name,
+            path=path,
+        )
+
+
+@dataclass(frozen=True)
+class PathExplanationStep:
+    step: PathStep
+    traversal_depth: int | None
+    predicate_kind: PredicateKind
+    reason: str
+
+@dataclass(frozen=True)
+class PathExplanation:
+    path: GraphPath
+    profile: PathProfile
+    steps: tuple[PathExplanationStep, ...]
+
+    @classmethod
+    def from_path(
+        cls,
+        kg: KnowledgeGraph,
+        path: GraphPath,
+        trace: GraphTrace,
+        confidence: ResolverConfidence,
+    ) -> "PathExplanation":
+        steps: list[PathExplanationStep] = []
+        profile = PathProfile.from_path(kg, path, confidence=confidence)
+
+        for step in path.steps:
+            ts = trace_contains_step(trace, step)
+            kind = kg.predicate_kind(step.predicate)
+            reason = kind.label()
+            steps.append(
+                PathExplanationStep(
+                    step=step,
+                    traversal_depth=ts.depth if ts else None,
+                    predicate_kind=kind,
+                    reason=reason,
+                )
+            )
+        return cls(
+            path=path,
+            profile=profile,
+            steps=tuple(steps),
+        )
+    
+def trace_contains_step(trace: GraphTrace, step: PathStep) -> TraceStep | None:
+    for ts in trace.steps:
+        if ts.node != step.subject:
+            continue
+        for e in ts.expanded_edges:
+            if (
+                e.object_id == step.object
+                and e.predicate_id == step.predicate
+            ):
+                return ts
+    return None
