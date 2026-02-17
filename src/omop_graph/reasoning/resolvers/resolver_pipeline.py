@@ -1,49 +1,120 @@
-from dataclasses import dataclass
-from omop_graph.graph.kg import KnowledgeGraph
+"""
+Pipeline for executing multiple candidate resolvers in sequence.
 
-from dataclasses import dataclass
-from typing import Optional, Generator
-from .resolvers import CandidateResolver, ResolverConfidence, CandidateHit, ALL_RESOLVERS
-from ...graph.kg import KnowledgeGraph
-from ...graph.constraints import SearchConstraintConcept
+This module defines the `ResolverPipeline`, which orchestrates the execution
+of various search strategies (exact match, synonym match, etc.) to find
+candidate OMOP concepts for a given text. It supports early stopping based on
+confidence thresholds.
+"""
+
+from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from typing import Generator, Optional, Tuple
+
+# Local Application Imports
+from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.reasoning.resolvers.resolvers import (
+    ALL_RESOLVERS,
+    CandidateHit,
+    CandidateResolver,
+    ResolverConfidence,
+)
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ResolverPipeline:
-    resolvers: tuple[CandidateResolver, ...]
+    """
+    A sequence of resolvers to be executed in order of confidence.
+
+    The pipeline runs high-confidence resolvers first (e.g., exact matches).
+    If a match is found and the confidence is sufficient, it can stop early,
+    preventing the execution of lower-confidence (and potentially slower/noisier)
+    resolvers.
+
+    Parameters
+    ----------
+    resolvers : tuple[CandidateResolver, ...]
+        The sequence of resolvers to execute. Automatically sorted by confidence.
+    stop_after_confidence : ResolverConfidence, optional
+        If set, the pipeline stops executing further resolvers once a match
+        has been found by a resolver with this confidence level or better (lower value).
+    """
+
+    resolvers: Tuple[CandidateResolver, ...]
+    stop_after_confidence: Optional[ResolverConfidence]
 
     def __init__(
         self,
-        resolvers: tuple[CandidateResolver, ...],
+        resolvers: Tuple[CandidateResolver, ...],
         *,
-        stop_after_confidence: ResolverConfidence | None = None,
+        stop_after_confidence: Optional[ResolverConfidence] = None,
     ):
-        # Sort the resolvers by confidence so the stop logic works correctly
-        self.resolvers = tuple(sorted(resolvers, key=lambda r: r.confidence.value))
-        self.stop_after_confidence = stop_after_confidence
+        # Sort the resolvers by confidence (lower value = higher confidence)
+        object.__setattr__(
+            self,
+            "resolvers",
+            tuple(sorted(resolvers, key=lambda r: r.confidence.value)),
+        )
+        object.__setattr__(self, "stop_after_confidence", stop_after_confidence)
 
     @classmethod
-    def with_all_resolvers(cls, stop_after_confidence: ResolverConfidence | None = None) -> "ResolverPipeline":
+    def with_all_resolvers(
+        cls, stop_after_confidence: Optional[ResolverConfidence] = None
+    ) -> "ResolverPipeline":
+        """
+        Create a pipeline configured with all available resolvers.
+
+        Parameters
+        ----------
+        stop_after_confidence : ResolverConfidence, optional
+            The confidence threshold for early stopping.
+
+        Returns
+        -------
+        ResolverPipeline
+            A fully configured pipeline instance.
+        """
         return cls(
-            resolvers=ALL_RESOLVERS,
-            stop_after_confidence=stop_after_confidence
+            resolvers=ALL_RESOLVERS, stop_after_confidence=stop_after_confidence
         )
 
     def resolve(
         self,
         kg: KnowledgeGraph,
         text: str,
-        limit_per_resolver: int | None = None,
+        limit_per_resolver: Optional[int] = None,
         constraints: Optional[SearchConstraintConcept] = None,
     ) -> Generator[CandidateHit, None, None]:
+        """
+        Execute the pipeline to find candidate concepts for the input text.
+
+        Parameters
+        ----------
+        kg : KnowledgeGraph
+            The graph instance used for lookups.
+        text : str
+            The input text to resolve.
+        limit_per_resolver : int, optional
+            Maximum number of hits to return per resolver strategy.
+        constraints : SearchConstraintConcept, optional
+            Domain or vocabulary restrictions to apply to the search.
+
+        Yields
+        -------
+        CandidateHit
+            Candidate concepts found by the resolvers.
+        """
         seen = set()
 
         for resolver in self.resolvers:
+            # Early stopping check
             if (
-                len(seen) > 0 
+                len(seen) > 0
                 and self.stop_after_confidence is not None
                 and resolver.confidence.value > self.stop_after_confidence.value
             ):
@@ -55,9 +126,8 @@ class ResolverPipeline:
                 limit=limit_per_resolver,
                 constraints=constraints,
             )
+
             for hit in hits:
                 if hit.concept_id not in seen:
                     seen.add(hit.concept_id)
                     yield hit
-    
-    

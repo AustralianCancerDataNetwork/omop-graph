@@ -1,17 +1,63 @@
+"""
+Node definitions for the OMOP Knowledge Graph.
 
+This module defines lightweight data structures (Views) representing entities
+in the OMOP graph, such as Concepts and search matches.
+
+These classes are primarily used for:
+1.  Holding data returned by database queries.
+2.  Rendering rich representations in Jupyter notebooks via `_repr_html_`.
+3.  Ranking and sorting search results.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional, Iterable
 from enum import Enum, auto
 from html import escape
-from collections import defaultdict
 from itertools import chain
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import Row
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class ConceptView:
+    """
+    A lightweight, immutable view of an OMOP Concept.
+
+    This class represents a row from the `concept` table, optimized for
+    read-only access and visualization.
+
+    Parameters
+    ----------
+    concept_id : int
+        The unique OMOP identifier.
+    concept_name : str
+        The human-readable name of the concept.
+    concept_code : str
+        The source code in the original vocabulary.
+    vocabulary_id : str
+        The vocabulary identifier (e.g., 'SNOMED', 'RxNorm').
+    domain_id : str
+        The domain identifier (e.g., 'Condition', 'Drug').
+    concept_class_id : str
+        The class of the concept (e.g., 'Clinical Finding').
+    standard_concept : bool
+        True if this is a Standard Concept ('S'), False otherwise.
+    valid_start_date : date
+        The start date of validity.
+    valid_end_date : date
+        The end date of validity.
+    invalid_reason : str, optional
+        The reason for invalidation (e.g., 'D', 'U'), or None if valid.
+    """
+
     concept_id: int
     concept_name: str
     concept_code: str
@@ -23,29 +69,31 @@ class ConceptView:
     valid_end_date: date
     invalid_reason: Optional[str]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"ConceptView("
             f"id={self.concept_id}, "
             f"{self.vocabulary_id}:{self.concept_code}, "
             f"name={self.concept_name!r})"
         )
-    
 
     def _repr_html_(self) -> str:
-        std_badge = (
-            f"<span style='background:#2b7; color:white; padding:2px 6px; "
-            f"border-radius:4px; font-size:0.75em; margin-left:6px;'>standard</span>"
-            if self.standard_concept == "S"
-            else ""
-        )
+        """
+        Render a rich HTML representation for Jupyter notebooks.
+        """
+        std_badge = ""
+        if self.standard_concept:
+            std_badge = (
+                "<span style='background:#2b7; color:white; padding:2px 6px; "
+                "border-radius:4px; font-size:0.75em; margin-left:6px;'>standard</span>"
+            )
 
-        inactive_badge = (
-            f"<span style='background:#c33; color:white; padding:2px 6px; "
-            f"border-radius:4px; font-size:0.75em; margin-left:6px;'>inactive</span>"
-            if self.invalid_reason
-            else ""
-        )
+        inactive_badge = ""
+        if self.invalid_reason:
+            inactive_badge = (
+                "<span style='background:#c33; color:white; padding:2px 6px; "
+                "border-radius:4px; font-size:0.75em; margin-left:6px;'>inactive</span>"
+            )
 
         return f"""
         <div style="border:1px solid #ddd; border-radius:8px; padding:8px; max-width:520px;">
@@ -68,21 +116,64 @@ class ConceptView:
           </table>
         </div>
         """
-    
+
     @classmethod
-    def from_row(cls, row: Row) -> "ConceptView":
+    def from_row(cls, row: Row) -> ConceptView:
+        """
+        Create a ConceptView from a SQLAlchemy Row.
+
+        This method handles the conversion of the 'standard_concept' field
+        from the DB string ("S") to a boolean.
+
+        Parameters
+        ----------
+        row : Row
+            A row object returned by a SQLAlchemy query selecting from the Concept table.
+
+        Returns
+        -------
+        ConceptView
+            The instantiated view.
+        """
         data = dict(row._mapping)
-        data['standard_concept'] = data.pop('standard_concept') == "S"
+        # Convert "S" (Standard) to True, anything else (None, "C") to False
+        # Note: "C" (Classification) is treated as non-standard for this boolean logic
+        data["standard_concept"] = data.pop("standard_concept") == "S"
         return cls(**data)
-    
+
+
 class LabelMatchKind(Enum):
-    # Order matters as it ranks the kinds of matches
+    """
+    Classification of how a label matched a concept.
+    The order defines the priority (Direct > Synonym > Fulltext).
+    """
+
     DIRECT = auto()
     SYNONYM = auto()
     FULLTEXT = auto()
 
+
 @dataclass(frozen=True)
 class LabelMatch:
+    """
+    A single result from a text search/grounding operation.
+
+    Parameters
+    ----------
+    input_label : str
+        The original text that was searched.
+    matched_label : str
+        The text in the database that matched (concept name or synonym).
+    concept_id : int
+        The ID of the matched concept.
+    match_kind : LabelMatchKind
+        How the match was found (Direct, Synonym, etc.).
+    is_standard : bool
+        Whether the matched concept is Standard.
+    is_active : bool
+        Whether the matched concept is currently valid.
+    """
+
     input_label: str
     matched_label: str
     concept_id: int
@@ -91,24 +182,27 @@ class LabelMatch:
     is_standard: bool
     is_active: bool
 
-
     def _repr_html_(self) -> str:
-        kind_badge = {
+        """
+        Render a rich HTML representation for Jupyter notebooks.
+        """
+        kind_badges = {
             LabelMatchKind.DIRECT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>direct</span>",
             LabelMatchKind.SYNONYM: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>synonym</span>",
             LabelMatchKind.FULLTEXT: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
-        }[self.match_kind]
+        }
+        kind_badge = kind_badges[self.match_kind]
 
         std_badge = (
             "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>standard</span>"
-            if self.is_standard else
-            "<span style='background:#aaa; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>non-standard</span>"
+            if self.is_standard
+            else "<span style='background:#aaa; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>non-standard</span>"
         )
 
         active_badge = (
             "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>active</span>"
-            if self.is_active else
-            "<span style='background:#c33; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>inactive</span>"
+            if self.is_active
+            else "<span style='background:#c33; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>inactive</span>"
         )
 
         return f"""
@@ -123,41 +217,88 @@ class LabelMatch:
         </div>
         """
 
-    def __lt__(self, other: "LabelMatch") -> bool:
+    def __lt__(self, other: LabelMatch) -> bool:
+        """
+        Compare two LabelMatches for sorting.
+        Delegates to `label_match_rank`.
+        """
         return label_match_rank(self) < label_match_rank(other)
 
-def label_match_rank(m: LabelMatch) -> tuple:
+
+def label_match_rank(m: LabelMatch) -> Tuple[bool, bool, int, int]:
     """
-    Lower is better.
+    Calculate a ranking key for a label match. Lower is better.
+
+    Priority:
+    1. Standard Concept (True < False)
+    2. Active Concept (True < False)
+    3. Match Kind (Direct < Synonym < Fulltext)
+    4. Label Length (Shorter < Longer)
+
+    Parameters
+    ----------
+    m : LabelMatch
+        The match to rank.
+
+    Returns
+    -------
+    tuple
+        A tuple of comparable values.
     """
     return (
-        not m.is_standard,          # prefer standard
-        not m.is_active,            # prefer active
-        m.match_kind.value,  # prefer direct
-        len(m.matched_label), # prefer shorter matches
+        not m.is_standard,  # Prefer standard (True -> False/0)
+        not m.is_active,  # Prefer active (True -> False/0)
+        m.match_kind.value,  # Prefer lower enum value (Direct=1)
+        len(m.matched_label),  # Prefer shorter matches
     )
-
 
 
 @dataclass(frozen=True)
 class LabelMatchGroupView:
     """
-    Grouped, human-readable view over a set of LabelMatch results.
+    A grouped collection of LabelMatch results.
+
+    Aggregates matches by Concept ID to present a unified view of
+    why a specific concept was selected (e.g., matched via name AND synonym).
+
+    Parameters
+    ----------
+    groups : dict[int, tuple[LabelMatch, ...]]
+        A dictionary mapping Concept ID to a tuple of sorted LabelMatches.
     """
-    groups: dict[int, tuple[LabelMatch, ...]]
+
+    groups: Dict[int, Tuple[LabelMatch, ...]]
 
     @classmethod
-    def from_matches(cls, matches: Iterable[LabelMatch]) -> "LabelMatchGroupView":
-        grouped: dict[int, list[LabelMatch]] = defaultdict(list)
+    def from_matches(cls, matches: Iterable[LabelMatch]) -> LabelMatchGroupView:
+        """
+        Construct a group view from a flat iterable of matches.
+
+        Matches are grouped by Concept ID and then sorted by quality within each group.
+
+        Parameters
+        ----------
+        matches : Iterable[LabelMatch]
+            The raw search results.
+
+        Returns
+        -------
+        LabelMatchGroupView
+            The grouped view.
+        """
+        grouped: Dict[int, List[LabelMatch]] = defaultdict(list)
         for m in matches:
             grouped[m.concept_id].append(m)
 
-        # sort each group by match quality
+        # Sort each group by match quality
         groups_sorted = {
-            cid: tuple(sorted(ms))
-            for cid, ms in grouped.items()
+            cid: tuple(sorted(ms)) for cid, ms in grouped.items()
         }
         return cls(groups=groups_sorted)
+
+    def __iter__(self):
+        """Iterate over all matches flattened."""
+        return chain.from_iterable(self.groups.values())
 
     def __repr__(self) -> str:
         parts = []
@@ -170,17 +311,18 @@ class LabelMatchGroupView:
                 f"{'active' if best.is_active else 'inactive'})"
             )
         return "LabelMatchGroupView(" + ", ".join(parts) + ")"
-    
-    def __iter__(self):
-        return chain.from_iterable(self.groups.values())
 
     def _repr_html_(self) -> str:
+        """
+        Render a summary table for Jupyter notebooks.
+        """
         rows = []
 
         for cid, ms in self.groups.items():
             best = ms[0]
 
             reasons = []
+            # Determine match kind
             if best.match_kind is LabelMatchKind.DIRECT:
                 reasons.append("direct name match")
             elif best.match_kind is LabelMatchKind.SYNONYM:
@@ -188,21 +330,14 @@ class LabelMatchGroupView:
             elif best.match_kind is LabelMatchKind.FULLTEXT:
                 reasons.append("fulltext match")
             else:
-                raise ValueError(f"Unknown match kind: {best.match_kind}")
+                reasons.append("unknown match")
 
-            if best.is_standard:
-                reasons.append("standard")
-            else:
-                reasons.append("non-standard")
+            # Determine concept status
+            reasons.append("standard" if best.is_standard else "non-standard")
+            reasons.append("active" if best.is_active else "inactive")
 
-            if best.is_active:
-                reasons.append("active")
-            else:
-                reasons.append("inactive")
-
-            other_labels = ", ".join(
-                escape(m.matched_label) for m in ms[1:]
-            )
+            # Collect other matched synonyms
+            other_labels = ", ".join(escape(m.matched_label) for m in ms[1:])
 
             rows.append(f"""
               <tr>
@@ -220,13 +355,13 @@ class LabelMatchGroupView:
           <div style="font-weight:600; margin-bottom:6px;">
             Label match summary
           </div>
-          <table style="border-collapse:collapse;">
+          <table style="border-collapse:collapse; width:100%;">
             <thead>
-              <tr>
-                <th align="left">concept_id</th>
-                <th align="left">best match</th>
-                <th align="left">why this matched</th>
-                <th align="left">other labels</th>
+              <tr style="border-bottom: 1px solid #eee; text-align:left;">
+                <th style="padding:4px;">concept_id</th>
+                <th style="padding:4px;">best match</th>
+                <th style="padding:4px;">details</th>
+                <th style="padding:4px;">other matched labels</th>
               </tr>
             </thead>
             <tbody>
@@ -235,9 +370,23 @@ class LabelMatchGroupView:
           </table>
         </div>
         """
-    
+
+
 @dataclass(frozen=True)
 class AncestorMatch:
+    """
+    Represents a successful hierarchy check between two concepts.
+
+    Parameters
+    ----------
+    ancestor_concept_id : int
+        The concept ID of the ancestor.
+    descendant_concept_id : int
+        The concept ID of the descendant.
+    min_levels_of_separation : int
+        The shortest path distance between them (0 = self).
+    """
+
     ancestor_concept_id: int
     descendant_concept_id: int
     min_levels_of_separation: int

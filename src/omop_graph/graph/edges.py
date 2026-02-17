@@ -1,77 +1,107 @@
-from __future__ import annotations
-from dataclasses import dataclass
-from datetime import date
-from enum import Enum, auto
-from typing import Optional, TYPE_CHECKING, Mapping, ClassVar
-from html import escape
-import re
-if TYPE_CHECKING:
-    from .kg import KnowledgeGraph
-
-import logging
-logger = logging.getLogger(__name__)
-
 """
 Definitions for graph edges and predicates.
 
-Edges represent relationships between concepts in the knowledge graph.
+This module defines the lightweight data structures representing the
+relationships (edges) between concepts in the OMOP Knowledge Graph.
 
-Scope: Lightweight data structures only. No graph algorithms here. 
-i.e. What is an edge or predicate, and how do I classify or filter them?
+It focuses on data definitions and classification logic, not graph traversal algorithms.
 
-Supported relationships include:
-    * mapping (semantic equivalence)
-    * versioning (replaced by / replaces)
-    * ontological (is a / subclass of)
-    * attribute (has attribute)
-    * metadata (additional information)
+Supported Relationships
+-----------------------
+* **Mapping:** Semantic equivalence (e.g., source code to standard concept).
+* **Versioning:** Lifecycle tracking (e.g., 'replaced by', 'is a').
+* **Ontological:** Hierarchical structure (e.g., 'is a', 'subsumes').
+* **Attribute:** Descriptive properties (e.g., 'has dose form').
+* **Metadata:** Administrative or low-semantic value connections.
 """
 
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass
+from datetime import date
+from enum import Enum, auto
+from html import escape
+from typing import TYPE_CHECKING, ClassVar, Mapping, Optional
+
+if TYPE_CHECKING:
+    from .kg import KnowledgeGraph
+
+logger = logging.getLogger(__name__)
+
+
 class PredicateKind(Enum):
+    """
+    Categorization of edge types for filtering and reasoning.
+    """
+
     # Vertical Hierarchy
     ONTO_UP = auto()
     ONTO_DOWN = auto()
-    
+
     # Horizontal & Translation
     MAPS_TO = auto()
     MAPS_FROM = auto()
     VERSIONING = auto()
-    
+
     # Semantic Enrichment
     COMPOSITION = auto()
     INTERACTION = auto()
     ATTRIBUTE = auto()
-    
+
     # Noise
     METADATA = auto()
 
     def label(self) -> str:
+        """
+        Get a human-readable description of the predicate kind.
+        """
         return {
             PredicateKind.ONTO_UP: "ontological relationship (upwards, generalization)",
             PredicateKind.ONTO_DOWN: "ontological relationship (downwards, specialization)",
-            
             PredicateKind.MAPS_TO: "mapping relationship (cross-vocabulary translation)",
             PredicateKind.MAPS_FROM: "reverse mapping relationship (cross-vocabulary translation)",
             PredicateKind.VERSIONING: "versioning relationship (lifecycle/deprecation)",
-            
             PredicateKind.COMPOSITION: "compositional relationship (part-whole structure)",
             PredicateKind.INTERACTION: "interaction relationship (causal/clinical logic)",
             PredicateKind.ATTRIBUTE: "attribute enrichment (descriptive property)",
-            
             PredicateKind.METADATA: "metadata relationship (administrative/low semantic value)",
         }[self]
 
-HIERARCHICAL_PREDICATE_KINDS = frozenset({
-    PredicateKind.ONTO_UP, 
-    PredicateKind.ONTO_DOWN, 
-    PredicateKind.MAPS_TO,
-    PredicateKind.VERSIONING,
-    PredicateKind.COMPOSITION
-})
+
+HIERARCHICAL_PREDICATE_KINDS = frozenset(
+    {
+        PredicateKind.ONTO_UP,
+        PredicateKind.ONTO_DOWN,
+        PredicateKind.MAPS_TO,
+        PredicateKind.VERSIONING,
+        PredicateKind.COMPOSITION,
+    }
+)
 
 
 @dataclass(frozen=True)
 class EdgeView:
+    """
+    A lightweight, immutable view of an edge in the Knowledge Graph.
+
+    Parameters
+    ----------
+    subject_id : int
+        The OMOP Concept ID of the source.
+    predicate_id : str
+        The relationship ID (e.g., 'is a', 'mapped from').
+    object_id : int
+        The OMOP Concept ID of the target.
+    valid_start_date : date, optional
+        The date the relationship became valid.
+    valid_end_date : date, optional
+        The date the relationship became invalid.
+    invalid_reason : str, optional
+        The reason for invalidation (e.g., 'D' for deleted), if applicable.
+    """
+
     subject_id: int
     predicate_id: str
     object_id: int
@@ -79,78 +109,140 @@ class EdgeView:
     valid_end_date: Optional[date]
     invalid_reason: Optional[str]
 
-
     def __repr__(self) -> str:
-        return (
-            f"Edge({self.subject_id} -[{self.predicate_id}]-> {self.object_id})"
-        )
-    
+        return f"Edge({self.subject_id} -[{self.predicate_id}]-> {self.object_id})"
 
-    def pretty(self, kg: "KnowledgeGraph") -> str:
+    def pretty(self, kg: KnowledgeGraph) -> str:
+        """
+        Return a human-readable string representation of the edge using concept names.
+
+        Parameters
+        ----------
+        kg : KnowledgeGraph
+            The graph instance used to look up concept names.
+
+        Returns
+        -------
+        str
+            A string in the format 'Subject Name -[predicate]-> Object Name'.
+        """
         s = kg.concept_view(self.subject_id)
         o = kg.concept_view(self.object_id)
         pred = kg.predicate(self.predicate_id)
 
-        return (
-            f"{s.concept_name} "
-            f"-[{pred.name}]-> "
-            f"{o.concept_name}"
-        )
+        return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
 
-# Can be adapted using self.kg.predicate_summary() as it queries all unique predicates
+
+# Regex rules for classifying predicates based on their relationship ID.
 PREDICATE_RULES: tuple[tuple[PredicateKind, re.Pattern], ...] = (
     # "ATC - RxNorm eq", "ATC to NDFRT eq", "RxNorm - CVX"
     (PredicateKind.ONTO_UP, re.compile(r".*\b(is a)\b.*", re.I)),
     (PredicateKind.ONTO_DOWN, re.compile(r"(subsumes)$", re.I)),
-    (PredicateKind.MAPS_TO, re.compile(r"^[A-Z0-9 -/]+ (to|-) [A-Z0-9 -/]+( (eq|name))?$", re.I)),
-    (PredicateKind.MAPS_TO, re.compile(r".*(maps to|same_as to|alt_to to|poss_eq to)$", re.I)),
-    (PredicateKind.MAPS_FROM, re.compile(r".*(mapped from|same_as from|alt_to from|poss_eq from)$", re.I)),
-    (PredicateKind.VERSIONING, re.compile(r".*(replaced|replaces|revision|discontinued|invalid|was_a|historic).*", re.I)),
-    (PredicateKind.COMPOSITION, re.compile(r".*(component|consist|constitut|contain|part of|ingredient|\bing\b|panel|includes).*", re.I)),
-    (PredicateKind.INTERACTION, re.compile(r".*(cause|due to|induce|treat|prevent|contraindicat|\bci\b|interact|affected|etiology|manifestation|inhibit|diagnose|acts on).*", re.I)),
-    (PredicateKind.ATTRIBUTE, re.compile(r".*\b(has | of$|property|value|unit|range|measure|scale|method|mode|available|sterile|dose form|character).*", re.I)),
-    (PredicateKind.METADATA, re.compile(r".*(asso with|occurs |follow|reformulated|physiol effect|during|before|after|towards|temp related).*", re.I)),
+    (
+        PredicateKind.MAPS_TO,
+        re.compile(r"^[A-Z0-9 -/]+ (to|-) [A-Z0-9 -/]+( (eq|name))?$", re.I),
+    ),
+    (
+        PredicateKind.MAPS_TO,
+        re.compile(r".*(maps to|same_as to|alt_to to|poss_eq to)$", re.I),
+    ),
+    (
+        PredicateKind.MAPS_FROM,
+        re.compile(r".*(mapped from|same_as from|alt_to from|poss_eq from)$", re.I),
+    ),
+    (
+        PredicateKind.VERSIONING,
+        re.compile(
+            r".*(replaced|replaces|revision|discontinued|invalid|was_a|historic).*",
+            re.I,
+        ),
+    ),
+    (
+        PredicateKind.COMPOSITION,
+        re.compile(
+            r".*(component|consist|constitut|contain|part of|ingredient|\bing\b|panel|includes).*",
+            re.I,
+        ),
+    ),
+    (
+        PredicateKind.INTERACTION,
+        re.compile(
+            r".*(cause|due to|induce|treat|prevent|contraindicat|\bci\b|interact|affected|etiology|manifestation|inhibit|diagnose|acts on).*",
+            re.I,
+        ),
+    ),
+    (
+        PredicateKind.ATTRIBUTE,
+        re.compile(
+            r".*\b(has | of$|property|value|unit|range|measure|scale|method|mode|available|sterile|dose form|character).*",
+            re.I,
+        ),
+    ),
+    (
+        PredicateKind.METADATA,
+        re.compile(
+            r".*(asso with|occurs |follow|reformulated|physiol effect|during|before|after|towards|temp related).*",
+            re.I,
+        ),
+    ),
     (PredicateKind.METADATA, re.compile(r".*\b(using|used|uses)\b.*", re.I)),
 )
 
+
 @dataclass(frozen=True)
 class Predicate:
-    relationship_id: str  # string ID (e.g. `maps to`)
-    name: str # human readable label (e.g. `Non-standard to Standard Mapping`)
-    reverse_id: Optional[str]  # string ID reverse relationship (e.g. `mapped from`)
+    """
+    Definition of a Relationship Type in the OMOP CDM.
+
+    Parameters
+    ----------
+    relationship_id : str
+        The unique string identifier (e.g. `maps to`).
+    name : str
+        The human-readable label (e.g. `Non-standard to Standard Mapping`).
+    reverse_id : str, optional
+        The relationship_id of the inverse relationship (e.g. `mapped from`).
+    is_hierarchical : bool
+        Whether OMOP defines this as a hierarchical relationship.
+    anc_up : bool
+        Whether this relationship defines 'defines_ancestry' upwards (deprecated logic).
+    anc_down : bool
+        Whether this relationship defines 'defines_ancestry' downwards (deprecated logic).
+    """
+
+    relationship_id: str
+    name: str
+    reverse_id: Optional[str]
     is_hierarchical: bool
     anc_up: bool
     anc_down: bool
 
-
     @property
     def defines_ancestry(self) -> bool:
+        """
+        Check if this predicate is involved in defining ancestry.
+        """
         return self.anc_up or self.anc_down
 
-    def classify_predicate(self) -> PredicateKind:       
-        
+    def classify_predicate(self) -> PredicateKind:
+        """
+        Classify the predicate into a specific `PredicateKind` based on regex rules.
+
+        Returns
+        -------
+        PredicateKind
+            The classification of the relationship (e.g. ONTO_UP, METADATA).
+        """
         rid = self.relationship_id.strip()
-        predicate_kind = self._get_regex_kind(rid)
-
-        # Defines ancestry is not really used so could be removed eventually
-        # NOTE: This is for debugging only
-        #if self.defines_ancestry:
-        #    if predicate_kind in (PredicateKind.ONTO_UP, PredicateKind.ONTO_DOWN):
-        #        return predicate_kind
-        #    logger.debug(f"Predicate {self.relationship_id} [{self.name}] has ancestry and is of type {predicate_kind}")
-
-        if predicate_kind is not None:
-            return predicate_kind
-
-        logger.debug(f"Defaults to METADATA: {rid}")
-        return PredicateKind.METADATA
-    
-    def _get_regex_kind(self, rid) -> Optional[PredicateKind]:
+        
+        # Helper logic to match regex
         for kind, pattern in PREDICATE_RULES:
             if pattern.match(rid):
                 return kind
-        return None
-    
+
+        # Default fallback
+        logger.debug(f"Defaults to METADATA: {rid}")
+        return PredicateKind.METADATA
 
     def __repr__(self) -> str:
         flags = []
@@ -165,13 +257,33 @@ class Predicate:
 
         return f"Predicate({self.relationship_id!r}: {self.name!r}{flag_str})"
 
+
 def is_active(
-    start: date | None,
-    end: date | None,
-    invalid_reason: str | None,
+    start: Optional[date],
+    end: Optional[date],
+    invalid_reason: Optional[str],
     *,
-    on: date | None = None,
+    on: Optional[date] = None,
 ) -> bool:
+    """
+    Check if a relationship is active on a given date.
+
+    Parameters
+    ----------
+    start : date, optional
+        The start date of the relationship.
+    end : date, optional
+        The end date of the relationship.
+    invalid_reason : str, optional
+        The invalid reason code (e.g. 'D', 'U'). None implies valid.
+    on : date, optional
+        The reference date to check against. If None, only checks `invalid_reason`.
+
+    Returns
+    -------
+    bool
+        True if the relationship is active, False otherwise.
+    """
     if on is None:
         return invalid_reason is None
     if start and on < start:
@@ -183,6 +295,12 @@ def is_active(
 
 @dataclass(frozen=True)
 class PredicateSummary:
+    """
+    A summary collection of predicates grouped by their Kind.
+
+    This is primarily used for reporting and visualization in Jupyter environments.
+    """
+
     groups: Mapping[PredicateKind, tuple[Predicate, ...]]
 
     def __repr__(self) -> str:
@@ -193,6 +311,9 @@ class PredicateSummary:
         return "PredicateSummary(" + ", ".join(parts) + ")"
 
     def _repr_html_(self) -> str:
+        """
+        Rich HTML representation for Jupyter Notebooks.
+        """
         blocks = []
 
         for kind in PredicateKind:

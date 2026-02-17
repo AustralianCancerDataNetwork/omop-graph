@@ -1,0 +1,45 @@
+site_name: omop-graph
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: light-blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Core Components:
+      - KnowledgeGraph: graph/kg.md
+      - Edges & Predicates: graph/edges.md
+  - Algorithms:
+      - Pathfinding: algorithms/paths.md
+      - Scoring & Ranking: algorithms/scoring.md
+  - Reasoning:
+      - Resolvers: reasoning/resolvers.md
+      - Grounding: reasoning/grounding.md
+  - API Reference: reference.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_root_heading: true
+            show_source: false

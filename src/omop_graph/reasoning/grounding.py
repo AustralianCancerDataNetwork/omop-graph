@@ -1,22 +1,59 @@
-from dataclasses import dataclass, field
-from typing import Optional, Iterable, Generator, Union
+"""
+Semantic Grounding Orchestration.
 
-from omop_graph.reasoning.resolvers import ResolverConfidence, ResolverPipeline, CandidateHit
-from omop_graph.graph.paths import find_standard_paths, StandardConcept
-from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.constraints import SearchConstraintConcept
-from omop_graph.graph.edges import PredicateKind, HIERARCHICAL_PREDICATE_KINDS
-from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
-from omop_graph.graph.paths import get_unique_standard_concepts
+This module provides the high-level `ground_term` function, which orchestrates 
+the full grounding pipeline:
+1.  **Candidate Resolution**: Finding raw concepts that match the input text.
+2.  **Hierarchy Validation**: Ensuring candidates have a valid relationship path 
+    to required parent concepts.
+3.  **Standardization**: Mapping non-standard candidates to standard OMOP concepts.
+4.  **Semantic Ranking**: Using embeddings and graph-based scoring to select the 
+    best mapping.
+"""
+
+from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
+from typing import Iterable, List, Optional, Tuple, Union
+
+# Local Application Imports
+from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_graph.graph.edges import HIERARCHICAL_PREDICATE_KINDS, PredicateKind
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.paths import (
+    StandardConcept,
+    find_standard_paths,
+    get_unique_standard_concepts,
+)
+from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
+from omop_graph.reasoning.resolvers import (
+    CandidateHit,
+    ResolverConfidence,
+    ResolverPipeline,
+)
+
 logger = logging.getLogger(__name__)
 
 
-    
 @dataclass(frozen=True)
 class GroundingConstraints:
-    parent_ids: Optional[tuple[int, ...]]
+    """
+    Configuration for restricting the grounding search space.
+
+    Parameters
+    ----------
+    parent_ids : tuple[int, ...], optional
+        OMOP Concept IDs that act as required ancestors for any valid result.
+    search_constraint : SearchConstraintConcept, optional
+        Domain and Vocabulary restrictions for the initial resolution phase.
+    max_depth : int, optional
+        Maximum allowed distance in the hierarchy between a candidate and a parent.
+    predicate_kinds : frozenset[PredicateKind], optional
+        The types of relationships allowed during pathfinding.
+    """
+
+    parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
     max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS
@@ -27,23 +64,47 @@ def ground_term(
     kg: KnowledgeGraph,
     text: str,
     constraints: GroundingConstraints,
-    max_candidates: int = 10  # We later also only return a singular candidate
-) -> list[StandardConceptWithScore]:
+    max_candidates: int = 10,
+) -> List[StandardConceptWithScore]:
+    """
+    Ground a text string to a ranked list of standard OMOP concepts.
 
-    standard_concepts: list[StandardConcept] = []
+    Parameters
+    ----------
+    resolver_pipeline : ResolverPipeline
+        The pipeline of search strategies to find initial candidates.
+    kg : KnowledgeGraph
+        The OMOP Knowledge Graph instance.
+    text : str
+        The input text to ground.
+    constraints : GroundingConstraints
+        Contextual constraints (parents, domains, etc.) to apply.
+    max_candidates : int, optional
+        Limit for the number of candidates processed.
 
-    # NOTE: Maybe not do this as a for-loop as we have so many calls to the DB this way! 
-    # Probably could do it batched
+    Returns
+    -------
+    list[StandardConceptWithScore]
+        A list of standard concepts sorted by their total score (descending).
 
+    Raises
+    ------
+    NotImplementedError
+        If no `parent_ids` are provided in constraints.
+    """
+    standard_concepts: List[StandardConcept] = []
+
+    # 1. Validate Constraints
     search_constraints = constraints.search_constraint
     if search_constraints is not None:
-        search_constraints.check(kg)  # Check that the constraints are valid to return something
+        search_constraints.check(kg)
 
-    resolved = resolver_pipeline.resolve(kg, text, constraints=search_constraints)
-    resolved = list(resolved)
+    # 2. Resolve Text to Candidate Hits
+    resolved = list(resolver_pipeline.resolve(kg, text, constraints=search_constraints))
+
+    # 3. Validate Hierarchy and Standardize
     for hit in resolved:
         if constraints.parent_ids is not None:
-            # NOTE: Rename the function?
             candidate_standard_concepts = find_standard_concepts(
                 kg=kg,
                 candidate=hit,
@@ -55,18 +116,24 @@ def ground_term(
 
             if not candidate_standard_concepts:
                 concept_name = kg.concept_view(hit.concept_id).concept_name
-                logger.debug(f"Failed hierarchy constraint (no path to parents): {hit.concept_id} ({concept_name}), Parents {constraints.parent_ids}")
-                continue  # fails hierarchy constraint
+                logger.debug(
+                    f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
+                    f"has no path to parents {constraints.parent_ids}"
+                )
+                continue
             
             standard_concepts.extend(candidate_standard_concepts)
         else:
-            raise NotImplementedError("Non parent_id is not supported")
+            # Note: We currently require parent_ids for clinical safety/context
+            raise NotImplementedError("Grounding without parent_ids is not supported.")
 
-    # Filter duplicates
+    # 4. Filter and Deduplicate
     unique_standard_concepts = get_unique_standard_concepts(standard_concepts)
+    if not unique_standard_concepts:
+        return []
 
-    # NOTE: This is temp! We should get the embeddings directly from the database for the standard concepts
-    # The only one we need to calculate is the one from the input text
+    # 5. Semantic Scoring (Embeddings)
+    # TODO: Refactor embedding client to be passed as a dependency
     from omop_spires.client.instructor_client import LLMClient
     embedding_client = LLMClient(
         model="qwen3-embedding:8b",
@@ -74,39 +141,66 @@ def ground_term(
         api_key=''
     )
 
-    # Combine the text with the standard_concepts
+    # Combine query text with candidate names for batch processing
     batch = [text] + [sc.concept_name for sc in unique_standard_concepts]
     embeddings = embedding_client.embeddings(batch)
 
-    input_embedding = embeddings[0:1]  # Shape (1, embedding_dim)
-    standard_concept_embeddings = embeddings[1:] # Shape (num_concepts, embedding_dim)
+    input_embedding = embeddings[0:1]  
+    standard_concept_embeddings = embeddings[1:] 
 
-    similarity_scores = embedding_client.cosine_similarity(input_embedding, standard_concept_embeddings)[0] # Shape (num_concepts,)
+    similarity_scores = embedding_client.cosine_similarity(
+        input_embedding, standard_concept_embeddings
+    )[0]
 
+    # 6. Rank Results
     ranked_standard_concepts = score_standard_concepts(
         text=text, 
         standard_concepts=tuple(unique_standard_concepts),
         kg=kg,
-        # NOTE: Could do these eventually
         similarity_scores=similarity_scores
     )
 
     ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)
     return ranked_standard_concepts
-    
+
+
 def find_standard_concepts(
     kg: KnowledgeGraph,
     candidate: CandidateHit,
-    parent_ids: tuple[int, ...],
+    parent_ids: Tuple[int, ...],
     max_depth: int,
-    max_paths: int = 3,
+    max_paths: Optional[int] = 3,
     predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS,
     lowest_cost: Optional[float] = None,
-) -> list[StandardConcept]:
+) -> List[StandardConcept]:
+    """
+    Identify standard concepts related to a candidate that satisfy parent constraints.
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The Knowledge Graph instance.
+    candidate : CandidateHit
+        The initial match found by a resolver.
+    parent_ids : tuple[int, ...]
+        Acceptable ancestor IDs.
+    max_depth : int
+        Maximum separation allowed.
+    max_paths : int, optional
+        Limit on unique standard concepts per parent lookup.
+    predicate_kinds : frozenset, optional
+        Edge types to traverse.
+    lowest_cost : float, optional
+        Minimum cost threshold for pathfinding.
+
+    Returns
+    -------
+    list[StandardConcept]
+        Standard concepts associated with the candidate that hit the targets.
+    """
     paths = []
 
     for parent in parent_ids:
-        # found, trace = find_shortest_paths(
         found = find_standard_paths(
             kg=kg,
             candidate=candidate,
