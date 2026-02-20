@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
-# Local Application Imports
+import numpy as np
+
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.edges import HIERARCHICAL_PREDICATE_KINDS, PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
@@ -34,6 +35,10 @@ from omop_graph.reasoning.resolvers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# DEBUG ONLY!!!
+if TYPE_CHECKING:
+    from omop_spires.client.instructor_client import LLMClient
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,8 @@ def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
     text: str,
+    text_embedding: np.ndarray,
+    embedding_client: "LLMClient",
     constraints: GroundingConstraints,
     max_candidates: int = 10,
 ) -> List[StandardConceptWithScore]:
@@ -92,6 +99,13 @@ def ground_term(
     NotImplementedError
         If no `parent_ids` are provided in constraints.
     """
+    assert embedding_client is not None, (
+        "An `embedding_client` must be provided.\n"
+        "This is just DEBUG! In the future, we just pass the name of the model to obtain the data from the database "
+        "once the full database has been populated with the necessary embedding data. "
+        "This is just for testing and should not be used in production."
+    )
+
     standard_concepts: List[StandardConcept] = []
 
     # 1. Validate Constraints
@@ -133,24 +147,32 @@ def ground_term(
         return []
 
     # 5. Semantic Scoring (Embeddings)
-    # TODO: Refactor embedding client to be passed as a dependency
-    from omop_spires.client.instructor_client import LLMClient
-    embedding_client = LLMClient(
-        model="qwen3-embedding:8b",
-        api_base="http://ollama:11434/v1",
-        api_key=''
-    )
+    similarity_scores_dict = {}
+    if kg.is_embedding_model_registered(embedding_client.model):
+        similarity_scores_dict = kg.get_embedding_similarities(
+            embedding_model_name=embedding_client.model,
+            text_embedding=text_embedding.tolist()[0],
+            concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
+        )
 
-    # Combine query text with candidate names for batch processing
-    batch = [text] + [sc.concept_name for sc in unique_standard_concepts]
-    embeddings = embedding_client.embeddings(batch)
-
-    input_embedding = embeddings[0:1]  
-    standard_concept_embeddings = embeddings[1:] 
-
-    similarity_scores = embedding_client.cosine_similarity(
-        input_embedding, standard_concept_embeddings
-    )[0]
+    if not similarity_scores_dict:
+        # Either the filtering resulted in no concepts or the embedding model is not registered. 
+        if kg.is_embedding_model_registered(embedding_client.model):
+            logger.warning(
+                f"Filtering resulted in no concepts with available embeddings for model '{embedding_client.model}'. "
+                "Falling back to debug client to obtain semantic similarity scores. This is just for testing and should not be used in production."
+            )
+        else:
+            logger.warning(
+                f"No embedding scores found for model '{embedding_client.model}'. "
+                "Falling back to debug client to obtain semantic similarity scores. This is just for testing and should not be used in production."
+            )
+        standard_concept_embeddings = embedding_client.embeddings([sc.concept_name for sc in unique_standard_concepts])
+        similarity_scores = embedding_client.cosine_similarity(
+            text_embedding, standard_concept_embeddings
+        )[0]
+    else:
+        similarity_scores = np.array(list(similarity_scores_dict.values()))
 
     # 6. Rank Results
     ranked_standard_concepts = score_standard_concepts(

@@ -25,7 +25,7 @@ from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session
 
 # Local Application Imports
-from omop_graph.db.session import safe_execute
+from omop_alchemy.cdm.base.embeddings import _MODEL_CACHE
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
 from .edges import EdgeView, Predicate, PredicateKind, PredicateSummary, is_active
@@ -64,6 +64,8 @@ from .queries import (
     q_predicate_row_with_ancestry,
     q_roots,
     q_singletons,
+    q_embedding_model_table_name,
+    q_embedding_cosine_similarity,
 )
 
 logger = logging.getLogger(__name__)
@@ -723,6 +725,64 @@ class KnowledgeGraph(GraphBackend):
         """
         rows = self.session.execute(q_concept_num_ancestors(concept_ids)).all()
         return {row.concept_id: row.num_ancestors for row in rows}
+    
+    def get_embedding_model_table_name(self, model_name: str) -> Optional[str]:
+        """
+        Check if an embedding model exists in the database.
+
+        Parameters
+        ----------
+        model_name : str
+            The name of the embedding model to check.
+
+        Returns
+        -------
+        Optional[str]
+            The table name of the embedding model if it exists, None otherwise.
+        """
+        query = self.session.execute(q_embedding_model_table_name(model_name)).all()
+        table_names = [row.table_name for row in query]
+        if len(table_names) > 1:
+            raise RuntimeError(f"Multiple embedding model tables found for model_name='{model_name}'. This should not happen. Returning the first match.")
+        return table_names[0] if table_names else None
+    
+    def is_embedding_model_registered(self, model_name: str) -> bool:
+        """
+        Check if an embedding model is registered in the database.
+
+        Parameters
+        ----------
+        model_name : str
+            The name of the embedding model to check.
+
+        Returns
+        -------
+        bool
+            True if the model is registered, False otherwise.
+        """
+        return self.get_embedding_model_table_name(model_name) is not None
+    
+    def get_embedding_similarities(
+        self,
+        embedding_model_name: str,
+        text_embedding: list[float],
+        concept_ids: Optional[Tuple[int, ...]] = None
+    ):
+        
+        embedding_table = _MODEL_CACHE.get(embedding_model_name)
+        if embedding_table is None:
+            raise ValueError(f"Embedding model '{embedding_model_name}' not found in cache. Make sure to initialize embedding tables at startup.")
+        
+        query = q_embedding_cosine_similarity(
+            embedding_table=embedding_table,
+            text_embedding=text_embedding,
+            concept_ids=concept_ids
+        )
+
+        return {row.concept_id: row.similarity for row in self.session.execute(query).all()}
+        
+
+
 
     def clear_caches(self) -> None:
         """
