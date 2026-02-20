@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 authors = [
   { name = "Georgie Kennedy", email = "georgie.kennedy@unsw.edu.au" }
 ]
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 
 keywords = [
   "OMOP",
@@ -20,7 +20,6 @@ keywords = [
   "real-world-evidence",
   "rapidfuzz"
 ]
-
 
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -53,11 +52,8 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/omop_graph"]
