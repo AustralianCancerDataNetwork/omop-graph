@@ -133,7 +133,7 @@ def score_standard_concepts(
             standard_concept=sc,
             num_ancestors=num_ancestors.get(sc.concept_id, 0),
             similarity_score=(
-                similarity_scores[i] if similarity_scores is not None else 0.0
+                similarity_scores[i] if similarity_scores is not None else None
             ),
         )
         for i, sc in enumerate(standard_concepts)
@@ -147,7 +147,7 @@ def _score_standard_concept(
     text: str,
     standard_concept: StandardConcept,
     num_ancestors: int,
-    similarity_score: float,
+    similarity_score: Optional[float],
     alpha: float = 0.05,
     beta: float = 0.01,
 ) -> StandardConceptWithScore:
@@ -164,8 +164,8 @@ def _score_standard_concept(
         The concept being scored.
     num_ancestors : int
         Number of ancestors (proxy for generality).
-    similarity_score : float
-        Embedding cosine similarity.
+    similarity_score : float, optional
+        Embedding cosine similarity. If None, no embedding relevance will be factored in.
     alpha : float, optional
         Weight for parsimony penalty (separation cost). Default 0.05.
     beta : float, optional
@@ -179,6 +179,9 @@ def _score_standard_concept(
     textual_similarity = _textual_similarity_score(
         query_text=text, matched_label=standard_concept.matched_label
     )
+
+    if similarity_score is None:
+        similarity_score = 1.0   # If no embedding score, rely solely on textual similarity for relevance
     
     # Combined relevance: Embedding similarity * Textual overlap
     relevance = similarity_score * textual_similarity

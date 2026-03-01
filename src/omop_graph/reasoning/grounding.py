@@ -68,10 +68,11 @@ def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
     text: str,
-    text_embedding: np.ndarray,
-    embedding_client: "LLMClient",
+    text_embedding: Optional[np.ndarray],
+    text_embedding_model: Optional[str],
+    embedding_client: Optional["LLMClient"],
     constraints: GroundingConstraints,
-    max_candidates: int = 10,
+    max_candidates: Optional[int] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
@@ -84,10 +85,16 @@ def ground_term(
         The OMOP Knowledge Graph instance.
     text : str
         The input text to ground.
+    text_embedding : np.ndarray
+        The embedding vector for the input text.
+    text_embedding_model : str, optional
+        The name of the embedding model used to generate `text_embedding`. Used for RAG retrieval from the database.
+    embedding_client : LLMClient, optional
+        DEBUG: A client to obtain embeddings and similarity scores if not available in the KG. Not for production use.
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
-        Limit for the number of candidates processed.
+        Limit for the number of candidates returned. If None, returns all candidates.
 
     Returns
     -------
@@ -99,13 +106,6 @@ def ground_term(
     NotImplementedError
         If no `parent_ids` are provided in constraints.
     """
-    assert embedding_client is not None, (
-        "An `embedding_client` must be provided.\n"
-        "This is just DEBUG! In the future, we just pass the name of the model to obtain the data from the database "
-        "once the full database has been populated with the necessary embedding data. "
-        "This is just for testing and should not be used in production."
-    )
-
     standard_concepts: List[StandardConcept] = []
 
     # 1. Validate Constraints
@@ -144,33 +144,45 @@ def ground_term(
     # 4. Filter and Deduplicate
     unique_standard_concepts = get_unique_standard_concepts(standard_concepts)
     if not unique_standard_concepts:
+        logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
         return []
 
     # 5. Semantic Scoring (Embeddings)
     similarity_scores_dict = {}
-    if kg.is_embedding_model_registered(embedding_client.model):
+    if (
+        text_embedding_model is not None and 
+        kg.is_embedding_model_registered(text_embedding_model) and
+        text_embedding is not None
+    ):
+        assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for RAG retrieval."
+        assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."
         similarity_scores_dict = kg.get_embedding_similarities(
-            embedding_model_name=embedding_client.model,
+            embedding_model_name=text_embedding_model,
             text_embedding=text_embedding.tolist()[0],
             concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
         )
 
     if not similarity_scores_dict:
         # Either the filtering resulted in no concepts or the embedding model is not registered. 
-        if kg.is_embedding_model_registered(embedding_client.model):
+        if text_embedding_model is not None and kg.is_embedding_model_registered(text_embedding_model):
             logger.warning(
-                f"Filtering resulted in no concepts with available embeddings for model '{embedding_client.model}'. "
-                "Falling back to debug client to obtain semantic similarity scores. This is just for testing and should not be used in production."
-            )
+                f"Filtering resulted in no concepts with available embeddings for model '{text_embedding_model}'.")
+        
+        # Fallback (but just debug)
+        if embedding_client is not None and text_embedding is not None:
+            logger.debug("Falling back to embedding client for similarity scores (DEBUG ONLY).")
+            standard_concept_embeddings = embedding_client.embeddings([sc.concept_name for sc in unique_standard_concepts])
+            assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for fallback similarity scoring."
+            assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."            
+            similarity_scores = embedding_client.cosine_similarity(
+                text_embedding, standard_concept_embeddings
+            )[0]
         else:
-            logger.warning(
-                f"No embedding scores found for model '{embedding_client.model}'. "
-                "Falling back to debug client to obtain semantic similarity scores. This is just for testing and should not be used in production."
+            logger.warning((
+                f"Embedding model '{text_embedding_model}' is not registered in the KG. No similarity scores will be available. "
+                f"Fallback to embedding client is not possible (embedding_client: {embedding_client is not None}, text_embedding: {text_embedding is not None}).")
             )
-        standard_concept_embeddings = embedding_client.embeddings([sc.concept_name for sc in unique_standard_concepts])
-        similarity_scores = embedding_client.cosine_similarity(
-            text_embedding, standard_concept_embeddings
-        )[0]
+            similarity_scores = None
     else:
         similarity_scores = np.array(list(similarity_scores_dict.values()))
 
@@ -183,7 +195,7 @@ def ground_term(
     )
 
     ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)
-    return ranked_standard_concepts
+    return ranked_standard_concepts[:max_candidates] if max_candidates is not None else ranked_standard_concepts
 
 
 def find_standard_concepts(
