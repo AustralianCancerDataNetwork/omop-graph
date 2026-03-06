@@ -1,7 +1,7 @@
 from .traverse import traverse
 from .paths import find_shortest_paths, GraphPath, PathStep
 from .kg import KnowledgeGraph
-from .edges import PredicateKind, HIERARCHICAL_PREDICATE_KINDS
+from .edges import PredicateKind, GROUNDING_PREDICATE_KINDS, HORIZONTAL_PREDICATE_KINDS
 
 __all__ = [
     "traverse",
@@ -10,5 +10,6 @@ __all__ = [
     "PathStep",
     "KnowledgeGraph",
     "PredicateKind",
-    "HIERARCHICAL_PREDICATE_KINDS",
+    "GROUNDING_PREDICATE_KINDS",
+    "HORIZONTAL_PREDICATE_KINDS",
 ]

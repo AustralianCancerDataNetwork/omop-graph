@@ -70,13 +70,21 @@ class PredicateKind(Enum):
         }[self]
 
 
-HIERARCHICAL_PREDICATE_KINDS = frozenset(
+# These predicates map horizontally between concepts, i.e. equivalence to standard concepts
+HORIZONTAL_PREDICATE_KINDS = frozenset(
     {
-        PredicateKind.ONTO_UP,
-        PredicateKind.ONTO_DOWN,
         PredicateKind.MAPS_TO,
+        PredicateKind.MAPS_FROM,
         PredicateKind.VERSIONING,
-        PredicateKind.COMPOSITION,
+    }
+)
+
+GROUNDING_PREDICATE_KINDS = frozenset(
+    {
+        *HORIZONTAL_PREDICATE_KINDS,
+        PredicateKind.ONTO_UP,      # Sometimes, non-standard to standard is achieved through vertical links
+        PredicateKind.ONTO_DOWN,    # NOTE: Not sure if that one is required
+        #PredicateKind.COMPOSITION,
     }
 )
 
@@ -134,59 +142,49 @@ class EdgeView:
 
 
 # Regex rules for classifying predicates based on their relationship ID.
-PREDICATE_RULES: tuple[tuple[PredicateKind, re.Pattern], ...] = (
-    # "ATC - RxNorm eq", "ATC to NDFRT eq", "RxNorm - CVX"
-    (PredicateKind.ONTO_UP, re.compile(r".*\b(is a)\b.*", re.I)),
-    (PredicateKind.ONTO_DOWN, re.compile(r"(subsumes)$", re.I)),
-    (
-        PredicateKind.MAPS_TO,
+PREDICATE_RULES: dict[PredicateKind, tuple[re.Pattern, ...]] = {
+    PredicateKind.ONTO_UP: (re.compile(r".*\b(is a)\b.*", re.I),),  # rdfs:subClassOf, skos:broader
+    PredicateKind.ONTO_DOWN: (re.compile(r"(subsumes)$", re.I),),   # Inverse of rdfs:subClassOf, skos:narrower
+    PredicateKind.MAPS_TO: (    # skos:exactMatch, skos:closeMatch
         re.compile(r"^[A-Z0-9 -/]+ (to|-) [A-Z0-9 -/]+( (eq|name))?$", re.I),
-    ),
-    (
-        PredicateKind.MAPS_TO,
         re.compile(r".*(maps to|same_as to|alt_to to|poss_eq to)$", re.I),
     ),
-    (
-        PredicateKind.MAPS_FROM,
+    PredicateKind.MAPS_FROM: (
         re.compile(r".*(mapped from|same_as from|alt_to from|poss_eq from)$", re.I),
     ),
-    (
-        PredicateKind.VERSIONING,
+    PredicateKind.VERSIONING: (
         re.compile(
             r".*(replaced|replaces|revision|discontinued|invalid|was_a|historic).*",
             re.I,
         ),
     ),
-    (
-        PredicateKind.COMPOSITION,
+    PredicateKind.COMPOSITION: (
         re.compile(
             r".*(component|consist|constitut|contain|part of|ingredient|\bing\b|panel|includes).*",
             re.I,
         ),
     ),
-    (
-        PredicateKind.INTERACTION,
+    PredicateKind.INTERACTION: (
         re.compile(
             r".*(cause|due to|induce|treat|prevent|contraindicat|\bci\b|interact|affected|etiology|manifestation|inhibit|diagnose|acts on).*",
             re.I,
         ),
     ),
-    (
-        PredicateKind.ATTRIBUTE,
+    PredicateKind.ATTRIBUTE: (
         re.compile(
             r".*\b(has | of$|property|value|unit|range|measure|scale|method|mode|available|sterile|dose form|character).*",
             re.I,
         ),
     ),
-    (
-        PredicateKind.METADATA,
+    PredicateKind.METADATA: (
         re.compile(
             r".*(asso with|occurs |follow|reformulated|physiol effect|during|before|after|towards|temp related).*",
             re.I,
         ),
+        re.compile(r".*\b(using|used|uses)\b.*", re.I),
     ),
-    (PredicateKind.METADATA, re.compile(r".*\b(using|used|uses)\b.*", re.I)),
-)
+}
+    
 
 
 @dataclass(frozen=True)
@@ -236,9 +234,10 @@ class Predicate:
         rid = self.relationship_id.strip()
         
         # Helper logic to match regex
-        for kind, pattern in PREDICATE_RULES:
-            if pattern.match(rid):
-                return kind
+        for kind, pattern_tuple in PREDICATE_RULES.items():
+            for pattern in pattern_tuple:
+                if pattern.match(rid):
+                    return kind
 
         # Default fallback
         logger.debug(f"Defaults to METADATA: {rid}")

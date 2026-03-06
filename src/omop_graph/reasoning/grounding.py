@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 import numpy as np
 
 from omop_graph.graph.constraints import SearchConstraintConcept
-from omop_graph.graph.edges import HIERARCHICAL_PREDICATE_KINDS, PredicateKind
+from omop_graph.graph.edges import GROUNDING_PREDICATE_KINDS, PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.paths import (
     StandardConcept,
@@ -61,7 +61,7 @@ class GroundingConstraints:
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
     max_depth: int = 6
-    predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS
+    predicate_kinds: frozenset[PredicateKind] = GROUNDING_PREDICATE_KINDS
 
 
 def ground_term(
@@ -204,7 +204,7 @@ def find_standard_concepts(
     parent_ids: Tuple[int, ...],
     max_depth: int,
     max_paths: Optional[int] = 3,
-    predicate_kinds: frozenset[PredicateKind] = HIERARCHICAL_PREDICATE_KINDS,
+    predicate_kinds: frozenset[PredicateKind] = GROUNDING_PREDICATE_KINDS,
     lowest_cost: Optional[float] = None,
 ) -> List[StandardConcept]:
     """
