@@ -18,7 +18,8 @@ keywords = [
   "knowledge-graph",
   "LLM-grounding",
   "real-world-evidence",
-  "rapidfuzz"
+  "rapidfuzz",
+  "omop-llm",
 ]
 
 classifiers = [
@@ -57,3 +58,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/omop_graph"]
+
+[tool.uv.sources]
+#omop-llm = { git = "ssh://git@github.com:AustralianCancerDataNetwork/omop-llm.git", branch = "main" }
+omop-llm = { path = "../omop-llm", editable = true }

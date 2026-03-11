@@ -33,12 +33,10 @@ from omop_graph.reasoning.resolvers import (
     ResolverConfidence,
     ResolverPipeline,
 )
+from omop_llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
-# DEBUG ONLY!!!
-if TYPE_CHECKING:
-    from omop_spires.client.instructor_client import LLMClient
 
 
 @dataclass(frozen=True)
