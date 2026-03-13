@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+
 class PredicateKind(Enum):
     """
     Categorization of edge types for filtering and reasoning.
@@ -50,8 +51,10 @@ class PredicateKind(Enum):
     INTERACTION = auto()
     ATTRIBUTE = auto()
 
-    # Noise
     METADATA = auto()
+
+    # Catch-all for uncategorised predicates
+    UNCATEGORISED = auto()
 
     def label(self) -> str:
         """
@@ -67,6 +70,7 @@ class PredicateKind(Enum):
             PredicateKind.INTERACTION: "interaction relationship (causal/clinical logic)",
             PredicateKind.ATTRIBUTE: "attribute enrichment (descriptive property)",
             PredicateKind.METADATA: "metadata relationship (administrative/low semantic value)",
+            PredicateKind.UNCATEGORISED: "uncategorised relationship (requires review)",
         }[self]
 
 
@@ -240,8 +244,7 @@ class Predicate:
                     return kind
 
         # Default fallback
-        logger.debug(f"Defaults to METADATA: {rid}")
-        return PredicateKind.METADATA
+        return PredicateKind.UNCATEGORISED
 
     def __repr__(self) -> str:
         flags = []

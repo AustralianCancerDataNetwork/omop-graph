@@ -40,6 +40,12 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "sqlalchemy>=2.0.45",
     "typing-extensions>=4.15.0",
+    "typer",
+]
+
+[project.optional-dependencies]
+emb = [
+  "omop-emb"
 ]
 
 [dependency-groups]
@@ -50,7 +56,11 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
+    "omop-graph[emb]"
 ]
+
+[project.scripts]
+omop-graph = "omop_graph.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -60,5 +70,5 @@ build-backend = "hatchling.build"
 packages = ["src/omop_graph"]
 
 [tool.uv.sources]
-#omop-llm = { git = "ssh://git@github.com:AustralianCancerDataNetwork/omop-llm.git", branch = "main" }
-omop-llm = { path = "../omop-llm", editable = true }
+omop-alchemy = { git = "https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy.git", branch = "main" }
+omop-emb = { git = "https://github.com/AustralianCancerDataNetwork/omop-emb.git", branch = "main" }

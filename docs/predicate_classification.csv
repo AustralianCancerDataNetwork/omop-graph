@@ -1,0 +1,748 @@
+﻿r_id,r_name,old_cat,parent_cat,subcategory,classification_notes,additional_info,link
+AB-drug cjgt of,Antibody-drug conjugate of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Absorbability of,Absorbability of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the absorbability aspect of an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-absorbability
+Acc device used by,Access device used by (SNOMED),METADATA,,,,,
+Accepted use of,Accepted use of (HemOnc),ATTRIBUTE,,,,,
+Access of,Access of (SNOMED),ATTRIBUTE,Attribute,Procedure,,"Access (attribute) describes the route used to access the site of a procedure. It distinguishes open, closed, and percutaneous procedures.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index
+Active ing of,Active ingredient of (SNOMED),COMPOSITION,Composition,Ingredient,,A medicinal product concept has a set of active ingredient substance(s) responsible for providing the therapeutic effect of the medicinal product and which are described using the clinically relevant part or whole of the substance that is intended to have a therapeutic action on or within the body,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/pharmaceutical-and-biologic-product-and-dose-form-attributes-summary/ingredient-substance-attributes#has-active-ingredient
+Add monitor ind of,NHS dm+d (dictionary of medicines and devices) additional monitoring indicator of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Admin method of,Dose form administration method of (SNOMED),ATTRIBUTE,,,,,
+Affected by process,Affected by process (SNOMED),INTERACTION,Attribute,Entity,,"Describes that a process specifically acts on some entity, e.g. by transporting that entity in or out of the body, i.e. Rate of intake of protein.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#process-acts-on
+After,After (SNOMED),METADATA,Attribute,Temporal,"All listed as ""Clinical Finding and Disorder""","used to model concepts in which a clinical finding occurs after another clinical finding, procedure or event.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#after
+AMP of,Actual Medicinal Product of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+AMP restr ind of,NHS dm+d (dictionary of medicines and devices) AMP (actual medicinal product) availability restriction indicator of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Answer of,Answer of,ATTRIBUTE,,,,,
+Answer of (PPI),Answer of (PPI),UNCATEGORISED,,,,,
+Anticoag Rx of,Anticoag Rx of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Anticoag tx of,Anticoag tx of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Antineoplastic of,Antineoplastic of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Approach of,Approach of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ARP of,ARP of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Asso finding of,Associated finding of (SNOMED),ATTRIBUTE,,,,,
+Asso morph of,Associated morphology of (SNOMED),ATTRIBUTE,Attribute,Morphology,"All listed as ""Clinical Finding and Disorder""",specifies the morphologic changes seen at the tissue or cellular level that are characteristic of a disease.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#associated-morphology
+Asso proc of,Associated procedure of (SNOMED),ATTRIBUTE,,,,,
+Asso visit of,Associated visit of (OMOP),ATTRIBUTE,Attribute,Visit,,,
+Asso with finding,Associated with finding (SNOMED),METADATA,,,,,
+ATC - RxNorm,ATC to RxNorm,MAPS_TO,Identity,Vocab Mapping,"technically non-hierarchical, however, semantically resembles 'Subsumes' - 'Is a’","Connects ATC Classes and Drug Products, but not Ingredients",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC - RxNorm name,ATC to RxNorm equivalent by concept_name (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ATC - RxNorm pr lat,ATC to RxNorm/Extension primary lateral (OMOP),MAPS_TO,Associative,Ingredient,"Semantically, it is an equivalent to ‘Maps to’ relationship_id, and usually (except for exemptions) has such a pair in concept_relationship_stage
+non-hierarchical
+The presence of this link is a prerequisite for creating a ‘Maps to’ relationship_id.","Connects Monocomponent ATC Class with its full semantic equivalent in the form of the main active Standard Ingredient.
+Connects the 1st active ingredient of the ATC Polycomponent ATC Class with Standard Ingredient. 
+Can be used for a group of similar ingredients (e.g. senna glycosides, estrogens)",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC - RxNorm pr up,ATC to RxNorm/Extension primary upwards (OMOP),MAPS_TO,Hierarchical,Ingredient,"is_hierarchical = 0 in OMOP CDM
+Hierarchical (applied at the post-processing, gives +1 level of separation)
+","Connects the 1st Ingredient Group of a Multicomponent ATC Class to respective Rx/RxE Ingredients
+Applied to a Multicomponent ATC Class, whose name starts either from an Ingredient Group or the word of ‘^combinations’, or contains only one Ingredient Group, which is mentioned somewhere in the middle
+Can be used for well-defined but diverse group of ingredients (e.g. diastase, tree pollen, feather)",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC - RxNorm sec lat,ATC to RxNorm/Extension secondary lateral (OMOP),MAPS_TO,Associative,Ingredient,"Non-hierarchical
+The presence of this link is a prerequisite for creating a ‘Maps to’ relationship_id.",Connects the 2nd active ingredient OR any subsequent active ingredient of a Multicomponent ATC Class to Rx/RxE Ingredient.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC - RxNorm sec up,ATC to RxNorm/Extension secondary upwards (OMOP),MAPS_TO,Hierarchical,Ingredient,"is_hierarchical = 0 in OMOP CDM
+Hierarchical (applied at the post-processing, gives +1 level of separation)
+",Connects the 2nd Ingredient Group OR any subsequent Ingredient Group OR NOT mentioned and unspecified list of Ingredients which can be in combination with Primary lateral or Primary upward ATC Classes to respective Rx/RxN Ingredients.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC - SNOMED eq,ATC to SNOMED equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,"Non-hierarchical
+Legacy relationships - are not supported
+Could be semantically only associative as it is not directly ""maps_to""","Connects ATC Classes and SNOMED Pharma or Biological Products, Physical Objects and Substances",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC to NDFRT eq,ATC to NDFRT equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,"Non-hierarchical
+Legacy relationships - are not supported
+Could be semantically only associative as it is not directly ""maps_to""",Is a cross-link between ATC Classes and National Drug File - Reference Terminology.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+ATC to VA Class eq,ATC to VA Class equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,"Non-hierarchical
+Legacy relationships - are not supported
+Could be semantically only associative as it is not directly ""maps_to""",Is a cross-link between ATC and Veteran Affairs drug classification.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+Available as box,Is available in a prepackaged box (OMOP),ATTRIBUTE,Attribute,Packaging,Categorised based on r_id,,
+Basic dose form of,Basic dose form of (SNOMED),ATTRIBUTE,Attribute,Dose,,,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/index/index/pharmaceutical-dose-form-naming-and-modeling-conventions
+Basis str subst of,Basis of strength substance of (SNOMED),ATTRIBUTE,,,,,
+Before,Before (SNOMED),METADATA,Attribute,Temporal,"All listed as ""Clinical Finding and Disorder""","is used to model pre-procedure complications (e.g., preoperative complication). It represents temporal associations between procedures and related disorders",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#before
+Biosimilar of,Biosimilar of,ATTRIBUTE,,,,,
+Box of,Prepackaged box of (OMOP),ATTRIBUTE,Attribute,Packaging,Categorised based on r_id,,
+Brand name of,Brand name of (OMOP),ATTRIBUTE,Attribute,Commercial,Categorised based on r_id,,
+CAP parent item of,CAP parent item of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CAP protocol of,CAP protocol of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CAP value of,CAP value of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CAP-Nebraska cat,CAP to Nebraska Lexicon category,UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CAP-Nebraska eq,CAP to Nebraska Lexicon equivalent,UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Category in Chapter,Category in Chapter,UNCATEGORISED,,,,,
+Category of,Category of,ATTRIBUTE,,,,,
+Causative agent of,Causative agent of (SNOMED),ATTRIBUTE,Attribute,Etiology,"All listed as ""Clinical Finding and Disorder""","identifies an organism, substance, physical object, physical force, and/or pharmaceutical/biological product as the direct cause of a condition",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#causative-agent
+Caused by,Caused by (SNOMED),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Causes,Causes (SNOMED),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CD category of,Controlled drug cathehory of (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Chapter has Category,Chapter has Category,ATTRIBUTE,,,,,
+Chapter to ICDO,Chapter to ICDO,MAPS_TO,,,,,
+Characterizes,Characterizes (SNOMED),ATTRIBUTE,Attribute,Observation,,"Specifies the process which the property describes, and on which the property (of this observable) depends",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#characterizes
+Chem structure of,Chemical structure of (NDF-RT),ATTRIBUTE,,,,,
+Chem to Prep eq,Chemical Structure to Pharmaceutical Preparation equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,,,
+CI by,Contraindicated by (NDF-RT),INTERACTION,,,,,
+CI chem class of,Contraindicating chemical class of (NDF-RT),INTERACTION,,,,,
+CI MoA of,Contraindicating mechanism of action of (NDF-RT),INTERACTION,,,,,
+CI physiol effect by,Contraindicating physiological effect induced by (NDF-RT),INTERACTION,,,,,
+CI to,Contraindication to (NDF-RT),INTERACTION,,,,,
+Clinical course of,Has clinical course of (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""",used to represent both the course and onset of a disease or condition,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#clinical-course
+CMS Specialty - NUCC,CMS Specialty to NUCC (CMS),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Coating material of,Coating material of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the material with which an object is coated,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-coating-material
+Combi prod ind of,Combination product indicator of (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Comp material of,Compositional material of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the site where the device is intended to reside in or on the body.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-compositional-material
+Component of,Component of,COMPOSITION,,,,,
+Conc denom unit of,Concentration strength denominator unit of (SNOMED),ATTRIBUTE,,,,,
+Conc denom val of,Concentration strength denominator value of (SNOMED),ATTRIBUTE,,,,,
+Conc num unit of,Concentration strength numerator unit of (SNOMED),ATTRIBUTE,,,,,
+Conc num val of,Concentration strength numerator value of (SNOMED),ATTRIBUTE,,,,,
+Concept alt_to from,Active alternative_to inactive (SNOMED),MAPS_FROM,,,,,
+Concept alt_to to,Inactive alternative_to active (SNOMED),MAPS_TO,,,,,
+Concept poss_eq from,Active possibly_equivalent_to inactive (SNOMED),MAPS_FROM,Uncategorised,,"This decision was taken based on multiple erroneous ""Maps to"" relationships, previously built from ""Concept poss_eq to"" (because in many cases one from many was chosen randomly).",,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Known-Issues-in-Vocabularies#snomed
+Concept poss_eq to,Inactive possibly_equivalent_to active (SNOMED),MAPS_TO,Uncategorised,,"This decision was taken based on multiple erroneous ""Maps to"" relationships, previously built from ""Concept poss_eq to"" (because in many cases one from many was chosen randomly).",,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Known-Issues-in-Vocabularies#snomed
+Concept replaced by,Concept replaced by,VERSIONING,Identity,Versioning,,,
+Concept replaces,Concept replaces,VERSIONING,Identity,Versioning,,,
+Concept same_as from,Active same_as inactive (SNOMED),MAPS_FROM,,,,,
+Concept same_as to,Inactive same_as active (SNOMED),MAPS_TO,,,,,
+Concept was_a from,Active was_a inactive (SNOMED),VERSIONING,Identity,Versioning,,,
+Concept was_a to,Inactive was_a active (SNOMED),VERSIONING,Identity,Versioning,,,
+Consists of,Consists of (RxNorm),COMPOSITION,Composition,Ingredient,,Links a drug to its components (e.g. multi-component drugs).,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Constitutes,Constitutes (RxNorm),COMPOSITION,Composition,Ingredient,,Links a component back to the whole drug.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Contained in,Is contained in (RxNorm),COMPOSITION,Composition,Packaging,,Links contents to their parent Pack/Kit.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Contained in panel,Contained in panel,COMPOSITION,,,,,
+Contained in version,Table/field contained in OMOP CDM Version (OMOP),COMPOSITION,Uncategorised,Versioning,Not categorised as deemd unimportant,,
+Contains,Contains (RxNorm),COMPOSITION,Composition,Packaging,,Links a Pack/Kit to its contents.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Context of,Context of (HemOnc),ATTRIBUTE,,,,,
+Count of act ing in,Is count of active ingredients in (SNOMED),COMPOSITION,,,,,
+Count of ing of,Count of base of active ingredient of (SNOMED),COMPOSITION,,,,,
+CPT4 - CVX eq,CPT4 to CVX equivalent (CVX),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CPT4 - LOINC eq,CPT4 to LOINC equivalent (SNOMED),MAPS_TO,Identity,Vocab Mapping,,,
+CPT4 - SNOMED cat,CPT-4 to SNOMED category (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+CPT4 - SNOMED eq,CPT-4 to SNOMED equivalent (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+Curr adult indic for,Current adult indication for (HemOnc),UNCATEGORISED,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Curr ped indic for,Current pediatric indication for (HemOnc),UNCATEGORISED,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Current treated by,Currently treated by (HemOnc),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CVX - CPT4 eq,CVX to CPT4 equivalent (CVX),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+CVX - RxNorm,CVX - RxNorm (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+Cytotox chemo RX of,Cytotoxic chemotherapy of - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Cytotoxic chemo of,Cytotoxic chemotherapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Date of variable,Date of variable (NAACCR),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Denom value of,Presentation strength denominator value of (SNOMED),ATTRIBUTE,,,,,
+Denominator unit of,Presentation strength denominator unit of (SNOMED),ATTRIBUTE,,,,,
+Dev intended site of,Device intended site of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the site where the device is intended to reside in or on the body.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-device-intended-site
+Device used by,Device used by (SNOMED),METADATA,Attribute,Device,,,
+Diagnosed through,Diagnosed through (NDF-RT),INTERACTION,,,,,
+Dir device of,Direct device of (SNOMED),ATTRIBUTE,Attribute,Device,,Direct device (attribute) represents the device on which the method directly acts.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#direct-device
+Dir morph of,Direct morphology of (SNOMED),ATTRIBUTE,Attribute,Morphology,,Direct morphology (attribute) describes the morphologically abnormal structure that is the direct object of the Method action.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#direct-morphology
+Dir proc site of,Direct procedure site of (SNOMED),ATTRIBUTE,Attribute,Spatial,,"is used when the action of the procedure is directly aimed at anatomical or acquired body structure or site, rather than something else located there",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-site-direct
+Dir subst of,Direct substance of (SNOMED),ATTRIBUTE,Attribute,Ingredient,,Direct substance (attribute) describes the Substance or Pharmaceutical/biologic product on which the procedure's method directly acts.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#direct-substance
+Direct site of,Direct site of (SNOMED),ATTRIBUTE,,,,,
+Direction of,Direction of,ATTRIBUTE,,,,,
+Disc indicator of,Discontinued indicator of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Disp dose form of,Dispensed dose form of (SNOMED),ATTRIBUTE,Attribute,Dose,,,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/index/index/pharmaceutical-dose-form-naming-and-modeling-conventions
+Disposition of,Disposition of (SNOMED),ATTRIBUTE,,,,,
+DOI - RxNorm,DOI contains RxNorm (OMOP),MAPS_TO,Composition,Drug,,,
+Domain subsumes,Domain subsumes (OMOP),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Dose form group of,Dose form group of (RxNorm),ATTRIBUTE,,,,,
+Dose form of,Dose form of (SNOMED),ATTRIBUTE,Attribute,Dose,,,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/index/index/pharmaceutical-dose-form-naming-and-modeling-conventions
+Dose form unit of,Unit relating to the size of (DM+D),ATTRIBUTE,,,,,
+DRG - MDC cat,DRG to MDC category (CMS),MAPS_TO,,,,,
+DRG - MS-DRG eq,DRG to MS-DRG equivalent (CMS),MAPS_TO,Identity,Vocab Mapping,,,
+Drug class of drug,Drug class of drug (OMOP),UNCATEGORISED,Associative,Drug,Relationships between any Drug Concept Class and a Classification Concept Class is recorded through the “Drug has drug class” and “Drug class of drug” generic relationship pair.,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Drug has drug class,Drug has drug class (OMOP),ATTRIBUTE,Associative,Drug,Relationships between any Drug Concept Class and a Classification Concept Class is recorded through the “Drug has drug class” and “Drug class of drug” generic relationship pair.,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Drug-drug inter for,Drug-drug interaction for (NDF),UNCATEGORISED,,,,,
+Due to of,Due to of (SNOMED),MAPS_TO,Attribute,Etiology,"All listed as ""Clinical Finding and Disorder""","to identify a clinical finding/disorder, event, or procedure concept as the direct cause of another Clinical finding or Disorder concept",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#due-to
+During,During (SNOMED),METADATA,Attribute,Temporal,"All listed as ""Clinical Finding and Disorder""","Models concepts in which a clinical finding occurs during a procedure. Neither asserting nor excluding a causal relationship, it instead emphasizes a sequence of events.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#during
+EMA indication of,EMA indication of (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+End date of,End date of,ATTRIBUTE,,,,,
+Endocrine tx of,Endocrine therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Energy used by,Energy used by (SNOMED),METADATA,Attribute,Characteristic,,Using energy (attribute) refers to the energy used to execute an action.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#using-energy
+Episodicity of,Episodicity of (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""","represent episodes of care provided by a physician or other healthcare provider, not episodes of disease experienced by the patient",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#episodicity
+ETC - RxNorm,ETC to RxNorm (FDB),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ETC - RxNorm name,ETC to RxNorm equivalent by concept_name (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Etiology of,Etiology of (SNOMED),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Excipient of,Excipient of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Excluded in map from,Standard to Non-standard exclude child (OMOP),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Extent of,Extent of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+FDA indication of,FDA indication of (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+FDA labeling of,FDA labeling of (HemOnc),ATTRIBUTE,,,,,
+FDB Ind - ICD9CM,FDB Indication/Contraindication to ICD-9-CM (FDB),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Filling of,Filling material of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the material or substance that fills an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-filling
+Finding asso with,Finding associated with (SNOMED),METADATA,,,,,
+Finding context of,Finding context of (SNOMED),ATTRIBUTE,,,,,
+Finding inform of,Finding informer of (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""",Specifies the person or other entity from which the clinical finding information was obtained. It is not about the particular individual but about the category or type of informer. It is used to differentiate patient-reported symptoms from provider-determined signs.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#finding-informer
+Finding method of,Finding method of (SNOMED),ATTRIBUTE,Attribute,Diagnostic,"All listed as ""Clinical Finding and Disorder""",Specifies the means by which a clinical finding was determined. It includes findings that were determined by examination of the patient.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#finding-method
+Finding site of,Finding site of (SNOMED),ATTRIBUTE,Attribute,Spatial,"All listed as ""Clinical Finding and Disorder""",Specifies the body site affected by a condition.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#finding-site
+Flavor of,Flavor of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Focus of,Focus of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,Has focus (attribute) specifies the Clinical finding or Procedure which is the focus of a procedure. This attribute is self-grouped.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#has-focus
+Followed by,Followed by (SNOMED),METADATA,,,,,
+Follows,Follows (SNOMED),METADATA,,,,,
+Form continuity of,Dose form continuity indicator (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Form of,Form of (RxNorm),ATTRIBUTE,,,,,
+Free indicator of,NHS dm+d freenes indicator of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Freq Code - Typ bill,Frequency code to Typ bill Full (UB04),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Growth factor of,Growth factor of (HemOnc),ATTRIBUTE,,,,,
+Growth factor Rx of,Growth factor Rx of (HemOnc),ATTRIBUTE,,,,,
+Had accepted for,Had accepted for (HemOnc),UNCATEGORISED,,,,,
+Had accepted use,Had accepted use (HemOnc),UNCATEGORISED,,,,,
+Has AB-drug cjgt,Has antibody-drug conjugate (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has AB-drug cjgt Rx,Has antibody-drug conjugate - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has absorbability,Has absorbability (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the absorbability aspect of an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-absorbability
+Has accepted use,Has accepted use (HemOnc),ATTRIBUTE,Attribute,Clinical,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has access,Has access (SNOMED),ATTRIBUTE,Attribute,Procedure,,"Access (attribute) describes the route used to access the site of a procedure. It distinguishes open, closed, and percutaneous procedures.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index
+Has active ing,Has active ingredient (SNOMED),COMPOSITION,Composition,Ingredient,,A medicinal product concept has a set of active ingredient substance(s) responsible for providing the therapeutic effect of the medicinal product and which are described using the clinically relevant part or whole of the substance that is intended to have a therapeutic action on or within the body,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/pharmaceutical-and-biologic-product-and-dose-form-attributes-summary/ingredient-substance-attributes#has-active-ingredient
+Has add monitor ind,Has NHS dm+d (dictionary of medicines and devices) additional monitoring indicator,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has admin method,Has dose form administration method (SNOMED),ATTRIBUTE,Attribute,,,,
+Has AMP,Has Actual Medicinal Product (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has AMP restr ind,Has NHS dm+d (dictionary of medicines and devices) AMP (actual medicinal product) availability restriction indicator,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has Answer,Has Answer,ATTRIBUTE,,,,,
+Has answer (PPI),Has answer (PPI),ATTRIBUTE,,,,,
+Has anticoag Rx,Has anticoag Rx (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has anticoag tx,Has anticoag tx (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has antineopl Rx,Has antineoplastic - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has antineoplastic,Has antineoplastic (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has approach,Has Approach (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has ARP,Has ARP (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has asso finding,Has associated finding (SNOMED),ATTRIBUTE,Composition,Clinical,,,
+Has asso morph,Has associated morphology (SNOMED),ATTRIBUTE,Attribute,Morphology,"All listed as ""Clinical Finding and Disorder""",specifies the morphologic changes seen at the tissue or cellular level that are characteristic of a disease.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#associated-morphology
+Has asso proc,Has associated procedure (SNOMED),ATTRIBUTE,Attribute,,,,
+Has asso visit,Has associated visit (OMOP),ATTRIBUTE,Attribute,Clinical,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-HCPCS#hcpcs-to-visit-relationships
+Has basic dose form,Has basic dose form (SNOMED),ATTRIBUTE,Attribute,Dose,,,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/index/index/pharmaceutical-dose-form-naming-and-modeling-conventions
+Has basis str subst,Has basis of strength substance (SNOMED),ATTRIBUTE,Composition,Ingredient,,,
+Has biosimilar,Has biosimilar,ATTRIBUTE,,,,,
+Has brand name,Has brand name (OMOP),ATTRIBUTE,Attribute,Commercial,,Connects an ingredient/product to a commercial brand name.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Has CAP parent item,Has CAP parent item,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has CAP protocol,Has CAP protocol,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has CAP value,Has CAP value,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has Category,Has Category,ATTRIBUTE,,,,,
+Has causative agent,Has causative agent (SNOMED),ATTRIBUTE,Attribute,Etiology,"All listed as ""Clinical Finding and Disorder""","identifies an organism, substance, physical object, physical force, and/or pharmaceutical/biological product as the direct cause of a condition",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#causative-agent
+Has CD category,Has controlled drug category (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has chem structure,Has chemical structure (NDF-RT),ATTRIBUTE,,,,,
+Has CI,Has drug contra-indication (FDB),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has CI chem class,Has contraindicating chemical class (NDF-RT),INTERACTION,,,,,
+Has CI MoA,Has contraindicating mechanism of action (NDF-RT),INTERACTION,,,,,
+Has CI physio effect,Has contraindicating physiological effect (NDF-RT),INTERACTION,,,,,
+Has clinical course,Has clinical course (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""",used to represent both the course and onset of a disease or condition,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#clinical-course
+Has coating material,Has coating material (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the material with which an object is coated,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-coating-material
+Has combi prod ind,Has combination product indicator (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has comp material,Has compositional material (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the site where the device is intended to reside in or on the body.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-compositional-material
+Has complication,Has complication (SNOMED),ATTRIBUTE,Attribute,Clinical,,"Is an unexpected condition, outcome, or adverse event due to another condition, procedure, or treatment.",https://docs.snomed.org/snomed-ct-specifications/snomed-ct-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-and-disorder-modeling/complication-and-sequela-modeling#complication
+Has component,Has component,COMPOSITION,,,,,
+Has conc denom unit,Has concentration strength denominator unit (SNOMED),ATTRIBUTE,Composition,Drug,,,
+Has conc denom val,Has concentration strength denominator value (SNOMED),ATTRIBUTE,Composition,Drug,,,
+Has conc num unit,Has concentration strength numerator unit (SNOMED),ATTRIBUTE,Composition,Drug,,,
+Has conc num val,Has concentration strength numerator value (SNOMED),ATTRIBUTE,Composition,Drug,,,
+Has context,Has context (HemOnc),ATTRIBUTE,Attribute,Clincal,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has count of act ing,Count of active ingredients (SNOMED),COMPOSITION,Attribute,,,,
+Has count of ing,Has count of base of active ingredient (SNOMED),COMPOSITION,Composition,Ingredient,,,
+Has cytotox chemo Rx,Has cytotoxic chemotherapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has cytotoxic chemo,Has cytotoxic chemotherapy (HemOnc),ATTRIBUTE,Attribute,Regimen,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has denomin value,Has presentation strength denominator value (SNOMED),ATTRIBUTE,Attribute,,,,
+Has denominator unit,Has presentation strength denominator unit (SNOMED),ATTRIBUTE,Attribute,,,,
+Has dev intend site,Has device intended site (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the site where the device is intended to reside in or on the body.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-device-intended-site
+Has dir device,Has direct device (SNOMED),ATTRIBUTE,Attribute,Device,,Direct device (attribute) represents the device on which the method directly acts.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#direct-device
+Has dir morph,Has direct morphology (SNOMED),ATTRIBUTE,Attribute,Morphology,,Direct morphology (attribute) describes the morphologically abnormal structure that is the direct object of the Method action.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#direct-morphology
+Has dir proc site,Has direct procedure site (SNOMED),ATTRIBUTE,Attribute,Spatial,,"is used when the action of the procedure is directly aimed at anatomical or acquired body structure or site, rather than something else located there",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-site-direct
+Has dir subst,Has direct substance (SNOMED),ATTRIBUTE,Attribute,Ingredient,,Direct substance (attribute) describes the Substance or Pharmaceutical/biologic product on which the procedure's method directly acts.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#direct-substance
+Has direct site,Has direct site (SNOMED),ATTRIBUTE,Attribute,,,,
+Has Direction,Has Direction,ATTRIBUTE,,,,,
+Has disc indicator,Has discontinued indicator (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has disp dose form,Has dispensed dose form (SNOMED),ATTRIBUTE,Attribute,Dose,,,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/index/index/pharmaceutical-dose-form-naming-and-modeling-conventions
+Has disposition,Has disposition (SNOMED),ATTRIBUTE,Attribute,,,,
+Has dose form,Has dose form (SNOMED),ATTRIBUTE,Attribute,Dose,,,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/pharmaceutical-and-biologic-product/index/index/pharmaceutical-dose-form-naming-and-modeling-conventions
+Has dose form group,Has dose form group (RxNorm),ATTRIBUTE,,,,,
+Has dose form unit,Has unit relating to the size (DM+D),ATTRIBUTE,,,,,
+Has drug-drug inter,Is involved in drug-drug interaction (NDF),ATTRIBUTE,,,,,
+Has due to,Has due to (SNOMED),INTERACTION,Attribute,Etiology,"All listed as ""Clinical Finding and Disorder""","to identify a clinical finding/disorder, event, or procedure concept as the direct cause of another Clinical finding or Disorder concept",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#due-to
+Has EMA indication,Has EMA indication (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has end date,Has end date,ATTRIBUTE,,,,,
+Has endocrine tx,Has endocrine therapy (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has endocrine tx Rx,Has endocrine therapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has episodicity,Has episodicity (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""","represent episodes of care provided by a physician or other healthcare provider, not episodes of disease experienced by the patient",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#episodicity
+Has etiology,Has Etiology (SNOMED),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has excipient,Has excipient (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has extent,Has Extent (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has FDA indication,Has FDA indication (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has FDA labeling,Has FDA labeling (HemOnc),ATTRIBUTE,,,,,
+Has FDA-appr ind,Has FDA-approved drug indication (FDB),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has filling,Has filling (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the material or substance that fills an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-filling
+Has finding context,Has finding context (SNOMED),ATTRIBUTE,Attribute,,,,
+Has finding site,Has finding site (SNOMED),ATTRIBUTE,Attribute,Spatial,"All listed as ""Clinical Finding and Disorder""",,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#finding-site
+Has flavor,Has flavor (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has focus,Has focus (SNOMED),ATTRIBUTE,Attribute,Characteristic,,Has focus (attribute) specifies the Clinical finding or Procedure which is the focus of a procedure. This attribute is self-grouped.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#has-focus
+Has form,Has form (RxNorm),ATTRIBUTE,,,,,
+Has form continuity,Has dose form continuity indicator (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has free indicator,Has NHS dm+d freeness indicator,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has growth factor,Has growth factor (HemOnc),ATTRIBUTE,,,,,
+Has growth factor Rx,Has growth factor Rx (HemOnc),ATTRIBUTE,,,,,
+Has HC indication,Has HC indication (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has Histology ICDO,Has Histology ICDO,ATTRIBUTE,,,,,
+Has immunosuppr Rx,Has immunosuppressor - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has immunosuppressor,Has immunosuppressor (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has immunotherapy,Has immunotherapy (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has immunotherapy Rx,Has immunotherapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has incipient,Has incipient (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has indir device,Has indirect device (SNOMED),ATTRIBUTE,Attribute,Device,,"Indirect device (attribute) represents action on something that is located in or on a device, but is not directly on the device itself. This attribute is infrequently needed. When modeling, carefully consider its use.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#indirect-device
+Has indir morph,Has indirect morphology (SNOMED),ATTRIBUTE,Attribute,,,,
+Has indir proc site,Has indirect procedure site (SNOMED),ATTRIBUTE,Attribute,,,,
+Has inferred class,Has inferred drug class (OMOP),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has inherent,Has inherent (SNOMED),ATTRIBUTE,Attribute,Entity,,Specifies the independent continuant in which the quality exists and on which the dependent quality (of this observable) depends.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#inheres-in
+Has inherent loc,Has inherent location (SNOMED),ATTRIBUTE,Attribute,Anatomical,,Specify a body site or other location of the independent continuant in which the property exists.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#inherent-location
+Has intended site,Has dose form intended site (SNOMED),ATTRIBUTE,Attribute,,,,
+Has intent,Has intent (SNOMED),ATTRIBUTE,Attribute,Characteristic,,"The Has intent attribute is used when a procedure may be performed for various reasons, described with subtypes of 363675004 |Intents (nature of procedure values) (qualifier value)|, such as diagnostic, palliative, preventive, therapeutic, etc. These intents are not used to define procedures with intents that are inherent to the procedure; such as biopsies that are by definition diagnostic, or fracture fixations which are always therapeutic.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#has-intent
+Has interpretation,Has interpretation (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""","Refers to and designates the judgment aspect being evaluated or interpreted (e.g., presence, absence, degree, normality, abnormality, etc.). ",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#has-interpretation
+Has interprets,Has interprets (SNOMED),ATTRIBUTE,Attribute,Evaluation,"All listed as ""Clinical Finding and Disorder""","Refers to the entity being evaluated or interpreted, when an evaluation, interpretation, or judgment is intrinsic to the meaning of a concept.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#interprets
+Has investig use,Has investigational use (HemOnc),ATTRIBUTE,,,,,
+Has Issue,Has Issue,ATTRIBUTE,,,,,
+Has kind,Has kind (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Has laterality,Has laterality (SNOMED),ATTRIBUTE,Attribute,,,,
+Has legal category,Has legal category (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has licensed route,Has licensed route (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has life circumstan,Has life circumstance (SNOMED Vet),ATTRIBUTE,Attribute,,,,
+Has local therap Rx,Has local therapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has local therapy,Has local therapy (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has manifestation,Has definitional manifestation (SNOMED),INTERACTION,Attribute,,,,
+Has marketed form,Has marketed form (OMOP),ATTRIBUTE,Attribute,Product-form,,Identifies the version of the drug that is marketed.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Has meas component,Has Measured Component (SNOMED),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has measurement,Has measurement method (SNOMED),ATTRIBUTE,Attribute,,,,
+Has metabolism,Has site of metabolism (NDF-RT),ATTRIBUTE,,,,,
+Has metabolites,Has active metabolites (NDF-RT),ATTRIBUTE,,,,,
+Has method,Has method,ATTRIBUTE,Attribute,Clinical,,"Defines the action or technique used (e.g., Excision).",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#attribute-relationships
+Has MoA,Has mechanism of action (NDF-RT),ATTRIBUTE,,,,,
+Has modality,Has modality (HemOnc),ATTRIBUTE,,,,,
+Has modification,Has modification of (SNOMED),ATTRIBUTE,Attribute,,,,
+Has Module,Has Module,ATTRIBUTE,,,,,
+Has morphology,Has Morphology (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has NMPA indication,Has NMPA indication (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has non-avail ind,Has VMP non-availability indicator (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has numerator unit,Has presentation strength numerator unit (SNOMED),ATTRIBUTE,Attribute,,,,
+Has numerator value,Has presentation strength numerator value (SNOMED),ATTRIBUTE,Attribute,,,,
+Has occurrence,Has occurrence (SNOMED),ATTRIBUTE,Attribute,Characteristic,,"Occurrence (attribute) is applied to procedures during a period of life. For example, procedures related to the gravid uterus should be modeled by the combination of the occurrence of the maternal pregnancy period and the uterus.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#occurrence
+Has off-label ind,Has off-label drug indication (FDB),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has ontological form,Has ontological dose form presentation (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has pack,Has pack (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has parent item,Has parent item (NAACCR),ATTRIBUTE,,,,,
+Has part of,Has part of (SNOMED),COMPOSITION,Attribute,,,,
+Has pathology,Has pathological process (SNOMED),ATTRIBUTE,Attribute,,,,
+Has PDC Rx,Has PDC - RxNorm (HemOnc),ATTRIBUTE,,,,,
+Has pept-drg cjg Rx,Has peptide-drug conjugate - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has pept-drug cjgt,Has peptide-drug conjugate (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has permiss range,Has permissible range,ATTRIBUTE,,,,,
+Has pharma prep,Has pharmaceutical preparation (NDF),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has physio effect,Has physiological effect (NDF-RT),ATTRIBUTE,,,,,
+Has physiol state,Has physiologic state (SNOMED Vet),ATTRIBUTE,Attribute,,,,
+Has PK,Has pharmacokinetics (NDF-RT),ATTRIBUTE,,,,,
+Has PMDA indication,Has PMDA indication (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has PPI parent code,Has PPI parent code,ATTRIBUTE,,,,,
+Has prec ingredient,Has precise active ingredient (SNOMED),COMPOSITION,Composition,Ingredient,,,
+Has precise ing,Has precise ingredient (RxNorm),COMPOSITION,Composition,Ingredient,,Precise version of the ingredient link (e.g. base vs salt).,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Has precondition,Has precondition (SNOMED),ATTRIBUTE,Attribute,Clinical,,"Specify body state, timing, challenges, or other situations that must be true of the entity to be observed.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#precondition
+Has precoord pair,Has precoordinated (Question-Answer/Variable-Value) pair,ATTRIBUTE,,,,,
+Has priority,Has priority (SNOMED),ATTRIBUTE,Attribute,Characteristic,,Priority (attribute) is used when a procedure concept specifies a priority. This attribute is self-grouped.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#priority
+Has proc context,Has procedure context (SNOMED),ATTRIBUTE,Attribute,,,,
+Has proc device,Has procedure device (SNOMED),ATTRIBUTE,Attribute,Device,,"Procedure device (attribute) is used to model devices associated with a procedure. This attribute is used to define high-level, general concepts that aggregate procedures according to the device involved.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-device
+Has proc duration,Process duration,ATTRIBUTE,,,,,
+Has proc morph,Has procedure morphology (SNOMED),ATTRIBUTE,Attribute,Characteristic,,"Procedure morphology (attribute) is used to specify the morphology, or abnormal structure, involved in a procedure. It is used when defining general concepts that subsume direct and indirect morphology. It subsumes the more specific attributes, Direct and Indirect Morphology. These should be used, if possible.
+
+",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-morphology
+Has proc site,Has procedure site (SNOMED),ATTRIBUTE,Attribute,Spatial,,,
+Has process output,Has process output (SNOMED),ATTRIBUTE,Attribute,,,,
+Has prod character,Has product characteristic (SNOMED),ATTRIBUTE,Attribute,,,,
+Has product comp,Has product component (NDF-RT),ATTRIBUTE,,,,,
+Has property,Has property,ATTRIBUTE,,,,,
+Has property type,Has property type,ATTRIBUTE,,,,,
+Has quantified form,Has quantified form (RxNorm),ATTRIBUTE,Attribute,Product-form,,Modifies a drug concept with a specific quantity/strength.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Has question source,Has question source,ATTRIBUTE,,,,,
+Has radiocjgt Rx,Has radioconjugate - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has radioconjugate,Has radioconjugate (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has radiotherapy,Has radiotherapy (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has radiotherapy Rx,Has radiotherapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has recipient cat,Has recipient category (SNOMED),ATTRIBUTE,Attribute,Characteristic,,Recipient category (attribute) specifies the type of individual or group upon which the action of the procedure is performed.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#recipient-category
+Has regimen type,Has regimen type (HemOnc),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has relat context,Has subject relationship context (SNOMED),ATTRIBUTE,Attribute,,,,
+Has relative part,Has relative part (SNOMED),ATTRIBUTE,Attribute,,,,
+Has release charact,Has dose form release characteristic (SNOMED),ATTRIBUTE,Attribute,,,,
+Has revision status,Has revision status (SNOMED),VERSIONING,Attribute,Characteristic,,Revision status (attribute) refers to another procedure performed on the same site for the same condition. A procedure without a revision status is considered to be performed for the first time. ,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#revision-status
+Has role,Has role (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Has route,Has route (DM+D),ATTRIBUTE,,,,,
+Has route of admin,Has route of administration (SNOMED),ATTRIBUTE,Attribute,,,,
+Has Scale,Has Scale,ATTRIBUTE,,,,,
+Has scale type,Has scale type,ATTRIBUTE,,,,,
+Has setting,Has setting (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Has severity,Has severity (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""",,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#severity
+Has spec active ing,Has specific active ingredient (SNOMED),COMPOSITION,Attribute,,,,
+Has specimen,Has specimen (SNOMED),ATTRIBUTE,Attribute,Evaluation,,Indicates the type of specimen on which a measurement or observation is performed.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/evaluation-procedure-attributes#has-specimen
+Has specimen morph,Has specimen source morphology (SNOMED),ATTRIBUTE,Attribute,Specimen,,Specifies the morphologic abnormality from which a specimen is obtained.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-source-morphology
+Has specimen proc,Has specimen procedure (SNOMED),ATTRIBUTE,Attribute,Specimen,,Identifies the procedure by which a specimen is obtained.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-procedure
+Has specimen source,Has specimen source identity (SNOMED),ATTRIBUTE,Attribute,Specimen,,"Specifies the type of individual, group, or physical location from which a specimen is collected",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-source-identity
+Has specimen subst,Has specimen substance (SNOMED),ATTRIBUTE,Attribute,Specimen,,"Specifies the type of substance, pharmaceutical/biologic product, or physical object of which a specimen is comprised.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-substance
+Has specimen topo,Has specimen source topography (SNOMED),ATTRIBUTE,Attribute,,,,
+Has stage,Has Stage (SNOMED),ATTRIBUTE,Attribute,,,,
+Has standard brand,Has standard Brand Name (OMOP),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has standard form,Has standard Dose Form (OMOP),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has standard ing,Has standard ingredient (OMOP),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has start date,Has start date,ATTRIBUTE,,,,,
+Has state of matter,Has state of matter (SNOMED),ATTRIBUTE,Attribute,,,,
+Has status,Has status,ATTRIBUTE,,,,,
+Has steroid tx,Has steroid therapy (HemOnc),ATTRIBUTE,Attribute,Regimen,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has steroid tx Rx,Has steroid therapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has strength,Has ingredient qualitative strength (SNOMED),ATTRIBUTE,Composition,Ingredient,,,
+Has sub-specimen,Includes sub-specimen (SNOMED Vet),ATTRIBUTE,Attribute,,,,
+Has subject matter,Has subject matter domain (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Has supplier,Has supplier or manufacturer (OMOP),ATTRIBUTE,Attribute,Commercial,,,
+Has support med Rx,Has supportive medication - RxNorm (HemOnc),ATTRIBUTE,,,,,
+Has supportive med,Has supportive medication (HemOnc),ATTRIBUTE,Attribute,Regimen,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has surface char,Has surface characteristic (SNOMED),ATTRIBUTE,Attribute,,,,
+Has surface texture,Has surface texture (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the tactile characteristic or appearance of the surface of an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-surface-texture
+Has surgical appr,Has surgical approach (SNOMED),ATTRIBUTE,Attribute,,,,
+Has synth regimen,Has synthetic regimen (HemOnc),ATTRIBUTE,,,,,
+Has system,Has system,ATTRIBUTE,,,,,
+Has targ population,Has target population (SNOMED),ATTRIBUTE,Attribute,,,,
+Has targeted therapy,Has targeted therapy (HemOnc),ATTRIBUTE,Attribute,Regimen,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has targeted tx Rx,Has targeted therapy - RxNorm (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Has technique,Has technique (SNOMED),ATTRIBUTE,Attribute,Observation,,Specify the systematic method of an observation.,
+Has temp finding,Has temporal finding (SNOMED),ATTRIBUTE,Attribute,Temporal,"All listed as ""Clinical Finding and Disorder""",Applies to perioperative complications and clinical findings where there is no causal relationship but a time-relative association exists.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#temporally-related-to
+Has temporal context,Has temporal context (SNOMED),ATTRIBUTE,Attribute,,,,
+Has therap class,Has therapeutic class (NDF),ATTRIBUTE,,,,,
+Has time aspect,Has time aspect,ATTRIBUTE,,,,,
+Has Topic,Has Topic,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has Topography ICDO,Has Topography ICDO,ATTRIBUTE,,,,,
+Has trade family grp,Has trade family group (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has tradename,Has tradename (RxNorm),ATTRIBUTE,Attribute,Commercial,"Bridging two distinct clinical entities, one that is manufacturer-neutral (Clinical) and one that is manufacturer-specific (Branded)",Reciprocal of Tradename of.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Has transformation,Has dose form transformation (SNOMED),ATTRIBUTE,Attribute,,,,
+Has type,Has type,ATTRIBUTE,,,,,
+Has type of service,Has type of service (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Has unit,Has unit,ATTRIBUTE,,,,,
+Has unit of admin,Has unit of administration (SNOMED),ATTRIBUTE,Attribute,,,,
+Has unit of presen,Has unit of presentation (SNOMED),ATTRIBUTE,Attribute,,,,
+Has unit of prod use,Has unit relating to the entity that can be handled (DM+D),ATTRIBUTE,,,,,
+Has vaccine group,Has vaccine group (CVX),ATTRIBUTE,,,,,
+Has Value,Has Value,ATTRIBUTE,,,,,
+Has variant,Reference to variant,ATTRIBUTE,,,,,
+Has VMP,Has Virtual Medicinal Product (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Has VRP,Has VRP (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+HC indication of,HC indication of (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+HCPCS - SNOMED meas,HCPCS is a SNOMED measurement (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+HCPCS - SNOMED proc,HCPCS is a SNOMED procedure (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Hist adult indic for,Historical adult indication for (HemOnc),UNCATEGORISED,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Hist ped indic for,Historical pediatric indication for (HemOnc),UNCATEGORISED,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Histology of ICDO,Histology of ICDO,UNCATEGORISED,,,,,
+Historic treated by,Historically treated by (HemOnc),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+HOI - MedDRA,HOI contains MedDRA (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+HOI - SNOMED,HOI contains SNOMED (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+ICD9CM - FDB Ind,ICD-9-CM to FDB Indication/Contraindication (FDB),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ICD9CM - MedDRA,ICD-9-CM to MedDRA (MSSO),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ICD9P - SNOMED eq,ICD-9-Procedure to SNOMED equivalent (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ICD9P replaced by,Concept replaced by (ICD-9-Procedure),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ICD9P replaces,Concept replaces (ICD-9-Procedure),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ICDO - SNOMED,ICDO - SNOMED,MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+ICDO br to OncoTree,ICDO broader to OncoTree,MAPS_TO,,,,,
+ICDO to Chapter,ICDO to Chapter,MAPS_TO,,,,,
+ICDO to OncoTree eq,ICDO to OncoTree equivalent,MAPS_TO,Identity,Vocab Mapping,,,
+ICDO to Proc Schema,ICDO Condition to Procedure Schema (NAACCR),MAPS_TO,,,,,
+ICDO to Schema,ICDO Condition to Schema (NAACCR),MAPS_TO,,,,,
+Immunosuppressor of,Immunosuppressor of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Immunotherapy of,Immunotherapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Incipient of,Incipient of (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Included in map from,Standard to Non-standard include child (OMOP),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Ind/CI - SNOMED,Indication/Contra-indication to SNOMED,MAPS_TO,Identity,Vocab Mapping,,,
+Indir device of,Indirect device of (SNOMED),ATTRIBUTE,Attribute,Device,,"Indirect device (attribute) represents action on something that is located in or on a device, but is not directly on the device itself. This attribute is infrequently needed. When modeling, carefully consider its use.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#indirect-device
+Indir morph of,Indirect morphology of (SNOMED),ATTRIBUTE,,,,,
+Indir proc site of,Indirect procedure site of (SNOMED),ATTRIBUTE,Attribute,Spatial,,"specifies the anatomical location but is not the direct focus of the procedure. The direct object of the action may be a device, a substance, or a morphologic abnormality that is not a part of the tissue structure of the anatomical site in which it is located, such as a calculus, thrombus, or foreign body.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-site-indirect
+Induced by,Induced by (NDF-RT),INTERACTION,,,,,
+Induces,Induces (NDF-RT),INTERACTION,,,,,
+Inferred class of,Inferred drug class of (OMOP),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Inherent location of,Inherent location of (SNOMED),ATTRIBUTE,Attribute,Anatomical,,Specify a body site or other location of the independent continuant in which the property exists.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#inherent-location
+Inheres in,Inheres in (SNOMED),UNCATEGORISED,Attribute,Entity,,Specifies the independent continuant in which the quality exists and on which the dependent quality (of this observable) depends.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#inheres-in
+Inhibits effect,Inhibits effect (NDF-RT),INTERACTION,,,,,
+Intended site of,Dose form intended site of (SNOMED),ATTRIBUTE,,,,,
+Intent of,Intent of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,"The Has intent attribute is used when a procedure may be performed for various reasons, described with subtypes of 363675004 |Intents (nature of procedure values) (qualifier value)|, such as diagnostic, palliative, preventive, therapeutic, etc. These intents are not used to define procedures with intents that are inherent to the procedure; such as biopsies that are by definition diagnostic, or fracture fixations which are always therapeutic.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#has-intent
+Interpretation of,Interpretation of (SNOMED),ATTRIBUTE,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""","Refers to and designates the judgment aspect being evaluated or interpreted (e.g., presence, absence, degree, normality, abnormality, etc.). ",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#has-interpretation
+Interprets of,Interprets of (SNOMED),ATTRIBUTE,Attribute,Evaluation,"All listed as ""Clinical Finding and Disorder""","Refers to the entity being evaluated or interpreted, when an evaluation, interpretation, or judgment is intrinsic to the meaning of a concept.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#interprets
+Investig use for,Investigational use for (HemOnc),UNCATEGORISED,,,,,
+Is a,Is a,ONTO_U,Hierarchical,Up,,,
+Is characterized by,Is characterized by (SNOMED),ATTRIBUTE,Attribute,Observation,,"Specifies the process which the property describes, and on which the property (of this observable) depends",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#characterizes
+Is CI of,Is contra-indication of (FDB),INTERACTION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is curr in adult,Is current in adult (HemOnc),UNCATEGORISED,,,,,
+Is curr in ped,Is current in pediatric (HemOnc),UNCATEGORISED,,,,,
+Is current in,Is currently used in (HemOnc),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is domain,Is a domain (OMOP),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is FDA-appr ind of,Is FDA-approved indication of (FDB),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is hist in adult,Is historical in adult (HemOnc),UNCATEGORISED,Attribute,Clinical,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Is hist in ped,Is historical in pediatric (HemOnc),UNCATEGORISED,,,,,
+Is historical in,Is historically used in (HemOnc),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is off-label ind of,Is off-label indication of (FDB),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is pack of,Is pack of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is standard brand of,Is standard Brand Name of (OMOP),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is standard form of,Is standard Dose Form of (OMOP),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is standard ing of,Is standard ingredient of ingredient (OMOP),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Is sterile,Is sterile (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the sterility quality (e.g. sterile or non-sterile) of an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#is-sterile
+Is sterile of,Is sterile of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the sterility quality (e.g. sterile or non-sterile) of an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#is-sterile
+Is transcribed from,mRNA is transcribed from genomic DNA,UNCATEGORISED,,,,,
+Is translated from,Protein is translated from mRNA,UNCATEGORISED,,,,,
+Issue of,Issue of,ATTRIBUTE,,,,,
+Kind of,Kind of (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Laterality of,Laterality of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Legal category of,Legal category of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Licensed route of,Licensed route of (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Life circumstan of,Life circumstance (SNOMED Vet),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Local therapy of,Local therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+LOINC - CPT4 eq,LOINC to CPT4 equivalent (SNOMED),MAPS_TO,Identity,Vocab Mapping,,,
+LOINC - SNOMED eq,LOINC Hierarchy to SNOMED equivalent (LOINC),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+LOINC replaced by,Concept replaced by (LOINC),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+LOINC replaces,Concept replaces (LOINC),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Manifestation of,Definitional manifestation of (SNOMED),INTERACTION,,,,,
+Map excludes child,Non-standard to Standard exclude child (OMOP),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Map includes child,Non-standard to Standard include child (OMOP),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Mapped from,Standard to Non-standard map (OMOP),MAPS_FROM,Identity,Vocab Mapping,,,
+Maps to,Non-standard to Standard map (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+Maps to number,Non-standard to value_as_number map (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Maps to operator,Non-standard to operator concept map (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Maps to type,Non-standard to type concept map (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Maps to unit,Non-standard to unit concept map (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+Maps to value,Non-standard to value_as_concept map (OMOP),MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-PPI#concept-relationships
+Marketed form of,Marketed form of (OMOP),ATTRIBUTE,Attribute,Product-form,,Marketed form of the drug.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+May be inhibited by,Effect may be inhibited by (NDF-RT),INTERACTION,,,,,
+May be prevented by,May be prevented by (NDF-RT),INTERACTION,,,,,
+May be route of,May be route of (HemOnc),ATTRIBUTE,,,,,
+May be treated by,May be treated by (NDF-RT),INTERACTION,,,,,
+May diagnose,May diagnose (NDF-RT),INTERACTION,,,,,
+May have route,May have route (HemOnc),UNCATEGORISED,,,,,
+May prevent,May prevent (NDF-RT),INTERACTION,,,,,
+May treat,May treat (NDF-RT),INTERACTION,,,,,
+MDC cat - DRG,MDC category to DRG (CMS),MAPS_TO,,,,,
+Meas component of,Measured Component of (SNOMED),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Measurement of,Measurement method of (SNOMED),ATTRIBUTE,,,,,
+MedDRA - HOI,MedDRA contained in HOI (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+MedDRA - ICD9CM,MedDRA to ICD-9-CM (MSSO),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+MedDRA - SMQ,MedDRA contained in SMQ (MedDRA),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+MedDRA - SNOMED eq,MedDRA to SNOMED equivalent (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Metabolism of,Site of metabolism of (NDF-RT),ATTRIBUTE,,,,,
+Metabolite of,Active metabolite of (NDF-RT),ATTRIBUTE,,,,,
+Method of,Method of,ATTRIBUTE,,,,,
+MoA of,Mechanism of action of (NDF-RT),ATTRIBUTE,,,,,
+Modality of,Modality of (Hemonc),ATTRIBUTE,,,,,
+Modification of,Is modification of (SNOMED),ATTRIBUTE,,,,,
+Module of,Module of,ATTRIBUTE,,,,,
+Morphology of,Morphology of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+MS-DRG - DRG eq,MS-DRG to DRG equivalent (CMS),MAPS_TO,Identity,Vocab Mapping,,,
+Multilex has ing,Has ingredient (Multilex),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Multilex ing of,Ingredient of (Multilex),COMPOSITION,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+NDFRT - RxNorm eq,NDF-RT to RxNorm equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,
+NDFRT - RxNorm name,NDF-RT to RxNorm equivalent by concept_name (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+NDFRT - SNOMED eq,NDF-RT to SNOMED equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,
+NDFRT - VAProd,NDF-RT to VA Product (NDF-RT),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+NDFRT dose form of,Dose form of (NDF-RT),ATTRIBUTE,,,,,
+NDFRT has dose form,Has dose form (NDF-RT),ATTRIBUTE,,,,,
+NDFRT has ing,Has ingredient (NDF-RT),COMPOSITION,,,,,
+NDFRT ing of,Ingredient of (NDF-RT),COMPOSITION,,,,,
+NDFRT to ATC eq,NDFRT to ATC equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,Reverse of ATC to NDFRT eq,Is a cross-link between ATC Classes and National Drug File - Reference Terminology.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+NDFRT to VA Class eq,NDFRT to VA Class equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,,,
+Nebraska-CAP cat,Nebraska Lexicon to CAP category,UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Nebraska-CAP eq,Nebraska Lexicon to CAP equivalent,UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+NMPA indication of,NMPA indication of (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Non-avail ind of,VMP non-availability indicator of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+NUCC - CMS Specialty,NUCC to CMS Specialty (CMS),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Number mapped from,Value_as_number to non-standard map (OMOP),MAPS_FROM,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Numerator unit of,Presentation strength numerator unit of (SNOMED),ATTRIBUTE,,,,,
+Numerator value of,Presentation strength numerator value of (SNOMED),ATTRIBUTE,,,,,
+Occurrence of,Occurrence of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,"Occurrence (attribute) is applied to procedures during a period of life. For example, procedures related to the gravid uterus should be modeled by the combination of the occurrence of the maternal pregnancy period and the uterus.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#occurrence
+Occurs after,Occurs after (SNOMED),METADATA,Attribute,Temporal,,,
+Occurs before,Occurs before (SNOMED),METADATA,Attribute,Temporal,,,
+OncoTree to ICDO br,OncoTree to ICDO broader,MAPS_TO,,,,,
+OncoTree to ICDO eq,OncoTree to ICDO equivalent,MAPS_TO,Identity,Vocab Mapping,,,
+Ontological form of,Ontological dose form presentation of (DM+D),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+OPCS4 - SNOMED,OPCS4 to SNOMED equivalent or categorical (NHS),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Operator mapped from,Operator concept to non-standard map (OMOP),MAPS_FROM,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Panel contains,Panel contains,COMPOSITION,,,,,
+Paral imprt ind,Has NHS dm+d parallel import indicator,UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Paral imprt of,NHS dm+d parallel import indicator of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Parent item of,Parent item of (NAACCR),ATTRIBUTE,,,,,
+Part of,Part of (SNOMED),COMPOSITION,,,,,
+Pathology of,Pathological process of (SNOMED),ATTRIBUTE,,,,,
+Pept-drug cjgt of,Peptide-drug conjugate of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Permiss range of,Permissible range of,ATTRIBUTE,,,,,
+Pharma prep in,Pharmaceutical preparation contained in (NDF),UNCATEGORISED,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Physiol effect by,Physiological effect induced by (NDF-RT),METADATA,,,,,
+Physiol state of,Physiologic state of (SNOMED Vet),ATTRIBUTE,,,,,
+PK of,Pharmacokinetics of (NDF-RT),ATTRIBUTE,,,,,
+Plays role,Plays role,UNCATEGORISED,,,,,
+PMDA indication of,PMDA indication of (HemOnc),ATTRIBUTE,Attribute,Regulatory,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+PoS - Visit cat,Place of Service to Visit category (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+PPI parent code of,PPI parent code of,ATTRIBUTE,,,,,
+Prec ingredient of,Precise active ingredient of (SNOMED),COMPOSITION,,,,,
+Precise ing of,Precise ingredient of (RxNorm),COMPOSITION,,,,,
+Precondition of,Precondition of (SNOMED),ATTRIBUTE,Attribute,Clinical,,"Specify body state, timing, challenges, or other situations that must be true of the entity to be observed.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#precondition
+Precoord pair of,Precoordinated (Question-Answer/Variable-Value) pair of,ATTRIBUTE,,,,,
+Prep to Chem eq,Pharmaceutical Preparation to Chemical Structure equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,,,
+Priority of,Priority of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,Priority (attribute) is used when a procedure concept specifies a priority. This attribute is self-grouped.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#priority
+Proc context of,Procedure context of (SNOMED),ATTRIBUTE,,,,,
+Proc device of,Procedure device of (SNOMED),ATTRIBUTE,Attribute,Device,,"Procedure device (attribute) is used to model devices associated with a procedure. This attribute is used to define high-level, general concepts that aggregate procedures according to the device involved.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-device
+Proc duration of,Process duration of,ATTRIBUTE,,,,,
+Proc morph of,Procedure morphology of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,"Procedure morphology (attribute) is used to specify the morphology, or abnormal structure, involved in a procedure. It is used when defining general concepts that subsume direct and indirect morphology. It subsumes the more specific attributes, Direct and Indirect Morphology. These should be used, if possible.
+
+",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#procedure-morphology
+Proc Schema to ICDO,Procedure Schema to ICDO Condition (NAACCR),MAPS_TO,,,,,
+Proc site of,Procedure site of (SNOMED),ATTRIBUTE,Attribute,Spatial,,,
+Process acts on,Process acts on (SNOMED),INTERACTION,Attribute,Entity,,"Describes that a process specifically acts on some entity, e.g. by transporting that entity in or out of the body, i.e. Rate of intake of protein.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#process-acts-on
+Process extends from,Process extends from (SNOMED),UNCATEGORISED,Attribute,Anatomical,,Specify the substance or process produced by the process characterized by the observable property type.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#process-extends-to
+Process extends to,Process extends to (SNOMED),UNCATEGORISED,Attribute,Anatomical,,Specify the substance or process produced by the process characterized by the observable property type.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#process-extends-to
+Process output of,Process output of (SNOMED),ATTRIBUTE,,,,,
+Prod character of,Product characteristic of (SNOMED),ATTRIBUTE,,,,,
+Product comp of,Product component of (NDF-RT),ATTRIBUTE,,,,,
+Property of,Property of,ATTRIBUTE,,,,,
+Property type of,Property type of,ATTRIBUTE,,,,,
+Quantified form of,Quantified form of (RxNorm),ATTRIBUTE,Attribute,Product-form,,Quantifier for a drug concept,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Question source of,Question source of,ATTRIBUTE,,,,,
+Radioconjugate of,Radioconjugate of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Radiotherapy of,Radiotherapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Recipient cat of,Recipient category of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,Recipient category (attribute) specifies the type of individual or group upon which the action of the procedure is performed.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#recipient-category
+Reformulated in,Reformulated in (RxNorm),METADATA,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Reformulation of,Reformulation of (RxNorm),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Regimen type of,Regimen type of (HemOnc),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Relat context of,Subject relationship context of (SNOMED),ATTRIBUTE,,,,,
+Relative part of,Relative part of (SNOMED),COMPOSITION,,,,,
+Relative to,Relative to (SNOMED),UNCATEGORISED,Attribute,Entity,,"Specify the denominator of a relational property type, e.g. a ratio or proportion.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#relative-to
+Relative to of,Relative to of (SNOMED),MAPS_TO,Attribute,Entity,,"Specify the denominator of a relational property type, e.g. a ratio or proportion.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#relative-to
+Release charact of,Dose form release characteristic of (SNOMED),ATTRIBUTE,,,,,
+Revision status of,Revision status of (SNOMED),VERSIONING,Attribute,Characteristic,,Revision status (attribute) refers to another procedure performed on the same site for the same condition. A procedure without a revision status is considered to be performed for the first time. ,
+Role of,Role of (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Role played by,Role played by,UNCATEGORISED,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Route of,Route of (DM+D),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Route of admin of,Route of administration of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Rx AB-drug cjgt of,RxNorm antibody-drug conjugate of (HemOnc),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Rx antineopl of,RxNorm antineoplastic of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx endocrine tx of,RxNorm endocrine therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx immunosuppr of,RxNorm immunosuppressor of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx immunotherapy of,RxNorm immunotherapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx local therapy of,RxNorm local therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx PDC of,RxNorm PDC of (HemOnc),ATTRIBUTE,,,,,
+Rx pept-drg cjg of,RxNorm peptide-drug conjugate of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx radiocjgt of,RxNorm radioconjugate of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx radiotherapy of,RxNorm radiotherapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx steroid tx of,RxNorm steroid therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx support med of,RxNorm Supportive medication of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Rx targeted tx of,RxNorm targeted therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+RxNorm - ATC,RxNorm to ATC,MAPS_TO,Identity,Vocab Mapping,Reverse of ATC - RxNorm,"Connects ATC Classes and Drug Products, but not Ingredients",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+RxNorm - ATC name,RxNorm to ATC equivalent by concept_name (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+RxNorm - ATC pr lat,RxNorm/Extension to ATC pr lateral (OMOP),MAPS_TO,Associative,Ingredient,Reverse of ATC - RxNorm pr lat,"Connects Monocomponent ATC Class with its full semantic equivalent in the form of the main active Standard Ingredient.
+Connects the 1st active ingredient of the ATC Polycomponent ATC Class with Standard Ingredient. 
+Can be used for a group of similar ingredients (e.g. senna glycosides, estrogens)",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+RxNorm - ATC pr up,RxNorm/Extension to ATC primary upwards (OMOP),MAPS_TO,Hierarchical,Ingredient,Reverse of ATC - RxNorm pr up,"Connects the 1st Ingredient Group of a Multicomponent ATC Class to respective Rx/RxE Ingredients
+Applied to a Multicomponent ATC Class, whose name starts either from an Ingredient Group or the word of ‘^combinations’, or contains only one Ingredient Group, which is mentioned somewhere in the middle
+Can be used for well-defined but diverse group of ingredients (e.g. diastase, tree pollen, feather)",https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+RxNorm - ATC sec lat,RxNorm/Extension to ATC secondary lateral (OMOP),MAPS_TO,Associative,Ingredient,Reverse of ATC - RxNorm sec lat,Connects the 2nd active ingredient OR any subsequent active ingredient of a Multicomponent ATC Class to Rx/RxE Ingredient.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+RxNorm - ATC sec up,RxNorm/Extension to ATC secondary upwards (OMOP),MAPS_TO,Hierarchical,Ingredient,Reverse of ATC - RxNorm sec up,Connects the 2nd Ingredient Group OR any subsequent Ingredient Group OR NOT mentioned and unspecified list of Ingredients which can be in combination with Primary lateral or Primary upward ATC Classes to respective Rx/RxN Ingredients.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+RxNorm - CVX,RxNorm - CVX (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm - DOI,RxNorm contained in DOI (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm - ETC,RxNorm to ETC (FDB),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+RxNorm - ETC name,RxNorm to ETC equivalent by concept_name (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+RxNorm - NDFRT eq,RxNorm to NDF-RT equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm - NDFRT name,RxNorm to NDF-RT equivalent by concept_name (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm - SNOMED eq,RxNorm to SNOMED equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm - Source eq,RxNorm to Drug Source equivalent (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm - SPL,RxNorm to SPL (NLM),MAPS_TO,,,,,
+RxNorm - VAProd eq,RxNorm to VA Product equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,,,
+RxNorm dose form of,Dose form of (RxNorm),ATTRIBUTE,Attribute,Dose,,Links specific pharmaceutical dose form to a drug.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+RxNorm has dose form,Has dose form (RxNorm),ATTRIBUTE,Attribute,Dose,,Links a drug to its specific pharmaceutical dose form.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+RxNorm has ing,Has ingredient (RxNorm),COMPOSITION,Composition,Ingredient,,Links a drug concept to its constituent active ingredient(s).,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+RxNorm ing of,Ingredient of (RxNorm),COMPOSITION,Composition,Ingredient,,Links an ingredient to its containing drug concepts.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+RxNorm inverse is a,Inverse is a (RxNorm),ONTO_U,Hierarchical,Down,Standard -> specific,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+RxNorm is a,Is a (RxNorm),ONTO_U,Hierarchical,Up,Specific -> Standard,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+RxNorm replaced by,Concept replaced by (RxNorm),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+RxNorm replaces,Concept replaces (RxNorm),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Scale of,Scale of,ATTRIBUTE,,,,,
+Scale type of,Scale type of,ATTRIBUTE,,,,,
+Schema to ICDO,Schema to ICDO Condition (NAACCR),MAPS_TO,,,,,
+Schema to Value,Schema to Value (NAACCR),MAPS_TO,,,,,
+Schema to Variable,Schema to Variable (NAACCR),MAPS_TO,,,,,
+Setting of,Setting of (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Severity of,Severity of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+SMQ - MedDRA,SMQ consists of MedDRA (MedDRA),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+SNOMED - ATC eq,SNOMED to ATC equivalent (RxNorm),MAPS_TO,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+SNOMED - CPT4 eq,SNOMED to CPT-4 equivalent (OMOP),MAPS_TO,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+SNOMED - HOI,SNOMED contained in HOI (OMOP),MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED - ICD9P eq,SNOMED to ICD-9-Procedure equivalent (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+SNOMED - ICDO,SNOMED - ICDO,MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+SNOMED - ind/CI,SNOMED to Indication/Contra-indication,MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED - LOINC eq,SNOMED to LOINC Hierarchy equivalent (LOINC),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+SNOMED - MedDRA eq,SNOMED to MedDRA equivalent (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED - NDFRT eq,SNOMED to NDF-RT equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED - OPCS4,SNOMED to OPCS4 equivalent or categorical (NHS),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+SNOMED - RxNorm eq,SNOMED to RxNorm equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED - VA Class eq,SNOMED to VA Class equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED cat - CPT4,SNOMED category to CPT-4 (OMOP),MAPS_TO,Identity,Vocab Mapping,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-SNOMED#equivalent-and-categorical-relationships
+SNOMED meas - HCPCS,SNOMED measurement subsumes HCPCS (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+SNOMED proc - HCPCS,SNOMED procedure subsumes HCPCS (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Source - RxNorm eq,Drug Source to RxNorm equivalent (OMOP),MAPS_TO,Identity,Vocab Mapping,,,
+Spec active ing of,Specific active ingredient of (SNOMED),COMPOSITION,,,,,
+Specimen identity of,Specimen source identity of (SNOMED),ATTRIBUTE,Attribute,Specimen,,"Specifies the type of individual, group, or physical location from which a specimen is collected",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-source-identity
+Specimen morph of,Specimen source morphology of (SNOMED),ATTRIBUTE,Attribute,Specimen,,Specifies the morphologic abnormality from which a specimen is obtained.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-source-morphology
+Specimen of,Specimen of (SNOMED),ATTRIBUTE,Attribute,Evaluation,,Indicates the type of specimen on which a measurement or observation is performed.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/evaluation-procedure-attributes#has-specimen
+Specimen proc of,Specimen procedure of (SNOMED),ATTRIBUTE,Attribute,Specimen,,Identifies the procedure by which a specimen is obtained.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-procedure
+Specimen subst of,Specimen substance of (SNOMED),ATTRIBUTE,Attribute,Specimen,,"Specifies the type of substance, pharmaceutical/biologic product, or physical object of which a specimen is comprised.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/specimen/specimen-defining-attributes#specimen-substance
+Specimen topo of,Specimen source topography of (SNOMED),ATTRIBUTE,,,,,
+SPL - RxNorm,SPL to RxNorm (NLM),MAPS_TO,,,,,
+Stage of,Stage of (SNOMED),ATTRIBUTE,,,,,
+Start date of,Start date of,ATTRIBUTE,,,,,
+State of matter of,State of matter of (SNOMED),ATTRIBUTE,,,,,
+Status of,Status of,ATTRIBUTE,,,,,
+Steroid tx of,Steroid therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Strength of,Ingredient qualitative strength of (SNOMED),ATTRIBUTE,,,,,
+Sub-specimen of,Sub-specimen of (SNOMED Vet),ATTRIBUTE,,,,,
+Subject matter of,Subject matter domain of (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Subject of,Subject of (SNOMED),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Subst used by,Substance used by (SNOMED),METADATA,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Subsumes,Subsumes,ONTO_DOWN,Hierarchical,Down,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Supplier of,Supplier or manufacturer of (OMOP),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Supportive med of,Supportive medication of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Surf character of,Surface characteristic of (SNOMED),ATTRIBUTE,,,,,
+Surface texture of,Surface texture of (SNOMED),ATTRIBUTE,Attribute,Physical,,Represents the tactile characteristic or appearance of the surface of an object.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/physical-object/physical-object-defining-attributes#has-surface-texture
+Surgical appr of,Surgical approach of (SNOMED),ATTRIBUTE,,,,,
+Synth regimen of,Synthetic regimen of(HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+System of,System of,ATTRIBUTE,,,,,
+Targ population of,Target population of (SNOMED),ATTRIBUTE,,,,,
+Targeted therapy of,Targeted therapy of (HemOnc),ATTRIBUTE,Attribute,Therapy,,,https://hemonc.org/wiki/HemOncKB_canonical_triples
+Technique of,Technique of (SNOMED),ATTRIBUTE,Attribute,Observation,,Specify the systematic method of an observation.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#technique
+Temp related to,Temporally related to (SNOMED),METADATA,Attribute,Temporal,"All listed as ""Clinical Finding and Disorder""", Applies to perioperative complications and clinical findings where there is no causal relationship but a time-relative association exists.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#temporally-related-to
+Temporal context of,Temporal context of (SNOMED),ATTRIBUTE,,,,,
+Therap class of,Therapeutic class of (NDF),ATTRIBUTE,,,,,
+Time aspect of,Time aspect of,ATTRIBUTE,,,,,
+Topic of,Topic of,ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Topography of ICDO,Topography of ICDO,UNCATEGORISED,,,,,
+Towards,Towards (SNOMED),METADATA,Attribute,Entity,,"Specify a disposition, what the disposition is towards, i.e. a specific triggering agent, or more generally, participant in the realization of the disposition.",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/observable-entity/observable-entity-defining-attributes#towards
+Trade family grp of,Trade family group of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Tradename of,Tradename of (RxNorm),ATTRIBUTE,Attribute,Commercial,"Bridging two distinct clinical entities, one that is manufacturer-neutral (Clinical) and one that is manufacturer-specific (Branded)",Navigation link between Clinical (Generic) and Branded concepts.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-RXNORM_EXTENSION#result
+Transcribes to,Genomic DNA transcribes to mRNA,UNCATEGORISED,,,,,
+Transformation of,Dose form transformation of (SNOMED),ATTRIBUTE,,,,,
+Translates to,mRNA Translates to protein,UNCATEGORISED,,,,,
+Typ bill - Freq Code,Typ bill Full to Frequency code (UB04),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Typ bill - Typ bill3,Typ bill Full to Typ bill 3 digits (UB04),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Typ bill3 - Typ bill,Typ bill 3 digits to Typ bill Full (UB04),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Type mapped from,Type concept to non-standard map (OMOP),MAPS_FROM,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Type of,Type of,ATTRIBUTE,,,,,
+Type of service of,Type of service of (LOINC),ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+UCUM replaced by,Concept replaced by (UCUM),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+UCUM replaces,Concept replaces (UCUM),VERSIONING,Uncategorised,Uncategorised,Unused in OMOP CDM,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Unit mapped from,Unit concept to non-standard map (OMOP),MAPS_FROM,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Unit of,Unit of,ATTRIBUTE,Attribute,Characteristic,,,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-LOINC#relationships
+Unit of admin of,Unit of administration of (SNOMED),ATTRIBUTE,,,,,
+Unit of presen of,Unit of presentation of (SNOMED),ATTRIBUTE,,,,,
+Unit of prod use of,Unit relating to the entity that can be handled of (DM+D),ATTRIBUTE,,,,,
+Using acc device,Using access device (SNOMED),METADATA,Attribute,Device,,Using access device (attribute) specifies the instrument or equipment used to access the site of a procedure.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#using-access-device
+Using device,Using device (SNOMED),METADATA,Attribute,Device,,"Using device (attribute) refers to the instrument or equipment utilized to execute an action. It is used when the device is actually used to carry out the action, that is the focus of the procedure. ",https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#using-device
+Using energy,Using energy (SNOMED),METADATA,Attribute,Characteristic,,Using energy (attribute) refers to the energy used to execute an action.,
+Using finding inform,Using finding informer (SNOMED),METADATA,Attribute,Clinical,"All listed as ""Clinical Finding and Disorder""",Specifies the person or other entity from which the clinical finding information was obtained. It is not about the particular individual but about the category or type of informer. It is used to differentiate patient-reported symptoms from provider-determined signs.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#finding-informer
+Using finding method,Using finding method (SNOMED),ATTRIBUTE,Attribute,Diagnostic,"All listed as ""Clinical Finding and Disorder""",Specifies the means by which a clinical finding was determined. It includes findings that were determined by examination of the patient.,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/clinical-finding-and-disorder/clinical-finding-defining-attributes#finding-method
+Using subst,Using substance (SNOMED),METADATA,Attribute,Characteristic,,Using substance (attribute) describes the Substance used to execute the action of a procedure. ,https://docs.snomed.org/education/snomed-ct-education-editorial-guide/readme/authoring/domain-specific-modeling/procedure/procedure-defining-attributes/index#using-substance
+VA Class - SNOMED eq,VA Class to SNOMED equivalent (RxNorm),MAPS_TO,Identity,Vocab Mapping,,,
+VA Class to ATC eq,VA Class to ATC equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,Reverse of ATC to VA Class eq,Is a cross-link between ATC and Veteran Affairs drug classification.,https://github.com/OHDSI/Vocabulary-v5.0/wiki/Vocab.-ATC#other-information
+VA Class to NDFRT eq,VA Class to NDFRT equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,,,
+Vaccine group of,Vaccine group of (CVX),ATTRIBUTE,,,,,
+Value mapped from,Value_as_concept to non-standard map (OMOP),MAPS_FROM,Identity,Vocab Mapping,,,
+Value of,Value of,ATTRIBUTE,,,,,
+Value to Schema,Value to Schema (NAACCR),MAPS_TO,,,,,
+VAProd - NDFRT,VA Product to NDF-RT (NDF-RT),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VAProd - RxNorm eq,VA Product to RxNorm equivalent (NDF-RT),MAPS_TO,Identity,Vocab Mapping,,,
+Variable has date,Variable has date (NAACCR),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+Variable to Schema,Variable to Schema (NAACCR),MAPS_TO,,,,,
+Variant of,Variant refer to concept,ATTRIBUTE,,,,,
+Version contains,OMOP CDM Version contains table/field (OMOP),COMPOSITION,,,,,
+Visit cat - PoS,Visit category to Place of Service (OMOP),MAPS_TO,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VMP has prescr stat,VMP has prescribing status (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VMP of,Virtual Medicinal Product of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VMP prescr stat of,VMP prescribing status of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VRP has prescr stat,VRP has prescribing status (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VRP of,VRP of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM,,
+VRP prescr stat of,VRP prescribing status of (SNOMED),ATTRIBUTE,Uncategorised,Uncategorised,Unused in OMOP CDM
