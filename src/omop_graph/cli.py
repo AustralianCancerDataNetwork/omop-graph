@@ -1,9 +1,10 @@
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker, Session
 
-from orm_loader.helpers import get_logger, configure_logging, create_db, bulk_load_context
+from orm_loader.helpers import create_db, bulk_load_context
 from orm_loader.loaders.loader_interface import PandasLoader
 from orm_loader.helpers.metadata import Base
+from omop_alchemy.cdm.base import CDMTableBase
 from omop_alchemy.cdm.model.health_system import Location, Care_Site, Provider, Visit_Occurrence
 from omop_alchemy.cdm.model.clinical import (
     Person, 
@@ -24,8 +25,9 @@ from omop_alchemy.cdm.model.vocabulary import (
     Concept_Relationship,
     Concept_Synonym
 )
+from omop_alchemy.cdm.model.extended import RelationshipClass, RelationshipMapping
 
-from typing import Annotated
+from typing import Annotated, Union, Optional
 import pandas as pd
 import os
 from pathlib import Path
@@ -34,9 +36,10 @@ import numpy as np
 from datetime import date, timedelta
 from dotenv import load_dotenv
 import typer
+import logging
 
 app = typer.Typer()
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 ATHENA_INITIAL_LOAD = [
     Domain,
@@ -53,6 +56,33 @@ ATHENA_SUBSEQUENT_LOAD = [
     Concept_Synonym,
 ]
 
+ATHENA_RELATIONSHIP_CLASSIFICATION_LOAD = [
+    RelationshipClass,
+    RelationshipMapping
+]
+
+def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> None:
+    """Configure global logging."""
+    level_map = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+    log_level = level_map.get(min(verbosity, 2), logging.DEBUG)
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
+
+    if reduce_logging:
+        existing_loggers = [
+            logging.getLogger(name) for name in logging.root.manager.loggerDict
+        ]
+        exempt_loggers = []
+        for logger_instance in existing_loggers:
+            if not any(
+                logger_instance.name.startswith(exempt) for exempt in exempt_loggers
+            ):
+                logger_instance.setLevel(logging.WARNING)
 
 def _populate_reference_data(
     session: Session,
@@ -344,11 +374,13 @@ def _create_performance_indexes(session: Session):
 def omop_cdm(
     add_test_data: Annotated[bool, typer.Option(help="Whether to add synthetic test data after loading Athena data. Omit if not used.")] = False,
     chunk_size: Annotated[int, typer.Option("--chunk-size", "-c", help="Number of rows to process in each chunk when loading large tables. Adjust based on your system's memory capacity.")] = 5000,
+    pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
+    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
     """
     Bootstrap script to load OMOP CDM and reference data from Athena into a local database.
     """
-    configure_logging()
+    configure_logging_level(verbosity)
     load_dotenv()
 
     engine_string = os.getenv('OMOP_DATABASE_URL')
@@ -401,14 +433,147 @@ def omop_cdm(
 
     _create_performance_indexes(session)
 
+    try:
+       relationship_classification(pred_class_dir)
+    except Exception as e:
+       logger.error(f"Failed to ingest predicate classifications: {e}")
+       logger.info("Continuing with bootstrap without predicate classifications. Re-run cli `ingest-classification` command once the issue is resolved.")
+
     if add_test_data:
         _populate_test_data(session)
 
-try:
-    from omop_emb.cli import add_embeddings
-    app.command(name="add-embeddings")(add_embeddings)
-except ImportError:
-    logger.warning("Embedding CLI not available. Install with [emb] for embedding generation features.")
+
+@app.command()
+def add_embeddings(
+    api_base: Annotated[str, typer.Option(
+        "--api-base",
+        help="Base URL for the API to use for generating embeddings.",
+    )],
+    api_key: Annotated[str, typer.Option(
+        "--api-key",
+        help="API key for the embedding API.")],
+    batch_size: Annotated[int, typer.Option(
+        "--batch-size", "-b",
+        help="Batch size to use when generating and inserting embeddings. Adjust based on your system's memory capacity.")] = 100,
+    model: Annotated[str, typer.Option(
+        "--model", "-m",
+        help="Name of the embedding model to use for generating concept embeddings (e.g., 'text-embedding-3-small'). If not provided, embeddings will not be generated.")] = "text-embedding-3-small",
+    num_embeddings: Annotated[Optional[int], typer.Option(
+        "--num-embeddings", "-n",
+        help="If set, limits the number of concepts for which embeddings are generated. Useful for testing and development to speed up the embedding generation step.")] = None,
+    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
+):
+    """
+    Wrapper command to add embeddings to the database. Provided in omop-emb package if loaded during install
+    """
+    configure_logging_level(verbosity)
+    try:
+        from omop_emb.cli import add_embeddings
+        return add_embeddings(
+            api_base=api_base,
+            api_key=api_key,
+            batch_size=batch_size,
+            model=model,
+            num_embeddings=num_embeddings
+        )
+    except ImportError:
+        logger.error("Embedding CLI not available. Please install the package with [emb] to use this feature.")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def relationship_classification(
+    pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
+    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
+):
+    """
+    Method to get the pre-classified predicates into the database.
+    """
+    configure_logging_level(verbosity)
+    load_dotenv()
+
+    if pred_class_dir is None:
+        pred_class_dir = str((Path(__file__).parent.parent.parent / "docs").resolve())
+
+    pred_class_dir_pl = Path(pred_class_dir)
+
+    pred_mapping_file = pred_class_dir_pl / "predicate_mapping.csv"
+    if not pred_mapping_file.is_file():
+        raise FileNotFoundError(f"`predicate_mapping.csv` not found in {pred_class_dir_pl}")
+    pred_class_file = pred_class_dir_pl / "predicate_classification.csv"
+    if not pred_class_file:
+        raise FileNotFoundError(f"`predicate_classification.csv` not found in {pred_class_dir_pl}")
+
+    df_class = pd.read_csv(pred_class_file)
+    df_mapping = pd.read_csv(pred_mapping_file)
+    
+
+    # 1. RelationshipClass
+    df_rel_cls = df_class.rename(columns={"class": "class_id", "subclass": "subclass_id"})
+
+    # Only allow that a subclass_id maps exactly to one semantic and inference description
+    check = df_rel_cls.groupby(["class_id", "subclass_id"])[["description", "semantics", "inference"]].nunique(dropna=True)
+    violations = check[(check > 1).any(axis=1)]
+    if not violations.empty:
+        conflicting_data = df_rel_cls[df_rel_cls["subclass_id"].isin(violations.index)].sort_values("subclass_id")
+        logger.error(f"Validation Failed! {len(violations)} subclass_ids have conflicting definitions: {conflicting_data}")        
+        raise AttributeError("Validation not passed")
+    df_rel_cls_to_export = df_rel_cls.groupby(["class_id", "subclass_id"], as_index=False).first()
+
+    # 2. RelationshipMapping
+    df_rel_mapping = df_mapping.rename(columns={"class": "class_id", "subclass": "subclass_id", "r_id": "relationship_id"})
+    # Same order as relationship_class.py
+    df_rel_mapping = df_rel_mapping[["relationship_id", "class_id", "subclass_id"]].dropna(subset=['class_id', 'subclass_id'], how='all')
+    invalid_mask = df_rel_mapping[['class_id', 'subclass_id']].isna().any(axis=1)
+    dropped_ids = df_rel_mapping.loc[invalid_mask, 'relationship_id'].unique().tolist()
+
+    if dropped_ids:
+        logger.warning(f"Dropping {len(dropped_ids)} relationships due to missing parent or child class: {dropped_ids}")
+    df_rel_mapping = df_rel_mapping.dropna(subset=['class_id', 'subclass_id'], how='any')
+    df_rel_mapping_to_export = df_rel_mapping.drop_duplicates(subset=["relationship_id", "class_id", "subclass_id"])
+
+    # Save and then load again
+    athena_db_path = os.getenv('SOURCE_PATH')
+    if athena_db_path is None:
+        raise RuntimeError("SOURCE_PATH environment variable not set. Please set it in your .env file to point to the Athena CSV files base directory.")
+    base_path = Path(athena_db_path).resolve()
+    assert base_path.exists(), f"Source path {base_path} does not exist"
+
+    engine_string = os.getenv('OMOP_DATABASE_URL')
+    if engine_string is None:
+        raise RuntimeError("OMOP_DATABASE_URL environment variable not set. Please set it in your .env file to point to your database.")
+    
+    engine = sa.create_engine(engine_string, future=True, echo=False)
+    Session = sessionmaker(bind=engine, future=True)
+    session = Session()
+
+    # Drop the tables
+    with engine.begin() as conn:
+        conn.execute(sa.text(f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"))  # type: ignore
+        conn.execute(sa.text(f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"))  # type: ignore
+        conn.execute(sa.text("DROP TYPE IF EXISTS classidenum CASCADE;"))
+
+    tables_to_drop = [
+        RelationshipMapping.__table__, 
+        RelationshipClass.__table__
+    ]
+    Base.metadata.drop_all(bind=engine, tables=tables_to_drop, checkfirst=True)  # type: ignore
+    Base.metadata.create_all(bind=engine, tables=tables_to_drop)  # type: ignore
+
+    for model, df in zip([RelationshipClass, RelationshipMapping], [df_rel_cls_to_export, df_rel_mapping_to_export]):
+        csv_path = base_path / f"{model.__tablename__.upper()}.csv"
+        df.to_csv(csv_path, index=False)
+        logger.info(f"Saved {len(df)} records to `{csv_path}` for model `{model.__name__}`")
+
+        with bulk_load_context(session):
+            model.load_csv(  # type: ignore
+                session,
+                csv_path,
+                dedupe=True,
+                merge_strategy="replace",
+                loader=PandasLoader()
+            )
+            session.commit()
 
 if __name__ == "__main__":
     app()

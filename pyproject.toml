@@ -56,7 +56,13 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
-    "omop-graph[emb]"
+    "omop-graph[emb]",
+    "mkdocs<2.0",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-mermaid2-plugin",
+    "mkdocs-table-reader-plugin",
+    "mkdocs-macros-plugin", 
 ]
 
 [project.scripts]

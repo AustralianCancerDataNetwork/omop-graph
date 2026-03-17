@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Own files
+docs/backup/
+docs/omop_relationships.csv

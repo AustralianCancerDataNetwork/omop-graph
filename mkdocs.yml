@@ -4,8 +4,10 @@ theme:
   features:
     - navigation.sections
     - navigation.expand
+    - navigation.path
     - navigation.top
     - content.code.copy
+    - content.code.annotate
   palette:
     - scheme: default
       primary: indigo
@@ -22,6 +24,9 @@ theme:
 
 nav:
   - Home: index.md
+  - Getting Started:
+      - Installation: usage/installation.md
+      - "CLI Reference": usage/cli.md
   - Core Components:
       - KnowledgeGraph: graph/kg.md
       - Edges & Predicates: graph/edges.md
@@ -43,3 +48,13 @@ plugins:
             docstring_style: numpy
             show_root_heading: true
             show_source: false
+  - macros:
+      module_name: docs/mkdocs_macros
+  - table-reader
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - tables
