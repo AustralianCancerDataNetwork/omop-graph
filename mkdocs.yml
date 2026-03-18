@@ -28,15 +28,19 @@ nav:
       - Installation: usage/installation.md
       - "CLI Reference": usage/cli.md
   - Core Components:
-      - KnowledgeGraph: graph/kg.md
-      - Edges & Predicates: graph/edges.md
-  - Algorithms:
-      - Pathfinding: algorithms/paths.md
-      - Scoring & Ranking: algorithms/scoring.md
+      - "Knowledge Graph": graph/kg.md
+      - "Relationships": graph/edges.md
   - Reasoning:
-      - Resolvers: reasoning/resolvers.md
-      - Grounding: reasoning/grounding.md
-  - API Reference: reference.md
+      - "Semantic Grounding": reasoning/grounding.md
+      - "Resolvers": reasoning/resolvers.md
+  - API Reference:
+      - "Edges": reference/ref_edges.md
+      - "Grounding": reference/ref_grounding.md
+      - "KnowledgeGraph": reference/ref_kg.md
+      - "Nodes": reference/ref_nodes.md
+      - "Paths": reference/ref_paths.md
+      - "Resolvers": reference/ref_resolvers.md
+      - "Scoring": reference/ref_scoring.md
 
 plugins:
   - search
@@ -58,3 +62,15 @@ markdown_extensions:
   - pymdownx.superfences
   - attr_list
   - tables
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  #- javascripts/mathjax.js
+  #- https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css

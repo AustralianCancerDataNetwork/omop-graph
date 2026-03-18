@@ -107,15 +107,13 @@ def ground_term(
     """
     standard_concepts: List[StandardConcept] = []
 
-    # 1. Validate Constraints
     search_constraints = constraints.search_constraint
     if search_constraints is not None:
         search_constraints.check(kg)
 
-    # 2. Resolve Text to Candidate Hits
     resolved = list(resolver_pipeline.resolve(kg, text, constraints=search_constraints))
 
-    # 3. Validate Hierarchy and Standardize
+    # Anchoring
     for hit in resolved:
         if constraints.parent_ids is not None:
             candidate_standard_concepts = find_standard_concepts(
@@ -140,13 +138,12 @@ def ground_term(
             # Note: We currently require parent_ids for clinical safety/context
             raise NotImplementedError("Grounding without parent_ids is not supported.")
 
-    # 4. Filter and Deduplicate
     unique_standard_concepts = get_unique_standard_concepts(standard_concepts)
     if not unique_standard_concepts:
         logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
         return []
 
-    # 5. Semantic Scoring (Embeddings)
+    # Optional: Semantic Scoring (Embeddings)
     try:
         with kg.session_factory() as session:
             similarity_scores_dict = {}
@@ -209,7 +206,7 @@ def ground_term(
         logger.info("Embedding-based grounding not available. Install this package with [emb] option to enable this functionality.")
         similarity_scores = None
 
-    # 6. Rank Results
+    # Scoring
     ranked_standard_concepts = score_standard_concepts(
         text=text, 
         standard_concepts=tuple(unique_standard_concepts),

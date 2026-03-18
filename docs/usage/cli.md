@@ -67,3 +67,32 @@ where `[OPTIONS]` are optional arguments that can be specified as described belo
 | **`--num-embeddings`** | `-n` | `Integer` | `None` | Limit the number of concepts processed (useful for testing). |
 ---
 
+
+## `relationship-classification` {: #relationship-classification }
+
+This command ingests pre-defined relationship classifications and mappings into the database. It categorizes standard OMOP relationships into semantic groups (e.g., Hierarchical, Lateral, Mapping) to enable more intelligent graph reasoning.
+
+### Rationale
+The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific `ClassIDEnum` (like `EQUIVALENT`, `HIERARCHICAL`, or `IDENTITY`) and provides detailed inference descriptions used by the `KnowledgeGraph` facade.
+
+### Prerequisites
+
+The command expects two CSV files to be present in the target directory:
+
+1. Prepopulated OMOP CDM (e.g. using command [`omop-cdm`](#omop-cdm))
+2. **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
+3. **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
+
+### Usage
+
+```bash
+omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
+```
+
+### Command Options
+
+| Option | Short | Type | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **`--pred-class-dir`** | | `String` | `./docs` | Path to the directory containing the classification CSVs. |
+| **`--verbose`** | `-v` | `Count` | `0` | Increase logging verbosity (use `-v` or `-vv`). |
+---

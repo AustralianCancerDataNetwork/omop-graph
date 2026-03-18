@@ -94,8 +94,9 @@ class KnowledgeGraph(GraphBackend):
 
     Parameters
     ----------
-    session : Session
-        The SQLAlchemy session connected to the OMOP database.
+    session_factory : sessionmaker
+        The SQLAlchemy sessionmaker factory capable of creating separate sessions for 
+        each database access.
     """
 
     def __init__(self, session_factory: sessionmaker):
