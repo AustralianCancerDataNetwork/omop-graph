@@ -14,24 +14,6 @@ class ParentStatistics:
     purity: float = 0.0 
     max_depth: int = 0
 
-
-def parent_search(
-    kg: KnowledgeGraph,
-    concept_id: int,
-) -> set[int]:
-    """
-    One-hop parents using ONLY 'Is a'
-    """
-    return {
-        e.object_id
-        for e in kg.iter_edges(
-            concept_id,
-            direction="out",
-            predicate="Is a",
-        )
-        if e.object_id != concept_id
-    }
-
 def descendants_exhaustive_subsumes(
     kg: KnowledgeGraph,
     root_id: int,
@@ -47,20 +29,24 @@ def descendants_exhaustive_subsumes(
     descendants: set[int] = set()
     frontier: list[int] = [root_id]
 
-    while frontier:
-        current = frontier.pop()
-        for e in kg.iter_edges(
-            current,
-            direction="out",
-            predicate="Subsumes",
-        ):
-            child = e.object_id
-            if child == current or child in descendants:
-                continue
-            descendants.add(child)
-            if child in exclude_roots:
-                continue
-            frontier.append(child)
+    raise NotImplementedError("predicate search has changed. Needs to change here too. Subsumes no longer valid.")
+
+    with kg.session_factory() as session:
+        while frontier:
+            current = frontier.pop()
+            for e in kg.iter_edges(
+                session=session,
+                concept_ids=current,
+                direction="out",
+                predicate="Subsumes",
+            ):
+                child = e.object_id
+                if child == current or child in descendants:
+                    continue
+                descendants.add(child)
+                if child in exclude_roots:
+                    continue
+                frontier.append(child)
 
     return descendants
 
@@ -89,7 +75,7 @@ def find_common_parents(
         if max_up_depth is not None and depth >= max_up_depth:
             continue
 
-        for parent in parent_search(kg, current):
+        for parent in kg.parents(current):
             # record evidence
             candidates[parent].found.add(origin)
             candidates[parent].descendants.add(origin)

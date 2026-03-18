@@ -32,7 +32,8 @@ from typing import (
 import numpy as np
 
 # Local Application Imports
-from omop_graph.graph.edges import EdgeView, PredicateKind
+from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.reasoning.resolvers import CandidateHit, ResolverConfidence
 
@@ -214,8 +215,7 @@ def find_shortest_paths(
     kg: "KnowledgeGraph",
     source: int,
     target: int,
-    *,
-    predicate_kinds: Optional[Set[PredicateKind]] = None,
+    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
@@ -232,7 +232,7 @@ def find_shortest_paths(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[PredicateKind], optional
+    predicate_kinds : set[ClassIDEnum], optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum path length.
@@ -282,34 +282,36 @@ def find_shortest_paths(
 
             if d >= max_depth:
                 continue
+            
+            with kg.session_factory() as session:
+                for e in kg.iter_edges(
+                    session=session,
+                    concept_ids=cur,
+                    direction="out",
+                    predicate_kinds=predicate_kinds,
+                    on=on,
+                ):
+                    nxt = e.object_id
+                    nd = d + 1
+                    if nd > max_depth:
+                        continue
 
-            for e in kg.iter_edges(
-                cur,
-                direction="out",
-                predicate_kinds=predicate_kinds,
-                on=on,
-            ):
-                nxt = e.object_id
-                nd = d + 1
-                if nd > max_depth:
-                    continue
+                    expanded.append(e)
 
-                expanded.append(e)
+                    if nxt not in depth_fwd:
+                        depth_fwd[nxt] = nd
+                        q_fwd.append(nxt)
 
-                if nxt not in depth_fwd:
-                    depth_fwd[nxt] = nd
-                    q_fwd.append(nxt)
+                    if depth_fwd[nxt] == nd:
+                        parents_fwd[nxt].append((cur, e.predicate_id))
 
-                if depth_fwd[nxt] == nd:
-                    parents_fwd[nxt].append((cur, e.predicate_id))
-
-                if nxt in depth_bwd:
-                    total = nd + depth_bwd[nxt]
-                    if best_total_depth is None or total < best_total_depth:
-                        best_total_depth = total
-                        meeting_nodes = {nxt}
-                    elif total == best_total_depth:
-                        meeting_nodes.add(nxt)
+                    if nxt in depth_bwd:
+                        total = nd + depth_bwd[nxt]
+                        if best_total_depth is None or total < best_total_depth:
+                            best_total_depth = total
+                            meeting_nodes = {nxt}
+                        elif total == best_total_depth:
+                            meeting_nodes.add(nxt)
 
         else:
             cur = q_bwd.popleft()
@@ -318,32 +320,34 @@ def find_shortest_paths(
             if d >= max_depth:
                 continue
 
-            for e in kg.iter_edges(
-                cur,
-                direction="in",
-                predicate_kinds=predicate_kinds,
-                on=on,
-            ):
-                expanded.append(e)
-                prev = e.subject_id
-                nd = d + 1
-                if nd > max_depth:
-                    continue
+            with kg.session_factory() as session:
+                for e in kg.iter_edges(
+                    session=session,
+                    concept_ids=cur,
+                    direction="in",
+                    predicate_kinds=predicate_kinds,
+                    on=on,
+                ):
+                    expanded.append(e)
+                    prev = e.subject_id
+                    nd = d + 1
+                    if nd > max_depth:
+                        continue
 
-                if prev not in depth_bwd:
-                    depth_bwd[prev] = nd
-                    q_bwd.append(prev)
+                    if prev not in depth_bwd:
+                        depth_bwd[prev] = nd
+                        q_bwd.append(prev)
 
-                if depth_bwd[prev] == nd:
-                    parents_bwd[prev].append((cur, e.predicate_id))
+                    if depth_bwd[prev] == nd:
+                        parents_bwd[prev].append((cur, e.predicate_id))
 
-                if prev in depth_fwd:
-                    total = depth_fwd[prev] + nd
-                    if best_total_depth is None or total < best_total_depth:
-                        best_total_depth = total
-                        meeting_nodes = {prev}
-                    elif total == best_total_depth:
-                        meeting_nodes.add(prev)
+                    if prev in depth_fwd:
+                        total = depth_fwd[prev] + nd
+                        if best_total_depth is None or total < best_total_depth:
+                            best_total_depth = total
+                            meeting_nodes = {prev}
+                        elif total == best_total_depth:
+                            meeting_nodes.add(prev)
 
         if traced:
             trace_steps.append(
@@ -399,8 +403,7 @@ def find_shortest_paths_batch(
     kg: "KnowledgeGraph",
     source: int,
     target: int,
-    *,
-    predicate_kinds: Union[Set[PredicateKind], frozenset[PredicateKind], None] = None,
+    predicate_kinds: Union[Set[ClassIDEnum], frozenset[ClassIDEnum], None] = None,
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
@@ -419,7 +422,7 @@ def find_shortest_paths_batch(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[PredicateKind], optional
+    predicate_kinds : set[ClassIDEnum], frozenset[ClassIDEnum] optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum path length.
@@ -474,12 +477,14 @@ def find_shortest_paths_batch(
             current_parents = parents_bwd
 
         # 2. Batch Query: Get all edges for the current layer in ONE shot
-        batch_edges = kg.iter_edges_batch(
-            current_layer_nodes,
-            direction=direction,
-            predicate_kinds=frozenset(predicate_kinds) if predicate_kinds else None,
-            on=on,
-        )
+        with kg.session_factory() as session:
+            batch_edges = kg.iter_edges(
+                session=session,
+                concept_ids=current_layer_nodes,
+                direction=direction,
+                predicate_kinds=frozenset(predicate_kinds) if predicate_kinds else None,
+                on=on,
+            )
 
         next_frontier = set()
 
@@ -700,13 +705,15 @@ def find_standard_paths(
                 continue
 
         # Expand: Go to next best concept_id
-        edges = list(
-            kg.iter_edges_batch(
-                (subject_node.concept_id,),
-                direction="out",
-                predicate_kinds=predicate_kinds,
+        with kg.session_factory() as session:
+            edges = list(
+                kg.iter_edges(
+                    session=session,
+                    concept_ids=subject_node.concept_id,
+                    direction="out",
+                    predicate_kinds=predicate_kinds,
+                )
             )
-        )
         if not edges:
             continue
 
@@ -819,9 +826,7 @@ class PathProfile:
             next_view = get_view(step_idx + 1)
             
             is_translation_edge = predicate_kind in (
-                PredicateKind.MAPS_TO,
-                PredicateKind.VERSIONING,
-                PredicateKind.MAPS_FROM,
+                ClassIDEnum.IDENTITY,
             )
 
             if (
@@ -860,7 +865,7 @@ class PathExplanationStep:
     """
     step: PathStep
     traversal_depth: Optional[int]
-    predicate_kind: PredicateKind
+    predicate_kind: ClassIDEnum
     reason: str
 
 
@@ -890,7 +895,7 @@ class PathExplanation:
         for step in path.steps:
             ts = trace_contains_step(trace, step)
             kind = kg.predicate_kind(step.predicate)
-            reason = kind.label()
+            reason = kind.value
             steps.append(
                 PathExplanationStep(
                     step=step,

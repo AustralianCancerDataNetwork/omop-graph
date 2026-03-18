@@ -14,7 +14,8 @@ The queries cover:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Type
+from typing import Optional, Tuple, Literal, Union
+from datetime import date
 
 from sqlalchemy import and_, case, exists, func, literal, select
 from sqlalchemy.orm import aliased
@@ -27,8 +28,8 @@ from omop_alchemy.cdm.model.vocabulary import (
     Concept_Synonym,
     Relationship,
 )
-from omop_alchemy.cdm.base.embeddings import ModelRegistry, EmbeddingBase
 
+from ..extensions.omop_alchemy import RelationshipClass, RelationshipMapping, ClassIDEnum
 from .constraints import SearchConstraintConcept
 
 
@@ -359,6 +360,8 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
     """
     Rel = Relationship
     Rev = aliased(Relationship)
+    Rm = aliased(RelationshipMapping)
+
 
     return (
         select(
@@ -368,9 +371,13 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
             Rel.is_hierarchical,
             Rel.defines_ancestry.label("anc_down"),
             Rev.defines_ancestry.label("anc_up"),
+            Rm.class_id,
+            Rm.subclass_id
         )
         .join(
-            Rev, Rel.reverse_relationship_id == Rev.relationship_id
+            Rev, Rel.reverse_relationship_id == Rev.relationship_id,
+        ).join(
+             Rm, Rel.relationship_id == Rm.relationship_id
         )  # Match string IDs
         .where(Rel.relationship_id == relationship_id)
     )
@@ -390,40 +397,22 @@ def q_all_predicates_with_ancestry() -> Select:
     ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
 
 
-def q_outgoing_edges(concept_id: int, relationship_id: Optional[str] = None) -> Select:
-    """
-    Query edges starting from a specific concept ID.
-
-    Parameters
-    ----------
-    concept_id : int
-        The subject concept ID.
-    relationship_id : str, optional
-        Filter by relationship type.
-
-    Returns
-    -------
-    Select
-        Statement returning edges (subj, rel, obj, validity).
-    """
-    stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
-        Concept_Relationship.valid_start_date,
-        Concept_Relationship.valid_end_date,
-        Concept_Relationship.invalid_reason,
-    ).where(Concept_Relationship.concept_id_1 == concept_id)
-
-    if relationship_id is not None:
-        stmt = stmt.where(Concept_Relationship.relationship_id == relationship_id)
-    return stmt
-
-
-def q_outgoing_edges_batch(
-    concept_ids: Tuple[int, ...], relationship_id: Optional[str] = None
+def q_edges(
+    concept_ids: Union[Tuple[int, ...], int], 
+    direction: Literal["in", "out"],
+    predicate_ids: Optional[frozenset[str]] = None,
+    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+    active_only: bool = False,
+    on: Optional[date] = None,
+    within_domain: bool = False
 ) -> Select:
     """Query outgoing edges for a batch of concept IDs."""
+    if isinstance(concept_ids, int):
+        concept_ids = (concept_ids, )
+
+    Subj = aliased(Concept)
+    Obj = aliased(Concept)
+
     stmt = select(
         Concept_Relationship.concept_id_1,
         Concept_Relationship.relationship_id,
@@ -431,58 +420,38 @@ def q_outgoing_edges_batch(
         Concept_Relationship.valid_start_date,
         Concept_Relationship.valid_end_date,
         Concept_Relationship.invalid_reason,
-    ).where(Concept_Relationship.concept_id_1.in_(concept_ids))
+        RelationshipMapping.class_id,
+        RelationshipMapping.subclass_id
+    ).join(
+        RelationshipMapping, 
+        Concept_Relationship.relationship_id == RelationshipMapping.relationship_id
+    )
 
-    if relationship_id is not None:
-        stmt = stmt.where(Concept_Relationship.relationship_id == relationship_id)
-    return stmt
+    if active_only:
+        stmt = stmt.where(Concept_Relationship.invalid_reason.is_(None))
+        if on is not None:
+            stmt = stmt.where(
+                and_(
+                    Concept_Relationship.valid_start_date <= on,
+                    Concept_Relationship.valid_end_date >= on
+                )
+            )
 
+    if within_domain:
+        stmt = stmt.join(Subj, Concept_Relationship.concept_id_1 == Subj.concept_id)
+        stmt = stmt.join(Obj, Concept_Relationship.concept_id_2 == Obj.concept_id)
+        stmt = stmt.where(Subj.domain_id == Obj.domain_id)
 
-def q_incoming_edges(concept_id: int, relationship_id: Optional[str] = None) -> Select:
-    """
-    Query edges ending at a specific concept ID.
+    if direction == "in":
+        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(concept_ids))
+    elif direction == "out":
+        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
+    
+    if predicate_ids:  # Exact ID's
+        stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
+    if predicate_kinds: # Global categories
+        stmt = stmt.where(RelationshipMapping.class_id.in_(predicate_kinds))
 
-    Parameters
-    ----------
-    concept_id : int
-        The object concept ID.
-    relationship_id : str, optional
-        Filter by relationship type.
-
-    Returns
-    -------
-    Select
-        Statement returning edges.
-    """
-    stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
-        Concept_Relationship.valid_start_date,
-        Concept_Relationship.valid_end_date,
-        Concept_Relationship.invalid_reason,
-    ).where(Concept_Relationship.concept_id_2 == concept_id)
-
-    if relationship_id is not None:
-        stmt = stmt.where(Concept_Relationship.relationship_id == relationship_id)
-    return stmt
-
-
-def q_incoming_edges_batch(
-    concept_ids: Tuple[int, ...], relationship_id: Optional[str] = None
-) -> Select:
-    """Query incoming edges for a batch of concept IDs."""
-    stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
-        Concept_Relationship.valid_start_date,
-        Concept_Relationship.valid_end_date,
-        Concept_Relationship.invalid_reason,
-    ).where(Concept_Relationship.concept_id_2.in_(concept_ids))
-
-    if relationship_id is not None:
-        stmt = stmt.where(Concept_Relationship.relationship_id == relationship_id)
     return stmt
 
 
@@ -508,6 +477,47 @@ def q_ancestors(concept_id: int) -> Select:
         Concept_Ancestor.descendant_concept_id == concept_id
     )
 
+def q_relationships(
+    subjects: Optional[tuple[int, ...]],
+    predicates: Optional[tuple[str, ...]],
+    objects: Optional[tuple[int, ...]]  
+) -> Select:
+
+    stmt = select(
+        Concept_Relationship.concept_id_1,
+        Concept_Relationship.relationship_id,
+        Concept_Relationship.concept_id_2,
+    )
+
+    if subjects:
+        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
+
+    if predicates:
+        stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicates))
+
+    if objects:
+        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
+
+    return stmt
+
+def q_entities(
+    domain: str | None,
+    standard_only: bool = True,
+    filter_obsoletes: bool = True
+) -> Select:
+    
+    stmt = select(Concept.concept_id)
+
+    if domain:
+        stmt = stmt.where(Concept.domain_id == domain)
+
+    if standard_only:
+        stmt = stmt.where(Concept.standard_concept.is_not(None))
+
+    if filter_obsoletes:
+        stmt = stmt.where(Concept.invalid_reason.is_(None))
+
+    return stmt
 
 def q_concept_filtered(
     vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
@@ -640,32 +650,10 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
         .group_by(Concept.concept_id)
     )
 
-def q_embedding_model_table_name(model_name: str) -> Select:
-    """Query to get the table name of an embedding model in the database."""
-    return select(ModelRegistry.table_name).where(ModelRegistry.name == model_name)
-
-def q_embedding_cosine_similarity(
-    embedding_table: Type[EmbeddingBase],
-    text_embedding: list[float],
-    concept_ids: Optional[Tuple[int, ...]] = None,
-    limit: int = 10
-):
-    
-    distance = embedding_table.embedding.cosine_distance(text_embedding)
-    stmt = (
+def q_relationship_class(relationship_id: str) -> Select:
+    return (
         select(
-            Concept.concept_id,
-            (1 - distance).label("similarity")
+            RelationshipMapping.class_id
         )
-        .join(embedding_table, Concept.concept_id == embedding_table.concept_id)  # type: ignore
-        .order_by(distance)
+        .where(RelationshipMapping.relationship_id == relationship_id)
     )
-
-    # 4. Add your optional where clause
-    if concept_ids:
-        stmt = stmt.where(Concept.concept_id.in_(concept_ids))
-        limit = len(concept_ids)
-
-    # Limit the number of results return to the top N most similar concepts
-    stmt = stmt.limit(limit)
-    return stmt

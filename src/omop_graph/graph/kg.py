@@ -12,6 +12,9 @@ Responsibilities
 * **Edge/Node Retrieval:** Provides methods to traverse the graph (parents, children, edges).
 """
 
+# IMPORTANT: The lru_cache has access to self in each cache. We need to avoid this if we use it
+# TODO: Get rid of the LRU cache and instead optimise the queries!
+
 from __future__ import annotations
 
 import logging
@@ -19,16 +22,18 @@ import re
 from collections import defaultdict
 from datetime import date
 from functools import lru_cache
-from typing import Dict, Iterable, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, Optional, Set, Tuple, Union, Literal, Generator
 
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
+
 
 # Local Application Imports
-from omop_alchemy.cdm.base.embeddings import _MODEL_CACHE
+from ..extensions.emb import MissingExtensionError
+from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
-from .edges import EdgeView, Predicate, PredicateKind, PredicateSummary, is_active
+from .edges import EdgeView, Predicate, is_active
 from .nodes import (
     AncestorMatch,
     ConceptView,
@@ -37,7 +42,6 @@ from .nodes import (
     LabelMatchKind,
 )
 from .queries import (
-    q_all_predicates,
     q_all_predicates_with_ancestry,
     q_concept_domain_ids,
     q_concept_id_by_code,
@@ -53,19 +57,16 @@ from .queries import (
     q_concept_view,
     q_concept_views,
     q_concept_vocabulary_ids,
-    q_incoming_edges,
-    q_incoming_edges_batch,
+    q_edges,
     q_leaves,
-    q_outgoing_edges,
-    q_outgoing_edges_batch,
     q_parents,
+    q_children,
     q_predicate_name,
-    q_predicate_row,
     q_predicate_row_with_ancestry,
     q_roots,
     q_singletons,
-    q_embedding_model_table_name,
-    q_embedding_cosine_similarity,
+    q_entities,
+    q_relationships
 )
 
 logger = logging.getLogger(__name__)
@@ -97,8 +98,24 @@ class KnowledgeGraph(GraphBackend):
         The SQLAlchemy session connected to the OMOP database.
     """
 
-    def __init__(self, session: Session):
-        self.session = session
+    def __init__(self, session_factory: sessionmaker):
+        self.session_factory = session_factory
+
+        # Populate the relationshipcache 
+        with self.session_factory() as session:
+            RelationshipCache.load(session)
+
+    @property
+    def emb(self):
+        """Namespace for all embedding operations."""
+        try:
+            from omop_emb.accessor import EmbeddingAccessor
+            return EmbeddingAccessor()
+        except ImportError:
+            raise MissingExtensionError(
+                "Accessing '.emb' requires the 'omop-emb' package. "
+                "Install via: pip install omop-graph[embeddings]"
+            )
 
     @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:
@@ -115,7 +132,8 @@ class KnowledgeGraph(GraphBackend):
         ConceptView
             The immutable view of the concept.
         """
-        row = self.session.execute(q_concept_view(concept_id)).one()
+        with self.session_factory() as session:
+            row = session.execute(q_concept_view(concept_id)).one()
         return ConceptView.from_row(row)
 
     @lru_cache(maxsize=200_000)
@@ -133,10 +151,12 @@ class KnowledgeGraph(GraphBackend):
         tuple[ConceptView, ...]
             A tuple of concept views.
         """
-        return tuple(
-            ConceptView.from_row(row)
-            for row in self.session.execute(q_concept_views(concept_ids)).all()
-        )
+        with self.session_factory() as session:
+            concept_views = tuple(
+                ConceptView.from_row(row)
+                for row in session.execute(q_concept_views(concept_ids))
+            )
+        return concept_views
 
     @lru_cache(maxsize=200_000)
     def concept_id_by_code(self, vocabulary_id: str, concept_code: str) -> int:
@@ -155,11 +175,13 @@ class KnowledgeGraph(GraphBackend):
         int
             The resolved OMOP Concept ID.
         """
-        return int(
-            self.session.execute(
-                q_concept_id_by_code(vocabulary_id, concept_code)
-            ).scalar_one()
-        )
+        with self.session_factory() as session:
+            concept_id = int(
+                session.execute(
+                    q_concept_id_by_code(vocabulary_id, concept_code)
+                ).scalar_one()
+            )
+        return concept_id
 
     @lru_cache(maxsize=200_000)
     def _synonym_lookup_raw(
@@ -179,19 +201,20 @@ class KnowledgeGraph(GraphBackend):
 
         fn = q_concept_synonym_ilike if fuzzy else q_concept_synonym_match
         cs = fn(input_label, search_constraint=search_constraint)
-        syn_rows = self.session.execute(cs).all()
 
-        return tuple(
-            LabelMatch(
-                input_label=input_label,
-                matched_label=name,
-                concept_id=int(cid),
-                match_kind=LabelMatchKind.SYNONYM,
-                is_standard=is_standard,
-                is_active=is_active,
+        with self.session_factory() as session:
+            matches = tuple(
+                LabelMatch(
+                    input_label=input_label,
+                    matched_label=name,
+                    concept_id=int(cid),
+                    match_kind=LabelMatchKind.SYNONYM,
+                    is_standard=is_standard,
+                    is_active=is_active,
+                )
+                for cid, name, is_standard, is_active in session.execute(cs)
             )
-            for cid, name, is_standard, is_active in syn_rows
-        )
+        return matches
 
     @lru_cache(maxsize=200_000)
     def _label_lookup_raw(
@@ -211,19 +234,19 @@ class KnowledgeGraph(GraphBackend):
         fn = q_concept_name_ilike if fuzzy else q_concept_name_match
         cn = fn(input_label, search_constraint=search_constraint)
 
-        direct_rows = self.session.execute(cn).all()
-
-        return tuple(
-            LabelMatch(
-                input_label=input_label,
-                matched_label=name,
-                concept_id=int(cid),
-                match_kind=LabelMatchKind.DIRECT,
-                is_standard=is_standard,
-                is_active=is_active,
+        with self.session_factory() as session:
+            matches = tuple(
+                LabelMatch(
+                    input_label=input_label,
+                    matched_label=name,
+                    concept_id=int(cid),
+                    match_kind=LabelMatchKind.DIRECT,
+                    is_standard=is_standard,
+                    is_active=is_active,
+                )
+                for cid, name, is_standard, is_active in session.execute(cn)
             )
-            for cid, name, is_standard, is_active in direct_rows
-        )
+        return matches
 
     @lru_cache(maxsize=200_000)
     def _fulltext_lookup_raw(
@@ -236,19 +259,20 @@ class KnowledgeGraph(GraphBackend):
         Resolve a label using fulltext search (bag of words, ignoring word order).
         """
         q = q_concept_synonym_fulltext if fuzzy else q_concept_name_fulltext
-        rows = self.session.execute(q(label, search_constraint=search_constraint)).all()
 
-        return tuple(
-            LabelMatch(
-                input_label=label,
-                matched_label=name,
-                concept_id=int(cid),
-                match_kind=LabelMatchKind.FULLTEXT,
-                is_standard=is_standard,
-                is_active=is_active,
+        with self.session_factory() as session:
+            matches = tuple(
+                LabelMatch(
+                    input_label=label,
+                    matched_label=name,
+                    concept_id=int(cid),
+                    match_kind=LabelMatchKind.FULLTEXT,
+                    is_standard=is_standard,
+                    is_active=is_active,
+                )
+                for cid, name, is_standard, is_active in session.execute(q(label, search_constraint=search_constraint))
             )
-            for cid, name, is_standard, is_active in rows
-        )
+        return matches
 
     def synonym_lookup(
         self,
@@ -355,10 +379,13 @@ class KnowledgeGraph(GraphBackend):
         """
         Find concept IDs that match the label exactly (case-insensitive).
         """
-        rows = self.session.execute(q_concept_name_match(label)).scalars()
+
+        with self.session_factory() as session:
+            rows = session.execute(q_concept_name_match(label)).scalars()
         return tuple(rows)
 
     @lru_cache(maxsize=10_000)
+    @validate_mapping_table
     def predicate(self, relationship_id: str) -> Predicate:
         """
         Retrieve a Predicate object by its relationship ID.
@@ -373,8 +400,8 @@ class KnowledgeGraph(GraphBackend):
         Predicate
             The predicate definition.
         """
-        row = self.session.execute(q_predicate_row_with_ancestry(relationship_id)).one()
-
+        with self.session_factory() as session:
+            row = session.execute(q_predicate_row_with_ancestry(relationship_id)).one()
         return Predicate(
             relationship_id=row.relationship_id,
             name=row.relationship_name,
@@ -382,6 +409,8 @@ class KnowledgeGraph(GraphBackend):
             is_hierarchical=bool(row.is_hierarchical),
             anc_up=bool(int(row.anc_up)),
             anc_down=bool(int(row.anc_up)),
+            class_id=ClassIDEnum(row.class_id),
+            subclass_id=row.subclass_id
         )
 
     @lru_cache(maxsize=10_000)
@@ -389,21 +418,76 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve the human-readable name of a relationship.
         """
-        return self.session.execute(q_predicate_name(relationship_id)).scalar_one()
+        # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
+        with self.session_factory() as session:
+            predicate_name = session.execute(q_predicate_name(relationship_id)).scalar_one()
+        return predicate_name
 
-    def predicate_kind(self, relationship_id: str) -> PredicateKind:
+    def predicate_kind(self, relationship_id: str) -> ClassIDEnum:
         """
         Classify the predicate into a semantic kind.
         """
-        return self.predicate(relationship_id).classify_predicate()
-
+        try:
+            return RelationshipCache.get(relationship_id).class_id
+        except AttributeError as e:
+            raise AttributeError(e)
+    
     def predicate_kinds(
         self, relationship_ids: tuple[str, ...]
-    ) -> Tuple[PredicateKind, ...]:
+    ) -> Tuple[ClassIDEnum, ...]:
         """
         Classify a batch of predicates.
         """
         return tuple(self.predicate_kind(rel_id) for rel_id in relationship_ids)
+    
+    def relationships(
+        self,
+        session: Session,
+        subjects: tuple[int, ...] | None,
+        predicates: tuple[str, ...] | None,
+        objects: tuple[int, ...] | None,
+        invert: bool = False,
+    ) -> Generator[Tuple[int, str, int], None, None]:
+        """
+        Query relationships between concepts.
+
+        Parameters
+        ----------
+        subjects : list[CURIE] | None
+            List of subject CURIEs.
+        predicates : list[str] | None
+            List of predicate (relationship) IDs.
+        objects : list[CURIE] | None
+            List of object CURIEs.
+        invert : bool
+            If True, swaps subjects and objects in the query and result.
+
+        Yields
+        -------
+        Tuple[CURIE, PRED_CURIE, CURIE]
+            Triples (subject, predicate, object).
+        """
+        if invert:
+            for s, p, o in self.relationships(
+                session=session,
+                subjects=objects,
+                predicates=predicates,
+                objects=subjects,
+            ):
+                yield o, p, s
+            return
+        
+
+
+        for s,p,o in session.execute(
+            q_relationships(
+                subjects=objects,
+                predicates=predicates,
+                objects=subjects,
+            )
+        ):
+            yield o, p, s
+
 
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
         """
@@ -416,94 +500,30 @@ class KnowledgeGraph(GraphBackend):
         Normalize a string for lookup (lowercase, single spaces).
         """
         return re.sub(r"\s+", " ", s.strip().lower())
-
-    @lru_cache(maxsize=500_000)
-    def outgoing_edges(
+       
+    @lru_cache(maxsize=1_000_000)
+    def edges(
         self,
-        concept_id: int,
-        relationship_id: str | None = None,
-    ) -> tuple[EdgeView, ...]:
-        """
-        Retrieve all outgoing edges from a concept.
-        """
-        stmt = q_outgoing_edges(concept_id, relationship_id)
-        return tuple(EdgeView(*row) for row in self.session.execute(stmt).all())
-
-    @lru_cache(maxsize=500_000)
-    def outgoing_edges_batch(
-        self,
-        concept_ids: tuple[int, ...],
-        relationship_id: str | None = None,
-    ) -> tuple[EdgeView, ...]:
-        """
-        Retrieve all outgoing edges for a batch of concepts.
-        """
-        stmt = q_outgoing_edges_batch(concept_ids, relationship_id)
-        return tuple(EdgeView(*row) for row in self.session.execute(stmt).all())
-
-    def specificity(self, concept_id: int) -> float:
-        """
-        Compute specificity as the inverse of out-degree.
-        Higher is more specific.
-        """
-        out_edges = self.outgoing_edges(concept_id)
-        if not out_edges:
-            return 1.0
-        return 1.0 / len(out_edges)
-
-    def _same_domain(self, e: EdgeView) -> bool:
-        """Check if subject and object of an edge belong to the same domain."""
-        subj = self.concept_view(e.subject_id)
-        obj = self.concept_view(e.object_id)
-        return subj.domain_id == obj.domain_id
-
-    @lru_cache(maxsize=500_000)
-    def incoming_edges(
-        self,
-        concept_id: int,
-        relationship_id: str | None = None,
-    ) -> tuple[EdgeView, ...]:
-        """
-        Retrieve all incoming edges to a concept.
-        """
-        stmt = q_incoming_edges(concept_id, relationship_id)
-        return tuple(EdgeView(*row) for row in self.session.execute(stmt).all())
-
-    @lru_cache(maxsize=500_000)
-    def incoming_edges_batch(
-        self,
-        concept_ids: tuple[int, ...],
-        relationship_id: str | None = None,
-    ) -> tuple[EdgeView, ...]:
-        """
-        Retrieve all incoming edges for a batch of concepts.
-        """
-        stmt = q_incoming_edges_batch(concept_ids, relationship_id)
-        return tuple(EdgeView(*row) for row in self.session.execute(stmt).all())
-
-    def iter_edges(
-        self,
-        concept_id: int,
-        *,
-        direction: str = "out",
-        predicate: Union[str, Predicate, None] = None,
-        predicate_kinds: Optional[Set[PredicateKind]] = None,
+        concept_ids: Tuple[int, ...] | int,
+        direction: Literal["in", "out"],
+        predicate_ids: Optional[frozenset[str]] = None,
+        predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = True,
-    ) -> Iterable[EdgeView]:
+    ) -> tuple[EdgeView, ...]:
         """
-        Iterate over edges for a concept with filtering.
+        Convenience method to retrieve all edges from one or multiple concepts.
 
         Parameters
         ----------
-        concept_id : int
-            The source/target concept ID.
+        concept_ids : int, tuple[int, ...]
+            The source/target concept ID(s).
         direction : str
             'out' for outgoing, 'in' for incoming.
-        predicate : str | Predicate, optional
-            Filter by specific relationship ID.
-        predicate_kinds : Set[PredicateKind], optional
+        predicate_ids : frozenset[str], optional
+            Filter by specific relationship IDs.
+        predicate_kinds : Set[ClassIDEnum], optional
             Filter by semantic kind of relationship.
         active_only : bool
             If True, return only valid/active edges.
@@ -511,90 +531,93 @@ class KnowledgeGraph(GraphBackend):
             Check validity on a specific date.
         within_domain : bool
             If True, only return edges where source/target domains match.
-
-        Yields
-        -------
-        EdgeView
-            Edges matching criteria.
         """
-        pred_id = _pred_id(predicate)
+        with self.session_factory() as session:
+            edges = tuple(
+                self.iter_edges(
+                    session=session,
+                    concept_ids=concept_ids, 
+                    predicate_ids=predicate_ids,
+                    direction=direction,
+                    predicate_kinds=predicate_kinds,
+                    active_only=active_only,
+                    on=on,
+                    within_domain=within_domain)
+                )
+        return edges
 
-        edges = (
-            self.outgoing_edges(concept_id, pred_id)
-            if direction == "out"
-            else self.incoming_edges(concept_id, pred_id)
-        )
-
-        for e in edges:
-            if active_only and not is_active(
-                e.valid_start_date,
-                e.valid_end_date,
-                e.invalid_reason,
-                on=on,
-            ):
-                continue
-
-            if within_domain and not self._same_domain(e):
-                continue
-
-            if predicate_kinds and (
-                self.predicate_kind(e.predicate_id) not in predicate_kinds
-            ):
-                continue
-
-            yield e
-
-    def iter_edges_batch(
+    @validate_mapping_table
+    def iter_edges(
         self,
-        concept_ids: tuple[int, ...],
-        *,
-        direction: str = "out",
-        predicate: Union[str, Predicate, None] = None,
-        predicate_kinds: Union[Set[PredicateKind], frozenset[PredicateKind], None] = None,
+        session: Session,
+        concept_ids: int | tuple[int, ...],
+        direction: Literal["in", "out"],
+        predicate_ids: Optional[frozenset[str]] = None,
+        predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = True,
-    ) -> Iterable[EdgeView]:
+    ) -> Generator[EdgeView, None, None]:
+        
+        stmt = q_edges(
+            concept_ids=concept_ids, 
+            predicate_ids=predicate_ids,
+            direction=direction,
+            predicate_kinds=predicate_kinds,
+            active_only=active_only,
+            on=on,
+            within_domain=within_domain
+        )
+
+        for row in session.execute(stmt):
+            yield EdgeView.from_query(row)
+
+
+    def specificity(self, concept_id: int) -> float:
         """
-        Iterate over edges for a batch of concepts with filtering.
+        Compute specificity as the inverse of out-degree.
+        Higher is more specific.
         """
-        if not concept_ids:
-            return []
-
-        pred_id = _pred_id(predicate)
-
-        # 1. Fetch ALL raw edges for this batch from DB
-        if direction == "out":
-            edges = self.outgoing_edges_batch(concept_ids, pred_id)
-        else:
-            edges = self.incoming_edges_batch(concept_ids, pred_id)
-
-        # 2. Filter them in memory (Python is fast enough for this)
-        for e in edges:
-            if active_only and not is_active(
-                e.valid_start_date,
-                e.valid_end_date,
-                e.invalid_reason,
-                on=on,
-            ):
-                continue
-
-            if within_domain and not self._same_domain(e):
-                continue
-
-            if predicate_kinds and (
-                self.predicate_kind(e.predicate_id) not in predicate_kinds
-            ):
-                continue
-
-            yield e
+        out_edges = self.edges(direction="out", concept_ids=concept_id)
+        if not out_edges:
+            return 1.0
+        return 1.0 / len(out_edges)
 
     @lru_cache(maxsize=500_000)
     def parents(self, concept_id: int) -> tuple[int, ...]:
         """
-        Retrieve parent Concept IDs (based on 'is_a' or 'subsumes' hierarchy).
+        Retrieve parent Concept IDs of concept using Concept_Ancestor table.
         """
-        return tuple(self.session.execute(q_parents(concept_id)).scalars())
+        with self.session_factory() as session:
+            parents = tuple(session.execute(q_parents(concept_id)).scalars())
+        return parents
+
+    @lru_cache(maxsize=500_000)
+    def children(self, concept_id) -> tuple[int, ...]:
+        """
+        Retrieve children Concept IDs of concept using Concept_Ancestor table.
+        """
+        with self.session_factory() as session:
+            children = tuple(session.execute(q_children(concept_id)).scalars())
+        return children
+
+    def entities(
+        self,
+        session: Session,
+        domain: str | None = None,
+        standard_only: bool = True,
+        filter_obsoletes: bool = True,
+    ) -> Generator[int, None, None]:
+        
+        query = q_entities(
+            domain=domain,
+            standard_only=standard_only,
+            filter_obsoletes=filter_obsoletes
+        )
+        
+        for row in session.execute(query):
+            yield int(row.concept_id)
+        
 
     @lru_cache(maxsize=20_000)
     def roots(
@@ -603,11 +626,13 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve root concepts (no parents).
         """
-        return tuple(
-            self.session.execute(
-                q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
-            ).scalars()
-        )
+        with self.session_factory() as session:
+            roots = tuple(
+                session.execute(
+                    q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
+                ).scalars()
+            )
+        return roots 
 
     @lru_cache(maxsize=20_000)
     def leaves(
@@ -616,11 +641,13 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve leaf concepts (no children).
         """
-        return tuple(
-            self.session.execute(
-                q_leaves(domain_id=domain_id, vocabulary_id=vocabulary_id)
-            ).scalars()
-        )
+        with self.session_factory() as session:
+            leaves = tuple(
+                session.execute(
+                    q_leaves(domain_id=domain_id, vocabulary_id=vocabulary_id)
+                ).scalars()
+            )
+        return leaves
 
     @lru_cache(maxsize=20_000)
     def singletons(
@@ -629,18 +656,20 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve singleton concepts (no parents and no children).
         """
-        return tuple(
-            self.session.execute(
-                q_singletons(domain_id=domain_id, vocabulary_id=vocabulary_id)
-            ).scalars()
-        )
+        with self.session_factory() as session:
+            return tuple(
+                session.execute(
+                    q_singletons(domain_id=domain_id, vocabulary_id=vocabulary_id)
+                ).scalars()
+            )
 
     @lru_cache(maxsize=50_000)
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
         """
         Retrieve all synonyms for a concept.
         """
-        rows = self.session.execute(q_concept_synonym_filtered(concept_id)).all()
+        with self.session_factory() as session:
+            rows = session.execute(q_concept_synonym_filtered(concept_id)).all()
         return tuple(row.concept_synonym_name for row in rows)
 
     def rollback_session(self) -> None:
@@ -648,15 +677,18 @@ class KnowledgeGraph(GraphBackend):
         Safely rollback the session if in a pending state.
         """
         try:
-            self.session.rollback()
+            with self.session_factory() as session:
+                session.rollback()
         except (PendingRollbackError, InvalidRequestError):
             pass
-
+    
+    @validate_mapping_table
     def predicates(self) -> tuple[Predicate, ...]:
         """
         Return all predicates known to the knowledge graph.
         """
-        rows = self.session.execute(q_all_predicates_with_ancestry()).all()
+        with self.session_factory() as session:
+            rows = session.execute(q_all_predicates_with_ancestry()).all()
         return tuple(
             Predicate(
                 relationship_id=row.relationship_id,
@@ -665,34 +697,26 @@ class KnowledgeGraph(GraphBackend):
                 is_hierarchical=bool(int(row.is_hierarchical)),
                 anc_up=bool(int(row.anc_up)),
                 anc_down=bool(int(row.anc_down)),
+                class_id=ClassIDEnum(row.class_id),
+                subclass_id=row.subclass_id
             )
             for row in rows
         )
-
-    def predicate_summary(self) -> PredicateSummary:
-        """
-        Generate a summary of predicates grouped by kind.
-        """
-        groups: dict[PredicateKind, list[Predicate]] = defaultdict(list)
-
-        for pred in self.predicates():
-            kind = pred.classify_predicate()
-            groups[kind].append(pred)
-
-        return PredicateSummary(groups={k: tuple(v) for k, v in groups.items()})
 
     def get_all_concept_domain_ids(self) -> tuple[str, ...]:
         """
         Retrieve all distinct Domain IDs present in the concept table.
         """
-        rows = self.session.execute(q_concept_domain_ids()).all()
+        with self.session_factory() as session:
+            rows = session.execute(q_concept_domain_ids()).all()
         return tuple(row.domain_id for row in rows)
 
     def get_all_concept_vocabulary_ids(self) -> tuple[str, ...]:
         """
         Retrieve all distinct Vocabulary IDs present in the concept table.
         """
-        rows = self.session.execute(q_concept_vocabulary_ids()).all()
+        with self.session_factory() as session:
+            rows = session.execute(q_concept_vocabulary_ids()).all()
         return tuple(row.vocabulary_id for row in rows)
 
     def get_potential_ancestor(
@@ -701,87 +725,27 @@ class KnowledgeGraph(GraphBackend):
         """
         Check if an ancestry relationship exists between a child and parent.
         """
-        rows = self.session.execute(
-            q_concept_potential_ancestor(child_id, parent_id)
-        ).all()
 
-        if not rows:
+        with self.session_factory() as session:
+            row = session.execute(
+                q_concept_potential_ancestor(child_id, parent_id)
+            ).first()
+
+        if row is None:
             return None
-        else:
-            if len(rows) > 1:
-                logger.warning(
-                    f"Multiple potential ancestor rows found for child_id={child_id} "
-                    f"and parent_id={parent_id}. This should not happen. Returning the first match."
-                )
-            return AncestorMatch(
-                ancestor_concept_id=rows[0].ancestor_concept_id,
-                descendant_concept_id=rows[0].descendant_concept_id,
-                min_levels_of_separation=rows[0].min_levels_of_separation,
-            )
+        return AncestorMatch(
+            ancestor_concept_id=row.ancestor_concept_id,
+            descendant_concept_id=row.descendant_concept_id,
+            min_levels_of_separation=row.min_levels_of_separation,
+        )
 
     def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> Dict[int, int]:
         """
         Get the count of ancestors for a batch of concepts.
         """
-        rows = self.session.execute(q_concept_num_ancestors(concept_ids)).all()
+        with self.session_factory() as session:
+            rows = session.execute(q_concept_num_ancestors(concept_ids)).all()
         return {row.concept_id: row.num_ancestors for row in rows}
-    
-    def get_embedding_model_table_name(self, model_name: str) -> Optional[str]:
-        """
-        Check if an embedding model exists in the database.
-
-        Parameters
-        ----------
-        model_name : str
-            The name of the embedding model to check.
-
-        Returns
-        -------
-        Optional[str]
-            The table name of the embedding model if it exists, None otherwise.
-        """
-        query = self.session.execute(q_embedding_model_table_name(model_name)).all()
-        table_names = [row.table_name for row in query]
-        if len(table_names) > 1:
-            raise RuntimeError(f"Multiple embedding model tables found for model_name='{model_name}'. This should not happen. Returning the first match.")
-        return table_names[0] if table_names else None
-    
-    def is_embedding_model_registered(self, model_name: str) -> bool:
-        """
-        Check if an embedding model is registered in the database.
-
-        Parameters
-        ----------
-        model_name : str
-            The name of the embedding model to check.
-
-        Returns
-        -------
-        bool
-            True if the model is registered, False otherwise.
-        """
-        return self.get_embedding_model_table_name(model_name) is not None
-    
-    def get_embedding_similarities(
-        self,
-        embedding_model_name: str,
-        text_embedding: list[float],
-        concept_ids: Optional[Tuple[int, ...]] = None
-    ):
-        
-        embedding_table = _MODEL_CACHE.get(embedding_model_name)
-        if embedding_table is None:
-            raise ValueError(f"Embedding model '{embedding_model_name}' not found in cache. Make sure to initialize embedding tables at startup.")
-        
-        query = q_embedding_cosine_similarity(
-            embedding_table=embedding_table,
-            text_embedding=text_embedding,
-            concept_ids=concept_ids
-        )
-
-        return {row.concept_id: row.similarity for row in self.session.execute(query).all()}
-        
-
 
 
     def clear_caches(self) -> None:
@@ -796,5 +760,4 @@ class KnowledgeGraph(GraphBackend):
         self.predicate.cache_clear()
         self.predicate_name.cache_clear()
         self.parents.cache_clear()
-        self.outgoing_edges.cache_clear()
-        self.incoming_edges.cache_clear()
+        self.edges.cache_clear()

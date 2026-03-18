@@ -17,7 +17,8 @@ from datetime import date
 from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple
 
 # Local Application Imports
-from omop_graph.graph.edges import EdgeView, PredicateKind
+from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.graph.edges import EdgeView
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -113,8 +114,7 @@ class GraphTrace:
 def traverse(
     kg: "KnowledgeGraph",
     seeds: Iterable[int],
-    *,
-    predicate_kinds: Optional[Set[PredicateKind]],
+    predicate_kinds: Optional[Set[ClassIDEnum]],
     max_depth: int,
     on: Optional[date],
     max_nodes: Optional[int],
@@ -129,7 +129,7 @@ def traverse(
         The graph instance to query.
     seeds : Iterable[int]
         The starting Concept IDs.
-    predicate_kinds : set[PredicateKind], optional
+    predicate_kinds : set[ClassIDEnum], optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum distance from seeds to explore.
@@ -175,21 +175,23 @@ def traverse(
         expanded: List[EdgeView] = []
 
         # Iterate over outgoing edges
-        for e in kg.iter_edges(
-            node,
-            direction="out",
-            predicate_kinds=predicate_kinds,
-            active_only=True,
-            on=on,
-        ):
-            # Only add edges to the output; we decide to traverse in the next block
-            expanded.append(e)
-            edges_out.append(e)
+        with kg.session_factory() as session:
+            for e in kg.iter_edges(
+                session=session,
+                concept_ids=node,
+                direction="out",
+                predicate_kinds=frozenset(predicate_kinds) if predicate_kinds is not None else None,
+                active_only=True,
+                on=on,
+            ):
+                # Only add edges to the output; we decide to traverse in the next block
+                expanded.append(e)
+                edges_out.append(e)
 
-            nxt = e.object_id
-            # Optimization: Don't add to queue if already visited
-            if nxt not in visited:
-                q.append((nxt, depth + 1))
+                nxt = e.object_id
+                # Optimization: Don't add to queue if already visited
+                if nxt not in visited:
+                    q.append((nxt, depth + 1))
 
         if trace:
             trace_steps.append(

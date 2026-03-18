@@ -1,5 +1,7 @@
 from enum import Enum, auto
 
+
+# TODO: Get this out of here by preventing circular imports and have it in the resolver base class.
 class ResolverConfidence(Enum):
     EXACT = auto()
     EXACT_SYNONYM = auto()

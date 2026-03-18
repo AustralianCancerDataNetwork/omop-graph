@@ -25,8 +25,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Concept_Relationship,
     Concept_Synonym
 )
-from omop_alchemy.cdm.model.extended import RelationshipClass, RelationshipMapping
-
+from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from typing import Annotated, Union, Optional
 import pandas as pd
 import os

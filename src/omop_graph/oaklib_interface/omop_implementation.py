@@ -28,13 +28,11 @@ from oaklib.interfaces.basic_ontology_interface import (
 )
 from oaklib.interfaces.text_annotator_interface import nen_annotation
 from oaklib.types import CURIE, PRED_CURIE
-from omop_alchemy.cdm.base.embeddings import initialize_embedding_tables
+
 from omop_alchemy.cdm.model import Concept, Concept_Relationship
-from omop_graph.graph import (
-    GROUNDING_PREDICATE_KINDS,
-    KnowledgeGraph,
-    PredicateKind,
-)
+from omop_graph.graph import KnowledgeGraph
+from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.emb import MissingExtensionError
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers import ResolverConfidence
@@ -339,7 +337,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 require_standard=parent_ids is None,
             ),
             max_depth=6,
-            predicate_kinds=GROUNDING_PREDICATE_KINDS,
+            predicate_kinds=frozenset([ClassIDEnum.IDENTITY]),
         )
         resolver_pipeline = ResolverPipeline.with_all_resolvers(
             stop_after_confidence=ResolverConfidence.PARTIAL_SYNONYM
@@ -508,9 +506,8 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Retrieve direct children of the concept.
         """
         concept_id = self._parse_concept(curie)
-        for edge in self.kg.iter_edges(concept_id, direction="in"):
-            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.ONTO_DOWN:
-                yield self._concept_curie(edge.subject_id)
+        for parent_id in self.kg.parents(concept_id):
+            yield self._concept_curie(parent_id)
 
     @property
     def default_language(self) -> Optional[str]:
@@ -530,13 +527,17 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def entities(
         self,
-        *,
         domain: str | None = None,
         standard_only: bool = True,
         filter_obsoletes: bool = True,
     ) -> Iterable[CURIE]:
         """
         Iterate over entities in the graph, optionally filtered.
+
+        Notes
+        -----
+        We are consuming the entire session object to not have an open connection
+        that isn't closed.
 
         Parameters
         ----------
@@ -552,20 +553,18 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         CURIE
             Concept identifiers.
         """
-        # consider moving to kg object because it's a bit of an outlier here
-        stmt = select(Concept.concept_id)
 
-        if domain:
-            stmt = stmt.where(Concept.domain_id == domain)
-
-        if standard_only:
-            stmt = stmt.where(Concept.standard_concept.is_not(None))
-
-        if filter_obsoletes:
-            stmt = stmt.where(Concept.invalid_reason.is_(None))
-
-        for cid in self.kg.session.execute(stmt).scalars():
+        with self.kg.session_factory() as session:
+            cids = tuple(self.kg.entities(
+                session=session,
+                domain=domain,
+                standard_only=standard_only,
+                filter_obsoletes=filter_obsoletes
+            ))
+        
+        for cid in cids:
             yield self._concept_curie(cid)
+
 
     def roots(
         self,
@@ -643,36 +642,20 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Tuple[CURIE, PRED_CURIE, CURIE]
             Triples (subject, predicate, object).
         """
-        if invert:
-            for s, p, o in self.relationships(
-                subjects=objects,
-                predicates=predicates,
-                objects=subjects,
-            ):
-                yield o, p, s
-            return
+        
+        subject_ids = tuple([self._parse_concept(s) for s in subjects]) if subjects is not None else None
+        predicate_ids = tuple(predicates) if predicates is not None else None
+        object_ids = tuple([self._parse_concept(o) for o in objects]) if objects is not None else None
+        
+        with self.kg.session_factory() as session:
+            relationships = tuple(self.kg.relationships(
+                session=session,
+                subjects=subject_ids,
+                predicates=predicate_ids,
+                objects=object_ids,
+            ))
 
-        subjects = subjects or []
-        objects = objects or []
-
-        stmt = select(
-            Concept_Relationship.concept_id_1,
-            Concept_Relationship.relationship_id,
-            Concept_Relationship.concept_id_2,
-        )
-
-        if subjects:
-            subject_ids = [self._parse_concept(s) for s in subjects]
-            stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subject_ids))
-
-        if predicates:
-            stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicates))
-
-        if objects:
-            object_ids = [self._parse_concept(o) for o in objects]
-            stmt = stmt.where(Concept_Relationship.concept_id_2.in_(object_ids))
-
-        for s, p, o in self.kg.session.execute(stmt):
+        for s,p,o in relationships:
             yield (
                 self._concept_curie(s),
                 p,
@@ -756,6 +739,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Retrieve outgoing relationships, including those implied by the hierarchy.
         """
+        raise NotImplementedError(
+            "Changes to the CDM currently prevents this function"
+        )
         concept_id = self._parse_concept(curie)
 
         pred_filter = (
@@ -802,10 +788,16 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             {self._parse_predicate(p) for p in predicates} if predicates else None
         )
 
-        for edge in self.kg.iter_edges(concept_id, direction="in"):
-            if pred_filter and edge.predicate_id not in pred_filter:
-                continue
+        with self.kg.session_factory() as session:
+            # Consume and close the session
+            edges = self.kg.iter_edges(
+                session=session,
+                concept_ids=concept_id,
+                direction="in",
+                predicate_ids=frozenset(pred_filter) if pred_filter else None
+            )
 
+        for edge in edges:
             yield (
                 self._predicate_curie(edge.predicate_id),
                 self._concept_curie(edge.subject_id),
@@ -827,6 +819,8 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Find relationships connecting a subject and object, including hierarchical ones.
         """
+        raise NotImplementedError("Change in OMOP CDM made this function not work anymore")
+
         subj_id = self._parse_concept(subject)
         obj_id = self._parse_concept(object)
 
@@ -871,7 +865,6 @@ class OMOPAlchemyImplementation(
 
     def __init__(
         self,
-        *,
         engine_string: str | URL | None = None,
         resource: OMOPOntologyResource | None = None,
         kg: KnowledgeGraph | None = None,
@@ -889,36 +882,27 @@ class OMOPAlchemyImplementation(
         
         self.engine = create_engine(self.engine_string, future=True, echo=False)
         create_db(self.engine)
-        initialize_embedding_tables(self.engine)
 
-        # Q: Should this rather be done using context manager and only connect to the database when necessary?
-        self._session = None
+        self._session_factory = sessionmaker(self.engine)
         self._connection = None
 
         if kg is None:
-            kg = KnowledgeGraph(session=self.session)
+            kg = KnowledgeGraph(self._session_factory)
             bind_default_renderers(kg)
 
+        try:
+            kg.emb.initialise_tables(self.engine)
+        except MissingExtensionError:
+            logger.info("Embeddings not available. Install module with [emb] for optional embeddings.")
+        
         super().__init__(kg=kg, **kwargs)
 
     @property
-    def session(self):
+    def session_factory(self) -> sessionmaker:
         """
-        Get or create the SQLAlchemy session.
+        Return the factory to a session.
         """
-        if self._session is None:
-            session_cls = sessionmaker(self.engine)
-            self._session = session_cls()
-        return self._session
-
-    @property
-    def connection(self):
-        """
-        Get or create the SQLAlchemy connection.
-        """
-        if self._connection is None:
-            self._connection = self.engine.connect()
-        return self._connection
+        return self._session_factory
 
     # TODO: Implement if necessary!
     def _all_relationships(self):
