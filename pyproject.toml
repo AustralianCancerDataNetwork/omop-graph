@@ -76,5 +76,5 @@ build-backend = "hatchling.build"
 packages = ["src/omop_graph"]
 
 [tool.uv.sources]
-omop-alchemy = { git = "https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy.git", branch = "main" }
+omop-alchemy = { git = "https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy.git", branch = "spires" }
 omop-emb = { git = "https://github.com/AustralianCancerDataNetwork/omop-emb.git", branch = "main" }
