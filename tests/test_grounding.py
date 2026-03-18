@@ -113,7 +113,7 @@ class TestGrounding:
                 
                 assert prediction.object_id is not None, f"Failed to ground '{input_text}' (returned None)"
                 assert prediction.object_id == expected_concept_id_with_prefix, \
-                    f"Expected:{expected_concept_id_with_prefix} [{expected_concept_name}]\nGot: {prediction.object_id} [{prediction.concept_name}]"
+                    f"Expected:{expected_concept_id_with_prefix} [{expected_concept_name}]\nGot: {prediction.object_id} [{prediction.object_name}]"
                 
     def test_grounding_cancers_organ_no_embd(self, cancers_organ, cancer_annotations, get_omop_implementation, subtests):
         omop: OMOPAlchemyImplementation = get_omop_implementation()
@@ -135,5 +135,5 @@ class TestGrounding:
                 
                 assert prediction.object_id is not None, f"Failed to ground '{input_text}' (returned None)"
                 assert prediction.object_id == expected_concept_id_with_prefix, \
-                    f"Expected:{expected_concept_id_with_prefix} [{expected_concept_name}]\nGot: {prediction.object_id} [{prediction.concept_name}]"
+                    f"Expected:{expected_concept_id_with_prefix} [{expected_concept_name}]\nGot: {prediction.object_id} [{prediction.object_name}]"
 
