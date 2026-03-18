@@ -109,22 +109,26 @@ class RelationshipCache:
             raise AttributeError(f"`{source_concept_id}` not in mapping.")
         return item
     
-
 def validate_mapping_table(func_to_decorate):
     @functools.wraps(func_to_decorate)
     def wrapper(self, *args, **kwargs):
         try:
-            engine = self.engine
-        except AttributeError as e:
-            raise AttributeError(f"Decorator used on class instance that doesn't have access to an engine object.\n{e}") 
-        
-        if not sa.inspect(engine).has_table("RelationshipMapping"):
-            raise RuntimeError("Database table 'RelationshipMapping' is missing.")
+            factory = self.session_factory
+        except AttributeError:
+            raise AttributeError(
+                "Decorator requires 'self.session_factory' to exist on the class instance."
+            )
 
-        with engine.connect() as conn:
-            exists = conn.scalar(sa.select(sa.func.count()).select_from(RelationshipMapping))
+        engine = factory.kw.get("bind")
+        if engine and not sa.inspect(engine).has_table(RelationshipMapping.__tablename__):
+            raise RuntimeError("Database table for relationship mapping is missing. This is unexpected.")
+
+        with factory() as session:
+            exists = session.scalar(
+                sa.select(sa.func.count()).select_from(RelationshipMapping)
+            )
             if not exists:
-                raise RuntimeError("Table 'RelationshipMapping' has no entries.")
+                raise RuntimeError(f"Table '{RelationshipMapping.__tablename__}' has no entries. Did you ingest the new classification using the cli with `omop-graph relationship_classification *args`?")
 
         return func_to_decorate(self, *args, **kwargs)
     
