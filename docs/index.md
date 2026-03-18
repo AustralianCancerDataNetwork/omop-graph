@@ -18,6 +18,7 @@ Unlike generic graph libraries, `omop-graph` is built specifically for clinical 
 ### Core Components
 - [KnowledgeGraph](graph/kg.md): The VKG interface and what it attempts to solve.
 - [Relationships](graph/edges.md): Pre-classification of edges/relationships of the OMOP CDM.
+- [Oaklib Interface](oaklib/interface.md): `oaklib`-compliant interface
 
 ### Reasoning
 Explore the grounding pipeline used by clinical NLP tools.

@@ -30,6 +30,7 @@ nav:
   - Core Components:
       - "Knowledge Graph": graph/kg.md
       - "Relationships": graph/edges.md
+      - "Oaklib Interface": oaklib/interface.md
   - Reasoning:
       - "Semantic Grounding": reasoning/grounding.md
       - "Resolvers": reasoning/resolvers.md
