@@ -1,4 +1,9 @@
 site_name: omop-graph
+site_description: Virtual Knowledge Graph extension for OMOP CDM
+site_url: https://AustralianCancerDataNetwork.github.io/omop-graph
+repo_url: https://github.com/AustralianCancerDataNetwork/omop-graph
+repo_name: omop-graph
+
 theme:
   name: material
   features:

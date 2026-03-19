@@ -377,14 +377,15 @@ def omop_cdm(
     verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
     """
-    Bootstrap script to load OMOP CDM and reference data from Athena into a local database.
+    Instantiate the database from scratch by loading the Athena vocabularies.
+    IMPORTANT: This will wipe the entire existing database in the db container.
     """
     configure_logging_level(verbosity)
     load_dotenv()
 
     engine_string = os.getenv('OMOP_DATABASE_URL')
     if engine_string is None:
-        raise RuntimeError("OMOP_DATABASE_URL environment variable not set. Please set it in your .env file to point to your database.")
+        raise RuntimeError("OMOP_DATABASE_URL environment variable not set.")
     
     engine = sa.create_engine(engine_string, future=True, echo=False)
 
@@ -467,8 +468,8 @@ def add_embeddings(
     """
     configure_logging_level(verbosity)
     try:
-        from omop_emb.cli import add_embeddings
-        return add_embeddings(
+        from omop_emb.cli import add_embeddings as omop_emb_ae
+        return omop_emb_ae(
             api_base=api_base,
             api_key=api_key,
             batch_size=batch_size,

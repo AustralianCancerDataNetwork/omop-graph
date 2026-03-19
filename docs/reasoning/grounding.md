@@ -20,18 +20,18 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 
     The following steps summarise the entire grounding approach and are found in `omop_graph.reasoning.grounding`
 
-0. **Configuration**: Determine graph restrictions using [`GroundingConstraints`](#grounding-constraints)
+1. **Configuration**: Determine graph restrictions using [`GroundingConstraints`](#grounding-constraints)
     - `parent_id`: The `concept_id` of the parent Ontology. This attribute is **required** and allows testing whether a standard concept is part of the correct branch
     - `domains`: The OMOP CDM domains that are allowed to be searched for. Each Ontolgoy has an associated domain as described in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept). Specifying multiple permits all specified domains.
     - `vocabs`: The OMOP CDM vocabularies that are allowed to be searched for. Each Ontology is also part of a vocabulary as described in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept). Specifying multiple values permits all specified vocabularies.
 
-1.  **Resolve**: Use the [`ResolverPipeline`](resolvers.md) to find any concepts (Standard or Non-Standard) matching the text.
-2.  **Anchor**: For each candidate, find the nearest **Standard Concept**. This is required for Step 3 as all standard concepts are in `concept_ancestor`.
+2.  **Resolve**: Use the [`ResolverPipeline`](resolvers.md) to find any concepts (Standard or Non-Standard) matching the text.
+3.  **Anchor**: For each candidate, find the nearest **Standard Concept**. This is required for Step 3 as all standard concepts are in `concept_ancestor`.
     - If the candidate is already Standard, the hop count is 0.
     - If Non-Standard, follow `IDENTITY` relationship to the next standard concept.
-3.  **Verify**: Check the `concept_ancestor` table to see if the Standard Anchor is a descendant of the required `parent_ids`. 
+4.  **Verify**: Check the `concept_ancestor` table to see if the Standard Anchor is a descendant of the required `parent_ids`. 
     - Requires [`GroundingConstraints`](#grounding-constraints) for accurate grounding/verification
-4.  **Scoring**: Apply the scoring algorithm to the resulting valid Standard Concepts
+5.  **Scoring**: Apply the scoring algorithm to the resulting valid Standard Concepts
     - Details of scoring algorithm shown [here](#scoring)
 
 ## Grounding Constraints

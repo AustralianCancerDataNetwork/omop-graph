@@ -8,6 +8,9 @@ The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local 
 
 Bootstrap the OMOP CDM and load reference data from Athena into a local database.
 
+!!! danger "Warning"
+    This command will wipe the existing database in the target container before loading new data.
+
 ### Prerequisites
 
 Before running the command, ensure your environment is configured with a `.env` file or exported variables:
