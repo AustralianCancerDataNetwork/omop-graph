@@ -197,11 +197,13 @@ def ground_term(
                         model=text_embedding_model
                     )
 
-                else:
+                elif text_embedding_model is not None:
                     logger.warning((
                         f"Embedding model '{text_embedding_model}' is not registered in the KG. No similarity scores will be available. "
                         f"Fallback to embedding client is not possible (embedding_client: {embedding_client is not None}, text_embedding: {text_embedding is not None}).")
                     )
+                    similarity_scores = None
+                else:
                     similarity_scores = None
             else:
                 similarity_scores = np.array(list(similarity_scores_dict.values()))

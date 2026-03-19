@@ -457,6 +457,18 @@ def add_embeddings(
     model: Annotated[str, typer.Option(
         "--model", "-m",
         help="Name of the embedding model to use for generating concept embeddings (e.g., 'text-embedding-3-small'). If not provided, embeddings will not be generated.")] = "text-embedding-3-small",
+    index_method: Annotated[str, typer.Option(
+        "--index-method",
+        help="Vector index backend to use for new embedding tables. Options: auto, diskann, hnsw, ivfflat, none. Defaults to OMOP_EMB_INDEX_METHOD or auto."
+    )] = "auto",
+    standard_only: Annotated[bool, typer.Option(
+        "--standard-only",
+        help="If set, only generate embeddings for OMOP standard concepts (standard_concept = 'S')."
+    )] = False,
+    vocabularies: Annotated[Optional[list[str]], typer.Option(
+        "--vocabulary",
+        help="Optional vocabulary filter. Repeat the option to embed concepts only from specific OMOP vocabularies."
+    )] = None,
     num_embeddings: Annotated[Optional[int], typer.Option(
         "--num-embeddings", "-n",
         help="If set, limits the number of concepts for which embeddings are generated. Useful for testing and development to speed up the embedding generation step.")] = None,
@@ -473,6 +485,9 @@ def add_embeddings(
             api_key=api_key,
             batch_size=batch_size,
             model=model,
+            index_method=index_method,
+            standard_only=standard_only,
+            vocabularies=vocabularies,
             num_embeddings=num_embeddings
         )
     except ImportError:
