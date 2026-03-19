@@ -82,9 +82,14 @@ The standard OMOP `relationship` table provides basic metadata, but lacks unifie
 
 The command expects two CSV files to be present in the target directory:
 
+### Prerequisites
+Before running the command, ensure your environment is configured with a `.env` file or exported variables:
 1. Prepopulated OMOP CDM (e.g. using command [`omop-cdm`](#omop-cdm))
 2. **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
 3. **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
+4. Set following environment variables:
+    - **`OMOP_DATABASE_URL`**: SQLAlchemy connection string (e.g., `postgresql://user:pass@localhost:5432/omop`).
+    - **`SOURCE_PATH`**: Local directory path containing the Athena CSV files (e.g., `CONCEPT.csv`, `VOCABULARY.csv`). This is required as the new connections/tables are stored there after creation.
 
 ### Usage
 
