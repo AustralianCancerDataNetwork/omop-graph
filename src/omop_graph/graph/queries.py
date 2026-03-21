@@ -28,6 +28,10 @@ from omop_alchemy.cdm.model.vocabulary import (
     Concept_Synonym,
     Relationship,
 )
+from omop_alchemy.cdm.model.extended import (
+    concept_name_tsvector_expression,
+    concept_synonym_name_tsvector_expression,
+)
 
 from ..extensions.omop_alchemy import RelationshipClass, RelationshipMapping, ClassIDEnum
 from .constraints import SearchConstraintConcept
@@ -280,7 +284,7 @@ def q_concept_name_fulltext(
     Select
         The query statement ordered by rank.
     """
-    vector = func.to_tsvector("english", func.coalesce(Concept.concept_name, ""))
+    vector = concept_name_tsvector_expression(regconfig="english")
     query = func.plainto_tsquery("english", term)
     stmt = (
         q_concept_name()
@@ -300,9 +304,7 @@ def q_concept_synonym_fulltext(
     """
     Query for concept synonyms using PostgreSQL full-text search (tsvector).
     """
-    vector = func.to_tsvector(
-        "english", func.coalesce(Concept_Synonym.concept_synonym_name, "")
-    )
+    vector = concept_synonym_name_tsvector_expression(regconfig="english")
     query = func.plainto_tsquery("english", term)
     stmt = (
         q_concept_synonym()
