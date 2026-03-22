@@ -130,7 +130,7 @@ def q_concept_name() -> Select:
     """
     return select(
         Concept.concept_id,
-        Concept.concept_name,
+        Concept.concept_name.label("name"),
         case(
             (Concept.standard_concept.in_(["S", "C"]), literal(True)),
             else_=literal(False),
@@ -140,65 +140,6 @@ def q_concept_name() -> Select:
             else_=literal(True),
         ).label("is_active"),
     )
-
-
-def q_concept_name_match(
-    name: str, search_constraint: Optional[SearchConstraintConcept] = None
-) -> Select:
-    """
-    Query for exact case-insensitive matches on concept names.
-
-    Parameters
-    ----------
-    name : str
-        The concept name to match.
-    search_constraint : SearchConstraintConcept, optional
-        Additional filters (domain, vocab).
-
-    Returns
-    -------
-    Select
-        The query statement.
-    """
-    base_stmt = q_concept_name().where(
-        func.lower(Concept.concept_name) == func.lower(name)
-    )
-    if search_constraint:
-        if not isinstance(search_constraint, SearchConstraintConcept):
-            raise TypeError(
-                "search_constraint must be an instance of SearchConstraintConcept"
-            )
-        base_stmt = search_constraint.apply(base_stmt)
-    return base_stmt
-
-
-def q_concept_name_ilike(
-    term: str, search_constraint: Optional[SearchConstraintConcept] = None
-) -> Select:
-    """
-    Query for partial matches on concept names using ILIKE.
-
-    Parameters
-    ----------
-    term : str
-        The search term (without wildcards; wildcards are added automatically).
-    search_constraint : SearchConstraintConcept, optional
-        Additional filters.
-
-    Returns
-    -------
-    Select
-        The query statement.
-    """
-    base_stmt = q_concept_name().where(Concept.concept_name.ilike(f"%{term}%"))
-    if search_constraint:
-        if not isinstance(search_constraint, SearchConstraintConcept):
-            raise TypeError(
-                "search_constraint must be an instance of SearchConstraintConcept"
-            )
-        base_stmt = search_constraint.apply(base_stmt)
-    return base_stmt
-
 
 def q_concept_synonym() -> Select:
     """
@@ -212,7 +153,7 @@ def q_concept_synonym() -> Select:
     return (
         select(
             Concept.concept_id,
-            Concept_Synonym.concept_synonym_name,
+            Concept_Synonym.concept_synonym_name.label("name"),
             case(
                 (Concept.standard_concept.in_(["S", "C"]), literal(True)),
                 else_=literal(False),
@@ -226,15 +167,36 @@ def q_concept_synonym() -> Select:
     )
 
 
-def q_concept_synonym_match(
-    label: str, search_constraint: Optional[SearchConstraintConcept] = None
+def q_concept_name_match(
+    name: str, 
+    search_constraint: Optional[SearchConstraintConcept] = None,
+    synonym: bool = False
 ) -> Select:
     """
-    Query for exact case-insensitive matches on concept synonyms.
+    Query for exact case-insensitive matches on concept names.
+
+    Parameters
+    ----------
+    name : str
+        The concept name to match.
+    search_constraint : SearchConstraintConcept, optional
+        Additional filters (domain, vocab).
+    synonym : bool, optional
+        Whether to search in synonyms instead of concept names.
+
+    Returns
+    -------
+    Select
+        The query statement.
     """
-    base_stmt = q_concept_synonym().where(
-        func.lower(Concept_Synonym.concept_synonym_name) == func.lower(label)
-    )
+    if synonym:
+        base_stmt = q_concept_synonym().where(
+            func.lower(Concept_Synonym.concept_synonym_name) == func.lower(name)
+        )
+    else:
+        base_stmt = q_concept_name().where(
+            func.lower(Concept.concept_name) == func.lower(name)
+        )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
             raise TypeError(
@@ -244,15 +206,36 @@ def q_concept_synonym_match(
     return base_stmt
 
 
-def q_concept_synonym_ilike(
-    label: str, search_constraint: Optional[SearchConstraintConcept] = None
+def q_concept_name_ilike(
+    term: str, 
+    search_constraint: Optional[SearchConstraintConcept] = None,
+    synonym: bool = False
 ) -> Select:
     """
-    Query for partial matches on concept synonyms using ILIKE.
+    Query for partial matches on concept names using ILIKE.
+
+    Parameters
+    ----------
+    term : str
+        The search term (without wildcards; wildcards are added automatically).
+    search_constraint : SearchConstraintConcept, optional
+        Additional filters.
+    synonym : bool, optional
+        Whether to search in synonyms instead of concept names.
+
+    Returns
+    -------
+    Select
+        The query statement.
     """
-    base_stmt = q_concept_synonym().where(
-        Concept_Synonym.concept_synonym_name.ilike(f"%{label}%")
-    )
+    if synonym:
+        base_stmt = q_concept_synonym().where(
+            Concept_Synonym.concept_synonym_name.ilike(f"%{term}%")
+        )
+    else:
+        base_stmt = q_concept_name().where(
+            Concept.concept_name.ilike(f"%{term}%")
+        )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
             raise TypeError(
@@ -263,50 +246,33 @@ def q_concept_synonym_ilike(
 
 
 def q_concept_name_fulltext(
-    term: str, search_constraint: Optional[SearchConstraintConcept] = None
+    term: str, 
+    search_constraint: Optional['SearchConstraintConcept'] = None,
+    synonym: bool = False
 ) -> Select:
     """
-    Query for concept names using PostgreSQL full-text search (tsvector).
+    Query for concept names using PostgreSQL full-text search via pre-computed 
+    tsvector columns and GIN indices.
 
-    Parameters
-    ----------
-    term : str
-        The search string (passed to plainto_tsquery).
-    search_constraint : SearchConstraintConcept, optional
-        Additional filters.
+    1. Normalizing the `concept_name`/`concept_synonym_name` into a tsvector (tokenizing, 
+    stemming, and removing English stop words).
+    2. Converting the input 'term' into a plain tsquery (AND-based search).
+    3. Using the '@@' match operator to find intersections between the vector and query.
+    4. Ranking results by relevance using 'ts_rank' to ensure the closest matches 
+    appear first.
 
-    Returns
-    -------
-    Select
-        The query statement ordered by rank.
     """
-    vector = func.to_tsvector("english", func.coalesce(Concept.concept_name, ""))
+    if synonym:
+        vector = Concept_Synonym.concept_synonym_name_tsvector
+        stmt = q_concept_synonym()
+    else:
+        vector = Concept.concept_name_tsvector
+        stmt = q_concept_name()
+        
     query = func.plainto_tsquery("english", term)
-    stmt = (
-        q_concept_name()
-        .where(vector.op("@@")(query))  # The Match Operator
-        .order_by(func.ts_rank(vector, query).desc())
-    )
-
-    if search_constraint:
-        stmt = search_constraint.apply(stmt)
-
-    return stmt
-
-
-def q_concept_synonym_fulltext(
-    term: str, search_constraint: Optional[SearchConstraintConcept] = None
-) -> Select:
-    """
-    Query for concept synonyms using PostgreSQL full-text search (tsvector).
-    """
-    vector = func.to_tsvector(
-        "english", func.coalesce(Concept_Synonym.concept_synonym_name, "")
-    )
-    query = func.plainto_tsquery("english", term)
-    stmt = (
-        q_concept_synonym()
-        .where(vector.op("@@")(query))  # The Match Operator
+    
+    stmt = (stmt
+        .where(vector.op("@@")(query))  # Hits the GIN index instantly
         .order_by(func.ts_rank(vector, query).desc())
     )
 
@@ -633,7 +599,6 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
         )
     )
 
-
 def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     """
     Count the number of ancestors for each concept in the batch.
@@ -641,7 +606,25 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     return (
         select(
             Concept.concept_id,
-            func.count(Concept_Ancestor.descendant_concept_id).label("num_ancestors"),
+            func.count(Concept_Ancestor.ancestor_concept_id).label("num_ancestors"),
+        )
+        .join(
+            Concept_Ancestor, 
+            Concept.concept_id == Concept_Ancestor.descendant_concept_id
+        )
+        .where(Concept.concept_id.in_(concept_ids))
+        .group_by(Concept.concept_id)
+    )
+
+
+def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
+    """
+    Count the number of descendants for each concept in the batch.
+    """
+    return (
+        select(
+            Concept.concept_id,
+            func.count(Concept_Ancestor.descendant_concept_id).label("num_descendants"),
         )
         .join(
             Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id

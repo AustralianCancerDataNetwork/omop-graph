@@ -30,7 +30,6 @@ from omop_graph.graph.paths import (
 from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
     CandidateHit,
-    ResolverConfidence,
     ResolverPipeline,
 )
 from omop_graph.extensions.emb import MissingExtensionError
@@ -195,10 +194,11 @@ def ground_term(
                     )
 
                 else:
-                    logger.warning((
-                        f"Embedding model '{text_embedding_model}' is not registered in the KG. No similarity scores will be available. "
-                        f"Fallback to embedding client is not possible (embedding_client: {embedding_client is not None}, text_embedding: {text_embedding is not None}).")
-                    )
+                    if text_embedding_model is not None:
+                        logger.warning((
+                            f"Embedding model '{text_embedding_model}' is not registered in the KG. No similarity scores will be available. "
+                            f"Fallback to embedding client is not possible (embedding_client: {embedding_client is not None}, text_embedding: {text_embedding is not None}).")
+                        )
                     similarity_scores = None
             else:
                 similarity_scores = np.array(list(similarity_scores_dict.values()))

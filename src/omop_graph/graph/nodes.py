@@ -145,12 +145,24 @@ class ConceptView:
 class LabelMatchKind(Enum):
     """
     Classification of how a label matched a concept.
-    The order defines the priority (Direct > Synonym > Fulltext).
+    Value order defines priority (lower is better):
+
+    Notes
+    -----
+    - EXACT: Direct case-insensitive match on concept_name.
+    - FTS: Full-text search match (fuzzy).
+    - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
+
+    It currently does not distinguish between synonym vs. concept_name matches as they are recognised as identical.
+    Could be extended in the future if needed.
     """
 
-    DIRECT = auto()
-    SYNONYM = auto()
-    FULLTEXT = auto()
+    EXACT = 0
+    FTS = 1
+    PARTIAL = 2
+
+    def __lt__(self, other: "LabelMatchKind") -> bool:
+        return self.value < other.value
 
 
 @dataclass(frozen=True)
@@ -167,7 +179,7 @@ class LabelMatch:
     concept_id : int
         The ID of the matched concept.
     match_kind : LabelMatchKind
-        How the match was found (Direct, Synonym, etc.).
+        How the match was found (Exact, Synonym, etc.).
     is_standard : bool
         Whether the matched concept is Standard.
     is_active : bool
@@ -187,9 +199,9 @@ class LabelMatch:
         Render a rich HTML representation for Jupyter notebooks.
         """
         kind_badges = {
-            LabelMatchKind.DIRECT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>direct</span>",
-            LabelMatchKind.SYNONYM: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>synonym</span>",
-            LabelMatchKind.FULLTEXT: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
+            LabelMatchKind.EXACT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>exact</span>",
+            LabelMatchKind.FTS: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
+            LabelMatchKind.PARTIAL: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>partial</span>",
         }
         kind_badge = kind_badges[self.match_kind]
 
@@ -323,11 +335,11 @@ class LabelMatchGroupView:
 
             reasons = []
             # Determine match kind
-            if best.match_kind is LabelMatchKind.DIRECT:
+            if best.match_kind is LabelMatchKind.EXACT:
                 reasons.append("direct name match")
-            elif best.match_kind is LabelMatchKind.SYNONYM:
+            elif best.match_kind is LabelMatchKind.PARTIAL:
                 reasons.append("synonym match")
-            elif best.match_kind is LabelMatchKind.FULLTEXT:
+            elif best.match_kind is LabelMatchKind.FTS:
                 reasons.append("fulltext match")
             else:
                 reasons.append("unknown match")

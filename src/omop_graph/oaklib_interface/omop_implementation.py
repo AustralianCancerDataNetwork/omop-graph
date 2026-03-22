@@ -34,8 +34,8 @@ from omop_graph.graph import KnowledgeGraph
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
 from omop_graph.extensions.emb import MissingExtensionError
 from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
-from omop_graph.reasoning.resolvers import ResolverConfidence
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
 from omop_graph.utils.text_utils import cava_tokenizer
@@ -339,10 +339,8 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             max_depth=6,
             predicate_kinds=frozenset([ClassIDEnum.IDENTITY]),
         )
-        resolver_pipeline = ResolverPipeline.with_all_resolvers(
-            stop_after_confidence=ResolverConfidence.PARTIAL_SYNONYM
-        )
 
+        resolver_pipeline = ResolverPipeline.with_all_resolvers()
         grounded = ground_term(
             resolver_pipeline=resolver_pipeline,
             kg=self.kg,
@@ -412,12 +410,17 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
 
         if config.syntax == SearchTermSyntax.REGULAR_EXPRESSION:
             raise ValueError("REGULAR_EXPRESSION search is not supported for OMOP")
+        
+        if config.is_partial or config.syntax == SearchTermSyntax.STARTS_WITH:
+            match_kind = LabelMatchKind.PARTIAL
+        else:
+            match_kind = LabelMatchKind.EXACT
 
         if SearchProperty.LABEL.text in props:
-            matches = self.kg.label_lookup(
+            matches = self.kg.concept_lookup(
                 search_term,
-                fuzzy=config.is_partial
-                or config.syntax == SearchTermSyntax.STARTS_WITH,
+                match_kind=match_kind,
+                synonym=False,
             )
             for lm in matches:
                 cid = lm.concept_id
@@ -426,10 +429,10 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                     yield self._predicate_curie(cid)
 
         if SearchProperty.ALIAS.text in props:
-            matches = self.kg.synonym_lookup(
+            matches = self.kg.concept_lookup(
                 search_term,
-                fuzzy=config.is_partial
-                or config.syntax == SearchTermSyntax.STARTS_WITH,
+                match_kind=match_kind,
+                synonym=True,
             )
             for lm in matches:
                 cid = lm.concept_id

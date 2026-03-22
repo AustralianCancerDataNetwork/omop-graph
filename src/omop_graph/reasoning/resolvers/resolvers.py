@@ -11,17 +11,17 @@ They are designed to be used in a `ResolverPipeline` where high-confidence resol
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 
 from omop_graph.graph.constraints import SearchConstraintConcept
-from omop_graph.graph.nodes import LabelMatch
-from omop_graph.utils.types import ResolverConfidence
+from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
 
+import logging
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class CandidateHit:
@@ -32,38 +32,52 @@ class CandidateHit:
     ----------
     concept_id : int
         The OMOP Concept ID.
-    resolver_confidence : ResolverConfidence
-        The confidence level of the strategy that found this hit.
+    match_kind : LabelMatchKind
+        The kind of match of this hit.
     matched_label : str
         The specific text in the database (name or synonym) that matched.
     """
 
     concept_id: int
-    resolver_confidence: ResolverConfidence
+    match_kind: LabelMatchKind
     matched_label: str
 
 
-class CandidateResolver(ABC):
+class CandidateResolver:
     """
-    Abstract interface for resolving free text to OMOP concept_ids.
-
-    Resolvers are 'recall-oriented' and 'constraint-agnostic' regarding the
-    validity of the concept in a specific context (that is handled later by reasoning).
+    Interface for resolving free text to OMOP concept_ids.
 
     Attributes
     ----------
-    confidence : ResolverConfidence
-        The static confidence level assigned to hits found by this resolver.
+    match_kind : LabelMatchKind
+        The kind of match that this resolver produces.
     """
 
-    confidence: ResolverConfidence
+    def __init__(
+        self,
+        match_kind: LabelMatchKind,
+        synonym: bool,
+        
+    ) -> None:
+        super().__init__()
 
-    @abstractmethod
+        self._match_kind = match_kind
+        self._synonym = synonym
+    
+    @property
+    def match_kind(self) -> LabelMatchKind:
+        return self._match_kind
+    
+    @property
+    def synonym(self) -> bool:
+        return self._synonym
+
     def get_matches(
         self,
         kg: "KnowledgeGraph",
         text: str,
         constraints: Optional[SearchConstraintConcept] = None,
+        sort: bool = False,
     ) -> Tuple[LabelMatch, ...]:
         """
         Execute the search strategy against the Knowledge Graph.
@@ -82,7 +96,15 @@ class CandidateResolver(ABC):
         Tuple[LabelMatch, ...]
             A tuple of raw label matches.
         """
-        ...
+        return tuple(
+            kg.concept_lookup(
+                label=text, 
+                match_kind=self.match_kind, 
+                synonym=self.synonym, 
+                search_constraint=constraints,
+                sort=sort
+            )
+        )
 
     def resolve(
         self,
@@ -110,11 +132,12 @@ class CandidateResolver(ABC):
         Iterable[CandidateHit]
             The formatted candidate hits.
         """
+        logger.info(f"Running resolver {type(self).__name__} for text '{text}' with constraints {constraints} and limit {limit}.")
         matches = self.get_matches(kg, text, constraints=constraints)
         hits = [
             CandidateHit(
                 concept_id=m.concept_id,
-                resolver_confidence=self.confidence,
+                match_kind=self.match_kind,
                 matched_label=m.matched_label,
             )
             for m in matches
@@ -126,16 +149,8 @@ class ExactLabelResolver(CandidateResolver):
     """
     Strategy: Exact case-insensitive match on `Concept.concept_name`.
     """
-
-    confidence = ResolverConfidence.EXACT
-
-    def get_matches(
-        self,
-        kg: "KnowledgeGraph",
-        text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        return tuple(kg.label_lookup(text, search_constraint=constraints))
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.EXACT, synonym=False)
 
 
 class ExactSynonymResolver(CandidateResolver):
@@ -143,15 +158,8 @@ class ExactSynonymResolver(CandidateResolver):
     Strategy: Exact case-insensitive match on `Concept_Synonym.concept_synonym_name`.
     """
 
-    confidence = ResolverConfidence.EXACT_SYNONYM
-
-    def get_matches(
-        self,
-        kg: "KnowledgeGraph",
-        text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        return tuple(kg.synonym_lookup(text, search_constraint=constraints))
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.EXACT, synonym=True)
 
 
 class FullTextResolver(CandidateResolver):
@@ -160,35 +168,17 @@ class FullTextResolver(CandidateResolver):
     Matches irrespective of word order (e.g., "Kidney Cancer" -> "Cancer of Kidney").
     """
 
-    confidence = ResolverConfidence.FULLTEXT
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.FTS, synonym=False)
 
-    def get_matches(
-        self,
-        kg: "KnowledgeGraph",
-        text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        return tuple(
-            kg.fulltext_lookup(text, search_constraint=constraints, fuzzy=False)
-        )
 
 
 class FullTextSynonymResolver(CandidateResolver):
     """
     Strategy: Postgres Full-Text Search (tsvector) on `Concept_Synonym.concept_synonym_name`.
     """
-
-    confidence = ResolverConfidence.FULLTEXT_SYNONYM
-
-    def get_matches(
-        self,
-        kg: "KnowledgeGraph",
-        text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        return tuple(
-            kg.fulltext_lookup(text, search_constraint=constraints, fuzzy=True)
-        )
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.FTS, synonym=True)
 
 
 class PartialLabelResolver(CandidateResolver):
@@ -197,50 +187,17 @@ class PartialLabelResolver(CandidateResolver):
     Ranked by similarity heuristics (starts_with, length diff).
     """
 
-    confidence = ResolverConfidence.PARTIAL
-
-    def get_matches(
-        self,
-        kg: "KnowledgeGraph",
-        text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        matches = kg.label_lookup(text, fuzzy=True, search_constraint=constraints)
-        ranked = sorted(
-            matches, key=lambda m: self._similarity_score(text, m.matched_label)
-        )
-        return tuple(ranked)
-
-    @staticmethod
-    def _similarity_score(query: str, label: str) -> tuple:
-        q = query.lower()
-        l = label.lower()
-        return (
-            not l.startswith(q),  # Prefer matches starting with query (False < True)
-            l.count(" "),  # Prefer fewer words
-            abs(len(l) - len(q)),  # Prefer closer length
-        )
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.PARTIAL, synonym=False)
 
 
-class PartialSynonymResolver(PartialLabelResolver):
+class PartialSynonymResolver(CandidateResolver):
     """
     Strategy: Substring match (ILIKE %term%) on `Concept_Synonym.concept_synonym_name`.
     Inherits ranking logic from PartialLabelResolver.
     """
-
-    confidence = ResolverConfidence.PARTIAL_SYNONYM
-
-    def get_matches(
-        self,
-        kg: "KnowledgeGraph",
-        text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        matches = kg.synonym_lookup(text, fuzzy=True, search_constraint=constraints)
-        ranked = sorted(
-            matches, key=lambda m: self._similarity_score(text, m.matched_label)
-        )
-        return tuple(ranked)
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.PARTIAL, synonym=True)
 
 
 # Default sequence of resolvers to be used in a pipeline

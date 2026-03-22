@@ -35,7 +35,8 @@ import numpy as np
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
-from omop_graph.reasoning.resolvers import CandidateHit, ResolverConfidence
+from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.reasoning.resolvers import CandidateHit
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -557,7 +558,7 @@ class QueueItem:
 
     cost: float
     node: Node = field(compare=False)
-    rc: ResolverConfidence = field(compare=False)
+    mk: LabelMatchKind = field(compare=False)
     iterations: int = field(default=0, compare=False)
 
 
@@ -573,7 +574,7 @@ class StandardConcept:
     original_id: int
     original_name: str
     matched_label: str
-    resolver_confidence: ResolverConfidence
+    match_kind: LabelMatchKind
     hierarchy_cost: float = 0.0
 
 
@@ -585,14 +586,14 @@ def get_unique_standard_concepts(
 
     Ranking criteria:
     1. Separation (lower is better)
-    2. Resolver Confidence (lower value is better in this enum)
+    2. Match Kind (lower value is better in this enum)
     3. Hierarchy Cost (lower is better)
     """
     sorted_concepts = sorted(
         concepts,
         key=lambda x: (
             x.separation,
-            x.resolver_confidence.value,
+            x.match_kind.value,
             x.hierarchy_cost,
         ),
     )
@@ -653,7 +654,7 @@ def find_standard_paths(
         QueueItem(
             cost=0.0,
             node=Node(candidate.concept_id, source_is_std),
-            rc=candidate.resolver_confidence,
+            mk=candidate.match_kind,
             iterations=0,
         )
     ]
@@ -668,7 +669,7 @@ def find_standard_paths(
         item = heapq.heappop(queue)
         subject_node = item.node
         cost = item.cost
-        rc = item.rc
+        mk = item.mk
         iterations = item.iterations
 
         if max_concepts and len(found_standard_concepts) >= max_concepts:
@@ -699,7 +700,7 @@ def find_standard_paths(
                         original_id=candidate.concept_id,
                         original_name=source_view.concept_name,
                         matched_label=candidate.matched_label,
-                        resolver_confidence=rc,
+                        match_kind=mk,
                     )
                 )
                 continue
@@ -745,7 +746,7 @@ def find_standard_paths(
                 QueueItem(
                     cost=new_cost,
                     node=Node(concept_id=object_id, is_standard=object_is_std),
-                    rc=ResolverConfidence.PARTIAL,  # Mapped -> reduced confidence
+                    mk=LabelMatchKind.PARTIAL,  # Mapped -> reduced confidence
                     iterations=iterations + 1,
                 ),
             )
@@ -789,7 +790,7 @@ class PathProfile:
         cls,
         kg: "KnowledgeGraph",
         path: GraphPath,
-        confidence: ResolverConfidence,
+        match_kind: LabelMatchKind,
         embedding_sims: Optional[np.ndarray] = None,
     ) -> "PathProfile":
         """
@@ -884,13 +885,13 @@ class PathExplanation:
         kg: "KnowledgeGraph",
         path: GraphPath,
         trace: GraphTrace,
-        confidence: ResolverConfidence,
+        match_kind: LabelMatchKind,
     ) -> "PathExplanation":
         """
         Construct an explanation by combining the path, the trace log, and semantic profiles.
         """
         steps: List[PathExplanationStep] = []
-        profile = PathProfile.from_path(kg, path, confidence=confidence)
+        profile = PathProfile.from_path(kg, path, match_kind=match_kind)
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)

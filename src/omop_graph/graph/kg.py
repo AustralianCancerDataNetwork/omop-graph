@@ -19,10 +19,9 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import defaultdict
 from datetime import date
 from functools import lru_cache
-from typing import Dict, Iterable, Optional, Set, Tuple, Union, Literal, Generator
+from typing import Dict, Optional, Tuple, Union, Literal, Generator
 
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session, sessionmaker
@@ -33,7 +32,7 @@ from ..extensions.emb import MissingExtensionError
 from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
-from .edges import EdgeView, Predicate, is_active
+from .edges import EdgeView, Predicate
 from .nodes import (
     AncestorMatch,
     ConceptView,
@@ -51,9 +50,6 @@ from .queries import (
     q_concept_num_ancestors,
     q_concept_potential_ancestor,
     q_concept_synonym_filtered,
-    q_concept_synonym_fulltext,
-    q_concept_synonym_ilike,
-    q_concept_synonym_match,
     q_concept_view,
     q_concept_views,
     q_concept_vocabulary_ids,
@@ -184,24 +180,43 @@ class KnowledgeGraph(GraphBackend):
             )
         return concept_id
 
-    @lru_cache(maxsize=200_000)
-    def _synonym_lookup_raw(
+    @lru_cache(maxsize=600_000)
+    def concept_lookup(
         self,
         label: str,
-        fuzzy: bool = False,
+        match_kind: LabelMatchKind,
+        synonym: bool = False,
         search_constraint: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
+        sort: bool = True
+    ) -> LabelMatchGroupView:
         """
-        Resolve a synonym label to concept_id(s).
+        Resolve a label to concept_id(s).
+        
+        Parameters
+        ----------
+        label : str
+            The term to search for.
+        match_kind : LabelMatchKind
+            The kind of match to perform (exact, fulltext, partial).
+        synonym : bool
+            If True, searches in Concept_Synonym instead of Concept.
+        search_constraint : SearchConstraintConcept, optional
+            Additional filters for domain/vocabulary.
 
-        Returns matches annotated with LabelMatchKind for downstream explanations.
         """
         input_label = self._normalise_label(label)
         if not input_label:
-            return ()
+            return LabelMatchGroupView.from_matches(())
 
-        fn = q_concept_synonym_ilike if fuzzy else q_concept_synonym_match
-        cs = fn(input_label, search_constraint=search_constraint)
+        if match_kind == LabelMatchKind.EXACT:
+            fn = q_concept_name_match
+        elif match_kind == LabelMatchKind.PARTIAL:
+            fn = q_concept_name_ilike
+        elif match_kind == LabelMatchKind.FTS:
+            fn = q_concept_name_fulltext
+        else:
+            raise ValueError(f"Unsupported search mode: {match_kind}")
+        cn = fn(input_label, search_constraint=search_constraint, synonym=synonym)
 
         with self.session_factory() as session:
             matches = tuple(
@@ -209,171 +224,17 @@ class KnowledgeGraph(GraphBackend):
                     input_label=input_label,
                     matched_label=name,
                     concept_id=int(cid),
-                    match_kind=LabelMatchKind.SYNONYM,
-                    is_standard=is_standard,
-                    is_active=is_active,
-                )
-                for cid, name, is_standard, is_active in session.execute(cs)
-            )
-        return matches
-
-    @lru_cache(maxsize=200_000)
-    def _label_lookup_raw(
-        self,
-        label: str,
-        fuzzy: bool = False,
-        search_constraint: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        """
-        Resolve a label to concept_id(s), preferring Concept.concept_name matches.
-        Returns matches annotated with LabelMatchKind for downstream explanations.
-        """
-        input_label = self._normalise_label(label)
-        if not input_label:
-            return ()
-
-        fn = q_concept_name_ilike if fuzzy else q_concept_name_match
-        cn = fn(input_label, search_constraint=search_constraint)
-
-        with self.session_factory() as session:
-            matches = tuple(
-                LabelMatch(
-                    input_label=input_label,
-                    matched_label=name,
-                    concept_id=int(cid),
-                    match_kind=LabelMatchKind.DIRECT,
+                    match_kind=match_kind,
                     is_standard=is_standard,
                     is_active=is_active,
                 )
                 for cid, name, is_standard, is_active in session.execute(cn)
             )
-        return matches
 
-    @lru_cache(maxsize=200_000)
-    def _fulltext_lookup_raw(
-        self,
-        label: str,
-        fuzzy: bool = False,
-        search_constraint: Optional[SearchConstraintConcept] = None,
-    ) -> Tuple[LabelMatch, ...]:
-        """
-        Resolve a label using fulltext search (bag of words, ignoring word order).
-        """
-        q = q_concept_synonym_fulltext if fuzzy else q_concept_name_fulltext
-
-        with self.session_factory() as session:
-            matches = tuple(
-                LabelMatch(
-                    input_label=label,
-                    matched_label=name,
-                    concept_id=int(cid),
-                    match_kind=LabelMatchKind.FULLTEXT,
-                    is_standard=is_standard,
-                    is_active=is_active,
-                )
-                for cid, name, is_standard, is_active in session.execute(q(label, search_constraint=search_constraint))
-            )
-        return matches
-
-    def synonym_lookup(
-        self,
-        label: str,
-        fuzzy: bool = False,
-        sort: bool = True,
-        search_constraint: Optional[SearchConstraintConcept] = None,
-    ) -> LabelMatchGroupView:
-        """
-        Resolve a synonym label to grouped concept matches.
-
-        Parameters
-        ----------
-        label : str
-            The term to search for.
-        fuzzy : bool
-            If True, performs an ILIKE search.
-        sort : bool
-            If True, sorts the results.
-        search_constraint : SearchConstraintConcept, optional
-            Filters for domain/vocab.
-
-        Returns
-        -------
-        LabelMatchGroupView
-            Grouped matches.
-        """
-        raw = self._synonym_lookup_raw(
-            label, fuzzy=fuzzy, search_constraint=search_constraint
-        )
         if sort:
-            raw = sorted(raw)
-        return LabelMatchGroupView.from_matches(raw)
+            matches = sorted(matches)
+        return LabelMatchGroupView.from_matches(matches)
 
-    def label_lookup(
-        self,
-        label: str,
-        fuzzy: bool = False,
-        sort: bool = True,
-        search_constraint: Optional[SearchConstraintConcept] = None,
-    ) -> LabelMatchGroupView:
-        """
-        Resolve a label to grouped concept matches, preferring direct name matches.
-
-        Parameters
-        ----------
-        label : str
-            The term to search for.
-        fuzzy : bool
-            If True, performs an ILIKE search.
-        sort : bool
-            If True, sorts the results.
-        search_constraint : SearchConstraintConcept, optional
-            Filters for domain/vocab.
-
-        Returns
-        -------
-        LabelMatchGroupView
-            Grouped matches.
-        """
-        raw = self._label_lookup_raw(
-            label, fuzzy=fuzzy, search_constraint=search_constraint
-        )
-        if sort:
-            raw = sorted(raw)
-        return LabelMatchGroupView.from_matches(raw)
-
-    def fulltext_lookup(
-        self,
-        label: str,
-        sort: bool = True,
-        fuzzy: bool = False,
-        search_constraint: Optional[SearchConstraintConcept] = None,
-    ) -> LabelMatchGroupView:
-        """
-        Resolve a label using fulltext search (bag of words, ignoring word order).
-
-        Parameters
-        ----------
-        label : str
-            The term to search for.
-        sort : bool
-            If True, sorts the results.
-        fuzzy : bool
-            If True, searches synonyms instead of just concept names.
-        search_constraint : SearchConstraintConcept, optional
-            Filters for domain/vocab.
-
-        Returns
-        -------
-        LabelMatchGroupView
-            Grouped matches.
-        """
-        raw = self._fulltext_lookup_raw(
-            label, fuzzy=fuzzy, search_constraint=search_constraint
-        )
-        if sort:
-            raw = sorted(raw)
-
-        return LabelMatchGroupView.from_matches(raw)
 
     @lru_cache(maxsize=200_000)
     def concept_ids_by_label(self, label: str) -> Tuple[int, ...]:
@@ -755,9 +616,8 @@ class KnowledgeGraph(GraphBackend):
         """
         self.concept_view.cache_clear()
         self.concept_id_by_code.cache_clear()
-        self._label_lookup_raw.cache_clear()
-        self._synonym_lookup_raw.cache_clear()
         self.concept_ids_by_label.cache_clear()
+        self.concept_lookup.cache_clear()
         self.predicate.cache_clear()
         self.predicate_name.cache_clear()
         self.parents.cache_clear()

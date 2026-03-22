@@ -84,7 +84,7 @@ class StandardConceptWithScore(StandardConcept):
             concept_id=standard_concept.concept_id,
             concept_name=standard_concept.concept_name,
             separation=standard_concept.separation,
-            resolver_confidence=standard_concept.resolver_confidence,
+            match_kind=standard_concept.match_kind,
             original_id=standard_concept.original_id,
             original_name=standard_concept.original_name,
             matched_label=standard_concept.matched_label,

@@ -2,16 +2,14 @@
 Pipeline for executing multiple candidate resolvers in sequence.
 
 This module defines the `ResolverPipeline`, which orchestrates the execution
-of various search strategies (exact match, synonym match, etc.) to find
-candidate OMOP concepts for a given text. It supports early stopping based on
-confidence thresholds.
+of various search strategies defined by CandidateResolver. It supports early stopping based on
+the type of the resolver.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Generator, Optional, Tuple
+from typing import Generator, Optional, Tuple, Type
 
 # Local Application Imports
 from omop_graph.graph.constraints import SearchConstraintConcept
@@ -20,13 +18,11 @@ from omop_graph.reasoning.resolvers.resolvers import (
     ALL_RESOLVERS,
     CandidateHit,
     CandidateResolver,
-    ResolverConfidence,
 )
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
 class ResolverPipeline:
     """
     A sequence of resolvers to be executed in order of confidence.
@@ -39,49 +35,70 @@ class ResolverPipeline:
     Parameters
     ----------
     resolvers : tuple[CandidateResolver, ...]
-        The sequence of resolvers to execute. Automatically sorted by confidence.
-    stop_after_confidence : ResolverConfidence, optional
-        If set, the pipeline stops executing further resolvers once a match
-        has been found by a resolver with this confidence level or better (lower value).
+        The sequence of resolvers to execute.
+    stop_after_resolver : str, optional
+        If specified, the pipeline will stop after executing the resolver with this name.
+
+    Notes
+    -----
+    TODO: Have it stop after a confidence score on a match. That requries some sort of callback into the resolve step to
+    stop getting hits from the resolver and to get the confidence score of the match. 
     """
-
-    resolvers: Tuple[CandidateResolver, ...]
-    stop_after_confidence: Optional[ResolverConfidence]
-
     def __init__(
         self,
         resolvers: Tuple[CandidateResolver, ...],
-        *,
-        stop_after_confidence: Optional[ResolverConfidence] = None,
-    ):
-        # Sort the resolvers by confidence (lower value = higher confidence)
-        object.__setattr__(
-            self,
-            "resolvers",
-            tuple(sorted(resolvers, key=lambda r: r.confidence.value)),
-        )
-        object.__setattr__(self, "stop_after_confidence", stop_after_confidence)
+        stop_after_resolver: Optional[str | Type[CandidateResolver]] = None
+    ):  
+        self._resolver_map = {type(r): r for r in resolvers}
+    
+        if len(self._resolver_map) != len(resolvers):
+            raise ValueError("Duplicate resolver types detected in pipeline.")
 
+        self._resolvers = resolvers
+        self._stop_at = None
+        if stop_after_resolver:
+            # If they passed a string name, find the matching type
+            if isinstance(stop_after_resolver, str):
+                match = next((t for t in self._resolver_map if t.__name__ == stop_after_resolver), None)
+                if not match:
+                    raise ValueError(f"{stop_after_resolver} not in pipeline.")
+                self._stop_at = match
+            else:
+                # If they passed the class itself
+                if stop_after_resolver not in self._resolver_map:
+                    raise ValueError(f"{stop_after_resolver.__name__} not in pipeline.")
+                self._stop_at = stop_after_resolver
+
+    def __repr__(self) -> str:
+        resolver_names = [type(r).__name__ for r in self.resolvers]
+        return f"ResolverPipeline(resolvers={resolver_names}, stop_after_resolver={self.stop_at.__name__ if self.stop_at else None})"
+    
+
+    @property
+    def resolvers(self) -> Tuple[CandidateResolver, ...]:
+        return self._resolvers
+    
+    @property
+    def stop_at(self) -> Optional[Type[CandidateResolver]]:
+        """
+        The class type of the resolver where the pipeline is configured to truncate.
+        Returns None if the pipeline is configured to run to completion.
+        """
+        return self._stop_at
+
+        
     @classmethod
-    def with_all_resolvers(
-        cls, stop_after_confidence: Optional[ResolverConfidence] = None
-    ) -> "ResolverPipeline":
+    def with_all_resolvers(cls) -> "ResolverPipeline":
         """
         Create a pipeline configured with all available resolvers.
-
-        Parameters
-        ----------
-        stop_after_confidence : ResolverConfidence, optional
-            The confidence threshold for early stopping.
 
         Returns
         -------
         ResolverPipeline
             A fully configured pipeline instance.
         """
-        return cls(
-            resolvers=ALL_RESOLVERS, stop_after_confidence=stop_after_confidence
-        )
+        # All resolvers
+        return cls(resolvers=ALL_RESOLVERS, stop_after_resolver=None)
 
     def resolve(
         self,
@@ -112,14 +129,6 @@ class ResolverPipeline:
         seen = set()
 
         for resolver in self.resolvers:
-            # Early stopping check
-            if (
-                len(seen) > 0
-                and self.stop_after_confidence is not None
-                and resolver.confidence.value > self.stop_after_confidence.value
-            ):
-                break
-
             hits = resolver.resolve(
                 kg,
                 text,
@@ -131,3 +140,8 @@ class ResolverPipeline:
                 if hit.concept_id not in seen:
                     seen.add(hit.concept_id)
                     yield hit
+
+            # Early stopping
+            if type(resolver) == self._stop_at:
+                logger.info(f"Stopping pipeline after resolver {type(resolver).__name__} as configured.")
+                break
