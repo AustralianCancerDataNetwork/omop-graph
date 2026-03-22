@@ -21,7 +21,7 @@ import logging
 import re
 from collections import defaultdict
 from datetime import date
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from typing import Dict, Iterable, Optional, Set, Tuple, Union, Literal, Generator
 
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
@@ -105,7 +105,7 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             RelationshipCache.load(session)
 
-    @property
+    @cached_property
     def emb(self):
         """Namespace for all embedding operations."""
         try:
@@ -114,7 +114,21 @@ class KnowledgeGraph(GraphBackend):
         except ImportError:
             raise MissingExtensionError(
                 "Accessing '.emb' requires the 'omop-emb' package. "
-                "Install via: pip install omop-graph[embeddings]"
+                "Install via: pip install omop-graph[emb] "
+                "or install omop-emb with the backend extra you need."
+            )
+
+    @cached_property
+    def emb_service(self):
+        """Embedding orchestration service for query-time workflows."""
+        try:
+            from omop_emb import EmbeddingService
+            return EmbeddingService()
+        except ImportError:
+            raise MissingExtensionError(
+                "Accessing '.emb_service' requires the 'omop-emb' package. "
+                "Install via: pip install omop-graph[emb] "
+                "or install omop-emb with the backend extra you need."
             )
 
     @lru_cache(maxsize=200_000)

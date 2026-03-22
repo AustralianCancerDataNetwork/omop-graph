@@ -151,6 +151,7 @@ class LabelMatchKind(Enum):
     DIRECT = auto()
     SYNONYM = auto()
     FULLTEXT = auto()
+    EMBEDDING = auto()
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,7 @@ class LabelMatch:
             LabelMatchKind.DIRECT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>direct</span>",
             LabelMatchKind.SYNONYM: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>synonym</span>",
             LabelMatchKind.FULLTEXT: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
+            LabelMatchKind.EMBEDDING: "<span style='background:#a63; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>embedding</span>",
         }
         kind_badge = kind_badges[self.match_kind]
 
@@ -329,6 +331,8 @@ class LabelMatchGroupView:
                 reasons.append("synonym match")
             elif best.match_kind is LabelMatchKind.FULLTEXT:
                 reasons.append("fulltext match")
+            elif best.match_kind is LabelMatchKind.EMBEDDING:
+                reasons.append("embedding retrieval")
             else:
                 reasons.append("unknown match")
 

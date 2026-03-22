@@ -457,10 +457,18 @@ def add_embeddings(
     model: Annotated[str, typer.Option(
         "--model", "-m",
         help="Name of the embedding model to use for generating concept embeddings (e.g., 'text-embedding-3-small'). If not provided, embeddings will not be generated.")] = "text-embedding-3-small",
+    backend_name: Annotated[Optional[str], typer.Option(
+        "--backend",
+        help="Embedding backend to use. Defaults to OMOP_EMB_BACKEND or the omop-emb package default."
+    )] = None,
     index_method: Annotated[str, typer.Option(
         "--index-method",
-        help="Vector index backend to use for new embedding tables. Options: auto, diskann, hnsw, ivfflat, none. Defaults to OMOP_EMB_INDEX_METHOD or auto."
+        help="Backend-specific index type for newly registered models. For PostgreSQL this maps to pgvector index settings. For the current FAISS backend, auto maps to IndexFlatIP."
     )] = "auto",
+    faiss_base_dir: Annotated[Optional[str], typer.Option(
+        "--faiss-base-dir",
+        help="Optional base directory for FAISS backend storage."
+    )] = None,
     standard_only: Annotated[bool, typer.Option(
         "--standard-only",
         help="If set, only generate embeddings for OMOP standard concepts (standard_concept = 'S')."
@@ -485,13 +493,18 @@ def add_embeddings(
             api_key=api_key,
             batch_size=batch_size,
             model=model,
+            backend_name=backend_name,
             index_method=index_method,
+            faiss_base_dir=faiss_base_dir,
             standard_only=standard_only,
             vocabularies=vocabularies,
             num_embeddings=num_embeddings
         )
     except ImportError:
-        logger.error("Embedding CLI not available. Please install the package with [emb] to use this feature.")
+        logger.error(
+            "Embedding CLI not available. Install omop-graph[emb] for PostgreSQL-backed embeddings "
+            "or install omop-emb with the backend extra you need."
+        )
         raise typer.Exit(code=1)
 
 

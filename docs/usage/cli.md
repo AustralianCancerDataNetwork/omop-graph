@@ -43,16 +43,17 @@ omop-graph omop-cdm --help
 
 !!! warning
     
-    This method is only exposed for convenience reasons to populate the concept embeddings if the optional dependency `[emb]` was used during the [installation process](installation.md).
+    This method is only exposed for convenience reasons to populate concept embeddings if the optional embedding dependency was installed during the [installation process](installation.md).
 
 The method is directly imported from [`omop-emb`](https://australiancancerdatanetwork.github.io/omop-emb/). See the [documentation](https://australiancancerdatanetwork.github.io/omop-emb/usage/cli/) for more information.
 
 ### Prerequisites
-- **Database**: Postgres implementation of OMOP CDM. See [`omop-cdm`](#omop-cdm) for more details.
+- **Database**: an OMOP CDM database is always required for concept metadata and model registration.
+- **Embedding backend**: `omop-graph[emb]` installs the PostgreSQL-backed embedding path. Alternative vector backends such as FAISS can be selected if `omop-emb` was installed with the matching extra.
 
 ### Usage
 ```bash
-omop-emb add-embeddings --api-base <URL> --api-key <KEY> [OPTIONS]
+omop-graph add-embeddings --api-base <URL> --api-key <KEY> [OPTIONS]
 ```
 where `[OPTIONS]` are optional arguments that can be specified as described below.
 
@@ -64,6 +65,8 @@ where `[OPTIONS]` are optional arguments that can be specified as described belo
 | **`--api-key`** | | `String` | **Required** | API key for the embedding API provider. |
 | **`--batch-size`** | `-b` | `Integer` | `100` | Number of concepts to process in each chunk. |
 | **`--model`** | `-m` | `String` | `text-embedding-3-small` | Name of the embedding model to use for generating vectors. |
+| **`--backend`** | | `String` | `None` | Embedding backend to use. Defaults to `OMOP_EMB_BACKEND` or the `omop-emb` package default. |
+| **`--index-method`** | | `String` | `auto` | Backend-specific index type for newly registered models. |
+| **`--faiss-base-dir`** | | `String` | `None` | Optional base directory for FAISS backend storage. |
 | **`--num-embeddings`** | `-n` | `Integer` | `None` | Limit the number of concepts processed (useful for testing). |
 ---
-

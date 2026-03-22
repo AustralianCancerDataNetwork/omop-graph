@@ -9,6 +9,7 @@ class ResolverConfidence(Enum):
     FULLTEXT_SYNONYM = auto()
     PARTIAL = auto()
     PARTIAL_SYNONYM = auto()
+    EMBEDDING = auto()
 
     def __lt__(self, other: "ResolverConfidence") -> bool:
         return self.value < other.value

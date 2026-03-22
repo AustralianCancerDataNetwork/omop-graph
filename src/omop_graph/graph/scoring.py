@@ -14,7 +14,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -99,7 +99,7 @@ def score_standard_concepts(
     text: str,
     standard_concepts: tuple[StandardConcept, ...],
     kg: "KnowledgeGraph",
-    similarity_scores: Optional[np.ndarray] = None,
+    similarity_scores: Optional[Sequence[Optional[float]]] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Rank a list of standard concepts against a query text.
@@ -112,8 +112,10 @@ def score_standard_concepts(
         The list of candidate concepts to score.
     kg : KnowledgeGraph
         The graph instance used for retrieving metadata (like ancestor counts).
-    similarity_scores : np.ndarray, optional
+    similarity_scores : sequence[float | None], optional
         Pre-computed embedding similarity scores corresponding to the concepts.
+        Entries may be ``None`` when only a subset of concepts has stored
+        embeddings available.
 
     Returns
     -------
@@ -148,8 +150,10 @@ def _score_standard_concept(
     standard_concept: StandardConcept,
     num_ancestors: int,
     similarity_score: Optional[float],
-    alpha: float = 0.05,
+    alpha: float = 0.01,
     beta: float = 0.01,
+    embedding_weight: float = 0.85,
+    text_weight: float = 0.15,
 ) -> StandardConceptWithScore:
     """
     Calculate the score for a single concept.
@@ -167,9 +171,15 @@ def _score_standard_concept(
     similarity_score : float, optional
         Embedding cosine similarity. If None, no embedding relevance will be factored in.
     alpha : float, optional
-        Weight for parsimony penalty (separation cost). Default 0.05.
+        Weight for parsimony penalty (separation cost). Default 0.01.
     beta : float, optional
         Weight for broadness bonus. Default 0.01.
+    embedding_weight : float, optional
+        Weight assigned to embedding similarity when both semantic and lexical
+        signals are available. Default 0.85.
+    text_weight : float, optional
+        Weight assigned to textual similarity when both semantic and lexical
+        signals are available. Default 0.15.
 
     Returns
     -------
@@ -181,10 +191,18 @@ def _score_standard_concept(
     )
 
     if similarity_score is None:
-        similarity_score = 1.0   # If no embedding score, rely solely on textual similarity for relevance
-    
-    # Combined relevance: Embedding similarity * Textual overlap
-    relevance = similarity_score * textual_similarity
+        # If no embedding score is available, rely solely on textual similarity.
+        relevance = textual_similarity
+        embedding_score = None
+    else:
+        # A weighted sum is more robust than a product for long clinical labels:
+        # strong semantic matches should still score well even when token overlap
+        # is modest because the query is verbose or phrased differently.
+        relevance = (
+            (embedding_weight * similarity_score) +
+            (text_weight * textual_similarity)
+        )
+        embedding_score = similarity_score
 
     # Parsimony Component: Penalize concepts found deeper in the graph
     # (higher separation = higher penalty)
@@ -196,7 +214,7 @@ def _score_standard_concept(
 
     return StandardConceptWithScore.from_standard_concept(
         standard_concept=standard_concept,
-        embedding_score=similarity_score,
+        embedding_score=embedding_score,
         relevance=relevance,
         parsimony_penalty=parsimony_penalty,
         broadness_bonus=broadness_bonus,

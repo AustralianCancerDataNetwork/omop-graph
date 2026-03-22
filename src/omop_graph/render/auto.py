@@ -3,15 +3,21 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from omop_graph.graph.paths import GraphPath, PathExplanation
+from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.graph.traverse import Subgraph, GraphTrace
+from omop_graph.reasoning.resolvers import CandidateHit
 
 from .html import (
+    candidate_hits_html,
+    grounding_review_html,
     subgraph_html,
     trace_html_with_cards,
     path_html,
     explained_path_html,
 )
 from .text import (
+    candidate_hits_text,
+    grounding_review_text,
     subgraph_text,
     trace_text,
     path_text,
@@ -91,6 +97,52 @@ def render_explained_path(
     if fmt == "html":
         return explained_path_html(kg, explanation)
     return explained_path_text(kg, explanation)
+
+
+def render_candidate_hits(
+    kg,
+    hits: list[CandidateHit],
+    *,
+    title: str = "Candidate Hits",
+    format: Format = "auto",
+) -> str:
+    fmt = _resolve_format(format)
+    if fmt == "html":
+        return candidate_hits_html(kg, hits, title=title)
+    return candidate_hits_text(kg, hits, title=title)
+
+
+def render_grounding_review(
+    kg,
+    query_text: str,
+    results: list[StandardConceptWithScore],
+    *,
+    max_near_winners: int = 3,
+    max_also_rans: int = 5,
+    near_winner_delta: float = 0.05,
+    path_max_depth: int = 4,
+    format: Format = "auto",
+) -> str:
+    fmt = _resolve_format(format)
+    if fmt == "html":
+        return grounding_review_html(
+            kg,
+            query_text,
+            results,
+            max_near_winners=max_near_winners,
+            max_also_rans=max_also_rans,
+            near_winner_delta=near_winner_delta,
+            path_max_depth=path_max_depth,
+        )
+    return grounding_review_text(
+        kg,
+        query_text,
+        results,
+        max_near_winners=max_near_winners,
+        max_also_rans=max_also_rans,
+        near_winner_delta=near_winner_delta,
+        path_max_depth=path_max_depth,
+    )
 
 
 def bind_default_renderers(kg):

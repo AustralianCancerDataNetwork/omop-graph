@@ -753,6 +753,104 @@ def find_standard_paths(
     return found_standard_concepts
 
 
+def find_standard_concepts_unconstrained(
+    kg: "KnowledgeGraph",
+    candidate: CandidateHit,
+    predicate_kinds: Optional[frozenset[Any]] = None,
+    max_concepts: Optional[int] = None,
+    num_hops: int = 1,
+) -> List[StandardConcept]:
+    """
+    Resolve a candidate to standard concepts without ancestor constraints.
+
+    This is the unconstrained counterpart to ``find_standard_paths``:
+    - if the candidate is already standard, return it directly
+    - otherwise, follow allowed mapping edges to reachable standard concepts
+
+    The returned ``separation`` is set to 0 because there is no parent/ancestor
+    constraint in this mode. ``hierarchy_cost`` still captures the mapping-path
+    cost so later scoring can evolve if needed.
+    """
+    source_view = kg.concept_view(candidate.concept_id)
+    source_is_std = source_view.standard_concept if source_view else False
+
+    queue = [
+        QueueItem(
+            cost=0.0,
+            node=Node(candidate.concept_id, source_is_std),
+            rc=candidate.resolver_confidence,
+            iterations=0,
+        )
+    ]
+    found_standard_concepts: List[StandardConcept] = []
+    seen_standard_ids: Set[int] = set()
+
+    while queue:
+        item = heapq.heappop(queue)
+        subject_node = item.node
+        cost = item.cost
+        rc = item.rc
+        iterations = item.iterations
+
+        if max_concepts and len(found_standard_concepts) >= max_concepts:
+            break
+
+        if iterations > num_hops:
+            continue
+
+        if subject_node.is_standard and subject_node.concept_id not in seen_standard_ids:
+            seen_standard_ids.add(subject_node.concept_id)
+            found_standard_concepts.append(
+                StandardConcept(
+                    hierarchy_cost=cost,
+                    concept_id=subject_node.concept_id,
+                    concept_name=kg.concept_view(subject_node.concept_id).concept_name,
+                    separation=0,
+                    original_id=candidate.concept_id,
+                    original_name=source_view.concept_name,
+                    matched_label=candidate.matched_label,
+                    resolver_confidence=rc,
+                )
+            )
+            continue
+
+        with kg.session_factory() as session:
+            edges = list(
+                kg.iter_edges(
+                    session=session,
+                    concept_ids=subject_node.concept_id,
+                    direction="out",
+                    predicate_kinds=predicate_kinds,
+                )
+            )
+        if not edges:
+            continue
+
+        object_ids = tuple(e.object_id for e in edges)
+        object_views = kg.concept_views(object_ids)
+
+        for edge, object_view in zip(edges, object_views):
+            object_id = edge.object_id
+            if object_view.concept_id != object_id:
+                object_view = kg.concept_view(object_id)
+
+            object_is_std = object_view.standard_concept
+            if not object_is_std:
+                continue
+
+            heapq.heappush(
+                queue,
+                QueueItem(
+                    cost=cost,
+                    node=Node(concept_id=object_id, is_standard=object_is_std),
+                    rc=ResolverConfidence.PARTIAL,
+                    iterations=iterations + 1,
+                ),
+            )
+
+    return found_standard_concepts
+
+
 @dataclass(frozen=True)
 class PathProfile:
     """

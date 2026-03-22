@@ -25,6 +25,7 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.paths import (
     StandardConcept,
     find_standard_paths,
+    find_standard_concepts_unconstrained,
     get_unique_standard_concepts,
 )
 from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
@@ -38,6 +39,9 @@ from omop_llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from omop_emb import EmbeddingService
+
 
 
 @dataclass(frozen=True)
@@ -50,7 +54,11 @@ class GroundingConstraints:
     parent_ids : tuple[int, ...], optional
         OMOP Concept IDs that act as required ancestors for any valid result.
     search_constraint : SearchConstraintConcept, optional
-        Domain and Vocabulary restrictions for the initial resolution phase.
+        Domain and Vocabulary restrictions for the final grounded concepts.
+    resolver_search_constraint : SearchConstraintConcept, optional
+        Optional pre-filter for the initial resolution phase. If omitted,
+        ``ground_term`` falls back to using ``search_constraint`` for backward
+        compatibility.
     max_depth : int, optional
         Maximum allowed distance in the hierarchy between a candidate and a parent.
     predicate_kinds : frozenset[ClassIDEnum], optional
@@ -59,6 +67,7 @@ class GroundingConstraints:
 
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
+    resolver_search_constraint: Optional[SearchConstraintConcept] = None
     max_depth: int = 6
     predicate_kinds: frozenset[ClassIDEnum] = frozenset({ClassIDEnum.IDENTITY,})
 
@@ -71,6 +80,7 @@ def ground_term(
     text_embedding_model: Optional[str],
     embedding_client: Optional["LLMClient"],
     constraints: GroundingConstraints,
+    embedding_service: Optional["EmbeddingService"] = None,
     max_candidates: Optional[int] = None,
 ) -> List[StandardConceptWithScore]:
     """
@@ -90,6 +100,9 @@ def ground_term(
         The name of the embedding model used to generate `text_embedding`. Used for RAG retrieval from the database.
     embedding_client : LLMClient, optional
         DEBUG: A client to obtain embeddings and similarity scores if not available in the KG. Not for production use.
+    embedding_service : EmbeddingService, optional
+        Optional omop-emb orchestration service. If omitted, the function will
+        lazily use ``kg.emb_service`` when embedding workflows are needed.
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
@@ -100,20 +113,33 @@ def ground_term(
     list[StandardConceptWithScore]
         A list of standard concepts sorted by their total score (descending).
 
-    Raises
-    ------
-    NotImplementedError
-        If no `parent_ids` are provided in constraints.
     """
     standard_concepts: List[StandardConcept] = []
 
     # 1. Validate Constraints
     search_constraints = constraints.search_constraint
+    resolver_search_constraints = (
+        constraints.resolver_search_constraint
+        if constraints.resolver_search_constraint is not None
+        else search_constraints
+    )
     if search_constraints is not None:
         search_constraints.check(kg)
+    if resolver_search_constraints is not None and resolver_search_constraints is not search_constraints:
+        resolver_search_constraints.check(kg)
 
     # 2. Resolve Text to Candidate Hits
-    resolved = list(resolver_pipeline.resolve(kg, text, constraints=search_constraints))
+    resolved = list(
+        resolver_pipeline.resolve(
+            kg,
+            text,
+            constraints=resolver_search_constraints,
+            text_embedding=text_embedding,
+            text_embedding_model=text_embedding_model,
+            embedding_client=embedding_client,
+            embedding_service=embedding_service,
+        )
+    )
 
     # 3. Validate Hierarchy and Standardize
     for hit in resolved:
@@ -137,19 +163,39 @@ def ground_term(
             
             standard_concepts.extend(candidate_standard_concepts)
         else:
-            # Note: We currently require parent_ids for clinical safety/context
-            raise NotImplementedError("Grounding without parent_ids is not supported.")
+            standard_concepts.extend(
+                find_standard_concepts_unconstrained(
+                    kg=kg,
+                    candidate=hit,
+                    predicate_kinds=constraints.predicate_kinds,
+                    max_concepts=3,
+                )
+            )
 
     # 4. Filter and Deduplicate
     unique_standard_concepts = get_unique_standard_concepts(standard_concepts)
+    if search_constraints is not None:
+        unique_standard_concepts = [
+            standard_concept
+            for standard_concept in unique_standard_concepts
+            if _grounded_concept_matches_search_constraint(
+                kg,
+                standard_concept.concept_id,
+                search_constraints,
+            )
+        ]
     if not unique_standard_concepts:
-        logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
+        logger.info(
+            "No standard concepts found for '%s' after grounding candidate standardization.",
+            text,
+        )
         return []
 
     # 5. Semantic Scoring (Embeddings)
     try:
         with kg.session_factory() as session:
             similarity_scores_dict = {}
+            concept_ids = tuple(sc.concept_id for sc in unique_standard_concepts)
             if (
                 text_embedding_model is not None and 
                 kg.emb.is_model_registered(session=session, model_name=text_embedding_model) and
@@ -161,54 +207,66 @@ def ground_term(
                     session=session,
                     embedding_model_name=text_embedding_model,
                     text_embedding=text_embedding.tolist()[0],
-                    concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
+                    concept_ids=concept_ids
                 )
 
-            if not similarity_scores_dict:
-                # Either the filtering resulted in no concepts or the embedding model is not registered. 
-                if text_embedding_model is not None and kg.emb.is_model_registered(
+            missing_concept_ids = tuple(
+                sc.concept_id
+                for sc in unique_standard_concepts
+                if sc.concept_id not in similarity_scores_dict
+            )
+
+            if (
+                missing_concept_ids and
+                text_embedding_model is not None and
+                embedding_client is not None and
+                text_embedding is not None
+            ):
+                logger.info(
+                    "Backfilling %s grounded concept embeddings for model '%s' during scoring.",
+                    len(missing_concept_ids),
+                    text_embedding_model,
+                )
+                service = embedding_service or kg.emb_service
+                concept_name_by_id = {
+                    sc.concept_id: sc.concept_name
+                    for sc in unique_standard_concepts
+                }
+                missing_embeddings = service.embed_and_upsert_concepts(
                     session=session,
-                    model_name=text_embedding_model
-                ):
-                    logger.warning(
-                        f"Filtering resulted in no concepts with available embeddings for model '{text_embedding_model}'.")
-                
-                # Fallback (but just debug)
-                if (
-                    text_embedding_model is not None and
-                    embedding_client is not None and 
-                    text_embedding is not None
-                ):
-                    logger.debug("Falling back to embedding client for similarity scores (DEBUG ONLY).")
+                    model_name=text_embedding_model,
+                    concept_ids=missing_concept_ids,
+                    concept_texts=tuple(concept_name_by_id[concept_id] for concept_id in missing_concept_ids),
+                    embedding_client=embedding_client,
+                )
+                assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for fallback similarity scoring."
+                assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."
+                missing_similarity_scores = _cosine_similarity_row(
+                    text_embedding[0],
+                    missing_embeddings,
+                )
+                similarity_scores_dict.update({
+                    concept_id: float(score)
+                    for concept_id, score in zip(missing_concept_ids, missing_similarity_scores.tolist())
+                })
 
-                    sc_names = tuple([sc.concept_name for sc in unique_standard_concepts])
-                    standard_concept_embeddings = embedding_client.embeddings(sc_names)
-                    assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for fallback similarity scoring."
-                    assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."            
-                    similarity_scores = embedding_client.cosine_similarity(
-                        text_embedding, standard_concept_embeddings
-                    )[0]
-
-                    # Store them in the DB for faster acess in the future
-                    kg.emb.add_to_db(
-                        embeddings=standard_concept_embeddings,
-                        concept_ids=tuple([sc.concept_id for sc in unique_standard_concepts]),
-                        session=session,
-                        model=text_embedding_model
-                    )
-
-                elif text_embedding_model is not None:
+            if not similarity_scores_dict:
+                if text_embedding_model is not None:
                     logger.warning((
-                        f"Embedding model '{text_embedding_model}' is not registered in the KG. No similarity scores will be available. "
+                        f"Embedding model '{text_embedding_model}' is not registered in the KG or no concept embeddings could be scored. "
                         f"Fallback to embedding client is not possible (embedding_client: {embedding_client is not None}, text_embedding: {text_embedding is not None}).")
                     )
-                    similarity_scores = None
-                else:
-                    similarity_scores = None
+                similarity_scores = None
             else:
-                similarity_scores = np.array(list(similarity_scores_dict.values()))
+                similarity_scores = [
+                    similarity_scores_dict.get(sc.concept_id)
+                    for sc in unique_standard_concepts
+                ]
     except MissingExtensionError:
-        logger.info("Embedding-based grounding not available. Install this package with [emb] option to enable this functionality.")
+        logger.info(
+            "Embedding-based grounding not available. Install omop-graph[emb] for PostgreSQL-backed embeddings "
+            "or install omop-emb with the backend extra you need."
+        )
         similarity_scores = None
 
     # 6. Rank Results
@@ -221,6 +279,45 @@ def ground_term(
 
     ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)
     return ranked_standard_concepts[:max_candidates] if max_candidates is not None else ranked_standard_concepts
+
+
+def _cosine_similarity_row(query_embedding: np.ndarray, candidate_embeddings: np.ndarray) -> np.ndarray:
+    """
+    Compute cosine similarity between one query vector and many candidate vectors.
+    """
+    query = np.asarray(query_embedding, dtype=np.float32)
+    candidates = np.asarray(candidate_embeddings, dtype=np.float32)
+    if candidates.ndim != 2:
+        raise ValueError(f"Expected candidate_embeddings to be 2D, got shape {candidates.shape}.")
+
+    query_norm = np.linalg.norm(query)
+    candidate_norms = np.linalg.norm(candidates, axis=1)
+    denom = np.maximum(query_norm * candidate_norms, 1e-12)
+    return (candidates @ query) / denom
+
+
+def _grounded_concept_matches_search_constraint(
+    kg: KnowledgeGraph,
+    concept_id: int,
+    search_constraint: SearchConstraintConcept,
+) -> bool:
+    """
+    Apply a SearchConstraintConcept to a grounded concept view in memory.
+
+    This is used after grounding so we can support permissive resolver-stage
+    retrieval while still enforcing stricter constraints on the final grounded
+    concepts.
+    """
+    concept = kg.concept_view(concept_id)
+
+    if search_constraint.domains is not None and concept.domain_id not in search_constraint.domains:
+        return False
+    if search_constraint.vocabs is not None and concept.vocabulary_id not in search_constraint.vocabs:
+        return False
+    if search_constraint.require_standard and not concept.standard_concept:
+        return False
+
+    return True
 
 
 def find_standard_concepts(

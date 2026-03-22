@@ -642,14 +642,12 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     """
     return (
         select(
-            Concept.concept_id,
-            func.count(Concept_Ancestor.descendant_concept_id).label("num_ancestors"),
+            Concept_Ancestor.descendant_concept_id.label("concept_id"),
+            func.count(Concept_Ancestor.ancestor_concept_id).label("num_ancestors"),
         )
-        .join(
-            Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id
-        )
-        .where(Concept.concept_id.in_(concept_ids))
-        .group_by(Concept.concept_id)
+        .where(Concept_Ancestor.descendant_concept_id.in_(concept_ids))
+        .where(Concept_Ancestor.min_levels_of_separation > 0)
+        .group_by(Concept_Ancestor.descendant_concept_id)
     )
 
 def q_relationship_class(relationship_id: str) -> Select:

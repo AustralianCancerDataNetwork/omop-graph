@@ -243,6 +243,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         text_embedding: Optional[np.ndarray] = None,
         text_embedding_model: Optional[str] = None,
         embedding_client: Optional[LLMClient] = None,
+        embedding_service: Optional["EmbeddingService"] = None,
         configuration: Optional[TextAnnotationConfiguration] = None,
         annotations: Optional[Dict[str, Annotation]] = None,
     ) -> Iterator[TextAnnotation]:
@@ -257,6 +258,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             The embedding of the input text.
         embedding_client : LLMClient
             The client used to generate the embedding. Will be used to obtain embeddings for grounding if specified.
+        embedding_service : EmbeddingService, optional
+            Optional omop-emb orchestration service for query-embedding reuse and
+            on-the-fly embedding generation.
         configuration : TextAnnotationConfiguration, optional
             Configuration settings for annotation (e.g., token exclusion).
         annotations : Dict[str, Annotation], optional
@@ -351,6 +355,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             text_embedding=text_embedding,
             text_embedding_model=text_embedding_model,
             embedding_client=embedding_client,
+            embedding_service=embedding_service,
         )
 
         if not grounded:
@@ -891,9 +896,12 @@ class OMOPAlchemyImplementation(
             bind_default_renderers(kg)
 
         try:
-            kg.emb.initialise_tables(self.engine)
+            kg.emb_service.initialise_store(self.engine)
         except MissingExtensionError:
-            logger.info("Embeddings not available. Install module with [emb] for optional embeddings.")
+            logger.info(
+                "Embeddings not available. Install omop-graph[emb] for PostgreSQL-backed embeddings "
+                "or install omop-emb with the backend extra you need."
+            )
         
         super().__init__(kg=kg, **kwargs)
 

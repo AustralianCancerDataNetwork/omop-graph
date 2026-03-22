@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Generator, Optional, Tuple
+from typing import TYPE_CHECKING, Generator, Optional, Tuple
 
 # Local Application Imports
 from omop_graph.graph.constraints import SearchConstraintConcept
@@ -20,10 +20,14 @@ from omop_graph.reasoning.resolvers.resolvers import (
     ALL_RESOLVERS,
     CandidateHit,
     CandidateResolver,
+    EmbeddingResolver,
     ResolverConfidence,
 )
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from omop_emb import EmbeddingService
 
 
 @dataclass
@@ -64,7 +68,11 @@ class ResolverPipeline:
 
     @classmethod
     def with_all_resolvers(
-        cls, stop_after_confidence: Optional[ResolverConfidence] = None
+        cls,
+        stop_after_confidence: Optional[ResolverConfidence] = None,
+        *,
+        include_embedding_resolver: bool = True,
+        embedding_candidate_limit: int = 50,
     ) -> "ResolverPipeline":
         """
         Create a pipeline configured with all available resolvers.
@@ -79,9 +87,15 @@ class ResolverPipeline:
         ResolverPipeline
             A fully configured pipeline instance.
         """
-        return cls(
-            resolvers=ALL_RESOLVERS, stop_after_confidence=stop_after_confidence
+        resolvers = tuple(
+            resolver
+            for resolver in ALL_RESOLVERS
+            if not isinstance(resolver, EmbeddingResolver)
         )
+        if include_embedding_resolver:
+            resolvers = resolvers + (EmbeddingResolver(candidate_limit=embedding_candidate_limit),)
+
+        return cls(resolvers=resolvers, stop_after_confidence=stop_after_confidence)
 
     def resolve(
         self,
@@ -89,6 +103,10 @@ class ResolverPipeline:
         text: str,
         limit_per_resolver: Optional[int] = None,
         constraints: Optional[SearchConstraintConcept] = None,
+        text_embedding=None,
+        text_embedding_model: Optional[str] = None,
+        embedding_client=None,
+        embedding_service: Optional["EmbeddingService"] = None,
     ) -> Generator[CandidateHit, None, None]:
         """
         Execute the pipeline to find candidate concepts for the input text.
@@ -125,6 +143,10 @@ class ResolverPipeline:
                 text,
                 limit=limit_per_resolver,
                 constraints=constraints,
+                text_embedding=text_embedding,
+                text_embedding_model=text_embedding_model,
+                embedding_client=embedding_client,
+                embedding_service=embedding_service,
             )
 
             for hit in hits:

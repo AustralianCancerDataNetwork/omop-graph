@@ -1,6 +1,6 @@
 # Semantic Grounding
 
-Grounding is the process of mapping a raw string to a **Standard OMOP Concept ID** while respecting hierarchical constraints.
+Grounding is the process of mapping a raw string to a **Standard OMOP Concept ID**. It can be run either with hierarchical constraints (`parent_ids`) or in an unconstrained mode.
 
 ## The Standard Anchor Approach
 
@@ -12,13 +12,15 @@ The new **Standard Anchor** algorithm follows these steps:
 2.  **Anchor**: For each candidate, find the nearest **Standard Concept**.
     - If the candidate is already Standard, the hop count is 0.
     - If Non-Standard, follow "Maps to" or "Versioning" edges to find the Standard equivalent.
-3.  **Verify**: Check the `concept_ancestor` table to see if the Standard Anchor is a descendant of the required `parent_ids`.
+3.  **Verify**: If `parent_ids` are provided, check the `concept_ancestor` table to see if the Standard Anchor is a descendant of the required parents.
 4.  **Rank**: Apply the scoring algorithm to the resulting valid Standard Concepts.
 
 ## Grounding Constraints
 You can restrict the search using `GroundingConstraints`:
 - **parent_ids**: Only return concepts that fall under these ancestors (e.g., only search within "Procedures").
-- **search_constraint**: Limit search to specific vocabularies or domains (e.g., "RxNorm" only).
+- **search_constraint**: Limit search to specific vocabularies or domains.
+
+If `parent_ids` is omitted, grounding still resolves to Standard OMOP concepts, but skips ancestor validation.
 
 ```python
 from omop_graph.reasoning.grounding import ground_term, GroundingConstraints
@@ -28,5 +30,13 @@ constraints = GroundingConstraints(
     max_depth=6
 )
 
-results = ground_term(pipeline, kg, "chest pain", constraints)
+results = ground_term(
+    resolver_pipeline=pipeline,
+    kg=kg,
+    text="chest pain",
+    text_embedding=None,
+    text_embedding_model=None,
+    embedding_client=None,
+    constraints=constraints,
+)
 ```

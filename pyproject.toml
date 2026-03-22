@@ -45,7 +45,7 @@ dependencies = [
 
 [project.optional-dependencies]
 emb = [
-  "omop-emb"
+  "omop-emb[postgres]"
 ]
 
 [dependency-groups]
