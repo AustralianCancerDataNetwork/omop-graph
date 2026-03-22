@@ -341,34 +341,6 @@ def _populate_test_data(session):
     _populate_conditions_and_modifiers(session, staging_sets, cancers, avail_types)
 
 
-def _create_performance_indexes(session: Session):
-    """
-    Creates custom indexes to optimize recursive graph traversals.
-    Should be executed after data load to avoid slowing down insertions.
-    """
-    logger.info("Creating performance indexes for Graph Traversal...")
-    
-    # We use raw SQL here because these specific composite indexes 
-    # might not be defined in the ORM model, and we want to ensure they exist 
-    # specifically for your Recursive CTEs.
-    statements = [
-        # Optimize Forward Traversal (Parent -> Child)
-        "CREATE INDEX IF NOT EXISTS idx_concept_rel_1_type ON concept_relationship (concept_id_1, relationship_id);",
-        
-        # Optimize Backward Traversal (Child -> Parent)
-        "CREATE INDEX IF NOT EXISTS idx_concept_rel_2_type ON concept_relationship (concept_id_2, relationship_id);"
-
-        # Optimise not loading all in memory at runtime
-        "CREATE INDEX IF NOT EXISTS idx_ca_descendant ON concept_ancestor (descendant_concept_id);",
-        "CREATE INDEX IF NOT EXISTS idx_ca_ancestor ON concept_ancestor (ancestor_concept_id);"
-    ]
-    
-    logger.info("Executing index creation statements...")
-    for sql in statements:
-        session.execute(sa.text(sql))
-    session.commit()
-
-
 @app.command()
 def omop_cdm(
     add_test_data: Annotated[bool, typer.Option(help="Whether to add synthetic test data after loading Athena data. Omit if not used.")] = False,
@@ -430,8 +402,6 @@ def omop_cdm(
                 loader=loader
             )
             session.commit()
-
-    _create_performance_indexes(session)
 
     try:
        relationship_classification(pred_class_dir)

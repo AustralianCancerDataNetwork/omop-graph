@@ -35,7 +35,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "omop-alchemy>=0.5.7",
+    "omop-alchemy>=0.5.8",
     "orm-loader>=0.3.15",
     "psycopg2-binary>=2.9.11",
     "sqlalchemy>=2.0.45",
