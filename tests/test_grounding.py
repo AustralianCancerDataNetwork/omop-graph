@@ -128,3 +128,25 @@ class TestGrounding:
             f"Got: {prediction.object_id} [{prediction.object_label}]"
         )
 
+    @pytest.mark.parametrize("input_text, expected_concept_id, expected_concept_name", NAMES_CASES)
+    def test_grounding_cancers_named_with_embd(self, input_text, expected_concept_id, expected_concept_name, cancer_annotations, get_omop_implementation, get_embedding_model_instance):
+        omop: OMOPAlchemyImplementation = get_omop_implementation()
+        embedding_client = get_embedding_model_instance(model="omop-embedding-model")
+        expected_concept_id_with_prefix = f"OMOP:{expected_concept_id}"
+        annotation_iterator = omop.annotate_text(
+            text=input_text,
+            text_embedding=None,
+            text_embedding_model="omop-embedding-model",
+            embedding_client=embedding_client,
+            configuration=None,
+            annotations=cancer_annotations,
+        )
+
+        all_predictions = list(annotation_iterator)
+        prediction = all_predictions[0]
+
+        assert prediction.object_id is not None, f"Failed to ground '{input_text}' (returned None)"
+        assert prediction.object_id == expected_concept_id_with_prefix, (
+            f"Expected:{expected_concept_id_with_prefix} [{expected_concept_name}]\n"
+            f"Got: {prediction.object_id} [{prediction.object_label}]"
+        )

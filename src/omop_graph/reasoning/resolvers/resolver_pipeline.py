@@ -106,6 +106,7 @@ class ResolverPipeline:
         text: str,
         limit_per_resolver: Optional[int] = None,
         constraints: Optional[SearchConstraintConcept] = None,
+        **kwargs
     ) -> Generator[CandidateHit, None, None]:
         """
         Execute the pipeline to find candidate concepts for the input text.
@@ -134,6 +135,7 @@ class ResolverPipeline:
                 text,
                 limit=limit_per_resolver,
                 constraints=constraints,
+                **kwargs
             )
 
             for hit in hits:

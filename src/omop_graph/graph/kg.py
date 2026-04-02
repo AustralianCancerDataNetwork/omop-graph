@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from omop_llm import LLMClient
 
 # Local Application Imports
-from ..extensions.emb import MissingExtensionError
+from ..extensions.emb import MissingExtensionError, EmbeddingBackendName
 from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
@@ -69,9 +69,6 @@ from .queries import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Lazy instantiation of embedding backends to avoid hard dependencies and allow optional embedding support
-EmbeddingBackendName = Literal["pgvector", "faiss"]
 
 class KnowledgeGraph(GraphBackend):
     """
@@ -131,16 +128,15 @@ class KnowledgeGraph(GraphBackend):
             
         except ImportError:
             logger.info(
-                "Embedding functionality is not available because the optional 'omop-emb' package is not installed.\n"
-                "Install via: pip install omop-graph[emb|pgvector|faiss] and provide an embedding backend directly or using env variables."
+                "Embedding functionality is not available because the optional 'omop-emb' package is not installed."
             )
             raise MissingExtensionError()
-        except AttributeError as e:
-            logger.info(
-                f"Embedding backend is not configured correctly. Diosabling embedding functionality.\n{e}"
-            )
-            # This disables the functionality
-            raise MissingExtensionError()
+        #except AttributeError as e:
+        #    logger.info(
+        #        f"Embedding backend is not configured correctly. Diosabling embedding functionality.\n{e}"
+        #    )
+        #    # This disables the functionality
+        #    raise MissingExtensionError()
 
     @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:
@@ -648,6 +644,24 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_num_ancestors(concept_ids)).all()
         return {row.concept_id: row.num_ancestors for row in rows}
 
+    def check_search_constraints(self, constraints: SearchConstraintConcept) -> None:
+        if constraints.domains is not None:
+            valid_domains = self.get_all_concept_domain_ids()
+            invalid = [d for d in constraints.domains if d not in valid_domains]
+            if invalid:
+                raise ValueError(
+                    f"Invalid domain constraint(s): {invalid}. "
+                    f"Available domains: {sorted(list(valid_domains))}"
+                )
+
+        if constraints.vocabs is not None:
+            valid_vocabs = self.get_all_concept_vocabulary_ids()
+            invalid = [v for v in constraints.vocabs if v not in valid_vocabs]
+            if invalid:
+                raise ValueError(
+                    f"Invalid vocabulary constraint(s): {invalid}. "
+                    f"Available vocabularies: {sorted(list(valid_vocabs))}"
+                )
 
     def clear_caches(self) -> None:
         """

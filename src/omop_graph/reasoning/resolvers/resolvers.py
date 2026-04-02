@@ -13,14 +13,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Optional, Tuple
+import logging
+import numpy as np
 
 from omop_graph.graph.constraints import SearchConstraintConcept
-from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatch, LabelMatchKind, LabelMatchGroupView
+from omop_graph.extensions.emb import get_neareast_concepts, EmbeddingMetricType
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
 
-import logging
 logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
@@ -74,10 +77,11 @@ class CandidateResolver:
 
     def get_matches(
         self,
-        kg: "KnowledgeGraph",
+        kg: KnowledgeGraph,
         text: str,
         constraints: Optional[SearchConstraintConcept] = None,
         sort: bool = False,
+        **kwargs
     ) -> Tuple[LabelMatch, ...]:
         """
         Execute the search strategy against the Knowledge Graph.
@@ -90,6 +94,8 @@ class CandidateResolver:
             The input text to search for.
         constraints : SearchConstraintConcept, optional
             Filters for domain/vocabulary.
+        sort : bool, default False
+            Whether to sort LabelMatch results by their internal relevance ranking.
 
         Returns
         -------
@@ -108,10 +114,11 @@ class CandidateResolver:
 
     def resolve(
         self,
-        kg: "KnowledgeGraph",
+        kg: KnowledgeGraph,
         text: str,
         constraints: Optional[SearchConstraintConcept] = None,
         limit: Optional[int] = None,
+        **kwargs
     ) -> Iterable[CandidateHit]:
         """
         Public API to find and format candidates.
@@ -133,7 +140,7 @@ class CandidateResolver:
             The formatted candidate hits.
         """
         logger.debug(f"Running resolver {type(self).__name__} for text '{text}' with constraints {constraints} and limit {limit}.")
-        matches = self.get_matches(kg, text, constraints=constraints)
+        matches = self.get_matches(kg, text, constraints=constraints, **kwargs)
         hits = [
             CandidateHit(
                 concept_id=m.concept_id,
@@ -199,6 +206,59 @@ class PartialSynonymResolver(CandidateResolver):
     def __init__(self) -> None:
         super().__init__(match_kind=LabelMatchKind.PARTIAL, synonym=True)
 
+class EmbeddingResolver(CandidateResolver):
+    """
+    Strategy: Retrieve nearest concepts from stored concept embeddings.
+    Currently only for synonym=False as seamntic similarity should be preserved
+    in the primary name. Could be extended to synonym=True if needed.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(match_kind=LabelMatchKind.EMBEDDING, synonym=False)
+
+    
+    def get_matches(
+        self,
+        kg: KnowledgeGraph,
+        text: str,
+        constraints: Optional[SearchConstraintConcept] = None,
+        text_embedding: Optional[np.ndarray] = None,
+        text_embedding_model: Optional[str] = None,
+        metric_type: Optional[EmbeddingMetricType] = None,
+        sort: bool = False,
+    ) -> Tuple[LabelMatch, ...]:
+        
+        with kg.session_factory() as session:
+            matches = get_neareast_concepts(
+                session=session,
+                kg=kg,
+                text_embedding=text_embedding,
+                text_embedding_model=text_embedding_model,
+                concept_filter=constraints,
+                metric_type=metric_type
+            )
+            if matches is None:
+                return ()
+
+            concept_views = kg.concept_views(
+                concept_ids=tuple(matches.keys())
+            )
+            label_matches = tuple(
+                LabelMatch(
+                    input_label=text,
+                    matched_label=cv.concept_name,
+                    concept_id=int(cv.concept_id),
+                    match_kind=LabelMatchKind.EMBEDDING,
+                    is_standard=bool(cv.standard_concept),
+                    is_active=cv.invalid_reason is None,
+                )
+                for cv in concept_views
+            )
+
+            if sort:
+                label_matches = sorted(label_matches)
+            return tuple(LabelMatchGroupView.from_matches(label_matches))
+
 
 # Default sequence of resolvers to be used in a pipeline
 ALL_RESOLVERS = (
@@ -208,4 +268,5 @@ ALL_RESOLVERS = (
     PartialSynonymResolver(),
     FullTextResolver(),
     FullTextSynonymResolver(),
+    EmbeddingResolver()
 )

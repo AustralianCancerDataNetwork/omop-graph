@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple
 
 from sqlalchemy.sql import Select
 
 from omop_alchemy.cdm.model.vocabulary import Concept
 
-if TYPE_CHECKING:
-    from omop_graph.graph.kg import KnowledgeGraph
 
 
 @dataclass(frozen=True)
@@ -65,46 +63,3 @@ class SearchConstraintConcept:
             query = query.where(Concept.standard_concept.in_(["S", "C"]))
             
         return query
-
-    def check(self, kg: "KnowledgeGraph") -> None:
-        """
-        Validate that the specified constraints exist within the Knowledge Graph.
-
-        This method checks if the requested domains and vocabularies are actually
-        present in the connected database.
-
-        Parameters
-        ----------
-        kg : KnowledgeGraph
-            The Knowledge Graph instance to validate against.
-
-        Raises
-        ------
-        TypeError
-            If the provided `kg` is not an instance of `KnowledgeGraph`.
-        ValueError
-            If any specified domain or vocabulary ID is invalid/missing in the DB.
-        """
-        # Dynamic import to avoid circular dependency
-        from omop_graph.graph.kg import KnowledgeGraph
-        
-        if not isinstance(kg, KnowledgeGraph):
-            raise TypeError("The 'kg' argument must be an instance of KnowledgeGraph.")
-
-        if self.domains is not None:
-            valid_domains = kg.get_all_concept_domain_ids()
-            invalid = [d for d in self.domains if d not in valid_domains]
-            if invalid:
-                raise ValueError(
-                    f"Invalid domain constraint(s): {invalid}. "
-                    f"Available domains: {sorted(list(valid_domains))}"
-                )
-
-        if self.vocabs is not None:
-            valid_vocabs = kg.get_all_concept_vocabulary_ids()
-            invalid = [v for v in self.vocabs if v not in valid_vocabs]
-            if invalid:
-                raise ValueError(
-                    f"Invalid vocabulary constraint(s): {invalid}. "
-                    f"Available vocabularies: {sorted(list(valid_vocabs))}"
-                )

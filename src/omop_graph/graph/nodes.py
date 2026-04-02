@@ -149,9 +149,11 @@ class LabelMatchKind(Enum):
 
     Notes
     -----
+    Supported match kinds include:
     - EXACT: Direct case-insensitive match on concept_name.
     - FTS: Full-text search match (fuzzy).
     - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
+    - EMBEDDING: Match based on vector similarity.
 
     It currently does not distinguish between synonym vs. concept_name matches as they are recognised as identical.
     Could be extended in the future if needed.
@@ -160,6 +162,7 @@ class LabelMatchKind(Enum):
     EXACT = 0
     FTS = 1
     PARTIAL = 2
+    EMBEDDING = 3
 
     def __lt__(self, other: "LabelMatchKind") -> bool:
         return self.value < other.value
@@ -202,6 +205,7 @@ class LabelMatch:
             LabelMatchKind.EXACT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>exact</span>",
             LabelMatchKind.FTS: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
             LabelMatchKind.PARTIAL: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>partial</span>",
+            LabelMatchKind.EMBEDDING: "<span style='background:#a72; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>embedding</span>",
         }
         kind_badge = kind_badges[self.match_kind]
 
@@ -244,7 +248,7 @@ def label_match_rank(m: LabelMatch) -> Tuple[bool, bool, int, int]:
     Priority:
     1. Standard Concept (True < False)
     2. Active Concept (True < False)
-    3. Match Kind (Direct < Synonym < Fulltext)
+    3. Match Kind (Direct < Synonym < Fulltext < Embedding)
     4. Label Length (Shorter < Longer)
 
     Parameters
@@ -341,6 +345,8 @@ class LabelMatchGroupView:
                 reasons.append("synonym match")
             elif best.match_kind is LabelMatchKind.FTS:
                 reasons.append("fulltext match")
+            elif best.match_kind is LabelMatchKind.EMBEDDING:
+                reasons.append("embedding match")
             else:
                 reasons.append("unknown match")
 
