@@ -27,3 +27,6 @@ Explore the grounding pipeline used by clinical NLP tools.
 
 ### Interactive Exploration
 `omop-graph` includes built-in HTML renderers for Jupyter Notebooks, allowing you to visualize concepts and relationship summaries instantly.
+
+### Testing
+- [Testing](usage/testing.md): How test configuration works, what is covered, and how to set up environment variables for local test runs.

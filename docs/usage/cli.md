@@ -42,35 +42,6 @@ omop-graph omop-cdm --help
 
 ---
 
-## Optional: `add-embeddings` 
-
-!!! warning
-    
-    This method is only exposed for convenience reasons to populate the concept embeddings if the optional dependency `[emb]` was used during the [installation process](installation.md).
-
-The method is directly imported from [`omop-emb`](https://australiancancerdatanetwork.github.io/omop-emb/). See the [documentation](https://australiancancerdatanetwork.github.io/omop-emb/usage/cli/) for more information.
-
-### Prerequisites
-- **Database**: Postgres implementation of OMOP CDM. See [`omop-cdm`](#omop-cdm) for more details.
-
-### Usage
-```bash
-omop-emb add-embeddings --api-base <URL> --api-key <KEY> [OPTIONS]
-```
-where `[OPTIONS]` are optional arguments that can be specified as described below.
-
-### Command Options
-
-| Option | Short | Type | Default | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| **`--api-base`** | | `String` | **Required** | Base URL for the embedding API service. |
-| **`--api-key`** | | `String` | **Required** | API key for the embedding API provider. |
-| **`--batch-size`** | `-b` | `Integer` | `100` | Number of concepts to process in each chunk. |
-| **`--model`** | `-m` | `String` | `text-embedding-3-small` | Name of the embedding model to use for generating vectors. |
-| **`--num-embeddings`** | `-n` | `Integer` | `None` | Limit the number of concepts processed (useful for testing). |
----
-
-
 ## `relationship-classification` {: #relationship-classification }
 
 This command ingests pre-defined relationship classifications and mappings into the database. It categorizes standard OMOP relationships into semantic groups (e.g., Hierarchical, Lateral, Mapping) to enable more intelligent graph reasoning.

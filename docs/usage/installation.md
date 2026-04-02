@@ -1,22 +1,17 @@
 # Installation: Core
+
+!!! note
+
+    The dependency on uv is not strictly enforced and can be replaced using `pip install omop-graph`.
+    ```
+
 The package can be regularly installed using `pip` and `uv`:
 
 ```bash
 uv pip install omop-graph
 ```
 
-!!! note
-
-    The dependency on uv is temporarily. The dependencies `omop-emb` (see below) will be eventually hosted on PyPI, which
-    allows the installation using regular pip. Furthermore, `omop-alchemy` currently depends on a feature branch with PR imminent.
-    See `pyproject.toml` for details:
-    ```toml
-    [tool.uv.sources]
-    omop-alchemy = { git = "https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy.git", branch = "spires" }
-    omop-emb = { git = "https://github.com/AustralianCancerDataNetwork/omop-emb.git", branch = "main" }
-    ```
-
-## Installation: Embedding and RAG support (optional, recommended)
+## Installation: Embedding and RAG support (optional, recommended) {:#embedding-rag}
 
 !!! tip
     This is a recommended setting and improves the functionality of the library detrimental.

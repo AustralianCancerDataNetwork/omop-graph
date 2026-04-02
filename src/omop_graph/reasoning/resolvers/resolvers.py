@@ -132,7 +132,7 @@ class CandidateResolver:
         Iterable[CandidateHit]
             The formatted candidate hits.
         """
-        logger.info(f"Running resolver {type(self).__name__} for text '{text}' with constraints {constraints} and limit {limit}.")
+        logger.debug(f"Running resolver {type(self).__name__} for text '{text}' with constraints {constraints} and limit {limit}.")
         matches = self.get_matches(kg, text, constraints=constraints)
         hits = [
             CandidateHit(

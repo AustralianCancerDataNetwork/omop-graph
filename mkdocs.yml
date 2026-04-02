@@ -32,6 +32,7 @@ nav:
   - Getting Started:
       - Installation: usage/installation.md
       - "CLI Reference": usage/cli.md
+      - Testing: usage/testing.md
   - Core Components:
       - "Knowledge Graph": graph/kg.md
       - "Relationships": graph/edges.md

@@ -21,6 +21,11 @@ from sqlalchemy import and_, case, exists, func, literal, select
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
+from omop_alchemy.cdm.handlers.fulltext import (
+    CONCEPT_NAME_TSVECTOR_COLUMN,
+    CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN,
+    FullTextError
+)
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
     Concept_Ancestor,
@@ -251,23 +256,39 @@ def q_concept_name_fulltext(
     synonym: bool = False
 ) -> Select:
     """
-    Query for concept names using PostgreSQL full-text search via pre-computed 
-    tsvector columns and GIN indices.
+    Query for concept names using PostgreSQL full-text search via optional
+    pre-computed tsvector columns and GIN indices.
 
-    1. Normalizing the `concept_name`/`concept_synonym_name` into a tsvector (tokenizing, 
-    stemming, and removing English stop words).
-    2. Converting the input 'term' into a plain tsquery (AND-based search).
-    3. Using the '@@' match operator to find intersections between the vector and query.
-    4. Ranking results by relevance using 'ts_rank' to ensure the closest matches 
-    appear first.
+    This query only works when the stored tsvector columns have been installed
+    and registered in the ORM metadata via ``omop-maint fulltext install`` and
+    ``omop-maint fulltext populate``. If those columns are absent, this raises
+    ``FullTextError`` instead of falling back to on-demand tsvector
+    generation.
+
+    Parameters
+    ----------
+    term : str
+        The search term to match.
+    search_constraint : SearchConstraintConcept, optional
+        Additional filters (domain, vocab).
+    synonym : bool, optional
+        Whether to search in synonyms instead of concept names.
 
     """
     if synonym:
-        vector = Concept_Synonym.concept_synonym_name_tsvector
+        vector = Concept_Synonym.__table__.c.get(CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN)
         stmt = q_concept_synonym()
     else:
-        vector = Concept.concept_name_tsvector
+        vector = Concept.__table__.c.get(CONCEPT_NAME_TSVECTOR_COLUMN)
         stmt = q_concept_name()
+
+    if vector is None:
+        raise FullTextError(
+            "Full-text search is disabled because the optional OMOP Alchemy "
+            "tsvector columns are not registered on the current ORM metadata. "
+            "Run `omop-maint fulltext install` and `omop-maint fulltext populate` "
+            "to enable FTS, or skip LabelMatchKind.FTS resolvers."
+        )
         
     query = func.plainto_tsquery("english", term)
     

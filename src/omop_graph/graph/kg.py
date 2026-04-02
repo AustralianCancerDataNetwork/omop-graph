@@ -21,11 +21,14 @@ import logging
 import re
 from datetime import date
 from functools import lru_cache
-from typing import Dict, Optional, Tuple, Union, Literal, Generator
+from typing import Dict, Optional, Tuple, Union, Literal, Generator, TYPE_CHECKING
 
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session, sessionmaker
+from omop_alchemy.cdm.handlers.fulltext import FullTextError
 
+if TYPE_CHECKING:
+    from omop_llm import LLMClient
 
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError
@@ -67,19 +70,8 @@ from .queries import (
 
 logger = logging.getLogger(__name__)
 
-
-def _pred_id(pred: Union[Predicate, str, None]) -> Optional[str]:
-    """
-    Helper to extract the relationship ID string from various input types.
-    """
-    if pred is None:
-        return None
-    if isinstance(pred, Predicate):
-        return pred.relationship_id
-    if isinstance(pred, str):
-        return pred
-    raise TypeError(f"Unsupported predicate type: {type(pred)}")
-
+# Lazy instantiation of embedding backends to avoid hard dependencies and allow optional embedding support
+EmbeddingBackendName = Literal["pgvector", "faiss"]
 
 class KnowledgeGraph(GraphBackend):
     """
@@ -93,26 +85,62 @@ class KnowledgeGraph(GraphBackend):
     session_factory : sessionmaker
         The SQLAlchemy sessionmaker factory capable of creating separate sessions for 
         each database access.
+    emb_backend : EmbeddingBackendName, optional
+        The name of the embedding backend to use. Required for embedding
+        functionality. Embedding functionality is only possible if the 'omop-emb' extension is installed (`pip install omop-graph[emb]`)
+    emb_faiss_index_dir : str, optional
+        Optional base directory for FAISS backend storage. Only relevant if using the FAISS embedding backend.
+    emb_client : LLMClient, optional
+        An optional client for generating embeddings. Required if using any embedding functionality. Only relevant if the
+        'omop-emb' extension is installed (`pip install omop-graph[emb]`). Can also be specified per-method for embedding operations, in which case the method-level client will take precedence over this default client.
     """
 
-    def __init__(self, session_factory: sessionmaker):
+    def __init__(
+        self, 
+        session_factory: sessionmaker,
+        emb_backend: Optional[EmbeddingBackendName] = None,
+        emb_faiss_index_dir: Optional[str] = None,
+        emb_client: Optional[LLMClient] = None,
+    ):
         self.session_factory = session_factory
 
         # Populate the relationshipcache 
         with self.session_factory() as session:
             RelationshipCache.load(session)
 
+        # Embedding-specific private args
+        self._emb_backend = emb_backend
+        self._emb_faiss_dir = emb_faiss_index_dir
+        self._emb_client = emb_client
+        self._emb = None
+
     @property
     def emb(self):
         """Namespace for all embedding operations."""
+        if self._emb is not None:
+            return self._emb
+            
         try:
-            from omop_emb.accessor import EmbeddingAccessor
-            return EmbeddingAccessor()
-        except ImportError:
-            raise MissingExtensionError(
-                "Accessing '.emb' requires the 'omop-emb' package. "
-                "Install via: pip install omop-graph[embeddings]"
+            from omop_emb.interface import EmbeddingInterface
+            self._emb = EmbeddingInterface.from_backend_name(
+                backend_name=self._emb_backend,
+                faiss_base_dir=self._emb_faiss_dir,
+                embedding_client=self._emb_client
             )
+            return self._emb
+            
+        except ImportError:
+            logger.info(
+                "Embedding functionality is not available because the optional 'omop-emb' package is not installed.\n"
+                "Install via: pip install omop-graph[emb|pgvector|faiss] and provide an embedding backend directly or using env variables."
+            )
+            raise MissingExtensionError()
+        except AttributeError as e:
+            logger.info(
+                f"Embedding backend is not configured correctly. Diosabling embedding functionality.\n{e}"
+            )
+            # This disables the functionality
+            raise MissingExtensionError()
 
     @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:
@@ -216,7 +244,18 @@ class KnowledgeGraph(GraphBackend):
             fn = q_concept_name_fulltext
         else:
             raise ValueError(f"Unsupported search mode: {match_kind}")
-        cn = fn(input_label, search_constraint=search_constraint, synonym=synonym)
+        try:
+            cn = fn(input_label, search_constraint=search_constraint, synonym=synonym)
+        except FullTextError:
+            if match_kind == LabelMatchKind.FTS:
+                logger.info(
+                    "Skipping full-text concept lookup because the optional OMOP "
+                    "Alchemy tsvector columns are not available. Run `omop-maint "
+                    "fulltext install` and `omop-maint fulltext populate` to enable "
+                    "this resolver."
+                )
+                return LabelMatchGroupView.from_matches(())
+            raise
 
         with self.session_factory() as session:
             matches = tuple(

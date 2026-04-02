@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Literal, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from dotenv import load_dotenv
@@ -864,6 +864,13 @@ class OMOPAlchemyImplementation(
         An existing resource object.
     kg : KnowledgeGraph | None, optional
         An existing Knowledge Graph instance. If None, one is created.
+    kg_emb_backend : Literal['pgvector', 'faiss'], optional
+        Optional embedding backend to configure on the KnowledgeGraph if `kg` is not provided and embedding support is desired and enabled.
+        Environment variable `OMOP_EMB_BACKEND` can also be set to configure this globally.
+    kg_emb_faiss_index_dir : str | None, optional
+        Optional base directory for FAISS indexes if using the FAISS embedding backend.
+        Environment variable `OMOP_EMB_FAISS_INDEX_DIR` can also be set to configure this globally. Defaults to 
+        a temporary directory if not specified and FAISS backend is used.
     """
 
     def __init__(
@@ -871,6 +878,8 @@ class OMOPAlchemyImplementation(
         engine_string: str | URL | None = None,
         resource: OMOPOntologyResource | None = None,
         kg: KnowledgeGraph | None = None,
+        kg_emb_backend: Optional[Literal["pgvector", "faiss"]] = None,
+        kg_emb_faiss_index_dir: Optional[str] = None,
         **kwargs,
     ):
         if engine_string is not None:
@@ -890,13 +899,17 @@ class OMOPAlchemyImplementation(
         self._connection = None
 
         if kg is None:
-            kg = KnowledgeGraph(self._session_factory)
+            kg = KnowledgeGraph(
+                session_factory=self._session_factory,
+                emb_backend=kg_emb_backend,
+                emb_faiss_index_dir=kg_emb_faiss_index_dir,
+            )
             bind_default_renderers(kg)
 
         try:
             kg.emb.initialise_tables(self.engine)
-        except MissingExtensionError:
-            logger.info("Embeddings not available. Install module with [emb] for optional embeddings.")
+        except (MissingExtensionError, AttributeError):
+            logger.info("Embeddings not available. Install module with [emb] and set kg_emb_backend to enable optional embeddings.")
         
         super().__init__(kg=kg, **kwargs)
 

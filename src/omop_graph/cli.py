@@ -344,7 +344,9 @@ def _populate_test_data(session):
 @app.command()
 def omop_cdm(
     add_test_data: Annotated[bool, typer.Option(help="Whether to add synthetic test data after loading Athena data. Omit if not used.")] = False,
-    chunk_size: Annotated[int, typer.Option("--chunk-size", "-c", help="Number of rows to process in each chunk when loading large tables. Adjust based on your system's memory capacity.")] = 5000,
+    chunk_size: Annotated[int, typer.Option(
+        "--chunk-size", "-c", 
+        help="Number of rows to process in each chunk when loading large tables with fallback pandas loader.")] = 5000,
     pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
     verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
@@ -411,45 +413,6 @@ def omop_cdm(
 
     if add_test_data:
         _populate_test_data(session)
-
-
-@app.command()
-def add_embeddings(
-    api_base: Annotated[str, typer.Option(
-        "--api-base",
-        help="Base URL for the API to use for generating embeddings.",
-    )],
-    api_key: Annotated[str, typer.Option(
-        "--api-key",
-        help="API key for the embedding API.")],
-    batch_size: Annotated[int, typer.Option(
-        "--batch-size", "-b",
-        help="Batch size to use when generating and inserting embeddings. Adjust based on your system's memory capacity.")] = 100,
-    model: Annotated[str, typer.Option(
-        "--model", "-m",
-        help="Name of the embedding model to use for generating concept embeddings (e.g., 'text-embedding-3-small'). If not provided, embeddings will not be generated.")] = "text-embedding-3-small",
-    num_embeddings: Annotated[Optional[int], typer.Option(
-        "--num-embeddings", "-n",
-        help="If set, limits the number of concepts for which embeddings are generated. Useful for testing and development to speed up the embedding generation step.")] = None,
-    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
-):
-    """
-    Wrapper command to add embeddings to the database. Provided in omop-emb package if loaded during install
-    """
-    configure_logging_level(verbosity)
-    try:
-        from omop_emb.cli import add_embeddings as omop_emb_ae
-        return omop_emb_ae(
-            api_base=api_base,
-            api_key=api_key,
-            batch_size=batch_size,
-            model=model,
-            num_embeddings=num_embeddings
-        )
-    except ImportError:
-        logger.error("Embedding CLI not available. Please install the package with [emb] to use this feature.")
-        raise typer.Exit(code=1)
-
 
 @app.command()
 def relationship_classification(

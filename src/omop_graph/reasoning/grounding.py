@@ -14,10 +14,14 @@ the full grounding pipeline:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Optional, Tuple, Sequence, Mapping
 
 import numpy as np
+from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from omop_emb import EmbeddingConceptFilter, MetricType, EmbeddingInterface
 
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
 from omop_graph.graph.constraints import SearchConstraintConcept
@@ -71,6 +75,7 @@ def ground_term(
     embedding_client: Optional["LLMClient"],
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
+    metric_type: Optional[MetricType] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
@@ -93,6 +98,8 @@ def ground_term(
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
         Limit for the number of candidates returned. If None, returns all candidates.
+    metric_type : MetricType, optional
+        The similarity or distance metric to use for optional embedding-based scoring. This should be compatible with the index type used by the database for RAG retrieval. Must be provided if `text_embedding` and `text_embedding_model` are provided for RAG retrieval.
 
     Returns
     -------
@@ -142,69 +149,14 @@ def ground_term(
         logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
         return []
 
-    # Optional: Semantic Scoring (Embeddings)
-    try:
-        with kg.session_factory() as session:
-            similarity_scores_dict = {}
-            if (
-                text_embedding_model is not None and 
-                kg.emb.is_model_registered(session=session, model_name=text_embedding_model) and
-                text_embedding is not None
-            ):
-                assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for RAG retrieval."
-                assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."
-                similarity_scores_dict = kg.emb.get_similarities(
-                    session=session,
-                    embedding_model_name=text_embedding_model,
-                    text_embedding=text_embedding.tolist()[0],
-                    concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
-                )
-
-            if not similarity_scores_dict:
-                # Either the filtering resulted in no concepts or the embedding model is not registered. 
-                if text_embedding_model is not None and kg.emb.is_model_registered(
-                    session=session,
-                    model_name=text_embedding_model
-                ):
-                    logger.warning(
-                        f"Filtering resulted in no concepts with available embeddings for model '{text_embedding_model}'.")
-                
-                # Fallback (but just debug)
-                if (
-                    text_embedding_model is not None and
-                    embedding_client is not None and 
-                    text_embedding is not None
-                ):
-                    logger.debug("Falling back to embedding client for similarity scores (DEBUG ONLY).")
-
-                    sc_names = tuple([sc.concept_name for sc in unique_standard_concepts])
-                    standard_concept_embeddings = embedding_client.embeddings(sc_names)
-                    assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for fallback similarity scoring."
-                    assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."            
-                    similarity_scores = embedding_client.cosine_similarity(
-                        text_embedding, standard_concept_embeddings
-                    )[0]
-
-                    # Store them in the DB for faster acess in the future
-                    kg.emb.add_to_db(
-                        embeddings=standard_concept_embeddings,
-                        concept_ids=tuple([sc.concept_id for sc in unique_standard_concepts]),
-                        session=session,
-                        model=text_embedding_model
-                    )
-
-                else:
-                    if text_embedding_model is not None:
-                        logger.warning((
-                            f"Embedding model '{text_embedding_model}' is not registered in the KG. No similarity scores will be available. "
-                            f"Fallback to embedding client is not possible (embedding_client: {embedding_client is not None}, text_embedding: {text_embedding is not None}).")
-                        )
-                    similarity_scores = None
-            else:
-                similarity_scores = np.array(list(similarity_scores_dict.values()))
-    except MissingExtensionError:
-        logger.info("Embedding-based grounding not available. Install this package with [emb] option to enable this functionality.")
-        similarity_scores = None
+    similarity_scores = _optional_embedding_scoring(
+        kg=kg,
+        unique_standard_concepts=unique_standard_concepts,
+        text_embedding=text_embedding,
+        text_embedding_model=text_embedding_model,
+        embedding_client=embedding_client,
+        metric_type=metric_type,
+    )
 
     # Scoring
     ranked_standard_concepts = score_standard_concepts(
@@ -217,6 +169,148 @@ def ground_term(
     ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)
     return ranked_standard_concepts[:max_candidates] if max_candidates is not None else ranked_standard_concepts
 
+
+def _optional_embedding_scoring(
+    kg: KnowledgeGraph,
+    unique_standard_concepts: Sequence[StandardConcept],
+    text_embedding: Optional[np.ndarray],
+    text_embedding_model: Optional[str],
+    embedding_client: Optional["LLMClient"],
+    metric_type: Optional[MetricType],
+) -> Optional[np.ndarray]:
+    """ Retrieve similarity scores for the unique standard concepts using the provided text embedding and model.
+    Fallback to using the embedding client to compute similarity scores if retrieval from the KG is not possible. Returns an array of similarity scores corresponding to the unique standard concepts, or None if no similarity scores could be obtained.
+    
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The Knowledge Graph instance.
+    unique_standard_concepts : Sequence[StandardConcept]
+        The unique standard concepts identified for the candidate.
+    text_embedding : np.ndarray, optional
+        The embedding vector for the input text. Expected shape is (1, dimension) as we only have one text input (query).
+        Used for RAG retrieval of similarity scores from the database.
+    text_embedding_model : str, optional
+        The name of the embedding model to use.
+    embedding_client : LLMClient, optional
+        The client for retrieving embeddings.
+    metric_type : MetricType, optional
+        The type of similarity metric to use.
+    """
+    
+    try:
+        embedding_interface = kg.emb
+    except MissingExtensionError:
+        return None
+    
+    similarity_scores = None
+    with kg.session_factory() as session:
+        similarity_scores_dict = _retrieve_embeddings_for_concepts(
+            session=session,
+            text_embedding_model=text_embedding_model,
+            text_embedding=text_embedding,
+            unique_standard_concepts=unique_standard_concepts,
+            embedding_interface=embedding_interface,
+            metric_type=metric_type
+        )
+
+        if not similarity_scores_dict:
+            if (
+                text_embedding_model is not None and
+                embedding_client is not None and 
+                text_embedding is not None
+            ):
+                logger.debug("Falling back to embedding client for similarity scores (DEBUG ONLY).")
+
+                sc_names = tuple([sc.concept_name for sc in unique_standard_concepts])
+                standard_concept_embeddings = embedding_client.embeddings(sc_names)
+                assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for fallback similarity scoring."
+                assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."            
+                
+                embedding_interface.add_to_db(
+                    embeddings=standard_concept_embeddings,
+                    concept_ids=tuple([sc.concept_id for sc in unique_standard_concepts]),
+                    session=session,
+                    model=text_embedding_model
+                )
+
+                similarity_scores_dict = _retrieve_embeddings_for_concepts(
+                    session=session,
+                    text_embedding_model=text_embedding_model,
+                    text_embedding=text_embedding,
+                    unique_standard_concepts=unique_standard_concepts,
+                    embedding_interface=embedding_interface,
+                    metric_type=metric_type
+                )
+
+                if not similarity_scores_dict:
+                    logger.warning("Failed to retrieve similarity scores even after fallback embedding client computation.")
+        else:
+            similarity_scores = np.array(list(similarity_scores_dict.values()))
+
+        return similarity_scores
+
+def _retrieve_embeddings_for_concepts(
+    session: Session,
+    text_embedding_model: Optional[str],
+    text_embedding: Optional[np.ndarray],
+    unique_standard_concepts: Sequence[StandardConcept],
+    embedding_interface: EmbeddingInterface,
+    metric_type: Optional[MetricType]
+) -> Optional[Mapping[int, float]]:
+    """Tries to retrieve similarity scores for the unique standard concepts from the KG using RAG retrieval based on the provided text embedding and model. 
+    
+    Parameters
+    ----------
+    session : Session
+        The database session to use for retrieval.
+    text_embedding_model : Optional[str]
+        The name of the embedding model to use for retrieval. Must be provided to attempt retrieval.
+    text_embedding : Optional[np.ndarray]
+        The embedding vector for the input text to use for retrieval. Must be provided to attempt retrieval
+    unique_standard_concepts : Sequence[StandardConcept]
+        The unique standard concepts identified for the candidate, for which we want to retrieve similarity scores.
+    embedding_interface : EmbeddingInterface
+        The embedding interface to use for retrieval.
+    metric_type : Optional[MetricType]
+        The type of similarity metric to use for retrieval. Must be provided to attempt retrieval.
+    
+    Returns
+    -------
+    Optional[Mapping[int, float]]
+        A dictionary mapping concept_ids of the unique standard concepts to their similarity score with the input text
+        retrieved from the KG. Returns None if retrieval was not attempted due to missing parameters or if no similarity scores could be retrieved.
+    """
+    
+    if text_embedding_model is None:
+        logger.info("No text embedding model provided, skipping embedding-based similarity scoring.")
+        return None
+    if not embedding_interface.is_model_registered(session=session, model_name=text_embedding_model):
+        logger.info(f"Text embedding model '{text_embedding_model}' is not registered in the KG, skipping embedding-based similarity scoring.")
+        return None
+    if text_embedding is None:
+        logger.info("No text embedding provided, skipping embedding-based similarity scoring.")
+        return None
+    if metric_type is None:
+        logger.info("No metric type provided, skipping embedding-based similarity scoring.")
+        return None
+
+    assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for RAG retrieval."
+    assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1, i.e. having a query dimension of 1 for RAG retrieval."
+
+    concept_filter = EmbeddingConceptFilter(
+        concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
+    )
+    similarity_scores_tuple = embedding_interface.get_nearest_concepts(
+        session=session,
+        model_name=text_embedding_model,
+        query_embedding=text_embedding.tolist()[0],
+        concept_filter=concept_filter,
+        metric_type=metric_type
+    )
+
+    assert len(similarity_scores_tuple) == 1, "Expected a single set of similarity scores for the query embedding given the text embedding shape was (1, embedding_dim)."
+    return similarity_scores_tuple[0] 
 
 def find_standard_concepts(
     kg: KnowledgeGraph,

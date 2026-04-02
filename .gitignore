@@ -13,3 +13,4 @@ wheels/
 docs/backup/
 docs/omop_relationships.csv
 .vscode/
+.env
