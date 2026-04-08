@@ -32,7 +32,12 @@ from omop_graph.reasoning.resolvers import (
     CandidateHit,
     ResolverPipeline,
 )
-from omop_graph.extensions.emb import semantic_similarity, EmbeddingMetricType, get_embedding_interface
+from omop_graph.extensions.emb import (
+    EmbeddingIndexType,
+    EmbeddingMetricType,
+    get_embedding_interface,
+    semantic_similarity,
+)
 from omop_llm import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -72,6 +77,7 @@ def ground_term(
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
     metric_type: Optional[EmbeddingMetricType] = None,
+    index_type: Optional[EmbeddingIndexType] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
@@ -115,14 +121,29 @@ def ground_term(
 
     # Calculate the text embedding on demand if possible
     embedding_interface = get_embedding_interface(kg)
-    if embedding_interface is not None and text_embedding is None:
-        assert embedding_client is not None, "Embedding client must be provided if embedding interface is available in the KG."
-        text_embedding = embedding_interface.embed_texts(
-            texts=(text,),
-            embedding_client=embedding_client,
-        )
+    if (
+        embedding_interface is not None and 
+        text_embedding is None
+    ):
+        if embedding_client is None:
+            logger.info("Embedding interface is available but no embedding_client provided. Skipping embedding-based scoring.")
+        else:
+            text_embedding = embedding_interface.embed_texts(
+                texts=(text,),
+                embedding_client=embedding_client,
+            )
 
-    resolved = list(resolver_pipeline.resolve(kg, text, constraints=search_constraints, text_embedding=text_embedding, text_embedding_model=text_embedding_model, metric_type=metric_type))
+    resolved = list(
+        resolver_pipeline.resolve(
+            kg,
+            text,
+            constraints=search_constraints,
+            text_embedding=text_embedding,
+            text_embedding_model=text_embedding_model,
+            metric_type=metric_type,
+            index_type=index_type,
+        )
+    )
 
     # Anchoring
     for hit in resolved:
@@ -162,6 +183,7 @@ def ground_term(
         text_embedding_model=text_embedding_model,
         embedding_client=embedding_client,
         metric_type=metric_type,
+        index_type=index_type,
     )
 
     # Scoring

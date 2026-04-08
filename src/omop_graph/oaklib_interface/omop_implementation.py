@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Literal, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from dotenv import load_dotenv
@@ -32,7 +32,7 @@ from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.model import Concept, Concept_Relationship
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
-from omop_graph.extensions.emb import MissingExtensionError
+from omop_graph.extensions.emb import EmbeddingBackendType, MissingExtensionError
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -864,7 +864,7 @@ class OMOPAlchemyImplementation(
         An existing resource object.
     kg : KnowledgeGraph | None, optional
         An existing Knowledge Graph instance. If None, one is created.
-    kg_emb_backend : Literal['pgvector', 'faiss'], optional
+    kg_emb_backend : EmbeddingBackendName, optional
         Optional embedding backend to configure on the KnowledgeGraph if `kg` is not provided and embedding support is desired and enabled.
         Environment variable `OMOP_EMB_BACKEND` can also be set to configure this globally.
     kg_emb_faiss_index_dir : str | None, optional
@@ -878,8 +878,8 @@ class OMOPAlchemyImplementation(
         engine_string: str | URL | None = None,
         resource: OMOPOntologyResource | None = None,
         kg: KnowledgeGraph | None = None,
-        kg_emb_backend: Optional[Literal["pgvector", "faiss"]] = None,
-        kg_emb_faiss_index_dir: Optional[str] = None,
+        kg_emb_backend: Optional[EmbeddingBackendType] = None,
+        kg_emb_base_storage_dir: Optional[str] = None,
         **kwargs,
     ):
         if engine_string is not None:
@@ -902,7 +902,7 @@ class OMOPAlchemyImplementation(
             kg = KnowledgeGraph(
                 session_factory=self._session_factory,
                 emb_backend=kg_emb_backend,
-                emb_faiss_index_dir=kg_emb_faiss_index_dir,
+                emb_base_storage_dir=kg_emb_base_storage_dir,
             )
             bind_default_renderers(kg)
 

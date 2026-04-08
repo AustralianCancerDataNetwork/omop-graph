@@ -19,7 +19,12 @@ import numpy as np
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch, LabelMatchKind, LabelMatchGroupView
-from omop_graph.extensions.emb import get_neareast_concepts, EmbeddingMetricType
+from omop_graph.extensions.emb import (
+    HAS_OMOP_EMB,
+    EmbeddingIndexType,
+    EmbeddingMetricType,
+    get_neareast_concepts,
+)
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -225,6 +230,7 @@ class EmbeddingResolver(CandidateResolver):
         text_embedding: Optional[np.ndarray] = None,
         text_embedding_model: Optional[str] = None,
         metric_type: Optional[EmbeddingMetricType] = None,
+        index_type: Optional[EmbeddingIndexType] = None,
         sort: bool = False,
     ) -> Tuple[LabelMatch, ...]:
         
@@ -235,7 +241,8 @@ class EmbeddingResolver(CandidateResolver):
                 text_embedding=text_embedding,
                 text_embedding_model=text_embedding_model,
                 concept_filter=constraints,
-                metric_type=metric_type
+                metric_type=metric_type,
+                index_type=index_type,
             )
             if matches is None:
                 return ()
@@ -261,12 +268,14 @@ class EmbeddingResolver(CandidateResolver):
 
 
 # Default sequence of resolvers to be used in a pipeline
-ALL_RESOLVERS = (
+ALL_RESOLVERS: Tuple[CandidateResolver, ...] = (
     ExactLabelResolver(),
     ExactSynonymResolver(),
     PartialLabelResolver(),
     PartialSynonymResolver(),
     FullTextResolver(),
     FullTextSynonymResolver(),
-    EmbeddingResolver()
 )
+
+if HAS_OMOP_EMB:
+    ALL_RESOLVERS = (*ALL_RESOLVERS, EmbeddingResolver())

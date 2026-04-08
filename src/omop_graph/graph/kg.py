@@ -28,10 +28,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.cdm.handlers.fulltext import FullTextError
 
 if TYPE_CHECKING:
+    from omop_emb import EmbeddingInterface
     from omop_llm import LLMClient
 
 # Local Application Imports
-from ..extensions.emb import MissingExtensionError, EmbeddingBackendName
+from ..extensions.emb import MissingExtensionError, EmbeddingBackendType
 from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
@@ -95,8 +96,8 @@ class KnowledgeGraph(GraphBackend):
     def __init__(
         self, 
         session_factory: sessionmaker,
-        emb_backend: Optional[EmbeddingBackendName] = None,
-        emb_faiss_index_dir: Optional[str] = None,
+        emb_backend: Optional[EmbeddingBackendType] = None,
+        emb_base_storage_dir: Optional[str] = None,
         emb_client: Optional[LLMClient] = None,
     ):
         self.session_factory = session_factory
@@ -107,12 +108,12 @@ class KnowledgeGraph(GraphBackend):
 
         # Embedding-specific private args
         self._emb_backend = emb_backend
-        self._emb_faiss_dir = emb_faiss_index_dir
+        self._emb_base_storage_dir = emb_base_storage_dir
         self._emb_client = emb_client
         self._emb = None
 
     @property
-    def emb(self):
+    def emb(self) -> "EmbeddingInterface":
         """Namespace for all embedding operations."""
         if self._emb is not None:
             return self._emb
@@ -121,22 +122,24 @@ class KnowledgeGraph(GraphBackend):
             from omop_emb.interface import EmbeddingInterface
             self._emb = EmbeddingInterface.from_backend_name(
                 backend_name=self._emb_backend,
-                faiss_base_dir=self._emb_faiss_dir,
+                storage_base_dir=self._emb_base_storage_dir,
                 embedding_client=self._emb_client
             )
             return self._emb
-            
-        except ImportError:
+
+        except ModuleNotFoundError as e:
+            if e.name and e.name.startswith("omop_emb"):
+                logger.info(
+                    "Embedding functionality is not available because the optional 'omop-emb' package is not installed."
+                )
+                raise MissingExtensionError() from e
+            raise
+        except ImportError as e:
             logger.info(
-                "Embedding functionality is not available because the optional 'omop-emb' package is not installed."
+                "Embedding functionality failed to initialize due to an import error in the optional embedding stack."
             )
-            raise MissingExtensionError()
-        #except AttributeError as e:
-        #    logger.info(
-        #        f"Embedding backend is not configured correctly. Diosabling embedding functionality.\n{e}"
-        #    )
-        #    # This disables the functionality
-        #    raise MissingExtensionError()
+            raise e
+
 
     @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:

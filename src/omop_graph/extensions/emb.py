@@ -1,40 +1,65 @@
-# Utils for the optional omop-emb package
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Sequence, Mapping, Literal
-
 import logging
+import importlib.util
+from typing import TYPE_CHECKING, Optional, Sequence, Mapping, TypeAlias, Tuple
 import numpy as np
 from sqlalchemy.orm import Session
-
 from omop_graph.graph.constraints import SearchConstraintConcept
 
+HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
+
 if TYPE_CHECKING:
-    # Circular import guard for type hints
+    from omop_emb import BackendType, MetricType, IndexType
+    EmbeddingBackendType: TypeAlias = BackendType
+    EmbeddingMetricType: TypeAlias = MetricType
+    EmbeddingIndexType: TypeAlias = IndexType
     from omop_graph.graph.kg import KnowledgeGraph
     from omop_graph.graph.paths import StandardConcept
-    # Optional Import
-    from omop_emb import MetricType, EmbeddingInterface
+    from omop_emb import EmbeddingInterface
     from omop_llm import LLMClient
-    
+else:
+    EmbeddingBackendType = str
+    EmbeddingMetricType = str
+    EmbeddingIndexType = str
+
+SUPPORTED_BACKENDS: Tuple[str, ...] = ()
+SUPPORTED_METRICS: Tuple[str, ...] = ()
+_PARSE_INDEX_TYPE = None
+_PARSE_METRIC_TYPE = None
+
+if HAS_OMOP_EMB:
+    try:
+        from omop_emb import BackendType, MetricType
+        from omop_emb.config import parse_index_type, parse_metric_type
+        # Extract the string values from the StrEnums
+        SUPPORTED_BACKENDS = tuple(v.value for v in BackendType)
+        SUPPORTED_METRICS = tuple(v.value for v in MetricType)
+        _PARSE_INDEX_TYPE = parse_index_type
+        _PARSE_METRIC_TYPE = parse_metric_type
+    except ImportError:
+        pass
 
 logger = logging.getLogger(__name__)
 
-EmbeddingBackendName = Literal["pgvector", "faiss"]
-EmbeddingMetricType = Literal["cosine", "l2"]
 
 class MissingExtensionError(ImportError):
     """Raised when an optional omop extension is required but not installed."""
-    pass
+    def __init__(self, feature: str = "Embedding functionality"):
+        super().__init__(
+            f"{feature} requires the 'omop-emb' package. "
+            "Install it via: pip install omop-graph[emb]"
+        )
 
-
-def get_embedding_interface(kg: KnowledgeGraph) -> Optional[EmbeddingInterface]:
-    """Utility function to get the embedding interface from the KG, if the omop-emb extension is installed. Returns None if the extension is not available."""
+def get_embedding_interface(kg: KnowledgeGraph) -> Optional["EmbeddingInterface"]:
+    """
+    Utility to safely retrieve the embedding interface from the KG. 
+    Returns None if the extension is not available.
+    """
     try:
         return kg.emb
-    except MissingExtensionError:
+    except (MissingExtensionError, ImportError):
         return None
-    
 
 def semantic_similarity(
     kg: KnowledgeGraph,
@@ -43,37 +68,22 @@ def semantic_similarity(
     text_embedding_model: Optional[str],
     embedding_client: Optional[LLMClient],
     metric_type: Optional[EmbeddingMetricType],
+    index_type: Optional[EmbeddingIndexType],
 ) -> Optional[np.ndarray]:
-    """ Retrieve semantic similarity scores for the unique standard concepts using the provided text embedding and model.
-    The semantic similarity scores are calculated as the similarity between the text embedding and the embeddings of the unique standard concepts. 
-    The function first attempts to retrieve similarity scores from the KG using RAG retrieval. 
-    If retrieval from the KG is not possible (e.g., due to missing parameters or no scores found),
-    it falls back to using the embedding client to compute similarity scores by embedding the unique standard concepts and calculating similarity with the text embedding.
-    
-    Parameters
-    ----------
-    kg : KnowledgeGraph
-        The Knowledge Graph instance.
-    unique_standard_concepts : Sequence[StandardConcept]
-        The unique standard concepts identified for the candidate.
-    text_embedding : np.ndarray, optional
-        The embedding vector for the input text. Expected shape is (1, dimension) as we only have one text input (query).
-        Used for RAG retrieval of similarity scores from the database.
-    text_embedding_model : str, optional
-        The name of the embedding model to use for RAG retrieval and for storing new embeddings if fallback to embedding client is needed.
-    embedding_client : LLMClient, optional
-        The client to use for embedding the unique standard concepts and calculating similarity scores if retrieval from the KG is not possible. 
-    metric_type : EmbeddingMetricType, optional
-        The type of similarity metric to use.
     """
+    Calculates similarity between text embeddings and concept embeddings.
+    """
+    if not HAS_OMOP_EMB:
+        return None
 
     embedding_interface = get_embedding_interface(kg)
     if embedding_interface is None:
         return None
     
-    concept_filter = SearchConstraintConcept(concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts))
+    concept_filter = SearchConstraintConcept(
+        concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
+    )
 
-    similarity_scores = None
     with kg.session_factory() as session:
         similarity_scores_dict = get_neareast_concepts(
             session=session,
@@ -81,27 +91,29 @@ def semantic_similarity(
             text_embedding_model=text_embedding_model,
             text_embedding=text_embedding,
             concept_filter=concept_filter,
-            metric_type=metric_type
+            metric_type=metric_type,
+            index_type=index_type
         )
 
         if not similarity_scores_dict:
-            if (
-                text_embedding_model is not None and
-                embedding_client is not None and 
-                text_embedding is not None
-            ):
+            # Fallback logic if database retrieval fails
+            if all(v is not None for v in [text_embedding_model, embedding_client, text_embedding, index_type]):
                 logger.debug("Falling back to embedding client for similarity scores.")
 
-                assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for fallback similarity scoring."
-                assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1."            
-
-                embedding_interface = get_embedding_interface(kg)
-                if embedding_interface is None:
+                # Runtime narrowing for static and runtime safety.
+                model_name = text_embedding_model
+                resolved_index_type = index_type
+                if model_name is None or resolved_index_type is None:
                     return None
+
+                # Validate types at runtime since static checks won't catch this without the lib
+                if not isinstance(text_embedding, np.ndarray):
+                    raise TypeError("text_embedding must be a numpy array.")
                 
+                # Fetch missing embeddings and update DB
                 missing_sc_embeddings = embedding_interface.get_concepts_without_embedding(
                     session=session,
-                    concept_filter=concept_filter, # type: ignore (is the same and needs to be moved to OMOP_Alchemy eventually)
+                    concept_filter=concept_filter, # type: ignore
                     model_name=text_embedding_model
                 )
 
@@ -114,25 +126,25 @@ def semantic_similarity(
                     embeddings=standard_concept_embeddings,
                     concept_ids=tuple([sc.concept_id for sc in unique_standard_concepts]),
                     session=session,
-                    model=text_embedding_model
+                    model=model_name,
+                    index_type=resolved_index_type,
                 )
 
+                # Re-attempt retrieval after update
                 similarity_scores_dict = get_neareast_concepts(
                     session=session,
                     kg=kg,
                     text_embedding_model=text_embedding_model,
                     text_embedding=text_embedding,
                     concept_filter=concept_filter,
-                    metric_type=metric_type
+                    metric_type=metric_type,
+                    index_type=index_type
                 )
 
-                if not similarity_scores_dict:
-                    logger.warning("Failed to retrieve similarity scores even after fallback embedding client computation.")
-        else:
-            similarity_scores = np.array(list(similarity_scores_dict.values()))
-
-        return similarity_scores
-
+        if similarity_scores_dict:
+            return np.array(list(similarity_scores_dict.values()))
+        
+        return None
 
 def get_neareast_concepts(
     session: Session,
@@ -141,59 +153,59 @@ def get_neareast_concepts(
     text_embedding: Optional[np.ndarray],
     concept_filter: Optional[SearchConstraintConcept],
     metric_type: Optional[EmbeddingMetricType],
+    index_type: Optional[EmbeddingIndexType],
     k: int = 10
 ) -> Optional[Mapping[int, float]]:
-    """Tries to retrieve similarity scores for the unique standard concepts from the KG using RAG retrieval based on the provided text embedding and model. 
-    
-    Parameters
-    ----------
-    session : Session
-        The database session to use for retrieval.
-    kg : KnowledgeGraph
-        The Knowledge Graph instance.
-    text_embedding_model : Optional[str]
-        The name of the embedding model to use for retrieval. Must be provided to attempt retrieval.
-    text_embedding : Optional[np.ndarray]
-        The embedding vector for the input text to use for retrieval. Must be provided to attempt retrieval
-    concept_filter : Optional[SearchConstraintConcept]
-        A filter specifying which concepts to consider for similarity scoring.
-    metric_type : Optional[EmbeddingMetricType]
-        The type of similarity metric to use for retrieval. Must be provided to attempt retrieval.
-    
-    Returns
-    -------
-    Optional[Mapping[int, float]]
-        A dictionary mapping concept_ids to their similarity score with the input text
-        retrieved from the KG. Returns None if retrieval was not attempted due to missing parameters or if no similarity scores could be retrieved.
     """
-    embedding_interface = get_embedding_interface(kg)
-    if embedding_interface is None:
+    RAG retrieval for concept similarity scores.
+    Ensures all types from omop_emb are used via strings or local checks.
+    """
+    if not HAS_OMOP_EMB:
         return None
     
-    if text_embedding_model is None:
-        logger.info("No text embedding model provided, skipping embedding-based similarity scoring.")
+    embedding_interface = get_embedding_interface(kg)
+    if not embedding_interface:
+        logger.info("Embedding interface not available in KG.")
         return None
-    if not embedding_interface.is_model_registered(session=session, model_name=text_embedding_model):
-        logger.info(f"Text embedding model '{text_embedding_model}' is not registered in the KG, skipping embedding-based similarity scoring.")
-        return None
-    if text_embedding is None:
-        logger.info("No text embedding provided, skipping embedding-based similarity scoring.")
-        return None
-    if metric_type is None:
-        logger.info("No metric type provided, skipping embedding-based similarity scoring.")
+    
+    if not text_embedding_model:
+        logger.info("No text embedding model specified.")
         return None
 
-    assert isinstance(text_embedding, np.ndarray), "Text embedding must be a numpy array for RAG retrieval."
-    assert text_embedding.shape[0] == 1 and text_embedding.ndim == 2, "Text embedding must be a 2D vector with first dim = 1, i.e. having a query dimension of 1 for RAG retrieval."
+    if not index_type:
+        logger.info("No index type specified for retrieval.")
+        return None
+
+    if metric_type is None:
+        logger.info("No metric type specified for retrieval.")
+        return None
+
+    if _PARSE_INDEX_TYPE is None or _PARSE_METRIC_TYPE is None:
+        logger.info("Embedding type parsers are unavailable; cannot validate metric/index inputs.")
+        return None
+
+    try:
+        resolved_index_type = _PARSE_INDEX_TYPE(index_type)
+        resolved_metric_type = _PARSE_METRIC_TYPE(metric_type)
+    except ValueError as exc:
+        logger.info(f"Invalid embedding retrieval parameters: {exc}")
+        return None
+
+    if not embedding_interface.is_model_registered(model_name=text_embedding_model, index_type=resolved_index_type):
+        logger.info(f"Model '{text_embedding_model}' not registered.")
+        return None
+
+    if text_embedding is None:
+        return None
 
     similarity_scores_tuple = embedding_interface.get_nearest_concepts(
         session=session,
         model_name=text_embedding_model,
-        query_embedding=text_embedding.tolist()[0],
-        concept_filter=concept_filter,  # type: ignore (is the same and needs to be moved to OMOP_Alchemy eventually)
-        metric_type=metric_type,
+        index_type=resolved_index_type,
+        query_embedding=text_embedding,
+        concept_filter=concept_filter,  # type: ignore
+        metric_type=resolved_metric_type,
         k=k
     )
 
-    assert len(similarity_scores_tuple) == 1, "Expected a single set of similarity scores for the query embedding given the text embedding shape was (1, embedding_dim)."
-    return similarity_scores_tuple[0] 
+    return similarity_scores_tuple[0] if similarity_scores_tuple else None
