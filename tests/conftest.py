@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
+pytest_plugins = ("fixtures.mock_cdm",)
+
 
 TEST_ENV_FILE_ENV_VAR = "OMOP_GRAPH_TEST_ENV_FILE"
 DEFAULT_TEST_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"

@@ -1,0 +1,242 @@
+{
+  "cases_evaluated": 12,
+  "k": 5,
+  "summaries": {
+    "basic": {
+      "config": "basic",
+      "count": 12.0,
+      "top1_accuracy": 0.5,
+      "mrr": 0.5,
+      "recall_at_k": 0.5,
+      "false_grounding_rate": 0.0,
+      "safe_null_rate": 0.16666666666666666,
+      "latency_median_ms": 0.006619999567192281,
+      "latency_p95_ms": 0.009270000191463623,
+      "pruning_ratio_mean": 0.0
+    },
+    "extended": {
+      "config": "extended",
+      "count": 12.0,
+      "top1_accuracy": 0.5,
+      "mrr": 0.5833333333333334,
+      "recall_at_k": 0.6666666666666666,
+      "false_grounding_rate": 0.16666666666666666,
+      "safe_null_rate": 0.16666666666666666,
+      "latency_median_ms": 0.02364449983360828,
+      "latency_p95_ms": 0.02640999991854187,
+      "pruning_ratio_mean": 0.4444444444444445
+    },
+    "full_with_embeddings": {
+      "config": "full_with_embeddings",
+      "count": 12.0,
+      "top1_accuracy": 0.5,
+      "mrr": 0.6666666666666666,
+      "recall_at_k": 0.8333333333333334,
+      "false_grounding_rate": 0.08333333333333333,
+      "safe_null_rate": 0.08333333333333333,
+      "latency_median_ms": 0.028329999622656032,
+      "latency_p95_ms": 0.029969999559398275,
+      "pruning_ratio_mean": 0.5454365079365079
+    }
+  },
+  "bucket_summaries": {
+    "basic": {
+      "easy": {
+        "config": "basic:easy",
+        "count": 3.0,
+        "top1_accuracy": 1.0,
+        "mrr": 1.0,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.009270000191463623,
+        "latency_p95_ms": 0.009270000191463623,
+        "pruning_ratio_mean": 0.0
+      },
+      "synonym-heavy": {
+        "config": "basic:synonym-heavy",
+        "count": 3.0,
+        "top1_accuracy": 1.0,
+        "mrr": 1.0,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.007839999852876645,
+        "latency_p95_ms": 0.007839999852876645,
+        "pruning_ratio_mean": 0.0
+      },
+      "ambiguous": {
+        "config": "basic:ambiguous",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.0,
+        "recall_at_k": 0.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.005214999873714987,
+        "latency_p95_ms": 0.005160000000614673,
+        "pruning_ratio_mean": 0.0
+      },
+      "noisy": {
+        "config": "basic:noisy",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.0,
+        "recall_at_k": 0.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.005289999990054639,
+        "latency_p95_ms": 0.004970000190951396,
+        "pruning_ratio_mean": 0.0
+      },
+      "out-of-scope": {
+        "config": "basic:out-of-scope",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.0,
+        "recall_at_k": 0.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 1.0,
+        "latency_median_ms": 0.00495449967274908,
+        "latency_p95_ms": 0.004929999704472721,
+        "pruning_ratio_mean": 0.0
+      }
+    },
+    "extended": {
+      "easy": {
+        "config": "extended:easy",
+        "count": 3.0,
+        "top1_accuracy": 1.0,
+        "mrr": 1.0,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.022809000256529544,
+        "latency_p95_ms": 0.022809000256529544,
+        "pruning_ratio_mean": 0.4444444444444445
+      },
+      "synonym-heavy": {
+        "config": "extended:synonym-heavy",
+        "count": 3.0,
+        "top1_accuracy": 1.0,
+        "mrr": 1.0,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.02570000015111873,
+        "latency_p95_ms": 0.02570000015111873,
+        "pruning_ratio_mean": 0.6
+      },
+      "ambiguous": {
+        "config": "extended:ambiguous",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.5,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.02630949984450126,
+        "latency_p95_ms": 0.02620899977046065,
+        "pruning_ratio_mean": 0.6
+      },
+      "noisy": {
+        "config": "extended:noisy",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.0,
+        "recall_at_k": 0.0,
+        "false_grounding_rate": 1.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.02011500009757583,
+        "latency_p95_ms": 0.019780000002356246,
+        "pruning_ratio_mean": 0.5
+      },
+      "out-of-scope": {
+        "config": "extended:out-of-scope",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.0,
+        "recall_at_k": 0.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 1.0,
+        "latency_median_ms": 0.01524499975857907,
+        "latency_p95_ms": 0.015159999747993425,
+        "pruning_ratio_mean": 0.0
+      }
+    },
+    "full_with_embeddings": {
+      "easy": {
+        "config": "full_with_embeddings:easy",
+        "count": 3.0,
+        "top1_accuracy": 1.0,
+        "mrr": 1.0,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.02800999936880544,
+        "latency_p95_ms": 0.02800999936880544,
+        "pruning_ratio_mean": 0.65
+      },
+      "synonym-heavy": {
+        "config": "full_with_embeddings:synonym-heavy",
+        "count": 3.0,
+        "top1_accuracy": 1.0,
+        "mrr": 1.0,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.02913999924203381,
+        "latency_p95_ms": 0.02913999924203381,
+        "pruning_ratio_mean": 0.7222222222222223
+      },
+      "ambiguous": {
+        "config": "full_with_embeddings:ambiguous",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.5,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.03023449971806258,
+        "latency_p95_ms": 0.029969999559398275,
+        "pruning_ratio_mean": 0.7142857142857143
+      },
+      "noisy": {
+        "config": "full_with_embeddings:noisy",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.5,
+        "recall_at_k": 1.0,
+        "false_grounding_rate": 0.0,
+        "safe_null_rate": 0.0,
+        "latency_median_ms": 0.023934500404720893,
+        "latency_p95_ms": 0.023909000447019935,
+        "pruning_ratio_mean": 0.5
+      },
+      "out-of-scope": {
+        "config": "full_with_embeddings:out-of-scope",
+        "count": 2.0,
+        "top1_accuracy": 0.0,
+        "mrr": 0.0,
+        "recall_at_k": 0.0,
+        "false_grounding_rate": 0.5,
+        "safe_null_rate": 0.5,
+        "latency_median_ms": 0.01721949956845492,
+        "latency_p95_ms": 0.01641999915591441,
+        "pruning_ratio_mean": 0.0
+      }
+    }
+  },
+  "significance": {
+    "basic_vs_extended": {
+      "a_only_correct": 0.0,
+      "b_only_correct": 0.0,
+      "mcnemar_chi2_cc": 0.0
+    },
+    "extended_vs_full_with_embeddings": {
+      "a_only_correct": 0.0,
+      "b_only_correct": 0.0,
+      "mcnemar_chi2_cc": 0.0
+    }
+  }
+}

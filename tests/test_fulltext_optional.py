@@ -7,8 +7,9 @@ from omop_alchemy.cdm.handlers.fulltext import (
     unregister_optional_fulltext_columns,
 )
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Synonym
+from omop_alchemy.cdm.handlers.fulltext import FullTextError
 
-from omop_graph.extensions.emb import MissingExtensionError
+
 from omop_graph.graph.queries import q_concept_name_fulltext
 
 
@@ -20,7 +21,7 @@ def test_fulltext_query_requires_registered_tsvector_columns(synonym: bool):
 
     unregister_optional_fulltext_columns()
     try:
-        with pytest.raises(MissingExtensionError):
+        with pytest.raises(FullTextError):
             q_concept_name_fulltext("kidney cancer", synonym=synonym)
     finally:
         if had_name_column or had_synonym_column:
