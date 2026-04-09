@@ -867,10 +867,9 @@ class OMOPAlchemyImplementation(
     kg_emb_backend : EmbeddingBackendName, optional
         Optional embedding backend to configure on the KnowledgeGraph if `kg` is not provided and embedding support is desired and enabled.
         Environment variable `OMOP_EMB_BACKEND` can also be set to configure this globally.
-    kg_emb_faiss_index_dir : str | None, optional
-        Optional base directory for FAISS indexes if using the FAISS embedding backend.
-        Environment variable `OMOP_EMB_FAISS_INDEX_DIR` can also be set to configure this globally. Defaults to 
-        a temporary directory if not specified and FAISS backend is used.
+    kg_emb_base_storage_dir : str | None, optional
+        Optional base directory for embedding backend storage (for example FAISS index files).
+        Environment variable `OMOP_EMB_BASE_STORAGE_DIR` can also be set to configure this globally.
     """
 
     def __init__(

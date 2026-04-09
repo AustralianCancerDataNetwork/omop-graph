@@ -37,8 +37,12 @@ if HAS_OMOP_EMB:
         SUPPORTED_METRICS = tuple(v.value for v in MetricType)
         _PARSE_INDEX_TYPE = parse_index_type
         _PARSE_METRIC_TYPE = parse_metric_type
-    except ImportError:
-        pass
+    except ModuleNotFoundError as exc:
+        # Only swallow missing optional dependency imports.
+        if exc.name and exc.name.startswith("omop_emb"):
+            pass
+        else:
+            raise
 
 logger = logging.getLogger(__name__)
 
@@ -113,22 +117,25 @@ def semantic_similarity(
                 # Fetch missing embeddings and update DB
                 missing_sc_embeddings = embedding_interface.get_concepts_without_embedding(
                     session=session,
-                    concept_filter=concept_filter, # type: ignore
-                    model_name=text_embedding_model
-                )
-
-                standard_concept_embeddings = embedding_interface.embed_texts(
-                    texts=tuple(missing_sc_embeddings.values()),
-                    embedding_client=embedding_client,
-                )
-                
-                embedding_interface.add_to_db(
-                    embeddings=standard_concept_embeddings,
-                    concept_ids=tuple([sc.concept_id for sc in unique_standard_concepts]),
-                    session=session,
-                    model=model_name,
+                    concept_filter=concept_filter,  # type: ignore
+                    model_name=model_name,
                     index_type=resolved_index_type,
                 )
+
+                if missing_sc_embeddings:
+                    missing_concept_ids = tuple(missing_sc_embeddings.keys())
+                    standard_concept_embeddings = embedding_interface.embed_texts(
+                        texts=tuple(missing_sc_embeddings.values()),
+                        embedding_client=embedding_client,
+                    )
+
+                    embedding_interface.add_to_db(
+                        embeddings=standard_concept_embeddings,
+                        concept_ids=missing_concept_ids,
+                        session=session,
+                        model=model_name,
+                        index_type=resolved_index_type,
+                    )
 
                 # Re-attempt retrieval after update
                 similarity_scores_dict = get_neareast_concepts(

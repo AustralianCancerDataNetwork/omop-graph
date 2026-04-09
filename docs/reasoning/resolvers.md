@@ -13,7 +13,7 @@ The backbone of the `ResolverPipeline` are specific **resolvers**. `omop-graph` 
 
 !!! tip
     
-    Traversing each of the resolvers one by one can be an exhaustive search. The `ResolverPipeline` therefore offers the option of a `stop_after_confidence` attribute. If set, the retrieval from the DB stop after that respective resolver has concluded. The resolvers are ordered based on their confidence as above (i.e. **`ExactLabelResolver`** >> **`ExactSynonymResolver`** >> etc.)
+    Traversing each of the resolvers one by one can be an exhaustive search. The `ResolverPipeline` therefore offers a `stop_after_resolver` option. If set, retrieval from the DB stops after that resolver has concluded. The resolvers are ordered based on their confidence as above (i.e. **`ExactLabelResolver`** >> **`ExactSynonymResolver`** >> etc.)
 
 ```python
 from omop_graph.graph.nodes import LabelMatchKind
