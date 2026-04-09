@@ -4,6 +4,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from orm_loader.helpers import create_db, bulk_load_context
 from orm_loader.loaders.loader_interface import PandasLoader
 from orm_loader.helpers.metadata import Base
+from omop_alchemy.cdm.handlers import (
+    install_fulltext_columns,
+    populate_fulltext_columns,
+)
 from omop_alchemy.cdm.base import CDMTableBase
 from omop_alchemy.cdm.model.health_system import Location, Care_Site, Provider, Visit_Occurrence
 from omop_alchemy.cdm.model.clinical import (
@@ -82,6 +86,11 @@ def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> Non
                 logger_instance.name.startswith(exempt) for exempt in exempt_loggers
             ):
                 logger_instance.setLevel(logging.WARNING)
+
+
+def _enable_fulltext_sidecars(engine: sa.Engine, regconfig: str) -> None:
+    install_fulltext_columns(engine)
+    populate_fulltext_columns(engine, regconfig=regconfig)
 
 def _populate_reference_data(
     session: Session,
@@ -348,6 +357,8 @@ def omop_cdm(
         "--chunk-size", "-c", 
         help="Number of rows to process in each chunk when loading large tables with fallback pandas loader.")] = 5000,
     pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
+    fulltext: Annotated[bool, typer.Option("--fulltext/--no-fulltext", help="Install and populate PostgreSQL full-text sidecars after loading the vocabulary tables.")] = False,
+    fulltext_regconfig: Annotated[str, typer.Option("--fulltext-regconfig", help="PostgreSQL text search configuration to use when populating the full-text sidecars.")] = "english",
     verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
     """
@@ -404,6 +415,13 @@ def omop_cdm(
                 loader=loader
             )
             session.commit()
+
+    if fulltext:
+        try:
+            _enable_fulltext_sidecars(engine, fulltext_regconfig)
+        except Exception as exc:
+            logger.error(f"Failed to enable PostgreSQL full-text sidecars: {exc}")
+            logger.info("Continuing with bootstrap without full-text sidecars. You can rerun omop-maint fulltext install and omop-maint fulltext populate later.")
 
     try:
        relationship_classification(pred_class_dir)
