@@ -1,206 +1,108 @@
-[
-  {
-    "id": "easy_kidney_cancer",
-    "text": "Kidney cancer",
-    "bucket": "easy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 196653,
-    "hits": {
-      "exact": [196653],
-      "exact_synonym": [],
-      "partial": [999001],
-      "partial_synonym": [],
-      "fts": [196653],
-      "fts_synonym": [],
-      "embedding": [196653, 999001]
+{
+  "easy": [
+    {
+      "id": "easy_kidney_cancer",
+      "text": "Kidney cancer",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 196653,
+      "expected_concept_name": "Malignant tumor of kidney"
+    },
+    {
+      "id": "easy_hodgkin_lymphoma",
+      "text": "Hodgkin lymphoma",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 4038835,
+      "expected_concept_name": "Hodgkin's disease (clinical)"
+    },
+    {
+      "id": "easy_ovarian_cancer",
+      "text": "Ovarian cancer",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 4181351,
+      "expected_concept_name": "Malignant neoplasm of ovary"
     }
-  },
-  {
-    "id": "easy_hodgkin_lymphoma",
-    "text": "Hodgkin lymphoma",
-    "bucket": "easy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 4038835,
-    "hits": {
-      "exact": [4038835],
-      "exact_synonym": [],
-      "partial": [111001],
-      "partial_synonym": [],
-      "fts": [4038835],
-      "fts_synonym": [],
-      "embedding": [4038835, 111001]
+  ],
+  "synonym-heavy": [
+    {
+      "id": "synonym_neoplasm_of_kidney",
+      "text": "Neoplasm of kidney",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 196653,
+      "expected_concept_name": "Malignant tumor of kidney"
+    },
+    {
+      "id": "synonym_myelodysplasia",
+      "text": "Myelodysplasia",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 138994,
+      "expected_concept_name": "Myelodysplastic syndrome (clinical)"
+    },
+    {
+      "id": "synonym_acute_lymphoid_leukemia",
+      "text": "acute lymphoblastic leukaemia",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 134305,
+      "expected_concept_name": "Acute lymphoid leukemia"
     }
-  },
-  {
-    "id": "synonym_neoplasm_of_kidney",
-    "text": "Neoplasm of kidney",
-    "bucket": "synonym-heavy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 196653,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [196653],
-      "partial": [999001],
-      "partial_synonym": [196653],
-      "fts": [],
-      "fts_synonym": [196653],
-      "embedding": [196653, 999001]
+  ],
+  "ambiguous": [
+    {
+      "id": "ambiguous_mass",
+      "text": "mass",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 333001,
+      "expected_concept_name": "Mass of body structure"
+    },
+    {
+      "id": "ambiguous_lesion",
+      "text": "lesion",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 444001,
+      "expected_concept_name": "Lesion of skin"
     }
-  },
-  {
-    "id": "synonym_myelodysplasia",
-    "text": "Myelodysplasia",
-    "bucket": "synonym-heavy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 138994,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [138994],
-      "partial": [222001],
-      "partial_synonym": [138994],
-      "fts": [],
-      "fts_synonym": [138994],
-      "embedding": [138994, 222001]
+  ],
+  "noisy": [
+    {
+      "id": "noisy_typo_kidny",
+      "text": "kidny cancr",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 196653,
+      "expected_concept_name": "Malignant tumor of kidney"
+    },
+    {
+      "id": "noisy_abbrev_aml",
+      "text": "AML",
+      "domain": "Condition",
+      "vocabulary": "SNOMED",
+      "expected_concept_id": 140352,
+      "expected_concept_name": "Acute myeloid leukemia, disease"
     }
-  },
-  {
-    "id": "ambiguous_mass",
-    "text": "mass",
-    "bucket": "ambiguous",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 333001,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [],
-      "partial": [333002, 333001],
-      "partial_synonym": [333002],
-      "fts": [333002, 333001],
-      "fts_synonym": [],
-      "embedding": [333001, 333002]
+  ],
+  "out-of-scope": [
+    {
+      "id": "oos_weather",
+      "text": "sunny weather",
+      "domain": "NA",
+      "vocabulary": "NA",
+      "expected_concept_id": null,
+      "expected_concept_name": null
+    },
+    {
+      "id": "oos_vehicle",
+      "text": "car repair",
+      "domain": "NA",
+      "vocabulary": "NA",
+      "expected_concept_id": null,
+      "expected_concept_name": null
     }
-  },
-  {
-    "id": "ambiguous_lesion",
-    "text": "lesion",
-    "bucket": "ambiguous",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 444001,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [],
-      "partial": [444002, 444001],
-      "partial_synonym": [444002],
-      "fts": [444002, 444001],
-      "fts_synonym": [],
-      "embedding": [444001, 444002]
-    }
-  },
-  {
-    "id": "noisy_typo_kidny",
-    "text": "kidny cancr",
-    "bucket": "noisy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 196653,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [],
-      "partial": [999001],
-      "partial_synonym": [],
-      "fts": [999001],
-      "fts_synonym": [],
-      "embedding": [196653, 999001]
-    }
-  },
-  {
-    "id": "noisy_abbrev_aml",
-    "text": "AML",
-    "bucket": "noisy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 140352,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [],
-      "partial": [777001],
-      "partial_synonym": [],
-      "fts": [777001],
-      "fts_synonym": [],
-      "embedding": [140352, 777001]
-    }
-  },
-  {
-    "id": "oos_weather",
-    "text": "sunny weather",
-    "bucket": "out-of-scope",
-    "domain": "NA",
-    "vocabulary": "NA",
-    "expected_concept_id": null,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [],
-      "partial": [],
-      "partial_synonym": [],
-      "fts": [],
-      "fts_synonym": [],
-      "embedding": []
-    }
-  },
-  {
-    "id": "oos_vehicle",
-    "text": "car repair",
-    "bucket": "out-of-scope",
-    "domain": "NA",
-    "vocabulary": "NA",
-    "expected_concept_id": null,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [],
-      "partial": [],
-      "partial_synonym": [],
-      "fts": [],
-      "fts_synonym": [],
-      "embedding": [888888]
-    }
-  },
-  {
-    "id": "easy_ovarian_cancer",
-    "text": "Ovarian cancer",
-    "bucket": "easy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 4181351,
-    "hits": {
-      "exact": [4181351],
-      "exact_synonym": [],
-      "partial": [4181351],
-      "partial_synonym": [],
-      "fts": [4181351],
-      "fts_synonym": [],
-      "embedding": [4181351]
-    }
-  },
-  {
-    "id": "synonym_acute_lymphoid_leukemia",
-    "text": "acute lymphoblastic leukaemia",
-    "bucket": "synonym-heavy",
-    "domain": "Condition",
-    "vocabulary": "SNOMED",
-    "expected_concept_id": 134305,
-    "hits": {
-      "exact": [],
-      "exact_synonym": [134305],
-      "partial": [134305],
-      "partial_synonym": [134305],
-      "fts": [134305],
-      "fts_synonym": [134305],
-      "embedding": [134305]
-    }
-  }
-]
+  ]
+}
