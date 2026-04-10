@@ -77,15 +77,24 @@ def configure_logging_level(verbosity: int, reduce_logging: bool = True) -> None
     )
 
     if reduce_logging:
-        existing_loggers = [
-            logging.getLogger(name) for name in logging.root.manager.loggerDict
-        ]
-        exempt_loggers = ["omop_graph", "omop_emb"]
+        exempt_loggers = ("omop_graph", "omop_emb")
+
+        class _NamespaceAllowlistFilter(logging.Filter):
+            def filter(self, record: logging.LogRecord) -> bool:
+                return record.name.startswith(exempt_loggers)
+
+        allowlist_filter = _NamespaceAllowlistFilter()
+
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
+            handler.addFilter(allowlist_filter)
+
+        existing_loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
         for logger_instance in existing_loggers:
-            if not any(
-                logger_instance.name.startswith(exempt) for exempt in exempt_loggers
-            ):
-                logger_instance.setLevel(logging.WARNING)
+            if logger_instance.name.startswith(exempt_loggers):
+                continue
+            logger_instance.setLevel(logging.CRITICAL + 1)
+            logger_instance.propagate = False
 
 
 def _enable_fulltext_sidecars(engine: sa.Engine, regconfig: str) -> None:

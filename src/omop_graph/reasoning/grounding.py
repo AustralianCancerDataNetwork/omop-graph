@@ -144,8 +144,6 @@ def ground_term(
             index_type=index_type,
         )
     )
-    if resolved:
-        four = 4
 
     # Anchoring
     for hit in resolved:
@@ -163,7 +161,7 @@ def ground_term(
                 concept_name = kg.concept_view(hit.concept_id).concept_name
                 logger.debug(
                     f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
-                    f"has no path to parents {constraints.parent_ids}"
+                    f"has no path to parents {constraints.parent_ids} with {constraints.max_depth} max depth and predicates {constraints.predicate_kinds}."
                 )
                 continue
             
