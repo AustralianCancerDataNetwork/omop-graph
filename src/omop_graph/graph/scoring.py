@@ -120,6 +120,10 @@ def score_standard_concepts(
     list[StandardConceptWithScore]
         The list of concepts with scores attached.
     """
+    if similarity_scores is not None:
+        assert len(similarity_scores) == len(standard_concepts), "Length of similarity scores must match number of standard concepts."
+        assert similarity_scores.shape[1] == 1, "Similarity scores should have shape (num_concepts, 1) for k=1."
+
     ranked_concepts = []
 
     # Get specificity scores (ancestor counts) for the standard concepts
@@ -133,7 +137,7 @@ def score_standard_concepts(
             standard_concept=sc,
             num_ancestors=num_ancestors.get(sc.concept_id, 0),
             similarity_score=(
-                similarity_scores[i] if similarity_scores is not None else None
+                similarity_scores[i].item() if similarity_scores is not None else None
             ),
         )
         for i, sc in enumerate(standard_concepts)
@@ -192,7 +196,7 @@ def _score_standard_concept(
 
     # Broadness Component: Bonus for general concepts (more ancestors)
     # Uses log scale to dampen the effect of extremely high ancestor counts
-    broadness_bonus = beta * np.log(1 + num_ancestors)
+    broadness_bonus = (beta * np.log(1 + num_ancestors)).item()
 
     return StandardConceptWithScore.from_standard_concept(
         standard_concept=standard_concept,

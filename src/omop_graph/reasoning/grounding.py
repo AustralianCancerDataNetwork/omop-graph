@@ -188,6 +188,11 @@ def ground_term(
         index_type=index_type,
     )
 
+    # Transpose to make the shape (num_concepts, 1) if it's not None, 1 being the number of querie vectors
+    if text_embedding is not None:
+        assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single query."
+    similarity_scores = similarity_scores.transpose() if similarity_scores is not None else None
+
     # Scoring
     ranked_standard_concepts = score_standard_concepts(
         text=text, 

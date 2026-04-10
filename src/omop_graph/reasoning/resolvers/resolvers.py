@@ -246,7 +246,10 @@ class EmbeddingResolver(CandidateResolver):
             )
             if matches is None:
                 return ()
-
+            if text_embedding is not None:
+                assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single query."
+            assert len(matches) == 1, "Expected get_neareast_concepts to return a single dictionary given the text_embedding shape (1, embedding_dim)."
+            matches = matches[0]  # Unpack the single dictionary from the tuple
             concept_views = kg.concept_views(
                 concept_ids=tuple(matches.keys())
             )

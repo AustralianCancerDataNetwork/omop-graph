@@ -89,17 +89,18 @@ def semantic_similarity(
     )
 
     with kg.session_factory() as session:
-        similarity_scores_dict = get_neareast_concepts(
+        similarity_scores_tuple_of_dicts = get_neareast_concepts(
             session=session,
             kg=kg,
             text_embedding_model=text_embedding_model,
             text_embedding=text_embedding,
             concept_filter=concept_filter,
             metric_type=metric_type,
-            index_type=index_type
+            index_type=index_type,
+            k=len(unique_standard_concepts)
         )
 
-        if not similarity_scores_dict:
+        if not similarity_scores_tuple_of_dicts:
             # Fallback logic if database retrieval fails
             if all(v is not None for v in [text_embedding_model, embedding_client, text_embedding, index_type]):
                 logger.debug("Falling back to embedding client for similarity scores.")
@@ -138,7 +139,7 @@ def semantic_similarity(
                     )
 
                 # Re-attempt retrieval after update
-                similarity_scores_dict = get_neareast_concepts(
+                similarity_scores_tuple_of_dicts = get_neareast_concepts(
                     session=session,
                     kg=kg,
                     text_embedding_model=text_embedding_model,
@@ -148,8 +149,8 @@ def semantic_similarity(
                     index_type=index_type
                 )
 
-        if similarity_scores_dict:
-            return np.array(list(similarity_scores_dict.values()))
+        if similarity_scores_tuple_of_dicts:
+            return np.array([list(d.values()) for d in similarity_scores_tuple_of_dicts])
         
         return None
 
@@ -162,7 +163,7 @@ def get_neareast_concepts(
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
     k: int = 10
-) -> Optional[Mapping[int, float]]:
+) -> Optional[Tuple[Mapping[int, float], ...]]:
     """
     RAG retrieval for concept similarity scores.
     Ensures all types from omop_emb are used via strings or local checks.
@@ -215,4 +216,4 @@ def get_neareast_concepts(
         k=k
     )
 
-    return similarity_scores_tuple[0] if similarity_scores_tuple else None
+    return similarity_scores_tuple if similarity_scores_tuple else None
