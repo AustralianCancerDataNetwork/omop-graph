@@ -21,7 +21,7 @@ def _constraints() -> GroundingConstraints:
         parent_ids=(PARENT_CANCER_ID,),
         search_constraint=SearchConstraintConcept(
             domains=("Condition",),
-            vocabs=("SNOMED",),
+            vocabularies=("SNOMED",),
             require_standard=False,
         ),
         max_depth=6,

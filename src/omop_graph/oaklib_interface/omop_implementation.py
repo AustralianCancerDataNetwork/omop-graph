@@ -333,7 +333,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             ),
             search_constraint=SearchConstraintConcept(
                 domains=domains,
-                vocabs=vocabs,
+                vocabularies=vocabs,
                 require_standard=parent_ids is None,
             ),
             max_depth=6,

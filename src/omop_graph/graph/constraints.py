@@ -23,7 +23,7 @@ class SearchConstraintConcept:
     domains : tuple[str, ...], optional
         A tuple of OMOP Domain IDs to filter by (e.g., ('Condition', 'Drug')).
         If None, no domain filtering is applied.
-    vocabs : tuple[str, ...], optional
+    vocabularies : tuple[str, ...], optional
         A tuple of OMOP Vocabulary IDs to filter by (e.g., ('SNOMED', 'RxNorm')).
         If None, no vocabulary filtering is applied.
     require_standard : bool, optional
@@ -32,7 +32,7 @@ class SearchConstraintConcept:
     """
     concept_ids: Optional[Tuple[int, ...]] = field(default=None)
     domains: Optional[Tuple[str, ...]] = field(default=None)
-    vocabs: Optional[Tuple[str, ...]] = field(default=None)
+    vocabularies: Optional[Tuple[str, ...]] = field(default=None)
     require_standard: bool = False
 
     def apply(self, query: Select) -> Select:
@@ -55,8 +55,8 @@ class SearchConstraintConcept:
         if self.domains is not None:
             query = query.where(Concept.domain_id.in_(self.domains))
         
-        if self.vocabs is not None:
-            query = query.where(Concept.vocabulary_id.in_(self.vocabs))
+        if self.vocabularies is not None:
+            query = query.where(Concept.vocabulary_id.in_(self.vocabularies))
             
         if self.require_standard:
             # Filters for 'S' (Standard) or 'C' (Classification)

@@ -144,6 +144,8 @@ def ground_term(
             index_type=index_type,
         )
     )
+    if resolved:
+        four = 4
 
     # Anchoring
     for hit in resolved:

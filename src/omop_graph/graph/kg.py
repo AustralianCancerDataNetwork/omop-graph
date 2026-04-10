@@ -657,9 +657,9 @@ class KnowledgeGraph(GraphBackend):
                     f"Available domains: {sorted(list(valid_domains))}"
                 )
 
-        if constraints.vocabs is not None:
+        if constraints.vocabularies is not None:
             valid_vocabs = self.get_all_concept_vocabulary_ids()
-            invalid = [v for v in constraints.vocabs if v not in valid_vocabs]
+            invalid = [v for v in constraints.vocabularies if v not in valid_vocabs]
             if invalid:
                 raise ValueError(
                     f"Invalid vocabulary constraint(s): {invalid}. "
