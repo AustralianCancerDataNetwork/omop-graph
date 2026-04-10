@@ -48,8 +48,6 @@ from benchmark_base import (  # type: ignore
     build_knowledge_graph,
     case_constraints,
     load_cases,
-    mcnemar,
-    ranking_metrics,
 )
 
 
@@ -105,20 +103,48 @@ def _resolve_parent_ids(
 ) -> Optional[Tuple[int, ...]]:
     """Resolve grounding parent IDs from case-level or CLI-level defaults."""
 
-    if case.parent_ids is not None:
+    if case.parent_ids:
         return case.parent_ids
     return default_parent_ids
+
+
+def _bucket_sort_key(bucket: str) -> tuple[int, str]:
+    """Sort buckets with easy first, then other buckets alphabetically."""
+
+    normalised = bucket.lower()
+    if normalised == "easy":
+        return (0, normalised)
+    return (1, normalised)
+
+
+def _order_cases_for_report(cases: Sequence[BenchmarkCase]) -> List[BenchmarkCase]:
+    """Order cases so the easy bucket is shown first."""
+
+    return sorted(cases, key=lambda case: (_bucket_sort_key(case.bucket), case.id))
+
+
+def _actual_payload(grounded: Sequence[Any]) -> Dict[str, object]:
+    """Serialize the actual top grounded result for one config."""
+
+    actual_concept = grounded[0] if grounded else None
+
+    return {
+        "actual": {
+            "concept_id": int(actual_concept.concept_id) if actual_concept is not None else None,
+            "concept_name": actual_concept.concept_name if actual_concept is not None else None,
+            "total_score": float(actual_concept.total_score) if actual_concept is not None else 0.0,
+        },
+    }
 
 
 def _evaluate_case(
     kg: KnowledgeGraph,
     case: BenchmarkCase,
     config: PosterConfig,
-    k: int,
     default_parent_ids: Optional[Tuple[int, ...]],
     grounding_kwargs: Optional[Dict[str, Any]] = None,
-) -> Dict[str, float | int | bool | str]:
-    """Evaluate one case using ``ground_term`` and return poster-friendly metrics."""
+) -> Dict[str, object]:
+    """Evaluate one case using ``ground_term`` and return poster-friendly results."""
 
     search_constraint = case_constraints(case)
     parent_ids = _resolve_parent_ids(case, default_parent_ids)
@@ -146,123 +172,37 @@ def _evaluate_case(
             max_depth=6,
             predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
         ),
-        max_candidates=None,
+        max_candidates=10,
         metric_type=metric_type,
         index_type=index_type,
     )
-
-    predictions = [sc.concept_id for sc in grounded]
-    expected = case.expected_concept_id
-    metrics = ranking_metrics(predictions=predictions, expected=expected, k=k)
-
-    false_grounding = 0.0
-    safe_null = 0.0
-    if expected is None:
-        safe_null = 1.0 if len(predictions) == 0 else 0.0
-        false_grounding = 1.0 if len(predictions) > 0 else 0.0
-    elif expected not in predictions and len(predictions) > 0:
-        false_grounding = 1.0
-
-    target_rank = 0
-    target_total_score = 0.0
-    target_relevance = 0.0
-    target_embedding_score = 0.0
-    if expected is not None and expected in predictions:
-        target_rank = predictions.index(expected) + 1
-        target = grounded[target_rank - 1]
-        target_total_score = float(target.total_score)
-        target_relevance = float(target.relevance)
-        target_embedding_score = (
-            float(target.embedding_score) if target.embedding_score is not None else 0.0
-        )
-
-    top1_concept_id = predictions[0] if predictions else -1
-    top1_total_score = float(grounded[0].total_score) if grounded else 0.0
 
     return {
         "case_id": case.id,
         "text": case.text,
         "bucket": case.bucket,
         "config": config.name,
-        "expected": -1 if expected is None else expected,
-        "expected_concept_name": case.expected_concept_name or "",
-        "pred_count": len(predictions),
-        "top1_correct": metrics["top1_correct"],
-        "mrr": metrics["mrr"],
-        "recall_at_k": metrics["recall_at_k"],
-        "false_grounding": false_grounding,
-        "safe_null": safe_null,
-        "target_rank": float(target_rank),
-        "target_total_score": target_total_score,
-        "target_relevance": target_relevance,
-        "target_embedding_score": target_embedding_score,
-        "top1_concept_id": float(top1_concept_id),
-        "top1_total_score": top1_total_score,
-    }
-
-
-def _summarise(rows: Sequence[Dict[str, float | int | bool | str]], label: str) -> Dict[str, float | str]:
-    """Aggregate case-level grounded metrics for one configuration."""
-
-    if not rows:
-        return {"config": label, "count": 0}
-
-    return {
-        "config": label,
-        "count": float(len(rows)),
-        "top1_accuracy": sum(float(r["top1_correct"]) for r in rows) / len(rows),
-        "mrr": sum(float(r["mrr"]) for r in rows) / len(rows),
-        "recall_at_k": sum(float(r["recall_at_k"]) for r in rows) / len(rows),
-        "false_grounding_rate": sum(float(r["false_grounding"]) for r in rows) / len(rows),
-        "safe_null_rate": sum(float(r["safe_null"]) for r in rows) / len(rows),
-        "target_rank_mean": sum(float(r["target_rank"]) for r in rows) / len(rows),
-        "target_total_score_mean": sum(float(r["target_total_score"]) for r in rows) / len(rows),
-        "target_relevance_mean": sum(float(r["target_relevance"]) for r in rows) / len(rows),
-        "target_embedding_score_mean": sum(float(r["target_embedding_score"]) for r in rows) / len(rows),
-    }
-
-
-def _build_representative_cases(
-    per_config: Dict[str, List[Dict[str, float | int | bool | str]]],
-    baseline: str,
-    target: str,
-    limit: int,
-) -> List[Dict[str, float | int | str]]:
-    """Return high-signal case-level improvements for poster tables."""
-
-    if baseline not in per_config or target not in per_config:
-        return []
-
-    base_map = {str(r["case_id"]): r for r in per_config[baseline]}
-    target_map = {str(r["case_id"]): r for r in per_config[target]}
-
-    rows: List[Dict[str, float | int | str]] = []
-    for case_id, base_row in base_map.items():
-        if case_id not in target_map:
-            continue
-
-        target_row = target_map[case_id]
-        base_mrr = float(base_row["mrr"])
-        target_mrr = float(target_row["mrr"])
-
-        rows.append(
+        "target_concept_id": case.expected_concept_id,
+        "target_concept_name": case.expected_concept_name,
+        **_actual_payload(grounded),
+        "target_idx_in_grounded": next(
+            (i for i, concept in enumerate(grounded) if concept.concept_id == case.expected_concept_id),
+            None,
+        ),
+        "grounded": [
             {
-                "case_id": case_id,
-                "text": str(base_row["text"]),
-                "bucket": str(base_row["bucket"]),
-                "expected": int(float(base_row["expected"])),
-                "baseline_top1": int(float(base_row["top1_concept_id"])),
-                "target_top1": int(float(target_row["top1_concept_id"])),
-                "baseline_rank": int(float(base_row["target_rank"])),
-                "target_rank": int(float(target_row["target_rank"])),
-                "baseline_target_score": float(base_row["target_total_score"]),
-                "target_target_score": float(target_row["target_total_score"]),
-                "delta_mrr": target_mrr - base_mrr,
+                "concept_id": int(concept.concept_id),
+                "concept_name": concept.concept_name,
+                "total_score": float(concept.total_score),
+                "relevance": float(concept.relevance),
+                "embedding_score": float(concept.embedding_score) if concept.embedding_score is not None else 0.0,
+                "separation": int(concept.separation),
+                "matched_label": concept.matched_label,
             }
-        )
+            for concept in grounded
+        ],
 
-    rows.sort(key=lambda r: float(r["delta_mrr"]), reverse=True)
-    return rows[:limit]
+    }
 
 
 def run(
@@ -279,7 +219,6 @@ def run(
     domain_filter: Optional[set[str]] = None,
     vocab_filter: Optional[set[str]] = None,
     grounding_parent_ids: Optional[Tuple[int, ...]] = None,
-    representative_limit: int = 12,
 ) -> Dict[str, object]:
     """Run grounded poster benchmark and return report payload."""
 
@@ -289,7 +228,12 @@ def run(
     if domain_filter:
         cases = [c for c in cases if c.domain in domain_filter]
     if vocab_filter:
-        cases = [c for c in cases if c.vocabulary in vocab_filter]
+        cases = [
+            c
+            for c in cases
+            if c.vocabularies and any(vocabulary in vocab_filter for vocabulary in c.vocabularies)
+        ]
+    cases = _order_cases_for_report(cases)
     logger.info("Loaded %d benchmark cases after filters.", len(cases))
 
     if grounding_parent_ids is None and all(c.parent_ids is None for c in cases):
@@ -339,24 +283,21 @@ def run(
     configs = _build_configs()
 
     per_config: Dict[str, List[Dict[str, float | int | bool | str]]] = {}
-    summaries: Dict[str, Dict[str, float | str]] = {}
-    bucket_summaries: Dict[str, Dict[str, Dict[str, float | str]]] = {}
     errors: Dict[str, str] = {}
 
-    for config in configs:
-        logger.info("Evaluating config '%s' (%d resolvers).", config.name, len(config.resolvers))
-        try:
-            if config.requires_embedding and embedding_kg is None:
-                raise MissingExtensionError(
-                    "Embedding config requires omop-emb plus embedding model/api settings."
-                )
+    case_reports: List[Dict[str, object]] = []
+    active_kg = embedding_kg if embedding_kg is not None else kg
+    for case in cases:
+        config_results: List[Dict[str, object]] = []
+        for config in configs:
+            logger.info("Evaluating case '%s' with config '%s'.", case.id, config.name)
+            try:
+                if config.requires_embedding and embedding_kg is None:
+                    raise MissingExtensionError(
+                        "Embedding config requires omop-emb plus embedding model/api settings."
+                    )
 
-            active_kg = embedding_kg if embedding_kg is not None else kg
-            rows: List[Dict[str, float | int | bool | str]] = []
-
-            for case in cases:
                 grounding_kwargs: Optional[Dict[str, Any]] = None
-
                 if embedding_kg is not None and embedding_model is not None:
                     grounding_kwargs = {
                         "text_embedding": query_embeddings.get(case.id),
@@ -366,67 +307,40 @@ def run(
                         "index_type": resolved_embedding_index_type,
                     }
 
-                rows.append(
-                    _evaluate_case(
-                        kg=active_kg,
-                        case=case,
-                        config=config,
-                        k=k,
-                        default_parent_ids=grounding_parent_ids,
-                        grounding_kwargs=grounding_kwargs,
-                    )
+                row = _evaluate_case(
+                    kg=active_kg,
+                    case=case,
+                    config=config,
+                    default_parent_ids=grounding_parent_ids,
+                    grounding_kwargs=grounding_kwargs,
+                )
+                config_results.append(row)
+
+            except Exception as exc:
+                errors[f"{case.id}:{config.name}"] = str(exc)
+                logger.exception("Case '%s' config '%s' failed: %s", case.id, config.name, exc)
+                config_results.append(
+                    {
+                        "config": config.name,
+                        "error": str(exc),
+                        "predicted_top": {"concept_id": None, "concept_name": None, "total_score": 0.0, "relevance": 0.0, "embedding_score": 0.0},
+                        "target_total_score": 0.0,
+                    }
                 )
 
-            logger.info("Completed config '%s' with %d case rows.", config.name, len(rows))
-
-        except Exception as exc:
-            errors[config.name] = str(exc)
-            logger.exception("Config '%s' failed: %s", config.name, exc)
-            continue
-
-        per_config[config.name] = rows
-        summaries[config.name] = _summarise(rows, config.name)
-
-        buckets: Dict[str, List[Dict[str, float | int | bool | str]]] = {}
-        for row in rows:
-            bucket = str(row["bucket"])
-            buckets.setdefault(bucket, []).append(row)
-        bucket_summaries[config.name] = {
-            bucket: _summarise(bucket_rows, f"{config.name}:{bucket}")
-            for bucket, bucket_rows in buckets.items()
-        }
-
-    significance: Dict[str, Dict[str, float]] = {}
-    if "basic" in per_config and "extended" in per_config:
-        significance["basic_vs_extended"] = mcnemar(
-            per_config["basic"],
-            per_config["extended"],
+        case_reports.append(
+            {
+                "case_id": case.id,
+                "bucket": case.bucket,
+                "text": case.text,
+                "expected_concept_id": case.expected_concept_id,
+                "expected_concept_name": case.expected_concept_name,
+                "config_results": config_results,
+            }
         )
-    if "extended" in per_config and "full_text" in per_config:
-        significance["extended_vs_full_text"] = mcnemar(
-            per_config["extended"],
-            per_config["full_text"],
-        )
-    if "full_text" in per_config and "full_text_with_embedding" in per_config:
-        significance["full_text_vs_full_text_with_embedding"] = mcnemar(
-            per_config["full_text"],
-            per_config["full_text_with_embedding"],
-        )
-
-    representative_cases = _build_representative_cases(
-        per_config=per_config,
-        baseline="basic",
-        target="full_text_with_embedding",
-        limit=representative_limit,
-    )
-
     return {
         "cases_evaluated": len(cases),
-        "k": k,
-        "summaries": summaries,
-        "bucket_summaries": bucket_summaries,
-        "significance": significance,
-        "representative_cases": representative_cases,
+        "cases": case_reports,
         "errors": errors,
         "database_url": database_url or os.getenv("OMOP_DATABASE_URL"),
         "embedding_model": embedding_model,
@@ -435,7 +349,7 @@ def run(
         "embedding_metric_type": embedding_metric_type,
         "embedding_index_type": embedding_index_type,
         "grounding_parent_ids": grounding_parent_ids,
-        "representative_limit": representative_limit,
+        "k": k,
     }
 
 
@@ -508,13 +422,17 @@ def main() -> None:
         help="Grounding parent concept ID (repeatable).",
     )
     parser.add_argument(
-        "--representative-limit",
-        type=int,
-        default=12,
-        help="Number of representative improved cases to include.",
+        "--domain",
+        action="append",
+        default=None,
+        help="Optional domain filter (repeatable).",
     )
-    parser.add_argument("--domain", action="append", default=None, help="Optional domain filter (repeatable).")
-    parser.add_argument("--vocabulary", action="append", default=None, help="Optional vocabulary filter (repeatable).")
+    parser.add_argument(
+        "--vocabulary",
+        action="append",
+        default=None,
+        help="Optional vocabulary filter (repeatable).",
+    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -541,7 +459,6 @@ def main() -> None:
         domain_filter=set(args.domain) if args.domain else None,
         vocab_filter=set(args.vocabulary) if args.vocabulary else None,
         grounding_parent_ids=(tuple(args.grounding_parent_id) if args.grounding_parent_id else None),
-        representative_limit=args.representative_limit,
     )
 
     output = json.dumps(report, indent=2)

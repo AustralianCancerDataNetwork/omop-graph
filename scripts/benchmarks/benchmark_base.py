@@ -23,6 +23,23 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_llm import LLMClient
 
 
+DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
+
+
+def _normalize_parent_ids(raw_parent_ids: object) -> Optional[Tuple[int, ...]]:
+    """Normalize parent_ids from JSON into an optional tuple of ints."""
+
+    if raw_parent_ids is None:
+        return None
+    if isinstance(raw_parent_ids, int):
+        return (raw_parent_ids,)
+    if isinstance(raw_parent_ids, (list, tuple)):
+        return tuple(int(parent_id) for parent_id in raw_parent_ids)
+    raise TypeError(
+        "Invalid parent_ids value. Expected int, list[int], tuple[int, ...], or null."
+    )
+
+
 @dataclass(frozen=True)
 class BenchmarkCase:
     """One benchmark example and its expected target concept.
@@ -35,10 +52,10 @@ class BenchmarkCase:
         Query text sent to resolver/grounding pipelines.
     bucket : str
         Difficulty bucket used for grouped reporting.
-    domain : str
-        OMOP domain constraint value or ``NA`` for unconstrained.
-    vocabulary : str
-        OMOP vocabulary constraint value or ``NA`` for unconstrained.
+    domain : str, optional
+        OMOP domain constraint value. ``None`` means unconstrained.
+    vocabularies : tuple[str, ...], optional
+        OMOP vocabulary constraints. ``None`` or empty falls back to defaults.
     expected_concept_id : int, optional
         Gold concept ID. ``None`` indicates out-of-scope/null-grounding case.
     expected_concept_name : str, optional
@@ -50,9 +67,9 @@ class BenchmarkCase:
     id: str
     text: str
     bucket: str
-    domain: str
-    vocabulary: str
-    expected_concept_id: Optional[int]
+    domain: Optional[str] = None
+    vocabularies: Optional[Tuple[str, ...]] = None
+    expected_concept_id: Optional[int] = None
     expected_concept_name: Optional[str] = None
     parent_ids: Optional[Tuple[int, ...]] = None
 
@@ -63,14 +80,41 @@ def load_cases(path: Path) -> List[BenchmarkCase]:
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     if isinstance(payload, list):
-        return [BenchmarkCase(**row) for row in payload]
+        cases: List[BenchmarkCase] = []
+        for row in payload:
+            if "parent_ids" in row:
+                row = {**row, "parent_ids": _normalize_parent_ids(row["parent_ids"])}
+            if "vocabularies" not in row and "vocabulary" in row:
+                legacy_vocab = row.get("vocabulary")
+                if legacy_vocab is not None:
+                    row = {**row, "vocabularies": (str(legacy_vocab),)}
+                row = {k: v for k, v in row.items() if k != "vocabulary"}
+            if "vocabularies" in row and row["vocabularies"] is not None:
+                raw_vocabs = row["vocabularies"]
+                if isinstance(raw_vocabs, str):
+                    row = {**row, "vocabularies": (raw_vocabs,)}
+                else:
+                    row = {**row, "vocabularies": tuple(raw_vocabs)}
+            cases.append(BenchmarkCase(**row))
+        return cases
 
     if isinstance(payload, dict):
         cases: List[BenchmarkCase] = []
         for bucket, bucket_cases in payload.items():
             for row in bucket_cases:
-                if "parent_ids" in row and row["parent_ids"] is not None:
-                    row = {**row, "parent_ids": tuple(row["parent_ids"])}
+                if "parent_ids" in row:
+                    row = {**row, "parent_ids": _normalize_parent_ids(row["parent_ids"])}
+                if "vocabularies" not in row and "vocabulary" in row:
+                    legacy_vocab = row.get("vocabulary")
+                    if legacy_vocab is not None:
+                        row = {**row, "vocabularies": (str(legacy_vocab),)}
+                    row = {k: v for k, v in row.items() if k != "vocabulary"}
+                if "vocabularies" in row and row["vocabularies"] is not None:
+                    raw_vocabs = row["vocabularies"]
+                    if isinstance(raw_vocabs, str):
+                        row = {**row, "vocabularies": (raw_vocabs,)}
+                    else:
+                        row = {**row, "vocabularies": tuple(raw_vocabs)}
                 cases.append(BenchmarkCase(bucket=bucket, **row))
         return cases
 
@@ -130,11 +174,8 @@ def build_embedding_knowledge_graph(
 def case_constraints(case: BenchmarkCase) -> Optional[SearchConstraintConcept]:
     """Translate case metadata into OMOP search constraints when available."""
 
-    if case.domain == "NA" and case.vocabulary == "NA":
-        return None
-
-    domains = (case.domain,) if case.domain != "NA" else None
-    vocabularies = (case.vocabulary,) if case.vocabulary != "NA" else None
+    domains = (case.domain,) if case.domain else None
+    vocabularies = case.vocabularies if case.vocabularies else DEFAULT_VOCABULARIES
 
     return SearchConstraintConcept(
         domains=domains,
