@@ -64,7 +64,7 @@ ATHENA_RELATIONSHIP_CLASSIFICATION_LOAD = [
     RelationshipMapping
 ]
 
-def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> None:
+def configure_logging_level(verbosity: int, reduce_logging: bool = True) -> None:
     """Configure global logging."""
     level_map = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
     log_level = level_map.get(min(verbosity, 2), logging.DEBUG)
@@ -80,7 +80,7 @@ def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> Non
         existing_loggers = [
             logging.getLogger(name) for name in logging.root.manager.loggerDict
         ]
-        exempt_loggers = []
+        exempt_loggers = ["omop_graph", "omop_emb"]
         for logger_instance in existing_loggers:
             if not any(
                 logger_instance.name.startswith(exempt) for exempt in exempt_loggers

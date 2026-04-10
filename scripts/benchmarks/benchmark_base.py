@@ -91,6 +91,19 @@ def build_session_factory(database_url: Optional[str]) -> sessionmaker:
     return sessionmaker(bind=engine, future=True)
 
 
+def build_engine(database_url: Optional[str]) -> sa.Engine:
+    """Build a SQLAlchemy engine for the configured OMOP database."""
+
+    load_dotenv()
+    resolved_url = database_url or os.getenv("OMOP_DATABASE_URL")
+    if not resolved_url:
+        raise RuntimeError(
+            "No database URL provided. Pass --database-url or set OMOP_DATABASE_URL."
+        )
+
+    return sa.create_engine(resolved_url, future=True, echo=False)
+
+
 def build_knowledge_graph(database_url: Optional[str]) -> KnowledgeGraph:
     """Create a KnowledgeGraph backed by the live OMOP CDM database."""
 
@@ -125,7 +138,7 @@ def case_constraints(case: BenchmarkCase) -> Optional[SearchConstraintConcept]:
 
     return SearchConstraintConcept(
         domains=domains,
-        vocabs=vocabularies,
+        vocabularies=vocabularies,
         require_standard=False,
     )
 

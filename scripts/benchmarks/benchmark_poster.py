@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,10 +17,18 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from omop_llm import LLMClient
-
-from omop_graph.extensions.emb import EmbeddingBackendType, MissingExtensionError
+# Requires the omop-emb package installed!
+from omop_emb.config import (
+    IndexType,
+    BackendType,
+    MetricType,
+    parse_index_type,
+    parse_metric_type,
+)
+from omop_graph.extensions.emb import MissingExtensionError
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.cli import configure_logging_level
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (
@@ -35,12 +44,16 @@ from omop_graph.reasoning.resolvers.resolvers import (
 from benchmark_base import (  # type: ignore
     BenchmarkCase,
     build_embedding_knowledge_graph,
+    build_engine,
     build_knowledge_graph,
     case_constraints,
     load_cases,
     mcnemar,
     ranking_metrics,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -103,7 +116,6 @@ def _evaluate_case(
     config: PosterConfig,
     k: int,
     default_parent_ids: Optional[Tuple[int, ...]],
-    resolver_kwargs: Optional[Dict[str, Any]] = None,
     grounding_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, float | int | bool | str]:
     """Evaluate one case using ``ground_term`` and return poster-friendly metrics."""
@@ -116,8 +128,10 @@ def _evaluate_case(
         )
 
     resolver_pipeline = ResolverPipeline(resolvers=config.resolvers)
-    resolver_kwargs = resolver_kwargs or {}
     grounding_kwargs = grounding_kwargs or {}
+
+    metric_type = grounding_kwargs.get("metric_type")
+    index_type = grounding_kwargs.get("index_type")
 
     grounded = ground_term(
         resolver_pipeline=resolver_pipeline,
@@ -133,8 +147,8 @@ def _evaluate_case(
             predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
         ),
         max_candidates=None,
-        metric_type=grounding_kwargs.get("metric_type"),
-        index_type=grounding_kwargs.get("index_type"),
+        metric_type=metric_type,
+        index_type=index_type,
     )
 
     predictions = [sc.concept_id for sc in grounded]
@@ -255,7 +269,7 @@ def run(
     cases_path: Path,
     k: int,
     database_url: Optional[str] = None,
-    embedding_backend: Optional[EmbeddingBackendType] = None,
+    embedding_backend: Optional[str | BackendType] = None,
     embedding_storage_base_dir: Optional[str] = None,
     embedding_model: Optional[str] = None,
     embedding_api_base: Optional[str] = None,
@@ -269,11 +283,14 @@ def run(
 ) -> Dict[str, object]:
     """Run grounded poster benchmark and return report payload."""
 
+    logger.info("Starting poster benchmark run.")
+
     cases = load_cases(cases_path)
     if domain_filter:
         cases = [c for c in cases if c.domain in domain_filter]
     if vocab_filter:
         cases = [c for c in cases if c.vocabulary in vocab_filter]
+    logger.info("Loaded %d benchmark cases after filters.", len(cases))
 
     if grounding_parent_ids is None and all(c.parent_ids is None for c in cases):
         raise RuntimeError(
@@ -283,7 +300,14 @@ def run(
     embedding_client = None
     embedding_kg = None
     query_embeddings: Dict[str, np.ndarray] = {}
+    engine = build_engine(database_url)
+    resolved_embedding_index_type: Optional[IndexType] = None
+    resolved_embedding_metric_type: Optional[MetricType] = None
+
     if embedding_model is not None and embedding_api_base is not None:
+        resolved_embedding_index_type = parse_index_type(embedding_index_type)
+        resolved_embedding_metric_type = parse_metric_type(embedding_metric_type)
+
         embedding_client = LLMClient(
             model=embedding_model,
             api_base=embedding_api_base,
@@ -295,6 +319,17 @@ def run(
             embedding_client=embedding_client,
             embedding_storage_base_dir=embedding_storage_base_dir,
         )
+        embedding_dim = embedding_client.embedding_dim
+        if embedding_dim is None:
+            raise RuntimeError("Embedding client did not expose an embedding dimension.")
+        
+        embedding_kg.emb.setup_and_register_model(
+            engine=engine,
+            model_name=embedding_model,
+            dimensions=embedding_dim,
+            index_type=IndexType(embedding_index_type),
+        )
+
         query_embeddings = {
             case.id: embedding_kg.emb.embed_texts(case.text)
             for case in cases
@@ -309,6 +344,7 @@ def run(
     errors: Dict[str, str] = {}
 
     for config in configs:
+        logger.info("Evaluating config '%s' (%d resolvers).", config.name, len(config.resolvers))
         try:
             if config.requires_embedding and embedding_kg is None:
                 raise MissingExtensionError(
@@ -319,24 +355,15 @@ def run(
             rows: List[Dict[str, float | int | bool | str]] = []
 
             for case in cases:
-                resolver_kwargs: Optional[Dict[str, Any]] = None
                 grounding_kwargs: Optional[Dict[str, Any]] = None
-
-                if config.requires_embedding:
-                    resolver_kwargs = {
-                        "text_embedding": query_embeddings.get(case.id),
-                        "text_embedding_model": embedding_model,
-                        "metric_type": embedding_metric_type,
-                        "index_type": embedding_index_type,
-                    }
 
                 if embedding_kg is not None and embedding_model is not None:
                     grounding_kwargs = {
                         "text_embedding": query_embeddings.get(case.id),
                         "text_embedding_model": embedding_model,
                         "embedding_client": embedding_client,
-                        "metric_type": embedding_metric_type,
-                        "index_type": embedding_index_type,
+                        "metric_type": resolved_embedding_metric_type,
+                        "index_type": resolved_embedding_index_type,
                     }
 
                 rows.append(
@@ -346,13 +373,15 @@ def run(
                         config=config,
                         k=k,
                         default_parent_ids=grounding_parent_ids,
-                        resolver_kwargs=resolver_kwargs,
                         grounding_kwargs=grounding_kwargs,
                     )
                 )
 
+            logger.info("Completed config '%s' with %d case rows.", config.name, len(rows))
+
         except Exception as exc:
             errors[config.name] = str(exc)
+            logger.exception("Config '%s' failed: %s", config.name, exc)
             continue
 
         per_config[config.name] = rows
@@ -486,8 +515,17 @@ def main() -> None:
     )
     parser.add_argument("--domain", action="append", default=None, help="Optional domain filter (repeatable).")
     parser.add_argument("--vocabulary", action="append", default=None, help="Optional vocabulary filter (repeatable).")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase logging verbosity; use -vv for DEBUG output.",
+    )
     parser.add_argument("--out", type=Path, default=None, help="Optional output JSON path.")
     args = parser.parse_args()
+
+    configure_logging_level(args.verbose)
 
     report = run(
         cases_path=args.cases,
