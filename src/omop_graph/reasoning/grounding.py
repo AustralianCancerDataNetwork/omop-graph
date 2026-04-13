@@ -119,6 +119,8 @@ def ground_term(
     if search_constraints is not None:
         kg.check_search_constraints(search_constraints)
 
+    
+
     # Calculate the text embedding on demand if possible
     embedding_interface = get_embedding_interface(kg)
     if (
@@ -132,6 +134,10 @@ def ground_term(
                 texts=(text,),
                 embedding_client=embedding_client,
             )
+
+    if text_embedding is not None:
+        # TODO: Support grounding to more texts
+        assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single term to be grounded."
 
     resolved = list(
         resolver_pipeline.resolve(
@@ -175,8 +181,8 @@ def ground_term(
         logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
         return []
 
-    # Optional semantic similarity scoring
-    similarity_scores = semantic_similarity(
+
+    similarity_scores_with_concept_ids = semantic_similarity(
         kg=kg,
         unique_standard_concepts=unique_standard_concepts,
         text_embedding=text_embedding,
@@ -186,17 +192,12 @@ def ground_term(
         index_type=index_type,
     )
 
-    # Transpose to make the shape (num_concepts, 1) if it's not None, 1 being the number of querie vectors
-    if text_embedding is not None:
-        assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single query."
-    similarity_scores = similarity_scores.transpose() if similarity_scores is not None else None
-
     # Scoring
     ranked_standard_concepts = score_standard_concepts(
         text=text, 
         standard_concepts=tuple(unique_standard_concepts),
         kg=kg,
-        similarity_scores=similarity_scores
+        similarity_scores_with_concept_ids=similarity_scores_with_concept_ids
     )
 
     ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)

@@ -14,7 +14,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple, Mapping
 
 import numpy as np
 
@@ -47,19 +47,11 @@ class StandardConceptWithScore(StandardConcept):
         Bonus based on the concept's generality (ancestor count).
     """
 
-    total_score: float = field(compare=True, init=False)
+    total_score: float = field(compare=True, default=0.0)
     embedding_score: Optional[float] = field(compare=False, default=None)
     relevance: float = field(compare=False, default=0.0)
     parsimony_penalty: float = field(compare=False, default=0.0)
     broadness_bonus: float = field(compare=False, default=0.0)
-
-    def __post_init__(self):
-        """
-        Calculate the total score after initialization.
-        """
-        score = self.relevance - self.parsimony_penalty + self.broadness_bonus
-        # Use object.__setattr__ because the dataclass is frozen
-        object.__setattr__(self, "total_score", score)
 
     def __repr__(self) -> str:
         return (
@@ -72,10 +64,11 @@ class StandardConceptWithScore(StandardConcept):
     def from_standard_concept(
         cls,
         standard_concept: StandardConcept,
-        embedding_score: float,
+        embedding_score: Optional[float],
         relevance: float,
         parsimony_penalty: float,
         broadness_bonus: float,
+        total_score: float,
     ) -> "StandardConceptWithScore":
         """
         Factory method to promote a StandardConcept to a scored version.
@@ -92,6 +85,7 @@ class StandardConceptWithScore(StandardConcept):
             relevance=relevance,
             parsimony_penalty=parsimony_penalty,
             broadness_bonus=broadness_bonus,
+            total_score=total_score,
         )
 
 
@@ -99,7 +93,7 @@ def score_standard_concepts(
     text: str,
     standard_concepts: tuple[StandardConcept, ...],
     kg: "KnowledgeGraph",
-    similarity_scores: Optional[np.ndarray] = None,
+    similarity_scores_with_concept_ids: Optional[Tuple[Mapping[int, float], ...]] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Rank a list of standard concepts against a query text.
@@ -109,40 +103,38 @@ def score_standard_concepts(
     text : str
         The original query text.
     standard_concepts : tuple[StandardConcept, ...]
-        The list of candidate concepts to score.
+        The tuple of candidate concepts to score.
     kg : KnowledgeGraph
         The graph instance used for retrieving metadata (like ancestor counts).
-    similarity_scores : np.ndarray, optional
-        Pre-computed embedding similarity scores corresponding to the concepts.
+    similarity_scores_with_concept_ids : Tuple[Mapping[int, float], ...], optional
+        Pre-computed embedding similarity scores. The outer tuple corresponds to the query vectors in order, and each inner dictionary maps concept IDs to their similarity scores with the query embedding. 
 
     Returns
     -------
     list[StandardConceptWithScore]
         The list of concepts with scores attached.
     """
-    if similarity_scores is not None:
-        assert len(similarity_scores) == len(standard_concepts), "Length of similarity scores must match number of standard concepts."
-        assert similarity_scores.shape[1] == 1, "Similarity scores should have shape (num_concepts, 1) for k=1."
-
-    ranked_concepts = []
-
     # Get specificity scores (ancestor counts) for the standard concepts
-    concept_ids = tuple(sc.concept_id for sc in standard_concepts)
-    num_ancestors = kg.get_num_ancestors(concept_ids)
+    sc_dict = {sc.concept_id: sc for sc in standard_concepts}
+    num_ancestors = kg.get_num_ancestors(tuple(sc_dict.keys()))
+    
+    # singular text
+    if similarity_scores_with_concept_ids is None:
+        similarity_scores_with_concept_ids = ({}, )
 
+    assert len(similarity_scores_with_concept_ids) == 1, "Currently only supports scoring with a single query embedding vector for the singular text input"
+    _similarity_scores_dict = similarity_scores_with_concept_ids[0]
+    
     ranked_concepts = [
         _score_standard_concept(
             text=text,
             kg=kg,
             standard_concept=sc,
             num_ancestors=num_ancestors.get(sc.concept_id, 0),
-            similarity_score=(
-                similarity_scores[i].item() if similarity_scores is not None else None
-            ),
+            similarity_score=_similarity_scores_dict.get(sc.concept_id, None),
         )
-        for i, sc in enumerate(standard_concepts)
+        for sc in standard_concepts
     ]
-
     return ranked_concepts
 
 
@@ -157,6 +149,12 @@ def _score_standard_concept(
 ) -> StandardConceptWithScore:
     """
     Calculate the score for a single concept.
+
+    Notes
+    -----
+    Parsimony: Penalizes concepts that are found deeper in the graph (higher separation).
+    Broadness: Rewards concepts that are more general (higher ancestor count). Uses a log scale to dampen the effect of extremely high ancestor counts.
+    Relevance: Contextual similarity (if embedding_score is provided) or textual similarity as fallback
 
     Parameters
     ----------
@@ -180,23 +178,18 @@ def _score_standard_concept(
     StandardConceptWithScore
         The scored concept.
     """
-    textual_similarity = _textual_similarity_score(
-        query_text=text, matched_label=standard_concept.matched_label
-    )
 
     if similarity_score is None:
-        similarity_score = 1.0   # If no embedding score, rely solely on textual similarity for relevance
-    
-    # Combined relevance: Embedding similarity * Textual overlap
-    relevance = similarity_score * textual_similarity
+        relevance = _textual_similarity_score(
+        query_text=text, matched_label=standard_concept.matched_label
+    )
+    else:
+        relevance = similarity_score
 
-    # Parsimony Component: Penalize concepts found deeper in the graph
-    # (higher separation = higher penalty)
     parsimony_penalty = alpha * standard_concept.separation
-
-    # Broadness Component: Bonus for general concepts (more ancestors)
-    # Uses log scale to dampen the effect of extremely high ancestor counts
     broadness_bonus = (beta * np.log(1 + num_ancestors)).item()
+
+    total_score = relevance - parsimony_penalty + broadness_bonus
 
     return StandardConceptWithScore.from_standard_concept(
         standard_concept=standard_concept,
@@ -204,6 +197,7 @@ def _score_standard_concept(
         relevance=relevance,
         parsimony_penalty=parsimony_penalty,
         broadness_bonus=broadness_bonus,
+        total_score=total_score,
     )
 
 

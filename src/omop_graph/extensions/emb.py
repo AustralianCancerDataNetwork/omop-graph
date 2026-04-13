@@ -73,15 +73,42 @@ def semantic_similarity(
     embedding_client: Optional[LLMClient],
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
-) -> Optional[np.ndarray]:
+) -> Optional[Tuple[Mapping[int, float], ...]]:
     """
     Calculates similarity between text embeddings and concept embeddings.
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The knowledge graph instance, used to access the embedding interface.
+    unique_standard_concepts : Sequence[StandardConcept]
+        A sequence of unique standard concepts for which to calculate similarity scores against using the text_embedding.
+    text_embedding : Optional[np.ndarray]
+        The embedding vector to compare against concept embeddings. Expected shape is (q, dimension) where q is the number of query vectors and dimension is the size of the embedding space for the model. Note: q=1 for a single text embedding.
+    text_embedding_model : Optional[str]
+        The name of the text embedding model used to generate the text_embedding. This should correspond to
+        a model registered in the embedding interface. If None, similarity calculation will not be attempted.
+    embedding_client : Optional[LLMClient]
+        An optional LLM client used to fetch missing embeddings if they are not present in the database. This is only used as a fallback mechanism if the initial retrieval of similarity scores fails due to missing embeddings. If None, no fallback will be attempted and the function will return None if embeddings are missing.
+    metric_type : Optional[EmbeddingMetricType]
+        The similarity or distance metric to use for calculating similarity scores. This must be compatible with the index type used by the database. If None, similarity calculation will not be attempted.
+    index_type : Optional[EmbeddingIndexType]
+        The type of vector index used to store the embeddings. This is required to ensure that the correct retrieval method is used from the embedding interface. If None, similarity calculation will not be attempted.
+
+    Returns
+    -------
+    Optional[Tuple[Mapping[int, float], ...]]
+        A tuple of dictionaries mapping concept IDs to similarity scores for each query embedding.
+        The outer tuple is of length q (number of query embeddings, shape[0] of text_embedding), and each inner dictionary contains up to k (the number of unique concepts) entries mapping concept IDs to their similarity scores with the query embedding.
+
     """
     if not HAS_OMOP_EMB:
+        logger.info("Embedding functionality is not available. Ensure 'omop-emb' is installed to use this feature.")
         return None
 
     embedding_interface = get_embedding_interface(kg)
     if embedding_interface is None:
+        logger.info("Embedding interface not found in KG. Ensure the embedding extension is properly configured.")
         return None
     
     concept_filter = SearchConstraintConcept(
@@ -148,11 +175,17 @@ def semantic_similarity(
                     metric_type=metric_type,
                     index_type=index_type
                 )
+            else:
+                param_dict = {
+                    "text_embedding_model": text_embedding_model,
+                    "embedding_client": embedding_client,
+                    "text_embedding": text_embedding,
+                    "index_type": index_type
+                }
+                none_params = [k for k, v in param_dict.items() if v is None]
+                logger.info(f"Fallback embedding calculation not possible for unique_standard_concepts due to missing parameters: {none_params}")
 
-        if similarity_scores_tuple_of_dicts:
-            return np.array([list(d.values()) for d in similarity_scores_tuple_of_dicts])
-        
-        return None
+        return similarity_scores_tuple_of_dicts
 
 def get_neareast_concepts(
     session: Session,
@@ -165,8 +198,33 @@ def get_neareast_concepts(
     k: int = 10
 ) -> Optional[Tuple[Mapping[int, float], ...]]:
     """
-    RAG retrieval for concept similarity scores.
-    Ensures all types from omop_emb are used via strings or local checks.
+    RAG retrieval for concept similarity scores. The text_embedding is used to retrieve the nearest concepts from the database
+    using stored embeddings and the specified similarity metric.
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy session for any required relational access.
+    kg : KnowledgeGraph
+        The knowledge graph instance, used to access the embedding interface.
+    text_embedding_model : Optional[str]
+        The name of the text embedding model to use for retrieval. This should correspond to a model registered in the embedding interface. If None, retrieval will not be attempted.
+    text_embedding : Optional[np.ndarray]
+        The embedding vector to search with. Expected shape is (q, dimension) where q is the number of query vectors and dimension is the size of the embedding space for the model. If None, retrieval will not be attempted.
+    concept_filter : Optional[EmbeddingConceptFilter], optional
+        A filter to specify which concepts to consider as potential nearest neighbors.
+    index_type : IndexType
+        The type of vector index used to store the embeddings.
+    metric_type : MetricType
+        The similarity or distance metric to use for nearest neighbor search. This must be compatible with the index type used by the database.
+    k : int, optional
+        K nearest neighbors to return for each query vector. Default is 10.
+
+    Returns
+    -------
+    Tuple[Mapping[int, float], ...], optional
+        A tuple of dictionaries containing nearest concept matches for each query vector. The outer tuple is of length q (number of query vectors), and each inner dictionary maps concept IDs to their similarity scores with the query embedding (having k entries corresponding to the k nearest neighbors).
+        If retrieval fails or if any required parameters are missing, returns None.
     """
     if not HAS_OMOP_EMB:
         return None
@@ -216,4 +274,18 @@ def get_neareast_concepts(
         k=k
     )
 
-    return similarity_scores_tuple if similarity_scores_tuple else None
+    if similarity_scores_tuple is None:
+        logger.info("No similarity scores retrieved from embedding interface.")
+        return None
+    
+    assert len(similarity_scores_tuple) == text_embedding.shape[0], (
+        f"Expected similarity scores for {text_embedding.shape[0]} query embeddings, "
+        f"but got {len(similarity_scores_tuple)}."
+    )
+    assert all(isinstance(d, dict) for d in similarity_scores_tuple), (
+        "Expected each item in similarity_scores_tuple to be a dictionary mapping concept IDs to scores."
+    )
+    assert all(len(d) <= k for d in similarity_scores_tuple), (
+        f"Expected at most {k} nearest neighbors per query embedding, but found a dictionary with {max(len(d) for d in similarity_scores_tuple)} entries."
+    )
+    return similarity_scores_tuple
