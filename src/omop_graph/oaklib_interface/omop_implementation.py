@@ -865,11 +865,19 @@ class OMOPAlchemyImplementation(
     kg : KnowledgeGraph | None, optional
         An existing Knowledge Graph instance. If None, one is created.
     kg_emb_backend : EmbeddingBackendName, optional
-        Optional embedding backend to configure on the KnowledgeGraph if `kg` is not provided and embedding support is desired and enabled.
-        Environment variable `OMOP_EMB_BACKEND` can also be set to configure this globally.
+        Optional embedding backend for ``KnowledgeGraph`` construction when
+        ``kg`` is not provided.
+        Resolution order:
+        1. explicit ``kg_emb_backend`` argument
+        2. ``OMOP_EMB_BACKEND`` environment variable (inside ``omop_emb``)
+        If both are missing, embedding initialization fails only when embedding
+        operations are accessed.
     kg_emb_base_storage_dir : str | None, optional
-        Optional base directory for embedding backend storage (for example FAISS index files).
-        Environment variable `OMOP_EMB_BASE_STORAGE_DIR` can also be set to configure this globally.
+        Optional base directory forwarded to the embedding backend constructor.
+        Typical resolution order:
+        1. explicit ``kg_emb_base_storage_dir`` argument
+        2. ``OMOP_EMB_BASE_STORAGE_DIR`` environment variable
+        3. backend default directory
     """
 
     def __init__(
