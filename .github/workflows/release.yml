@@ -11,6 +11,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      OMOP_EMB_BACKEND: pgvector
 
     steps:
       - uses: actions/checkout@v5

@@ -62,7 +62,7 @@ def get_embedding_interface(kg: KnowledgeGraph) -> Optional["EmbeddingInterface"
     """
     try:
         return kg.emb
-    except (MissingExtensionError, ImportError):
+    except (MissingExtensionError, ImportError, AttributeError):
         return None
 
 def semantic_similarity(
