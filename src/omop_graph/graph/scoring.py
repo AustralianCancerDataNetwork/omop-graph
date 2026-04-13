@@ -1,171 +1,283 @@
+"""
+Scoring algorithms for ranking resolved concepts.
+
+This module implements the logic for scoring candidate OMOP concepts based on:
+1.  **Relevance:** How well the text matches the query (embeddings + string similarity).
+2.  **Parsimony:** Penalizing deep graph traversals (finding a concept far away).
+3.  **Broadness:** Rewarding concepts that are more general (higher ancestor count), 
+    often useful for finding category headers.
+"""
+
 from __future__ import annotations
-from dataclasses import dataclass
 
-from .edges import PredicateKind
-from .paths import GraphPath, PathStep
-from .traverse import GraphTrace, TraceStep
-from .kg import KnowledgeGraph
-from .paths import find_shortest_paths
+import logging
+import re
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
+from typing import TYPE_CHECKING, List, Optional, Tuple, Mapping
 
-"""
-Path scoring and explanation.
+import numpy as np
 
-Scope: Scoring and explaining paths through the graph.
-i.e. Which path is better and why?
-"""
+# Local Application Imports
+from omop_graph.graph.paths import StandardConcept
 
-@dataclass(frozen=True)
-class PathExplanationStep:
-    step: PathStep
-    traversal_depth: int | None
-    predicate_kind: PredicateKind
-    reason: str
+if TYPE_CHECKING:
+    from omop_graph.graph.kg import KnowledgeGraph
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
-class PathExplanation:
-    path: GraphPath
-    profile: PathProfile
-    steps: tuple[PathExplanationStep, ...]
+class StandardConceptWithScore(StandardConcept):
+    """
+    A StandardConcept enriched with scoring metrics.
 
-@dataclass(frozen=True)
-class PathProfile:
-    hops: int
-    invalid_concepts: int
-    non_standard_concepts: int
-    vocab_switches: int
+    Attributes
+    ----------
+    total_score : float
+        The final calculated score used for ranking.
+        Formula: `relevance - parsimony_penalty + broadness_bonus`
+    embedding_score : float, optional
+        The cosine similarity score from the embedding model.
+    relevance : float
+        The composite relevance score (embedding * textual similarity).
+    parsimony_penalty : float
+        Penalty based on graph distance (separation).
+    broadness_bonus : float
+        Bonus based on the concept's generality (ancestor count).
+    """
 
-    ontological_edges: int
-    mapping_edges: int
-    metadata_edges: int
+    total_score: float = field(compare=True, default=0.0)
+    embedding_score: Optional[float] = field(compare=False, default=None)
+    relevance: float = field(compare=False, default=0.0)
+    parsimony_penalty: float = field(compare=False, default=0.0)
+    broadness_bonus: float = field(compare=False, default=0.0)
 
-    def path_rank(self) -> tuple:
-        """
-        Lower is better.
-        """
+    def __repr__(self) -> str:
         return (
-            self.invalid_concepts,        # never want invalid concepts
-            self.non_standard_concepts,   # prefer standard
-            self.metadata_edges,          # noisy
-            self.mapping_edges,           # allowed but less ideal
-            self.vocab_switches,           # continuity matters
-            self.hops,                    # finally: shortest
-            -self.ontological_edges,      # prefer structure if tied
+            f"StandardConceptWithScore("
+            f"concept_id={self.concept_id} [{self.concept_name}], "
+            f"score={self.total_score:.4f})"
         )
 
-    def __lt__(self, other: PathProfile) -> bool:
-        return self.path_rank() < other.path_rank()
-
-def path_profile(kg: KnowledgeGraph, path: GraphPath) -> PathProfile:
-    invalid = 0
-    non_standard = 0
-    vocab_switches = 0
-
-    prev_vocab = None
-    for cid in path.nodes():
-        c = kg.concept_view(cid)
-        if c.invalid_reason:
-            invalid += 1
-        if c.standard_concept is None:
-            non_standard += 1
-        if prev_vocab and c.vocabulary_id != prev_vocab:
-            vocab_switches += 1
-        prev_vocab = c.vocabulary_id
-
-    ont = map_ = meta = 0
-    for step in path.steps:
-        kind = kg.predicate_kind(step.predicate)
-        if kind == PredicateKind.ONTOLOGICAL:
-            ont += 1
-        elif kind == PredicateKind.MAPPING:
-            map_ += 1
-        else:
-            meta += 1
-
-    return PathProfile(
-        hops=len(path.steps),
-        invalid_concepts=invalid,
-        non_standard_concepts=non_standard,
-        vocab_switches=vocab_switches,
-        ontological_edges=ont,
-        mapping_edges=map_,
-        metadata_edges=meta,
-    )
-
-def trace_contains_step(trace: GraphTrace, step: PathStep) -> TraceStep | None:
-    for ts in trace.steps:
-        if ts.node != step.subject:
-            continue
-        for e in ts.expanded_edges:
-            if (
-                e.object_id == step.object
-                and e.predicate_id == step.predicate
-            ):
-                return ts
-    return None
-
-def explain_path(
-    kg: KnowledgeGraph,
-    path: GraphPath,
-    trace: GraphTrace,
-) -> PathExplanation:
-    steps: list[PathExplanationStep] = []
-    profile = path_profile(kg, path)
-
-    for step in path.steps:
-        ts = trace_contains_step(trace, step)
-        kind = kg.predicate_kind(step.predicate)
-        reason = kind.label()
-        steps.append(
-            PathExplanationStep(
-                step=step,
-                traversal_depth=ts.depth if ts else None,
-                predicate_kind=kind,
-                reason=reason,
-            )
+    @classmethod
+    def from_standard_concept(
+        cls,
+        standard_concept: StandardConcept,
+        embedding_score: Optional[float],
+        relevance: float,
+        parsimony_penalty: float,
+        broadness_bonus: float,
+        total_score: float,
+    ) -> "StandardConceptWithScore":
+        """
+        Factory method to promote a StandardConcept to a scored version.
+        """
+        return cls(
+            **vars(standard_concept),
+            embedding_score=embedding_score,
+            relevance=relevance,
+            parsimony_penalty=parsimony_penalty,
+            broadness_bonus=broadness_bonus,
+            total_score=total_score,
         )
-    return PathExplanation(
-        path=path,
-        profile=profile,
-        steps=tuple(steps),
-    )
 
-def rank_paths(
-    kg: KnowledgeGraph,
-    paths: list[GraphPath],
-) -> list[GraphPath]:
-    profiles = {
-        path: path_profile(kg, path)
-        for path in paths
-    }
-    return sorted(paths, key=lambda p: profiles[p].path_rank())
 
-def find_ranked_paths_with_explanations(
-    kg,
-    source: int,
-    target: int,
-    *,
-    predicate_kinds: set[PredicateKind] | None = None,
-    max_depth: int = 6,
-    on=None,
-    max_paths: int = 20,
-):
-    paths, trace = find_shortest_paths(
-        kg,
-        source,
-        target,
-        predicate_kinds=predicate_kinds,
-        max_depth=max_depth,
-        on=on,
-        max_paths=max_paths,
-        traced=True,
-    )
+def score_standard_concepts(
+    text: str,
+    standard_concepts: tuple[StandardConcept, ...],
+    kg: "KnowledgeGraph",
+    similarity_scores_with_concept_ids: Optional[Tuple[Mapping[int, float], ...]] = None,
+) -> List[StandardConceptWithScore]:
+    """
+    Rank a list of standard concepts against a query text.
 
-    if not paths:
-        return []
+    Parameters
+    ----------
+    text : str
+        The original query text.
+    standard_concepts : tuple[StandardConcept, ...]
+        The tuple of candidate concepts to score.
+    kg : KnowledgeGraph
+        The graph instance used for retrieving metadata (like ancestor counts).
+    similarity_scores_with_concept_ids : Tuple[Mapping[int, float], ...], optional
+        Pre-computed embedding similarity scores. The outer tuple corresponds to the query vectors in order, and each inner dictionary maps concept IDs to their similarity scores with the query embedding. 
 
-    ranked = rank_paths(kg, paths)
+    Returns
+    -------
+    list[StandardConceptWithScore]
+        The list of concepts with scores attached.
+    """
+    # Get specificity scores (ancestor counts) for the standard concepts
+    sc_dict = {sc.concept_id: sc for sc in standard_concepts}
+    num_ancestors = kg.get_num_ancestors(tuple(sc_dict.keys()))
+    
+    # singular text
+    if similarity_scores_with_concept_ids is None:
+        similarity_scores_with_concept_ids = ({}, )
 
-    return [
-        explain_path(kg, path, trace) # type: ignore
-        for path in ranked
+    assert len(similarity_scores_with_concept_ids) == 1, "Currently only supports scoring with a single query embedding vector for the singular text input"
+    _similarity_scores_dict = similarity_scores_with_concept_ids[0]
+    
+    ranked_concepts = [
+        _score_standard_concept(
+            text=text,
+            kg=kg,
+            standard_concept=sc,
+            num_ancestors=num_ancestors.get(sc.concept_id, 0),
+            similarity_score=_similarity_scores_dict.get(sc.concept_id, None),
+        )
+        for sc in standard_concepts
     ]
+    return ranked_concepts
+
+
+def _score_standard_concept(
+    kg: "KnowledgeGraph",
+    text: str,
+    standard_concept: StandardConcept,
+    num_ancestors: int,
+    similarity_score: Optional[float],
+    alpha: float = 0.05,
+    beta: float = 0.01,
+) -> StandardConceptWithScore:
+    """
+    Calculate the score for a single concept.
+
+    Notes
+    -----
+    Parsimony: Penalizes concepts that are found deeper in the graph (higher separation).
+    Broadness: Rewards concepts that are more general (higher ancestor count). Uses a log scale to dampen the effect of extremely high ancestor counts.
+    Relevance: Contextual similarity (if embedding_score is provided) or textual similarity as fallback
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        Graph instance.
+    text : str
+        Query text.
+    standard_concept : StandardConcept
+        The concept being scored.
+    num_ancestors : int
+        Number of ancestors (proxy for generality).
+    similarity_score : float, optional
+        Embedding cosine similarity. If None, no embedding relevance will be factored in.
+    alpha : float, optional
+        Weight for parsimony penalty (separation cost). Default 0.05.
+    beta : float, optional
+        Weight for broadness bonus. Default 0.01.
+
+    Returns
+    -------
+    StandardConceptWithScore
+        The scored concept.
+    """
+
+    if similarity_score is None:
+        relevance = _textual_similarity_score(
+        query_text=text, matched_label=standard_concept.matched_label
+    )
+    else:
+        relevance = similarity_score
+
+    parsimony_penalty = alpha * standard_concept.separation
+    broadness_bonus = (beta * np.log(1 + num_ancestors)).item()
+
+    total_score = relevance - parsimony_penalty + broadness_bonus
+
+    return StandardConceptWithScore.from_standard_concept(
+        standard_concept=standard_concept,
+        embedding_score=similarity_score,
+        relevance=relevance,
+        parsimony_penalty=parsimony_penalty,
+        broadness_bonus=broadness_bonus,
+        total_score=total_score,
+    )
+
+
+def _textual_similarity_score(
+    query_text: str,
+    matched_label: str,
+    similarity_threshold: float = 0.85,
+    missing_penalty: float = 2.0,
+    extra_penalty: float = 0.5,
+) -> float:
+    """
+    Compute a custom token-based similarity score.
+
+    This scoring is asymmetric: it penalizes missing query tokens heavily
+    (the concept MUST cover what was asked), but penalizes extra tokens lightly
+    (the concept can be more specific).
+
+    Parameters
+    ----------
+    query_text : str
+        The user's query.
+    matched_label : str
+        The label of the candidate concept.
+    similarity_threshold : float, optional
+        Minimum Levenshtein ratio to consider two tokens a 'match'. Default 0.85.
+    missing_penalty : float, optional
+        Penalty weight for tokens in query but not in label. Default 2.0.
+    extra_penalty : float, optional
+        Penalty weight for tokens in label but not in query. Default 0.5.
+
+    Returns
+    -------
+    float
+        A score between 0.0 and 1.0.
+    """
+    # 1. Tokenize (keep standard normalization)
+    stop_words = {"of", "the", "in", "and", "or", "to", "nos", "a", "an"}
+
+    def tokenize(text: str) -> List[str]:
+        tokens = re.findall(r"\w+", text.lower())
+        return [t for t in tokens if t not in stop_words]
+
+    q_tokens = tokenize(query_text)
+    m_tokens = tokenize(matched_label)
+
+    if not q_tokens or not m_tokens:
+        return 0.0
+
+    # 2. Soft Alignment Logic
+    # Try to match every Query Token to the best available Match Token
+    matched_m_indices = set()
+    n_shared = 0
+
+    for q_word in q_tokens:
+        best_score = 0.0
+        best_idx = -1
+
+        # Find the best match in m_tokens that hasn't been used yet
+        for i, m_word in enumerate(m_tokens):
+            if i in matched_m_indices:
+                continue
+
+            # Levenshtein ratio as similarity score
+            score = SequenceMatcher(None, q_word, m_word).ratio()
+
+            if score > best_score:
+                best_score = score
+                best_idx = i
+
+        # Did we find a match good enough to call "Shared"?
+        if best_score >= similarity_threshold:
+            n_shared += 1
+            matched_m_indices.add(best_idx)
+
+    # 3. Calculate Penalties
+    # Any query token that didn't find a buddy is "Missing"
+    n_missing = len(q_tokens) - n_shared
+
+    # Any match token that wasn't used is "Extra"
+    n_extra = len(m_tokens) - n_shared
+
+    # 4. Final Score
+    # Score = Shared / (Shared + Weighted Penalties)
+    denominator = n_shared + (missing_penalty * n_missing) + (extra_penalty * n_extra)
+
+    if denominator == 0:
+        return 0.0
+
+    return n_shared / denominator

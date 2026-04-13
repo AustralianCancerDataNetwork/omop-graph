@@ -1,102 +1,132 @@
-from __future__ import annotations
-from dataclasses import dataclass
-from datetime import date
-from enum import Enum, auto
-from typing import Optional, TYPE_CHECKING, Mapping
-from html import escape
-if TYPE_CHECKING:
-    from .kg import KnowledgeGraph
-
 """
 Definitions for graph edges and predicates.
 
-Edges represent relationships between concepts in the knowledge graph.
+This module defines the lightweight data structures representing the
+relationships (edges) between concepts in the OMOP Knowledge Graph.
 
-Scope: Lightweight data structures only. No graph algorithms here. 
-i.e. What is an edge or predicate, and how do I classify or filter them?
+It focuses on data definitions and classification logic, not graph traversal algorithms.
 
-Supported relationships include:
-    * mapping (semantic equivalence)
-    * versioning (replaced by / replaces)
-    * ontological (is a / subclass of)
-    * attribute (has attribute)
-    * metadata (additional information)
+Supported Relationships
+-----------------------
+* **Mapping:** Semantic equivalence (e.g., source code to standard concept).
+* **Versioning:** Lifecycle tracking (e.g., 'replaced by', 'is a').
+* **Ontological:** Hierarchical structure (e.g., 'is a', 'subsumes').
+* **Attribute:** Descriptive properties (e.g., 'has dose form').
+* **Metadata:** Administrative or low-semantic value connections.
 """
 
-class PredicateKind(Enum):
-    ONTOLOGICAL = auto()
-    ATTRIBUTE = auto()
-    MAPPING = auto()
-    VERSIONING = auto()
-    METADATA = auto()
+from __future__ import annotations
 
-    def label(self) -> str:
-        return {
-            PredicateKind.ONTOLOGICAL: "ontological relationship (preferred structure)",
-            PredicateKind.MAPPING: "mapping relationship (cross-vocabulary)",
-            PredicateKind.ATTRIBUTE: "attribute enrichment",
-            PredicateKind.VERSIONING: "versioning relationship",
-            PredicateKind.METADATA: "metadata relationship (low semantic value)",
-        }[self]
+import logging
+from dataclasses import dataclass, fields
+from datetime import date
+from typing import TYPE_CHECKING, Optional
+
+from ..extensions.omop_alchemy import ClassIDEnum
+
+if TYPE_CHECKING:
+    from .kg import KnowledgeGraph
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class EdgeView:
+    """
+    A lightweight, immutable view of an edge in the Knowledge Graph.
+
+    Parameters
+    ----------
+    subject_id : int
+        The OMOP Concept ID of the source.
+    predicate_id : str
+        The relationship ID (e.g., 'is a', 'mapped from').
+    object_id : int
+        The OMOP Concept ID of the target.
+    valid_start_date : date, optional
+        The date the relationship became valid.
+    valid_end_date : date, optional
+        The date the relationship became invalid.
+    invalid_reason : str, optional
+        The reason for invalidation (e.g., 'D' for deleted), if applicable.
+    """
+
     subject_id: int
     predicate_id: str
     object_id: int
     valid_start_date: Optional[date]
     valid_end_date: Optional[date]
     invalid_reason: Optional[str]
-
+    class_id: ClassIDEnum
+    subclass_id: str
 
     def __repr__(self) -> str:
-        return (
-            f"Edge({self.subject_id} -[{self.predicate_id}]-> {self.object_id})"
-        )
-    
+        return f"Edge({self.subject_id} -[{self.predicate_id}]-> {self.object_id})"
 
-    def pretty(self, kg: "KnowledgeGraph") -> str:
+    def pretty(self, kg: KnowledgeGraph) -> str:
+        """
+        Return a human-readable string representation of the edge using concept names.
+
+        Parameters
+        ----------
+        kg : KnowledgeGraph
+            The graph instance used to look up concept names.
+
+        Returns
+        -------
+        str
+            A string in the format 'Subject Name -[predicate]-> Object Name'.
+        """
         s = kg.concept_view(self.subject_id)
         o = kg.concept_view(self.object_id)
         pred = kg.predicate(self.predicate_id)
 
-        return (
-            f"{s.concept_name} "
-            f"-[{pred.name}]-> "
-            f"{o.concept_name}"
-        )
-
+        return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
+    
+    @classmethod
+    def from_query(cls, entry) -> "EdgeView":
+        data = dict(zip([f.name for f in fields(cls)], entry))
+        if "class_id" in data:
+            data["class_id"] = ClassIDEnum(data["class_id"])
+        return cls(**data)
 
 @dataclass(frozen=True)
 class Predicate:
+    """
+    Definition of a Relationship Type in the OMOP CDM.
+
+    Parameters
+    ----------
+    relationship_id : str
+        The unique string identifier (e.g. `maps to`).
+    name : str
+        The human-readable label (e.g. `Non-standard to Standard Mapping`).
+    reverse_id : str, optional
+        The relationship_id of the inverse relationship (e.g. `mapped from`).
+    is_hierarchical : bool
+        Whether OMOP defines this as a hierarchical relationship.
+    anc_up : bool
+        Whether this relationship defines 'defines_ancestry' upwards (deprecated logic).
+    anc_down : bool
+        Whether this relationship defines 'defines_ancestry' downwards (deprecated logic).
+    
+    """
+
     relationship_id: str
     name: str
     reverse_id: Optional[str]
     is_hierarchical: bool
-    defines_ancestry: bool
+    anc_up: bool
+    anc_down: bool
+    class_id: ClassIDEnum
+    subclass_id: str
 
-    def classify_predicate(self, *, kg) -> PredicateKind:
-        if self.defines_ancestry:
-            return PredicateKind.ONTOLOGICAL
-
-        name = self.name.lower()
-
-        if "maps to" in name or "mapped from" in name or "equivalent" in name:
-            return PredicateKind.MAPPING
-
-        if "replaced" in name or "replaces" in name:
-            return PredicateKind.VERSIONING
-
-        if name.startswith("has "):
-            return PredicateKind.ATTRIBUTE
-
-        if self.reverse_id:
-            rev = kg.predicate(self.reverse_id)
-            if rev.name.lower().startswith("has "):
-                return PredicateKind.METADATA
-
-        return PredicateKind.METADATA
-    
+    @property
+    def defines_ancestry(self) -> bool:
+        """
+        Check if this predicate is involved in defining ancestry.
+        """
+        return self.anc_up or self.anc_down
 
     def __repr__(self) -> str:
         flags = []
@@ -111,13 +141,33 @@ class Predicate:
 
         return f"Predicate({self.relationship_id!r}: {self.name!r}{flag_str})"
 
+
 def is_active(
-    start: date | None,
-    end: date | None,
-    invalid_reason: str | None,
+    start: Optional[date],
+    end: Optional[date],
+    invalid_reason: Optional[str],
     *,
-    on: date | None = None,
+    on: Optional[date] = None,
 ) -> bool:
+    """
+    Check if a relationship is active on a given date.
+
+    Parameters
+    ----------
+    start : date, optional
+        The start date of the relationship.
+    end : date, optional
+        The end date of the relationship.
+    invalid_reason : str, optional
+        The invalid reason code (e.g. 'D', 'U'). None implies valid.
+    on : date, optional
+        The reference date to check against. If None, only checks `invalid_reason`.
+
+    Returns
+    -------
+    bool
+        True if the relationship is active, False otherwise.
+    """
     if on is None:
         return invalid_reason is None
     if start and on < start:
@@ -125,51 +175,3 @@ def is_active(
     if end and on > end:
         return False
     return invalid_reason is None
-
-
-@dataclass(frozen=True)
-class PredicateSummary:
-    groups: Mapping[PredicateKind, tuple[Predicate, ...]]
-
-    def __repr__(self) -> str:
-        parts = []
-        for kind in PredicateKind:
-            preds = self.groups.get(kind, ())
-            parts.append(f"{kind.name}: {len(preds)}")
-        return "PredicateSummary(" + ", ".join(parts) + ")"
-
-    def _repr_html_(self) -> str:
-        blocks = []
-
-        for kind in PredicateKind:
-            preds = self.groups.get(kind, ())
-            if not preds:
-                continue
-
-            pred_list = "".join(
-                f"<li><code>{escape(p.relationship_id)}</code>: {escape(p.name)}</li>"
-                for p in sorted(preds, key=lambda p: p.relationship_id)
-            )
-
-            blocks.append(f"""
-              <details style="margin-bottom:6px;">
-                <summary style="cursor:pointer; font-weight:600;">
-                  {escape(kind.name)} 
-                  <span style="color:#666; font-weight:normal;">
-                    ({len(preds)}) — {escape(kind.label())}
-                  </span>
-                </summary>
-                <ul style="margin:6px 0 0 16px;">
-                  {pred_list}
-                </ul>
-              </details>
-            """)
-
-        return f"""
-        <div style="border:1px solid #ddd; border-radius:8px; padding:10px;">
-          <div style="font-weight:600; margin-bottom:8px;">
-            Predicate summary
-          </div>
-          {''.join(blocks)}
-        </div>
-        """

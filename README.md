@@ -38,7 +38,7 @@ pip install omop-graph
 KnowledgeGraph is the main entry point. It wraps an existing SQLAlchemy session connected to an OMOP vocabulary schema. kg-core assumes OMOP semantics and tables.
 
 ```python
-from from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.kg import KnowledgeGraph
 ```
 
 ### Nodes and Edges
@@ -67,8 +67,8 @@ You can:
 * render simple HTML cards for easy interactive exploration
 
 ```python
-from omop_graph.graph.scoring import find_shortest_paths
-from omop_graph.graph.edges import PredicateKind
+from omop_graph.graph.paths import find_shortest_paths
+from omop_graph.extensions.omop_alchemy import ClassIDEnum
 
 ingredient = kg.concept_id_by_code("RxNorm", "6809") # Metformin
 drug = kg.concept_id_by_code("RxNorm", "860975") # Metformin 500 MG Oral Tablet
@@ -81,8 +81,8 @@ paths, trace = find_shortest_paths(
     source=drug,
     target=ingredient,
     predicate_kinds={
-        PredicateKind.ONTOLOGICAL,
-        PredicateKind.MAPPING,
+        ClassIDEnum.HIERARCHICAL,
+        ClassIDEnum.IDENTITY,
     },
     max_depth=6,
     traced=True,
@@ -115,7 +115,7 @@ Rendering auto-detects the environment.
 
 ```python 
 from IPython.display import HTML, display
-from kg_core.render import render_trace
+from omop_graph.render import render_trace
 
 display(HTML(render_trace(kg, trace)))
 ```

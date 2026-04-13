@@ -1,0 +1,83 @@
+site_name: omop-graph
+site_description: Virtual Knowledge Graph extension for OMOP CDM
+site_url: https://AustralianCancerDataNetwork.github.io/omop-graph
+repo_url: https://github.com/AustralianCancerDataNetwork/omop-graph
+repo_name: omop-graph
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: light-blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: usage/installation.md
+      - "CLI Reference": usage/cli.md
+      - Testing: usage/testing.md
+  - Core Components:
+      - "Knowledge Graph": graph/kg.md
+      - "Relationships": graph/edges.md
+      - "Oaklib Interface": oaklib/interface.md
+  - Reasoning:
+      - "Semantic Grounding": reasoning/grounding.md
+      - "Resolvers": reasoning/resolvers.md
+  - API Reference:
+      - "Edges": reference/ref_edges.md
+      - "Grounding": reference/ref_grounding.md
+      - "KnowledgeGraph": reference/ref_kg.md
+      - "Nodes": reference/ref_nodes.md
+      - "Paths": reference/ref_paths.md
+      - "Resolvers": reference/ref_resolvers.md
+      - "Scoring": reference/ref_scoring.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_root_heading: true
+            show_source: false
+  - macros:
+      module_name: docs/mkdocs_macros
+  - table-reader
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - tables
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  #- javascripts/mathjax.js
+  #- https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from omop_graph.graph.paths import GraphPath
-from omop_graph.graph.scoring import PathExplanation
+from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import Subgraph, GraphTrace
 
 from .html import (

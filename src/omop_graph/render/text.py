@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from omop_graph.graph.paths import GraphPath
-from omop_graph.graph.scoring import PathExplanation
+from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import Subgraph, GraphTrace
 
 

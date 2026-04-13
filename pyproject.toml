@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 authors = [
   { name = "Georgie Kennedy", email = "georgie.kennedy@unsw.edu.au" }
 ]
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 
 keywords = [
   "OMOP",
@@ -17,9 +17,10 @@ keywords = [
   "sqlalchemy",
   "knowledge-graph",
   "LLM-grounding",
-  "real-world-evidence"
+  "real-world-evidence",
+  "rapidfuzz",
+  "omop-llm",
 ]
-
 
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -34,11 +35,23 @@ classifiers = [
 ]
 
 dependencies = [
-    "omop-alchemy>=0.5.7",
-    "orm-loader>=0.3.15",
-    "psycopg2-binary>=2.9.11",
-    "sqlalchemy>=2.0.45",
-    "typing-extensions>=4.15.0",
+  "omop-alchemy>=0.6.0",
+  "orm-loader>=0.3.15",
+  "psycopg2-binary>=2.9.11",
+  "sqlalchemy>=2.0.45",
+  "typing-extensions>=4.15.0",
+  "typer",
+]
+
+[project.optional-dependencies]
+faiss = [
+  "omop-emb[faiss]>=0.3.2",
+]
+pgvector = [
+  "omop-emb[pgvector]>=0.3.2",
+]
+emb = [
+  "omop-emb[all]>=0.3.2"
 ]
 
 [dependency-groups]
@@ -49,14 +62,22 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
+    "omop-graph[emb]>=0.3.2",
+    "mkdocs<2.0",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-mermaid2-plugin",
+    "mkdocs-table-reader-plugin",
+    "mkdocs-macros-plugin", 
 ]
 
+[project.scripts]
+omop-graph = "omop_graph.cli:app"
+
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[tool.hatch.build.targets.wheel]
+packages = ["src/omop_graph"]
 
-[tool.setuptools.packages.find]
-where = ["src"]

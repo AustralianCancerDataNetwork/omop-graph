@@ -1,0 +1,80 @@
+{
+  "easy": [
+    {
+      "id": "easy_kidney_cancer",
+      "text": "Kidney cancer",
+      "domain": "Condition",
+      "expected_concept_id": 196653,
+      "expected_concept_name": "Malignant tumor of kidney"
+    },
+    {
+      "id": "easy_hodgkin_lymphoma",
+      "text": "Hodgkin lymphoma",
+      "domain": "Condition",
+      "expected_concept_id": 4038835,
+      "expected_concept_name": "Hodgkin's disease (clinical)"
+    },
+    {
+      "id": "easy_ovarian_cancer",
+      "text": "Ovarian cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4181351,
+      "expected_concept_name": "Malignant neoplasm of ovary"
+    }
+  ],
+  "synonym-heavy": [
+    {
+      "id": "synonym_myelodysplasia",
+      "text": "Myelodysplasia",
+      "domain": "Condition",
+      "expected_concept_id": 138994,
+      "expected_concept_name": "Myelodysplastic syndrome (clinical)"
+    },
+    {
+      "id": "synonym_acute_lymphoid_leukemia",
+      "text": "acute lymphoblastic leukaemia",
+      "domain": "Condition",
+      "expected_concept_id": 134305,
+      "expected_concept_name": "Acute lymphoid leukemia"
+    },
+    {
+      "id": "synonym_heart_attack",
+      "text": "heart attack",
+      "domain": "Condition",
+      "expected_concept_id": 4329847,
+      "expected_concept_name": "Myocardial infarction"
+    }
+  ],
+  "ambiguous": [
+    {
+      "id": "ambiguous_mass",
+      "text": "mass",
+      "domain": "Condition",
+      "expected_concept_id": 333001,
+      "expected_concept_name": "Mass of body structure"
+    },
+    {
+      "id": "ambiguous_lesion",
+      "text": "lesion",
+      "domain": "Condition",
+      "expected_concept_id": 444001,
+      "expected_concept_name": "Lesion of skin"
+    }
+  ],
+  "noisy": [
+    {
+      "id": "noisy_typo_kidny",
+      "text": "kidny cancr",
+      "domain": "Condition",
+      "expected_concept_id": 196653,
+      "expected_concept_name": "Malignant tumor of kidney"
+    },
+    {
+      "id": "noisy_abbrev_aml",
+      "text": "AML",
+      "domain": "Condition",
+      "expected_concept_id": 140352,
+      "expected_concept_name": "Acute myeloid leukemia, disease"
+    }
+  ]
+}
