@@ -84,13 +84,23 @@ class KnowledgeGraph(GraphBackend):
         The SQLAlchemy sessionmaker factory capable of creating separate sessions for 
         each database access.
     emb_backend : EmbeddingBackendName, optional
-        The name of the embedding backend to use. Required for embedding
-        functionality. Embedding functionality is only possible if the 'omop-emb' extension is installed (`pip install omop-graph[emb]`)
-    emb_faiss_index_dir : str, optional
-        Optional base directory for FAISS backend storage. Only relevant if using the FAISS embedding backend.
+        Optional embedding backend identifier passed to ``omop_emb``.
+        Resolution order is:
+        1. explicit ``emb_backend`` argument
+        2. ``OMOP_EMB_BACKEND`` environment variable
+        If both are missing, embedding initialization fails when ``emb`` is first accessed.
+        Embedding functionality is only available when the optional dependency
+        is installed (``pip install omop-graph[emb]``).
+    emb_base_storage_dir : str, optional
+        Optional base directory forwarded to the embedding backend constructor.
+        Resolution order is backend-specific but typically:
+        1. explicit ``emb_base_storage_dir`` argument
+        2. ``OMOP_EMB_BASE_STORAGE_DIR`` environment variable
+        3. backend default local directory
+        This is mainly relevant for backends that persist files locally.
     emb_client : LLMClient, optional
-        An optional client for generating embeddings. Required if using any embedding functionality. Only relevant if the
-        'omop-emb' extension is installed (`pip install omop-graph[emb]`). Can also be specified per-method for embedding operations, in which case the method-level client will take precedence over this default client.
+        Optional default client for generating embeddings. Method-level clients can
+        override this value for specific calls.
     """
 
     def __init__(
@@ -114,7 +124,12 @@ class KnowledgeGraph(GraphBackend):
 
     @property
     def emb(self) -> "EmbeddingInterface":
-        """Namespace for all embedding operations."""
+        """Namespace for all embedding operations.
+
+        The interface is created lazily on first access using ``_emb_backend`` and
+        ``_emb_base_storage_dir``. Backend resolution follows ``omop_emb`` rules:
+        explicit backend argument first, then ``OMOP_EMB_BACKEND``.
+        """
         if self._emb is not None:
             return self._emb
             
