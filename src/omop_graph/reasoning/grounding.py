@@ -25,7 +25,6 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.paths import (
     StandardConcept,
     find_standard_paths,
-    get_unique_standard_concepts,
 )
 from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
@@ -176,15 +175,14 @@ def ground_term(
             # Note: We currently require parent_ids for clinical safety/context
             raise NotImplementedError("Grounding without parent_ids is not supported.")
 
-    unique_standard_concepts = get_unique_standard_concepts(standard_concepts)
-    if not unique_standard_concepts:
+    if not standard_concepts:
         logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
         return []
 
 
     similarity_scores_with_concept_ids = semantic_similarity(
         kg=kg,
-        unique_standard_concepts=unique_standard_concepts,
+        standard_concepts=standard_concepts,
         text_embedding=text_embedding,
         text_embedding_model=text_embedding_model,
         embedding_client=embedding_client,
@@ -195,13 +193,24 @@ def ground_term(
     # Scoring
     ranked_standard_concepts = score_standard_concepts(
         text=text, 
-        standard_concepts=tuple(unique_standard_concepts),
+        standard_concepts=tuple(standard_concepts),
         kg=kg,
         similarity_scores_with_concept_ids=similarity_scores_with_concept_ids
     )
 
-    ranked_standard_concepts.sort(key=lambda sc: sc.total_score, reverse=True)
-    return ranked_standard_concepts[:max_candidates] if max_candidates is not None else ranked_standard_concepts
+    # Keep one best-scoring entry per standard concept after scoring all evidence.
+    best_by_concept_id: dict[int, StandardConceptWithScore] = {}
+    for concept in ranked_standard_concepts:
+        existing = best_by_concept_id.get(concept.concept_id)
+        if existing is None or concept.total_score > existing.total_score:
+            best_by_concept_id[concept.concept_id] = concept
+
+    deduped_ranked = sorted(
+        best_by_concept_id.values(),
+        key=lambda sc: sc.total_score,
+        reverse=True,
+    )
+    return deduped_ranked[:max_candidates] if max_candidates is not None else deduped_ranked
 
 
 

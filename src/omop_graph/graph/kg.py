@@ -308,7 +308,7 @@ class KnowledgeGraph(GraphBackend):
             reverse_id=row.reverse_relationship_id,
             is_hierarchical=bool(row.is_hierarchical),
             anc_up=bool(int(row.anc_up)),
-            anc_down=bool(int(row.anc_up)),
+            anc_down=bool(int(row.anc_down)),
             class_id=ClassIDEnum(row.class_id),
             subclass_id=row.subclass_id
         )

@@ -135,7 +135,7 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
 
     result = emb_ext.semantic_similarity(
         kg=cast(KnowledgeGraph, FakeKG()),
-        unique_standard_concepts=[
+        standard_concepts=[
             StandardConcept(
                 concept_id=1,
                 concept_name="alpha",

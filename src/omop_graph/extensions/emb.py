@@ -67,7 +67,7 @@ def get_embedding_interface(kg: KnowledgeGraph) -> Optional["EmbeddingInterface"
 
 def semantic_similarity(
     kg: KnowledgeGraph,
-    unique_standard_concepts: Sequence[StandardConcept],
+    standard_concepts: Sequence[StandardConcept],
     text_embedding: Optional[np.ndarray],
     text_embedding_model: Optional[str],
     embedding_client: Optional[LLMClient],
@@ -81,8 +81,8 @@ def semantic_similarity(
     ----------
     kg : KnowledgeGraph
         The knowledge graph instance, used to access the embedding interface.
-    unique_standard_concepts : Sequence[StandardConcept]
-        A sequence of unique standard concepts for which to calculate similarity scores against using the text_embedding.
+    standard_concepts : Sequence[StandardConcept]
+        A sequence of standard concepts for which to calculate similarity scores against using the text_embedding.
     text_embedding : Optional[np.ndarray]
         The embedding vector to compare against concept embeddings. Expected shape is (q, dimension) where q is the number of query vectors and dimension is the size of the embedding space for the model. Note: q=1 for a single text embedding.
     text_embedding_model : Optional[str]
@@ -111,9 +111,8 @@ def semantic_similarity(
         logger.info("Embedding interface not found in KG. Ensure the embedding extension is properly configured.")
         return None
     
-    concept_filter = SearchConstraintConcept(
-        concept_ids=tuple(sc.concept_id for sc in unique_standard_concepts)
-    )
+    concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
+    concept_filter = SearchConstraintConcept(concept_ids=concept_ids)
 
     with kg.session_factory() as session:
         similarity_scores_tuple_of_dicts = get_neareast_concepts(
@@ -124,7 +123,7 @@ def semantic_similarity(
             concept_filter=concept_filter,
             metric_type=metric_type,
             index_type=index_type,
-            k=len(unique_standard_concepts)
+            k=len(concept_ids)
         )
 
         if not similarity_scores_tuple_of_dicts:
@@ -183,7 +182,7 @@ def semantic_similarity(
                     "index_type": index_type
                 }
                 none_params = [k for k, v in param_dict.items() if v is None]
-                logger.info(f"Fallback embedding calculation not possible for unique_standard_concepts due to missing parameters: {none_params}")
+                logger.info(f"Fallback embedding calculation not possible for standard_concepts due to missing parameters: {none_params}")
 
         return similarity_scores_tuple_of_dicts
 
