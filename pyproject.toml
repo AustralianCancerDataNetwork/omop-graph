@@ -62,7 +62,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
-    "omop-graph[emb]>=0.3.2",
+    "omop-emb[all]>=0.3.2",
     "mkdocs<2.0",
     "mkdocs-material",
     "mkdocstrings[python]",

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
@@ -24,8 +27,30 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
-  release:
+  docs-check:
     needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MkDocs and plugins
+        run: pip install "mkdocs<2.0" mkdocs-material mkdocstrings-python mkdocs-mermaid2-plugin mkdocs-table-reader-plugin mkdocs-macros-plugin
+
+      - name: Install omop-graph
+        run: pip install .
+
+      - name: Build docs
+        run: mkdocs build --strict
+
+  release:
+    needs: docs-check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: release
     permissions:
