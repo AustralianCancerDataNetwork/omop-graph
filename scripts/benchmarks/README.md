@@ -151,15 +151,46 @@ The poster report includes:
 - `representative_cases`: top case-level improvements from `basic` to
 	`full_text_with_embedding` (rank and score deltas)
 
+## Cancer NSW Grounded Benchmark
+
+Use `benchmark_cancer_nsw.py` to run the same grounded benchmark flow against
+the dedicated cancer-focused case set.
+
+```bash
+python scripts/benchmarks/benchmark_cancer_nsw.py \
+	--k 5 \
+	--grounding-parent-id 441840 \
+	--embedding-backend pgvector \
+	--embedding-model nomic-embed-text \
+	--embedding-api-base http://ollama:11434/v1
+```
+
+This wrapper defaults to:
+
+- `--cases scripts/benchmarks/cancer_nsw_cases.json`
+- `--out /home/vscode/benchmark_cancer_nsw.json`
+
 ## Cases
 
-Cases are defined in `scripts/benchmarks/resolver_cases.json` and are grouped by bucket:
+Cases are configuration files in `scripts/benchmarks/`:
+
+- `resolver_cases.json` for general poster/resolver evaluation
+- `cancer_nsw_cases.json` for cancer-specific benchmarking
+
+Each file is grouped by bucket/category labels.
+
+`resolver_cases.json` currently uses:
 
 - easy
 - synonym-heavy
 - ambiguous
 - noisy
 - out-of-scope
+
+`cancer_nsw_cases.json` uses:
+
+- names
+- organ
 
 Add or edit examples there to expand evaluation coverage.
 

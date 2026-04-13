@@ -1,0 +1,104 @@
+{
+  "names": [
+    {
+      "id": "name_hodgkin_lymphoma",
+      "text": "Hodgkin lymphoma",
+      "domain": "Condition",
+      "expected_concept_id": 4038835,
+      "expected_concept_name": "Hodgkin's disease (clinical)"
+    },
+    {
+      "id": "name_multiple_myeloma",
+      "text": "Multiple myeloma",
+      "domain": "Condition",
+      "expected_concept_id": 437233,
+      "expected_concept_name": "Multiple myeloma"
+    },
+    {
+      "id": "name_acute_lymphoblastic_leukaemia",
+      "text": "Acute lymphoblastic leukaemia",
+      "domain": "Condition",
+      "expected_concept_id": 134305,
+      "expected_concept_name": "Acute lymphoid leukemia"
+    },
+    {
+      "id": "name_acute_myeloid_leukaemia",
+      "text": "Acute myeloid leukaemia",
+      "domain": "Condition",
+      "expected_concept_id": 140352,
+      "expected_concept_name": "Acute myeloid leukemia, disease"
+    },
+    {
+      "id": "name_myelodysplasia",
+      "text": "Myelodysplasia",
+      "domain": "Condition",
+      "expected_concept_id": 138994,
+      "expected_concept_name": "Myelodysplastic syndrome (clinical)"
+    }
+  ],
+  "organ": [
+    {
+      "id": "organ_ovarian_cancer",
+      "text": "Ovarian cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4181351,
+      "expected_concept_name": "Malignant neoplasm of ovary"
+    },
+    {
+      "id": "organ_placenta_cancer",
+      "text": "Placenta cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4221190,
+      "expected_concept_name": "Gestational choriocarcinoma"
+    },
+    {
+      "id": "organ_prostate_cancer",
+      "text": "Prostate cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4163261,
+      "expected_concept_name": "Malignant neoplasm of prostate"
+    },
+    {
+      "id": "organ_testicular_cancer",
+      "text": "Testicular cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4177115,
+      "expected_concept_name": "Malignant tumor of testis"
+    },
+    {
+      "id": "organ_kidney_cancer",
+      "text": "Kidney cancer",
+      "domain": "Condition",
+      "expected_concept_id": 196653,
+      "expected_concept_name": "Malignant tumor of kidney"
+    },
+    {
+      "id": "organ_bladder_cancer",
+      "text": "Bladder cancer",
+      "domain": "Condition",
+      "expected_concept_id": 197508,
+      "expected_concept_name": "Malignant neoplasm of urinary bladder"
+    },
+    {
+      "id": "organ_eye_cancer",
+      "text": "Eye cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4246808,
+      "expected_concept_name": "Malignant tumor of ciliary body"
+    },
+    {
+      "id": "organ_brain_tumor",
+      "text": "Brain tumor",
+      "domain": "Condition",
+      "expected_concept_id": 443588,
+      "expected_concept_name": "Malignant neoplasm of brain"
+    },
+    {
+      "id": "organ_thyroid_cancer",
+      "text": "Thyroid cancer",
+      "domain": "Condition",
+      "expected_concept_id": 4178976,
+      "expected_concept_name": "Malignant tumor of thyroid gland"
+    }
+  ]
+}
