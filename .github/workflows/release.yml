@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - main
+<<<<<<< chore/semantic-release-setup
   pull_request:
     branches:
       - main
+=======
+>>>>>>> main
 
 jobs:
   test:
@@ -27,6 +30,7 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
+<<<<<<< chore/semantic-release-setup
   docs-check:
     needs: test
     runs-on: ubuntu-latest
@@ -51,6 +55,10 @@ jobs:
   release:
     needs: docs-check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+=======
+  release:
+    needs: test
+>>>>>>> main
     runs-on: ubuntu-latest
     concurrency: release
     permissions:
