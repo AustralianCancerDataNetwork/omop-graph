@@ -1,3 +1,14 @@
+## 0.3.0
+- refactored grounding flow to score all candidate mappings before deduplicating to the best entry per standard concept id
+- removed pre-score standard concept collapsing to preserve stronger evidence paths and label matches
+- updated embedding similarity API from `unique_standard_concepts` to `standard_concepts`, including callsite and docs alignment
+- improved benchmark case handling with optional per-case `parent_ids`, tuple/list/int parsing, and CLI fallback behavior
+- simplified benchmark constraints (optional domain, centralized default vocabularies, cleaner vocabularies parsing)
+- reworked poster benchmark output to case-first grounded reporting for easier interpretation
+- expanded tests for grounding, resolver behavior, optional embedding integration, and optional full-text paths
+- expanded docs and API references for grounding/resolvers/CLI and benchmark usage
+- fixed docs workflow dependency installation to include `mkdocs-macros-plugin` and pinned mkdocs `<2.0` in CI
+
 ## 0.1.1
 - additional functionality for supporting phenotype simplification by parent grouping
 

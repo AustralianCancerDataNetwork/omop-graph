@@ -25,5 +25,5 @@ jobs:
           path: ~/.cache 
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs mkdocs-material mkdocstrings-python mkdocs-mermaid2-plugin mkdocs-table-reader-plugin
+      - run: pip install "mkdocs<2.0" mkdocs-material mkdocstrings-python mkdocs-mermaid2-plugin mkdocs-table-reader-plugin mkdocs-macros-plugin
       - run: mkdocs gh-deploy --force
