@@ -34,6 +34,7 @@ from omop_graph.extensions.emb import EmbeddingBackendType, MissingExtensionErro
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (
@@ -331,17 +332,35 @@ def _order_cases_for_report(cases: Sequence[BenchmarkCase]) -> List[BenchmarkCas
     return sorted(cases, key=lambda case: (_bucket_sort_key(case.bucket), case.id))
 
 
-def _actual_payload(grounded: Sequence[Any]) -> Dict[str, object]:
+def _grounded_element_to_dict(
+    concept: StandardConceptWithScore,
+) -> Dict[str, object]:
+    
+    return {
+        "concept_id": int(concept.concept_id),
+        "concept_name": concept.concept_name,
+        "total_score": float(concept.total_score),
+        "relevance": float(concept.relevance),
+        "embedding_score": float(concept.embedding_score) if concept.embedding_score is not None else 0.0,
+        "separation": int(concept.separation),
+        "matched_label": concept.matched_label,
+        "match_kind": str(concept.match_kind),
+        "synonym": concept.synonym,
+    }
+
+
+def _actual_payload(grounded: Sequence[StandardConceptWithScore]) -> Dict[str, object]:
     """Serialize the actual top grounded result for one config."""
-
     actual_concept = grounded[0] if grounded else None
-
+    #return {
+    #    "actual": _grounded_element_to_dict(actual_concept) if actual_concept else None
+    #}
     return {
         "actual": {
-            "concept_id": int(actual_concept.concept_id) if actual_concept is not None else None,
-            "concept_name": actual_concept.concept_name if actual_concept is not None else None,
-            "total_score": float(actual_concept.total_score) if actual_concept is not None else 0.0,
-        },
+            "concept_id": int(actual_concept.concept_id) if actual_concept else None,
+            "concept_name": actual_concept.concept_name if actual_concept else None,
+            "total_score": float(actual_concept.total_score) if actual_concept else 0.0,
+        }
     }
 
 
@@ -400,19 +419,7 @@ def _evaluate_grounded_case(
             (i for i, concept in enumerate(grounded) if concept.concept_id == case.expected_concept_id),
             None,
         ),
-        "grounded": [
-            {
-                "concept_id": int(concept.concept_id),
-                "concept_name": concept.concept_name,
-                "total_score": float(concept.total_score),
-                "relevance": float(concept.relevance),
-                "embedding_score": float(concept.embedding_score) if concept.embedding_score is not None else 0.0,
-                "separation": int(concept.separation),
-                "matched_label": concept.matched_label,
-            }
-            for concept in grounded
-        ],
-
+        "grounded": [_grounded_element_to_dict(concept) for concept in grounded],
     }
 
 

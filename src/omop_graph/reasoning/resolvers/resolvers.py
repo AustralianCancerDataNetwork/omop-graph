@@ -49,6 +49,7 @@ class CandidateHit:
     concept_id: int
     match_kind: LabelMatchKind
     matched_label: str
+    synonym: bool
 
 
 class CandidateResolver:
@@ -150,6 +151,7 @@ class CandidateResolver:
                 concept_id=m.concept_id,
                 match_kind=self.match_kind,
                 matched_label=m.matched_label,
+                synonym=self.synonym
             )
             for m in matches
         ]

@@ -144,6 +144,7 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
                 original_name="alpha",
                 matched_label="alpha",
                 match_kind=LabelMatchKind.EXACT,
+                synonym=False
             ),
             StandardConcept(
                 concept_id=2,
@@ -153,6 +154,7 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
                 original_name="beta",
                 matched_label="beta",
                 match_kind=LabelMatchKind.EXACT,
+                synonym=False
             ),
             StandardConcept(
                 concept_id=3,
@@ -162,6 +164,7 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
                 original_name="gamma",
                 matched_label="gamma",
                 match_kind=LabelMatchKind.EXACT,
+                synonym=False
             ),
         ],
         text_embedding=np.zeros((1, 3), dtype=np.float32),

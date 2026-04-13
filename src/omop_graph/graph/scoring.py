@@ -74,13 +74,7 @@ class StandardConceptWithScore(StandardConcept):
         Factory method to promote a StandardConcept to a scored version.
         """
         return cls(
-            concept_id=standard_concept.concept_id,
-            concept_name=standard_concept.concept_name,
-            separation=standard_concept.separation,
-            match_kind=standard_concept.match_kind,
-            original_id=standard_concept.original_id,
-            original_name=standard_concept.original_name,
-            matched_label=standard_concept.matched_label,
+            **vars(standard_concept),
             embedding_score=embedding_score,
             relevance=relevance,
             parsimony_penalty=parsimony_penalty,

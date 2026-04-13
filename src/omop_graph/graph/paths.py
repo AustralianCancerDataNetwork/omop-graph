@@ -575,6 +575,7 @@ class StandardConcept:
     original_name: str
     matched_label: str
     match_kind: LabelMatchKind
+    synonym: bool
     hierarchy_cost: float = 0.0
 
 
@@ -658,13 +659,13 @@ def find_standard_paths(
             iterations=0,
         )
     ]
+    # Track the shallowest iteration we have enqueued per concept to avoid
+    # unbounded duplicate growth in high-degree neighborhoods.
+    visited_min_iteration: Dict[int, int] = {candidate.concept_id: 0}
     
     # Track found concepts to respect max_concepts
     found_standard_concepts: List[StandardConcept] = []
     
-    # Note: visited logic was initialized in original code but unused in loop
-    # visited: Dict[Tuple[int, bool], int] = {} 
-
     while queue:
         item = heapq.heappop(queue)
         subject_node = item.node
@@ -701,6 +702,7 @@ def find_standard_paths(
                         original_name=source_view.concept_name,
                         matched_label=candidate.matched_label,
                         match_kind=mk,
+                        synonym=candidate.synonym,
                     )
                 )
                 continue
@@ -724,12 +726,8 @@ def find_standard_paths(
 
         for edge, object_view in zip(edges, object_views):
             object_id = edge.object_id
-            # object_view = object_views lookup corresponds to index or zip order?
-            # concept_views returns results in order? If not, this logic needs a dict lookup map.
-            # Assuming concept_views returns map or ordered list matching input.
-            # Safety check:
+
             if object_view.concept_id != object_id:
-                # Fallback if bulk fetch isn't ordered
                 object_view = kg.concept_view(object_id)
 
             object_is_std = object_view.standard_concept
@@ -737,6 +735,15 @@ def find_standard_paths(
             # Optimization: Only traverse to Standard concepts
             if not object_is_std:
                 continue
+
+            next_iterations = iterations + 1
+            if next_iterations > num_hops:
+                continue
+
+            prev_best_iteration = visited_min_iteration.get(object_id)
+            if prev_best_iteration is not None and prev_best_iteration <= next_iterations:
+                continue
+            visited_min_iteration[object_id] = next_iterations
 
             new_cost = cost
             #new_cost = cost + COST_PREDICATES[converted_predicate_kind]  # Not punishing on the mapping to standard concept
@@ -746,8 +753,8 @@ def find_standard_paths(
                 QueueItem(
                     cost=new_cost,
                     node=Node(concept_id=object_id, is_standard=object_is_std),
-                    mk=LabelMatchKind.PARTIAL,  # Mapped -> reduced confidence
-                    iterations=iterations + 1,
+                    mk=mk,
+                    iterations=next_iterations,
                 ),
             )
 
