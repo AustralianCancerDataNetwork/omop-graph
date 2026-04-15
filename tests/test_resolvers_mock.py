@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, cast
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatch, LabelMatchGroupView, LabelMatchKind
+from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (
     ExactLabelResolver,
@@ -27,7 +27,7 @@ class _KG:
     def concept_lookup(self, label: str, match_kind: LabelMatchKind, synonym: bool = False, search_constraint=None, sort: bool = False):
         key = _key(match_kind, synonym)
         concept_ids = self.case.hits.get(key, [])
-        matches = tuple(
+        return tuple(
             LabelMatch(
                 input_label=label,
                 matched_label=f"concept-{cid}",
@@ -38,7 +38,6 @@ class _KG:
             )
             for cid in concept_ids
         )
-        return LabelMatchGroupView.from_matches(matches)
 
 
 def _key(match_kind: LabelMatchKind, synonym: bool) -> str:

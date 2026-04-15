@@ -41,7 +41,6 @@ from .nodes import (
     AncestorMatch,
     ConceptView,
     LabelMatch,
-    LabelMatchGroupView,
     LabelMatchKind,
 )
 from .queries import (
@@ -176,7 +175,7 @@ class KnowledgeGraph(GraphBackend):
         return ConceptView.from_row(row)
 
     @lru_cache(maxsize=200_000)
-    def concept_views(self, concept_ids: tuple[int, ...]) -> tuple[ConceptView, ...]:
+    def concept_views(self, concept_ids: tuple[int, ...], sort: bool = True) -> tuple[ConceptView, ...]:
         """
         Retrieve multiple concept views in a batch.
 
@@ -193,7 +192,7 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             concept_views = tuple(
                 ConceptView.from_row(row)
-                for row in session.execute(q_concept_views(concept_ids))
+                for row in session.execute(q_concept_views(concept_ids, sort=sort))
             )
         return concept_views
 
@@ -230,7 +229,7 @@ class KnowledgeGraph(GraphBackend):
         synonym: bool = False,
         search_constraint: Optional[SearchConstraintConcept] = None,
         sort: bool = True
-    ) -> LabelMatchGroupView:
+    ) -> tuple[LabelMatch, ...]:
         """
         Resolve a label to concept_id(s).
         
@@ -248,7 +247,7 @@ class KnowledgeGraph(GraphBackend):
         """
         input_label = self._normalise_label(label)
         if not input_label:
-            return LabelMatchGroupView.from_matches(())
+            return ()
 
         if match_kind == LabelMatchKind.EXACT:
             fn = q_concept_name_match
@@ -259,7 +258,12 @@ class KnowledgeGraph(GraphBackend):
         else:
             raise ValueError(f"Unsupported search mode: {match_kind}")
         try:
-            cn = fn(input_label, search_constraint=search_constraint, synonym=synonym)
+            cn = fn(
+                input_label,
+                search_constraint=search_constraint,
+                synonym=synonym,
+                sort=sort,
+            )
         except FullTextError:
             if match_kind == LabelMatchKind.FTS:
                 logger.info(
@@ -268,7 +272,7 @@ class KnowledgeGraph(GraphBackend):
                     "fulltext install` and `omop-maint fulltext populate` to enable "
                     "this resolver."
                 )
-                return LabelMatchGroupView.from_matches(())
+                return ()
             raise
 
         with self.session_factory() as session:
@@ -283,10 +287,7 @@ class KnowledgeGraph(GraphBackend):
                 )
                 for cid, name, is_standard, is_active in session.execute(cn)
             )
-
-        if sort:
-            matches = sorted(matches)
-        return LabelMatchGroupView.from_matches(matches)
+        return matches
 
 
     @lru_cache(maxsize=200_000)

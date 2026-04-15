@@ -38,6 +38,41 @@ from ..extensions.omop_alchemy import RelationshipClass, RelationshipMapping, Cl
 from .constraints import SearchConstraintConcept
 
 
+def _concept_match_order_terms(name_expr, rank_expr=None):
+    """
+    Build a stable ordering for concept label matches.
+
+    Ordering logic:
+    - Basic ordering
+        1. Standard concepts first (standard_concept in ["S", "C"])
+        2. Active concepts first (invalid_reason not in ["D", "U"])
+        3. Shorter label length first (LENGTH(name))
+        4. Lower concept_id as final tie-breaker
+    - If rank_expr is provided (e.g. FTS rank):
+        0. rank_expr (e.g. FTS: Highest full-text relevance score (ts_rank))
+
+    This ensures that, for all search types, the most relevant, standard, active, and concise concepts are ranked first.
+    """
+    terms = []
+    if rank_expr is not None:
+        terms.append(rank_expr.desc())
+    terms.extend(
+        (
+            case(
+                (Concept.standard_concept.in_(["S", "C"]), literal(0)),
+                else_=literal(1),
+            ),
+            case(
+                (Concept.invalid_reason.in_(["D", "U"]), literal(1)),
+                else_=literal(0),
+            ),
+            func.length(name_expr),
+            Concept.concept_id,
+        )
+    )
+    return tuple(terms)
+
+
 def q_concept_view(concept_id: int) -> Select:
     """
     Query for a single concept by its ID.
@@ -66,37 +101,38 @@ def q_concept_view(concept_id: int) -> Select:
     ).where(Concept.concept_id == concept_id)
 
 
-def q_concept_views(concept_ids: Tuple[int, ...]) -> Select:
+def q_concept_views(concept_ids: Tuple[int, ...], sort: bool = True) -> Select:
     """
-    Query for multiple concepts by their IDs, preserving the input order.
+    Query for multiple concepts by their IDs.
 
     Parameters
     ----------
     concept_ids : tuple[int, ...]
         A tuple of OMOP Concept IDs.
+    sort : bool, default True
+        If True, preserve the input order using a CASE statement.
+        If False, do not add an ORDER BY clause (DB returns arbitrary order).
 
     Returns
     -------
     Select
-        A statement selecting standard concept columns ordered by the input list.
+        A statement selecting standard concept columns, optionally ordered by input list.
     """
-    order_map = {cid: index for index, cid in enumerate(concept_ids)}
-    return (
-        select(
-            Concept.concept_id,
-            Concept.concept_name,
-            Concept.concept_code,
-            Concept.vocabulary_id,
-            Concept.domain_id,
-            Concept.concept_class_id,
-            Concept.standard_concept,
-            Concept.valid_start_date,
-            Concept.valid_end_date,
-            Concept.invalid_reason,
-        )
-        .where(Concept.concept_id.in_(concept_ids))
-        .order_by(case(order_map, value=Concept.concept_id))
-    )
+    stmt = select(
+        Concept.concept_id,
+        Concept.concept_name,
+        Concept.concept_code,
+        Concept.vocabulary_id,
+        Concept.domain_id,
+        Concept.concept_class_id,
+        Concept.standard_concept,
+        Concept.valid_start_date,
+        Concept.valid_end_date,
+        Concept.invalid_reason,
+    ).where(Concept.concept_id.in_(concept_ids))
+    if sort:
+        stmt = stmt.order_by(*_concept_match_order_terms(Concept.concept_name))
+    return stmt
 
 
 def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:
@@ -175,7 +211,8 @@ def q_concept_synonym() -> Select:
 def q_concept_name_match(
     name: str, 
     search_constraint: Optional[SearchConstraintConcept] = None,
-    synonym: bool = False
+    synonym: bool = False,
+    sort: bool = True,
 ) -> Select:
     """
     Query for exact case-insensitive matches on concept names.
@@ -194,13 +231,15 @@ def q_concept_name_match(
     Select
         The query statement.
     """
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+
     if synonym:
         base_stmt = q_concept_synonym().where(
-            func.lower(Concept_Synonym.concept_synonym_name) == func.lower(name)
+            func.lower(name_expr) == func.lower(name)
         )
     else:
         base_stmt = q_concept_name().where(
-            func.lower(Concept.concept_name) == func.lower(name)
+            func.lower(name_expr) == func.lower(name)
         )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
@@ -208,13 +247,16 @@ def q_concept_name_match(
                 "search_constraint must be an instance of SearchConstraintConcept"
             )
         base_stmt = search_constraint.apply(base_stmt)
+    if sort:
+        base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
     return base_stmt
 
 
 def q_concept_name_ilike(
     term: str, 
     search_constraint: Optional[SearchConstraintConcept] = None,
-    synonym: bool = False
+    synonym: bool = False,
+    sort: bool = True,
 ) -> Select:
     """
     Query for partial matches on concept names using ILIKE.
@@ -233,13 +275,15 @@ def q_concept_name_ilike(
     Select
         The query statement.
     """
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+
     if synonym:
         base_stmt = q_concept_synonym().where(
-            Concept_Synonym.concept_synonym_name.ilike(f"%{term}%")
+            name_expr.ilike(f"%{term}%")
         )
     else:
         base_stmt = q_concept_name().where(
-            Concept.concept_name.ilike(f"%{term}%")
+            name_expr.ilike(f"%{term}%")
         )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
@@ -247,13 +291,16 @@ def q_concept_name_ilike(
                 "search_constraint must be an instance of SearchConstraintConcept"
             )
         base_stmt = search_constraint.apply(base_stmt)
+    if sort:
+        base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
     return base_stmt
 
 
 def q_concept_name_fulltext(
     term: str, 
     search_constraint: Optional['SearchConstraintConcept'] = None,
-    synonym: bool = False
+    synonym: bool = False,
+    sort: bool = True,
 ) -> Select:
     """
     Query for concept names using PostgreSQL full-text search via optional
@@ -275,6 +322,8 @@ def q_concept_name_fulltext(
         Whether to search in synonyms instead of concept names.
 
     """
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+
     if synonym:
         vector = Concept_Synonym.__table__.c.get(CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN)
         stmt = q_concept_synonym()
@@ -292,13 +341,15 @@ def q_concept_name_fulltext(
         
     query = func.plainto_tsquery("english", term)
     
-    stmt = (stmt
-        .where(vector.op("@@")(query))  # Hits the GIN index instantly
-        .order_by(func.ts_rank(vector, query).desc())
-    )
+    stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
     if search_constraint:
         stmt = search_constraint.apply(stmt)
+
+    if sort:
+        stmt = stmt.order_by(
+            *_concept_match_order_terms(name_expr, rank_expr=func.ts_rank(vector, query))
+        )
 
     return stmt
 

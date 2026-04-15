@@ -29,11 +29,14 @@ class SearchConstraintConcept:
     require_standard : bool, optional
         If True, restricts results to standard ('S') or classification ('C') concepts.
         Default is False.
+    limit: int, optional
+        If set, limits the number of results returned by the query.
     """
     concept_ids: Optional[Tuple[int, ...]] = field(default=None)
     domains: Optional[Tuple[str, ...]] = field(default=None)
     vocabularies: Optional[Tuple[str, ...]] = field(default=None)
     require_standard: bool = False
+    limit: Optional[int] = None
 
     def apply(self, query: Select) -> Select:
         """
@@ -62,4 +65,4 @@ class SearchConstraintConcept:
             # Filters for 'S' (Standard) or 'C' (Classification)
             query = query.where(Concept.standard_concept.in_(["S", "C"]))
             
-        return query
+        return query.limit(self.limit)
