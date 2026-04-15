@@ -104,7 +104,6 @@ class ResolverPipeline:
         self,
         kg: KnowledgeGraph,
         text: str,
-        limit_per_resolver: Optional[int] = None,
         constraints: Optional[SearchConstraintConcept] = None,
         **kwargs
     ) -> Generator[CandidateHit, None, None]:
@@ -117,10 +116,9 @@ class ResolverPipeline:
             The graph instance used for lookups.
         text : str
             The input text to resolve.
-        limit_per_resolver : int, optional
-            Maximum number of hits to return per resolver strategy.
         constraints : SearchConstraintConcept, optional
             Domain or vocabulary restrictions to apply to the search.
+            Determines also the number of candidates returned for each resolver using the `limit` field. If None, no additional filtering is applied.
 
         Yields
         -------
@@ -133,7 +131,6 @@ class ResolverPipeline:
             hits = resolver.resolve(
                 kg,
                 text,
-                limit=limit_per_resolver,
                 constraints=constraints,
                 **kwargs
             )
