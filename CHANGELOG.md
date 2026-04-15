@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.0...v1.0.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* Perform sorting and limits in queries ([52cf7d2](https://github.com/AustralianCancerDataNetwork/omop-graph/commit/52cf7d22149612aeeb7e29f2a2dcee7d0fbe0b3a))
+
 # 1.0.0 (2026-04-13)
 
 
