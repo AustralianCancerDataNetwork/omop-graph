@@ -123,7 +123,6 @@ class CandidateResolver:
         kg: KnowledgeGraph,
         text: str,
         constraints: Optional[SearchConstraintConcept] = None,
-        limit: Optional[int] = None,
         **kwargs
     ) -> Iterable[CandidateHit]:
         """
@@ -155,7 +154,7 @@ class CandidateResolver:
             )
             for m in matches
         ]
-        return hits[:limit] if limit else hits
+        return hits
 
 
 class ExactLabelResolver(CandidateResolver):
