@@ -462,6 +462,28 @@ class KnowledgeGraph(GraphBackend):
                 )
         return edges
 
+    def explore_connections(
+        self,
+        seed_concept_id: int,
+        predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+        max_depth: int = 4,
+        max_edges_per_expand: int = 100,
+        max_total_expansions: int = 500,
+        on: Optional[date] = None,
+    ):
+        """Bounded neighborhood exploration for distant-concept discovery."""
+        from .paths import explore_connections as _explore_connections
+
+        return _explore_connections(
+            kg=self,
+            seed_concept_id=seed_concept_id,
+            predicate_kinds=predicate_kinds,
+            max_depth=max_depth,
+            max_edges_per_expand=max_edges_per_expand,
+            max_total_expansions=max_total_expansions,
+            on=on,
+        )
+
     @validate_mapping_table
     def iter_edges(
         self,

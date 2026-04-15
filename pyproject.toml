@@ -53,6 +53,9 @@ pgvector = [
 emb = [
   "omop-emb[all]>=0.3.3"
 ]
+mcp = [
+  "mcp>=1.0.0",
+]
 
 [dependency-groups]
 dev = [
@@ -69,10 +72,13 @@ dev = [
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
     "mkdocs-macros-plugin", 
+    "mcp>=1.0.0",
 ]
 
 [project.scripts]
 omop-graph = "omop_graph.cli:app"
+omop-graph-mcp = "omop_graph.mcp.cli_mcp:main"
+omop-graph-mcp-kg = "omop_graph.mcp.kg_server:main"
 
 [build-system]
 requires = ["hatchling"]

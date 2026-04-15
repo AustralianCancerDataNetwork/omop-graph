@@ -1,5 +1,12 @@
 from .traverse import traverse
-from .paths import find_shortest_paths, GraphPath, PathStep
+from .paths import (
+    find_shortest_paths,
+    GraphPath,
+    PathStep,
+    ExplorationStep,
+    ExplorationResult,
+    explore_connections,
+)
 from .kg import KnowledgeGraph
 
 __all__ = [
@@ -7,5 +14,8 @@ __all__ = [
     "find_shortest_paths",
     "GraphPath",
     "PathStep",
+    "ExplorationStep",
+    "ExplorationResult",
+    "explore_connections",
     "KnowledgeGraph"
 ]

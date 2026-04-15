@@ -175,6 +175,44 @@ class GraphPath:
         return "\n  ↳ ".join(parts)
 
 
+@dataclass(frozen=True)
+class ExplorationStep(PathStep):
+    """A path step plus traversal depth for graph exploration."""
+
+    depth: int
+
+    @property
+    def source(self) -> int:
+        return self.subject.concept_id
+
+    @property
+    def target(self) -> int:
+        return self.object.concept_id
+
+    @property
+    def predicate_id(self) -> str:
+        return self.predicate
+
+
+@dataclass(frozen=True)
+class ExplorationResult:
+    """Result payload for bounded neighborhood exploration."""
+
+    visited: tuple[int, ...]
+    steps: tuple[ExplorationStep, ...]
+    truncated: bool
+
+    def __len__(self) -> int:
+        return len(self.steps)
+
+    def __iter__(self):
+        return iter(self.steps)
+
+    def nodes(self) -> tuple[int, ...]:
+        """Return visited concept IDs for API parity with GraphPath-style access."""
+        return self.visited
+
+
 def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
     """
     Helper function to reconstruct full paths from bidirectional BFS parent pointers.
@@ -550,6 +588,81 @@ def find_shortest_paths_batch(
             break
 
     return paths[:max_paths]
+
+
+def explore_connections(
+    kg: "KnowledgeGraph",
+    seed_concept_id: int,
+    *,
+    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+    max_depth: int = 4,
+    max_edges_per_expand: int = 100,
+    max_total_expansions: int = 500,
+    on: Optional[Any] = None,
+) -> ExplorationResult:
+    """Explore local graph neighborhoods with strict hard limits.
+
+    This is intended for agent-guided discovery workflows where the caller
+    iteratively decides how to continue exploration while avoiding unbounded
+    search cost.
+    """
+    if max_depth < 1:
+        raise ValueError("max_depth must be >= 1")
+    if max_edges_per_expand < 1:
+        raise ValueError("max_edges_per_expand must be >= 1")
+    if max_total_expansions < 1:
+        raise ValueError("max_total_expansions must be >= 1")
+
+    visited: set[int] = {seed_concept_id}
+    queue: deque[tuple[int, int]] = deque([(seed_concept_id, 0)])
+    steps: list[ExplorationStep] = []
+    expansions = 0
+    truncated = False
+
+    while queue:
+        current, depth = queue.popleft()
+        if depth >= max_depth:
+            continue
+
+        edges_at_node = 0
+        with kg.session_factory() as session:
+            for edge in kg.iter_edges(
+                session=session,
+                concept_ids=current,
+                direction="out",
+                predicate_kinds=predicate_kinds,
+                on=on,
+            ):
+                if edge.object_id not in visited:
+                    visited.add(edge.object_id)
+                    queue.append((edge.object_id, depth + 1))
+
+                steps.append(
+                    ExplorationStep(
+                        subject=Node(concept_id=edge.subject_id, is_standard=False),
+                        predicate=edge.predicate_id,
+                        object=Node(concept_id=edge.object_id, is_standard=False),
+                        depth=depth + 1,
+                    )
+                )
+
+                edges_at_node += 1
+                expansions += 1
+                if (
+                    edges_at_node >= max_edges_per_expand
+                    or expansions >= max_total_expansions
+                ):
+                    truncated = True
+                    break
+
+        if truncated:
+            break
+
+    return ExplorationResult(
+        visited=tuple(sorted(visited)),
+        steps=tuple(steps),
+        truncated=truncated,
+    )
 
 
 @dataclass(order=True)
