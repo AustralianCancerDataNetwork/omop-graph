@@ -18,7 +18,7 @@ import numpy as np
 
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatch, LabelMatchKind, LabelMatchGroupView
+from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 from omop_graph.extensions.emb import (
     HAS_OMOP_EMB,
     EmbeddingIndexType,
@@ -123,7 +123,6 @@ class CandidateResolver:
         kg: KnowledgeGraph,
         text: str,
         constraints: Optional[SearchConstraintConcept] = None,
-        limit: Optional[int] = None,
         **kwargs
     ) -> Iterable[CandidateHit]:
         """
@@ -136,9 +135,8 @@ class CandidateResolver:
         text : str
             The input text.
         constraints : SearchConstraintConcept, optional
-            Filters.
-        limit : int, optional
-            Max number of hits to return.
+            Filters for concepts to consider in the search. Also limits the number of candidates returned
+            using the `limit` field. 
 
         Returns
         -------
@@ -155,7 +153,7 @@ class CandidateResolver:
             )
             for m in matches
         ]
-        return hits[:limit] if limit else hits
+        return hits
 
 
 class ExactLabelResolver(CandidateResolver):
@@ -252,7 +250,8 @@ class EmbeddingResolver(CandidateResolver):
             assert len(matches) == 1, "Expected get_neareast_concepts to return a single dictionary given the text_embedding shape (1, embedding_dim)."
             matches = matches[0]  # Unpack the single dictionary from the tuple
             concept_views = kg.concept_views(
-                concept_ids=tuple(matches.keys())
+                concept_ids=tuple(matches.keys()),
+                sort=sort
             )
             label_matches = tuple(
                 LabelMatch(
@@ -265,10 +264,7 @@ class EmbeddingResolver(CandidateResolver):
                 )
                 for cv in concept_views
             )
-
-            if sort:
-                label_matches = sorted(label_matches)
-            return tuple(LabelMatchGroupView.from_matches(label_matches))
+            return label_matches
 
 
 # Default sequence of resolvers to be used in a pipeline

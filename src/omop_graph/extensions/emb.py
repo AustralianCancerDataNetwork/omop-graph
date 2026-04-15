@@ -112,7 +112,7 @@ def semantic_similarity(
         return None
     
     concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
-    concept_filter = SearchConstraintConcept(concept_ids=concept_ids)
+    concept_filter = SearchConstraintConcept(concept_ids=concept_ids, limit=len(concept_ids))
 
     with kg.session_factory() as session:
         similarity_scores_tuple_of_dicts = get_neareast_concepts(
@@ -123,7 +123,6 @@ def semantic_similarity(
             concept_filter=concept_filter,
             metric_type=metric_type,
             index_type=index_type,
-            k=len(concept_ids)
         )
 
         if not similarity_scores_tuple_of_dicts:
@@ -194,7 +193,6 @@ def get_neareast_concepts(
     concept_filter: Optional[SearchConstraintConcept],
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
-    k: int = 10
 ) -> Optional[Tuple[Mapping[int, float], ...]]:
     """
     RAG retrieval for concept similarity scores. The text_embedding is used to retrieve the nearest concepts from the database
@@ -211,13 +209,11 @@ def get_neareast_concepts(
     text_embedding : Optional[np.ndarray]
         The embedding vector to search with. Expected shape is (q, dimension) where q is the number of query vectors and dimension is the size of the embedding space for the model. If None, retrieval will not be attempted.
     concept_filter : Optional[EmbeddingConceptFilter], optional
-        A filter to specify which concepts to consider as potential nearest neighbors.
+        A filter to specify which concepts to consider as potential nearest neighbors. Also limits the number of neighbors returned (K). If None, internal defaults are used to limit the number of neighbours.
     index_type : IndexType
         The type of vector index used to store the embeddings.
     metric_type : MetricType
         The similarity or distance metric to use for nearest neighbor search. This must be compatible with the index type used by the database.
-    k : int, optional
-        K nearest neighbors to return for each query vector. Default is 10.
 
     Returns
     -------
@@ -270,21 +266,13 @@ def get_neareast_concepts(
         query_embedding=text_embedding,
         concept_filter=concept_filter,  # type: ignore
         metric_type=resolved_metric_type,
-        k=k
     )
 
     if similarity_scores_tuple is None:
         logger.info("No similarity scores retrieved from embedding interface.")
         return None
     
-    assert len(similarity_scores_tuple) == text_embedding.shape[0], (
-        f"Expected similarity scores for {text_embedding.shape[0]} query embeddings, "
-        f"but got {len(similarity_scores_tuple)}."
-    )
     assert all(isinstance(d, dict) for d in similarity_scores_tuple), (
         "Expected each item in similarity_scores_tuple to be a dictionary mapping concept IDs to scores."
-    )
-    assert all(len(d) <= k for d in similarity_scores_tuple), (
-        f"Expected at most {k} nearest neighbors per query embedding, but found a dictionary with {max(len(d) for d in similarity_scores_tuple)} entries."
     )
     return similarity_scores_tuple

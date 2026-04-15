@@ -233,40 +233,6 @@ class LabelMatch:
         </div>
         """
 
-    def __lt__(self, other: LabelMatch) -> bool:
-        """
-        Compare two LabelMatches for sorting.
-        Delegates to `label_match_rank`.
-        """
-        return label_match_rank(self) < label_match_rank(other)
-
-
-def label_match_rank(m: LabelMatch) -> Tuple[bool, bool, int, int]:
-    """
-    Calculate a ranking key for a label match. Lower is better.
-
-    Priority:
-    1. Standard Concept (True < False)
-    2. Active Concept (True < False)
-    3. Match Kind (Direct < Synonym < Fulltext < Embedding)
-    4. Label Length (Shorter < Longer)
-
-    Parameters
-    ----------
-    m : LabelMatch
-        The match to rank.
-
-    Returns
-    -------
-    tuple
-        A tuple of comparable values.
-    """
-    return (
-        not m.is_standard,  # Prefer standard (True -> False/0)
-        not m.is_active,  # Prefer active (True -> False/0)
-        m.match_kind.value,  # Prefer lower enum value (Direct=1)
-        len(m.matched_label),  # Prefer shorter matches
-    )
 
 
 @dataclass(frozen=True)
@@ -290,7 +256,11 @@ class LabelMatchGroupView:
         """
         Construct a group view from a flat iterable of matches.
 
-        Matches are grouped by Concept ID and then sorted by quality within each group.
+        Matches are grouped by Concept ID.
+
+        Notes
+        -----
+        This could also be performed in SQL during the query phase.
 
         Parameters
         ----------
@@ -306,11 +276,8 @@ class LabelMatchGroupView:
         for m in matches:
             grouped[m.concept_id].append(m)
 
-        # Sort each group by match quality
-        groups_sorted = {
-            cid: tuple(sorted(ms)) for cid, ms in grouped.items()
-        }
-        return cls(groups=groups_sorted)
+        grouped_tuple = {cid: tuple(ms) for cid, ms in grouped.items()}
+        return cls(groups=grouped_tuple)
 
     def __iter__(self):
         """Iterate over all matches flattened."""
