@@ -135,9 +135,8 @@ class CandidateResolver:
         text : str
             The input text.
         constraints : SearchConstraintConcept, optional
-            Filters.
-        limit : int, optional
-            Max number of hits to return.
+            Filters for concepts to consider in the search. Also limits the number of candidates returned
+            using the `limit` field. 
 
         Returns
         -------
