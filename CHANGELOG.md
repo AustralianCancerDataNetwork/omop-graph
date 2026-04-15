@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.1...v1.0.2) (2026-04-15)
+
+
+### Bug Fixes
+
+* Remove Limit from pipeline ([2f44bc4](https://github.com/AustralianCancerDataNetwork/omop-graph/commit/2f44bc4b47db9d9243bbab1bf330cd7412562c0a))
+
 ## [1.0.1](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.0...v1.0.1) (2026-04-15)
 
 
