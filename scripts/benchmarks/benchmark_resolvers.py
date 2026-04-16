@@ -37,7 +37,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_llm import LLMClient
+from omop_emb import EmbeddingClient
 
 
 @dataclass(frozen=True)
@@ -108,7 +108,7 @@ def _build_knowledge_graph(database_url: Optional[str]) -> KnowledgeGraph:
 def _build_embedding_knowledge_graph(
     database_url: Optional[str],
     embedding_backend: Optional[EmbeddingBackendType],
-    embedding_client: Optional[LLMClient],
+    embedding_client: Optional[EmbeddingClient],
     embedding_storage_base_dir: Optional[str],
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured when requested."""
@@ -302,7 +302,7 @@ def run(
     embedding_client = None
     embedding_kg = None
     if embedding_model is not None and embedding_api_base is not None:
-        embedding_client = LLMClient(
+        embedding_client = EmbeddingClient(
             model=embedding_model,
             api_base=embedding_api_base,
             api_key=embedding_api_key or "ollama",

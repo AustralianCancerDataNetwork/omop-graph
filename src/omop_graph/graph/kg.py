@@ -28,8 +28,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.cdm.handlers.fulltext import FullTextError
 
 if TYPE_CHECKING:
-    from omop_emb import EmbeddingInterface
-    from omop_llm import LLMClient
+    from omop_emb import EmbeddingInterface, EmbeddingClient
 
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError, EmbeddingBackendType
@@ -97,7 +96,7 @@ class KnowledgeGraph(GraphBackend):
         2. ``OMOP_EMB_BASE_STORAGE_DIR`` environment variable
         3. backend default local directory
         This is mainly relevant for backends that persist files locally.
-    emb_client : LLMClient, optional
+    emb_client : EmbeddingClient, optional
         Optional default client for generating embeddings. Method-level clients can
         override this value for specific calls.
     """
@@ -107,7 +106,7 @@ class KnowledgeGraph(GraphBackend):
         session_factory: sessionmaker,
         emb_backend: Optional[EmbeddingBackendType] = None,
         emb_base_storage_dir: Optional[str] = None,
-        emb_client: Optional[LLMClient] = None,
+        emb_client: Optional[EmbeddingClient] = None,
     ):
         self.session_factory = session_factory
 

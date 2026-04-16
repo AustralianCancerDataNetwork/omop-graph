@@ -37,7 +37,9 @@ from omop_graph.extensions.emb import (
     get_embedding_interface,
     semantic_similarity,
 )
-from omop_llm import LLMClient
+
+if TYPE_CHECKING:
+    from omop_emb import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,7 @@ def ground_term(
     text: str,
     text_embedding: Optional[np.ndarray],
     text_embedding_model: Optional[str],
-    embedding_client: Optional["LLMClient"],
+    embedding_client: Optional[EmbeddingClient],
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
     metric_type: Optional[EmbeddingMetricType] = None,
@@ -93,7 +95,7 @@ def ground_term(
         The embedding vector for the input text.
     text_embedding_model : str, optional
         The name of the embedding model used to generate `text_embedding`. Used for RAG retrieval from the database.
-    embedding_client : LLMClient, optional
+    embedding_client : EmbeddingClient, optional
         The client to use for embedding concepts if RAG retrieval is not possible.
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
@@ -117,8 +119,6 @@ def ground_term(
     search_constraints = constraints.search_constraint
     if search_constraints is not None:
         kg.check_search_constraints(search_constraints)
-
-    
 
     # Calculate the text embedding on demand if possible
     embedding_interface = get_embedding_interface(kg)

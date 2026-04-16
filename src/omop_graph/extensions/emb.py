@@ -10,14 +10,17 @@ from omop_graph.graph.constraints import SearchConstraintConcept
 HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
 
 if TYPE_CHECKING:
+    # Optional embedding-specific ones
     from omop_emb import BackendType, MetricType, IndexType
+    from omop_emb import EmbeddingInterface, EmbeddingClient
     EmbeddingBackendType: TypeAlias = BackendType
     EmbeddingMetricType: TypeAlias = MetricType
     EmbeddingIndexType: TypeAlias = IndexType
+
+    # Circular imports for static type hints
     from omop_graph.graph.kg import KnowledgeGraph
     from omop_graph.graph.paths import StandardConcept
-    from omop_emb import EmbeddingInterface
-    from omop_llm import LLMClient
+
 else:
     EmbeddingBackendType = str
     EmbeddingMetricType = str
@@ -55,7 +58,7 @@ class MissingExtensionError(ImportError):
             "Install it via: pip install omop-graph[emb]"
         )
 
-def get_embedding_interface(kg: KnowledgeGraph) -> Optional["EmbeddingInterface"]:
+def get_embedding_interface(kg: KnowledgeGraph) -> Optional[EmbeddingInterface]:
     """
     Utility to safely retrieve the embedding interface from the KG. 
     Returns None if the extension is not available.
@@ -70,7 +73,7 @@ def semantic_similarity(
     standard_concepts: Sequence[StandardConcept],
     text_embedding: Optional[np.ndarray],
     text_embedding_model: Optional[str],
-    embedding_client: Optional[LLMClient],
+    embedding_client: Optional[EmbeddingClient],
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
 ) -> Optional[Tuple[Mapping[int, float], ...]]:
@@ -88,8 +91,8 @@ def semantic_similarity(
     text_embedding_model : Optional[str]
         The name of the text embedding model used to generate the text_embedding. This should correspond to
         a model registered in the embedding interface. If None, similarity calculation will not be attempted.
-    embedding_client : Optional[LLMClient]
-        An optional LLM client used to fetch missing embeddings if they are not present in the database. This is only used as a fallback mechanism if the initial retrieval of similarity scores fails due to missing embeddings. If None, no fallback will be attempted and the function will return None if embeddings are missing.
+    embedding_client : Optional[EmbeddingClient]
+        An optional embedding client used to fetch missing embeddings if they are not present in the database. This is only used as a fallback mechanism if the initial retrieval of similarity scores fails due to missing embeddings. If None, no fallback will be attempted and the function will return None if embeddings are missing.
     metric_type : Optional[EmbeddingMetricType]
         The similarity or distance metric to use for calculating similarity scores. This must be compatible with the index type used by the database. If None, similarity calculation will not be attempted.
     index_type : Optional[EmbeddingIndexType]
@@ -144,7 +147,7 @@ def semantic_similarity(
                 missing_sc_embeddings = embedding_interface.get_concepts_without_embedding(
                     session=session,
                     concept_filter=concept_filter,  # type: ignore
-                    model_name=model_name,
+                    canonical_model_name=model_name,
                     index_type=resolved_index_type,
                 )
 
@@ -159,7 +162,7 @@ def semantic_similarity(
                         embeddings=standard_concept_embeddings,
                         concept_ids=missing_concept_ids,
                         session=session,
-                        model=model_name,
+                        canonical_model_name=model_name,
                         index_type=resolved_index_type,
                     )
 
@@ -252,7 +255,7 @@ def get_neareast_concepts(
         logger.info(f"Invalid embedding retrieval parameters: {exc}")
         return None
 
-    if not embedding_interface.is_model_registered(model_name=text_embedding_model, index_type=resolved_index_type):
+    if not embedding_interface.is_model_registered(canonical_model_name=text_embedding_model, index_type=resolved_index_type):
         logger.info(f"Model '{text_embedding_model}' not registered.")
         return None
 
@@ -261,7 +264,7 @@ def get_neareast_concepts(
 
     similarity_scores_tuple = embedding_interface.get_nearest_concepts(
         session=session,
-        model_name=text_embedding_model,
+        canonical_model_name=text_embedding_model,
         index_type=resolved_index_type,
         query_embedding=text_embedding,
         concept_filter=concept_filter,  # type: ignore

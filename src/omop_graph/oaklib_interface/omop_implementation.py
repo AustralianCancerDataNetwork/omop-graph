@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from dotenv import load_dotenv
@@ -42,7 +42,8 @@ from omop_graph.utils.text_utils import cava_tokenizer
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.omop_factory import omop_resource
 
-from omop_llm import LLMClient
+if TYPE_CHECKING:
+    from omop_emb import EmbeddingClient
 
 from orm_loader.helpers.bootstrap import create_db
 from sqlalchemy import create_engine, select
@@ -242,7 +243,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         text: str,
         text_embedding: Optional[np.ndarray] = None,
         text_embedding_model: Optional[str] = None,
-        embedding_client: Optional[LLMClient] = None,
+        embedding_client: Optional[EmbeddingClient] = None,
         configuration: Optional[TextAnnotationConfiguration] = None,
         annotations: Optional[Dict[str, Annotation]] = None,
     ) -> Iterator[TextAnnotation]:
