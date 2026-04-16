@@ -130,7 +130,11 @@ def semantic_similarity(
 
         if not similarity_scores_tuple_of_dicts:
             # Fallback logic if database retrieval fails
-            if all(v is not None for v in [text_embedding_model, embedding_client, text_embedding, index_type]):
+            if (text_embedding_model is not None and 
+                embedding_client is not None and 
+                text_embedding is not None and 
+                index_type is not None
+            ):
                 logger.debug("Falling back to embedding client for similarity scores.")
 
                 # Runtime narrowing for static and runtime safety.
