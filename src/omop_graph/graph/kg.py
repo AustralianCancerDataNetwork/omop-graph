@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface, EmbeddingClient
 
 # Local Application Imports
-from ..extensions.emb import MissingExtensionError, EmbeddingBackendType
+from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType
 from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
@@ -78,19 +78,23 @@ class KnowledgeGraphEmbeddingConfiguration:
     Parameters
     ----------
     backend_type : EmbeddingBackendType
-        The embedding backend to use (e.g., 'faiss', 'pinecone').
-    base_storage : str, optional
-        The type of index to use for storing embeddings (e.g., 'flat', 'hnsw').
+        The embedding backend name (e.g., 'faiss', 'pinecone') or type to use.
+    base_storage_dir : str, optional
+        The directory where embeddings are stored.
     client : EmbeddingClient, optional
         An optional client instance for generating embeddings. If not provided, no writing operations can take place.
-    provider_type : str, optional
-        The respective provider type (e.g., 'openai', 'ollama') if using a read-only embedding reader interface.
+    provider_type : EmbeddingProviderType, optional
+        The respective provider name (e.g., 'openai', 'ollama') or type if using a read-only embedding reader interface.
+    canonical_model_name : str, optional
+        The canonical model name to use for the embedding reader interface (e.g., 'text-embedding-3-small:0.6b').
+        Required for read-only embedding interface to determine which embeddings to retrieve for concepts.
+        Obtained from client if a client is provided, otherwise must be set explicitly for read-only use cases.
     """
 
     backend_type: Optional[EmbeddingBackendType] = None
     base_storage_dir: Optional[str] = None
     client: Optional[EmbeddingClient] = None
-    provider_type: Optional[str] = None
+    provider_type: Optional[EmbeddingProviderType] = None
     canonical_model_name: Optional[str] = None
 
 class KnowledgeGraph(GraphBackend):

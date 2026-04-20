@@ -11,11 +11,12 @@ HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
 
 if TYPE_CHECKING:
     # Optional embedding-specific ones
-    from omop_emb import BackendType, MetricType, IndexType
+    from omop_emb import BackendType, MetricType, IndexType, ProviderType
     from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface
     EmbeddingBackendType: TypeAlias = BackendType
     EmbeddingMetricType: TypeAlias = MetricType
     EmbeddingIndexType: TypeAlias = IndexType
+    EmbeddingProviderType: TypeAlias = ProviderType
 
     # Circular imports for static type hints
     from omop_graph.graph.kg import KnowledgeGraph
@@ -25,6 +26,7 @@ else:
     EmbeddingBackendType = str
     EmbeddingMetricType = str
     EmbeddingIndexType = str
+    EmbeddingProviderType = str
 
 SUPPORTED_BACKENDS: Tuple[str, ...] = ()
 SUPPORTED_METRICS: Tuple[str, ...] = ()
