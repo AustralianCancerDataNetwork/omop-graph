@@ -68,7 +68,7 @@ def mock_cdm_kg(
     RelationshipCache._is_initialized = False
 
     # Grounding tests here focus on SQL + resolver + path pipeline.
-    monkeypatch.setattr("omop_graph.reasoning.grounding.get_embedding_interface", lambda _kg: None)
+    monkeypatch.setattr("omop_graph.reasoning.grounding.get_embedding_writer_interface", lambda _kg: None)
 
     return KnowledgeGraph(session_factory=mock_cdm_session_factory)
 

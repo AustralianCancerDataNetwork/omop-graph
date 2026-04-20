@@ -22,13 +22,14 @@ import re
 from datetime import date
 from functools import lru_cache
 from typing import Dict, Optional, Tuple, Union, Literal, Generator, TYPE_CHECKING
+from dataclasses import dataclass, field
 
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.cdm.handlers.fulltext import FullTextError
 
 if TYPE_CHECKING:
-    from omop_emb import EmbeddingInterface, EmbeddingClient
+    from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface, EmbeddingClient
 
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError, EmbeddingBackendType
@@ -69,6 +70,29 @@ from .queries import (
 
 logger = logging.getLogger(__name__)
 
+@dataclass(frozen=True)
+class KnowledgeGraphEmbeddingConfiguration:
+    """
+    Configuration for embedding-based operations in the knowledge graph.
+
+    Parameters
+    ----------
+    backend_type : EmbeddingBackendType
+        The embedding backend to use (e.g., 'faiss', 'pinecone').
+    base_storage : str, optional
+        The type of index to use for storing embeddings (e.g., 'flat', 'hnsw').
+    client : EmbeddingClient, optional
+        An optional client instance for generating embeddings. If not provided, no writing operations can take place.
+    provider_type : str, optional
+        The respective provider type (e.g., 'openai', 'ollama') if using a read-only embedding reader interface.
+    """
+
+    backend_type: Optional[EmbeddingBackendType] = None
+    base_storage_dir: Optional[str] = None
+    client: Optional[EmbeddingClient] = None
+    provider_type: Optional[str] = None
+    canonical_model_name: Optional[str] = None
+
 class KnowledgeGraph(GraphBackend):
     """
     The main entry point for interacting with the OMOP Graph.
@@ -81,63 +105,62 @@ class KnowledgeGraph(GraphBackend):
     session_factory : sessionmaker
         The SQLAlchemy sessionmaker factory capable of creating separate sessions for 
         each database access.
-    emb_backend : EmbeddingBackendName, optional
-        Optional embedding backend identifier passed to ``omop_emb``.
-        Resolution order is:
-        1. explicit ``emb_backend`` argument
-        2. ``OMOP_EMB_BACKEND`` environment variable
-        If both are missing, embedding initialization fails when ``emb`` is first accessed.
-        Embedding functionality is only available when the optional dependency
-        is installed (``pip install omop-graph[emb]``).
-    emb_base_storage_dir : str, optional
-        Optional base directory forwarded to the embedding backend constructor.
-        Resolution order is backend-specific but typically:
-        1. explicit ``emb_base_storage_dir`` argument
-        2. ``OMOP_EMB_BASE_STORAGE_DIR`` environment variable
-        3. backend default local directory
-        This is mainly relevant for backends that persist files locally.
-    emb_client : EmbeddingClient, optional
-        Optional default client for generating embeddings. Method-level clients can
-        override this value for specific calls.
+    
     """
 
     def __init__(
-        self, 
+        self,
         session_factory: sessionmaker,
-        emb_backend: Optional[EmbeddingBackendType] = None,
-        emb_base_storage_dir: Optional[str] = None,
-        emb_client: Optional[EmbeddingClient] = None,
+        emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
     ):
         self.session_factory = session_factory
 
-        # Populate the relationshipcache 
+        # Populate the relationshipcache
         with self.session_factory() as session:
             RelationshipCache.load(session)
 
         # Embedding-specific private args
-        self._emb_backend = emb_backend
-        self._emb_base_storage_dir = emb_base_storage_dir
-        self._emb_client = emb_client
+        self._emb_config = emb_config
         self._emb = None
 
     @property
-    def emb(self) -> "EmbeddingInterface":
+    def emb(self) -> "EmbeddingWriterInterface | EmbeddingReaderInterface":
         """Namespace for all embedding operations.
 
-        The interface is created lazily on first access using ``_emb_backend`` and
+        Returns EmbeddingInterface if _emb_client is set (for write operations),
+        otherwise returns EmbeddingReader (for read-only operations).
+
+        The interface/reader is created lazily on first access using ``_emb_backend`` and
         ``_emb_base_storage_dir``. Backend resolution follows ``omop_emb`` rules:
         explicit backend argument first, then ``OMOP_EMB_BACKEND``.
         """
         if self._emb is not None:
             return self._emb
-            
+
         try:
-            from omop_emb.interface import EmbeddingInterface
-            self._emb = EmbeddingInterface.from_backend_name(
-                backend_name=self._emb_backend,
-                storage_base_dir=self._emb_base_storage_dir,
-                embedding_client=self._emb_client
-            )
+            from omop_emb.interface import EmbeddingWriterInterface, EmbeddingReaderInterface
+            
+            if self._emb_config is None:
+                raise ValueError("Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features.")
+            if self._emb_config.client is not None:
+                # Write-capable interface
+                self._emb = EmbeddingWriterInterface(
+                    embedding_client=self._emb_config.client,
+                    backend_name_or_type=self._emb_config.backend_type,
+                    storage_base_dir=self._emb_config.base_storage_dir,
+                )
+            else:
+                if self._emb_config.provider_type is None:
+                    raise ValueError("Provider type must be specified for read-only embedding interface.")
+                if self._emb_config.canonical_model_name is None:
+                    raise ValueError("Canonical model name must be specified for read-only embedding interface.")
+                # Read-only interface
+                self._emb = EmbeddingReaderInterface(
+                    canonical_model_name=self._emb_config.canonical_model_name,
+                    backend_name_or_type=self._emb_config.backend_type,
+                    provider_name_or_type=self._emb_config.provider_type,
+                    storage_base_dir=self._emb_config.base_storage_dir,
+                )
             return self._emb
 
         except ModuleNotFoundError as e:

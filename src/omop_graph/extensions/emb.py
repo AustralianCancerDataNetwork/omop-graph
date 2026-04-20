@@ -12,7 +12,7 @@ HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
 if TYPE_CHECKING:
     # Optional embedding-specific ones
     from omop_emb import BackendType, MetricType, IndexType
-    from omop_emb import EmbeddingInterface, EmbeddingClient
+    from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface
     EmbeddingBackendType: TypeAlias = BackendType
     EmbeddingMetricType: TypeAlias = MetricType
     EmbeddingIndexType: TypeAlias = IndexType
@@ -35,6 +35,7 @@ if HAS_OMOP_EMB:
     try:
         from omop_emb import BackendType, MetricType
         from omop_emb.config import parse_index_type, parse_metric_type
+        from omop_emb import EmbeddingReaderInterface, EmbeddingWriterInterface
         # Extract the string values from the StrEnums
         SUPPORTED_BACKENDS = tuple(v.value for v in BackendType)
         SUPPORTED_METRICS = tuple(v.value for v in MetricType)
@@ -58,22 +59,50 @@ class MissingExtensionError(ImportError):
             "Install it via: pip install omop-graph[emb]"
         )
 
-def get_embedding_interface(kg: KnowledgeGraph) -> Optional[EmbeddingInterface]:
+def _get_embedding_interface(kg: KnowledgeGraph) -> Optional[EmbeddingReaderInterface | EmbeddingWriterInterface]:
     """
-    Utility to safely retrieve the embedding interface from the KG. 
-    Returns None if the extension is not available.
+    Internal utility to retrieve the embedding interface from the KG, without distinguishing between reader/writer.
+    This is only used for internal logic where we don't need to differentiate between reader and writer capabilities.
+    For external use, prefer get_embedding_reader_interface and get_embedding_writer_interface for clearer intent and error handling.
+
+    Returns None if the extension is not available or if any errors occur during retrieval. The following errors can be raised by the kg.emb property:
+    - MissingExtensionError: if the omop_emb package is not installed.
+    - ValueError: if the package is installed but the KG was not initialized with an embedding configuration.
+
+    Both errors indicate that the embedding interface is not available, so we catch them and return None to simplify handling for callers.
     """
     try:
         return kg.emb
-    except (MissingExtensionError, ImportError, AttributeError):
+    except (MissingExtensionError, ValueError) as exc:
+        logger.error(f"Embedding interface not available: {exc}")
         return None
+    
+def get_embedding_reader_interface(kg: KnowledgeGraph) -> Optional["EmbeddingReaderInterface"]:
+    """
+    Utility to safely retrieve the embedding reader interface from the KG.
+    Returns None if the extension is not available or if the interface is not a reader.
+    """
+    interface = _get_embedding_interface(kg)
+    if interface is not None and HAS_OMOP_EMB and not isinstance(interface, EmbeddingReaderInterface):
+        raise TypeError(f"Expected embedding interface to be a reader, but got {type(interface)}.")
+    return interface
+
+
+def get_embedding_writer_interface(kg: KnowledgeGraph) -> Optional["EmbeddingWriterInterface"]:
+    """
+    Utility to safely retrieve the embedding writer interface from the KG.
+    Returns None if the extension is not available or if the interface is not a writer.
+    """
+    interface = _get_embedding_interface(kg)
+    if interface is not None and HAS_OMOP_EMB and not isinstance(interface, EmbeddingWriterInterface):
+        raise TypeError(f"Expected embedding interface to be a writer, but got {type(interface)}. Instantiate the KG with an embedding client to get a writer interface.")
+    return interface  # type: ignore[return-value]
 
 def semantic_similarity(
     kg: KnowledgeGraph,
     standard_concepts: Sequence[StandardConcept],
     text_embedding: Optional[np.ndarray],
     text_embedding_model: Optional[str],
-    embedding_client: Optional[EmbeddingClient],
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
 ) -> Optional[Tuple[Mapping[int, float], ...]]:
@@ -91,8 +120,6 @@ def semantic_similarity(
     text_embedding_model : Optional[str]
         The name of the text embedding model used to generate the text_embedding. This should correspond to
         a model registered in the embedding interface. If None, similarity calculation will not be attempted.
-    embedding_client : Optional[EmbeddingClient]
-        An optional embedding client used to fetch missing embeddings if they are not present in the database. This is only used as a fallback mechanism if the initial retrieval of similarity scores fails due to missing embeddings. If None, no fallback will be attempted and the function will return None if embeddings are missing.
     metric_type : Optional[EmbeddingMetricType]
         The similarity or distance metric to use for calculating similarity scores. This must be compatible with the index type used by the database. If None, similarity calculation will not be attempted.
     index_type : Optional[EmbeddingIndexType]
@@ -109,9 +136,9 @@ def semantic_similarity(
         logger.info("Embedding functionality is not available. Ensure 'omop-emb' is installed to use this feature.")
         return None
 
-    embedding_interface = get_embedding_interface(kg)
-    if embedding_interface is None:
-        logger.info("Embedding interface not found in KG. Ensure the embedding extension is properly configured.")
+    embedding_reader = get_embedding_reader_interface(kg)
+    if embedding_reader is None:
+        logger.info("Embedding reader interface not found in KG. Skipping similarity calculation.")
         return None
     
     concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
@@ -130,44 +157,40 @@ def semantic_similarity(
 
         if not similarity_scores_tuple_of_dicts:
             # Fallback logic if database retrieval fails
-            if (text_embedding_model is not None and 
-                embedding_client is not None and 
-                text_embedding is not None and 
+            embedding_writer = get_embedding_writer_interface(kg)
+            
+            if (text_embedding_model is not None and
+                embedding_writer is not None and
+                text_embedding is not None and
                 index_type is not None
             ):
                 logger.debug("Falling back to embedding client for similarity scores.")
 
-                # Runtime narrowing for static and runtime safety.
-                model_name = text_embedding_model
-                resolved_index_type = index_type
-                if model_name is None or resolved_index_type is None:
-                    return None
+                if text_embedding_model != embedding_writer.canonical_model_name:
+                    raise ValueError(f"Text embedding model '{text_embedding_model}' does not match the model registered in the embedding writer interface ('{embedding_writer.canonical_model_name}'). Ensure that the text_embedding was generated using the same model as the one registered in the embedding interface for accurate similarity calculation.")
 
                 # Validate types at runtime since static checks won't catch this without the lib
                 if not isinstance(text_embedding, np.ndarray):
                     raise TypeError("text_embedding must be a numpy array.")
                 
                 # Fetch missing embeddings and update DB
-                missing_sc_embeddings = embedding_interface.get_concepts_without_embedding(
+                missing_sc_embeddings = embedding_writer.get_concepts_without_embedding(
                     session=session,
                     concept_filter=concept_filter,  # type: ignore
-                    canonical_model_name=model_name,
-                    index_type=resolved_index_type,
+                    index_type=index_type,
                 )
 
                 if missing_sc_embeddings:
                     missing_concept_ids = tuple(missing_sc_embeddings.keys())
-                    standard_concept_embeddings = embedding_interface.embed_texts(
+                    standard_concept_embeddings = embedding_writer.embed_texts(
                         texts=tuple(missing_sc_embeddings.values()),
-                        embedding_client=embedding_client,
                     )
 
-                    embedding_interface.add_to_db(
+                    embedding_writer.add_to_db(
                         embeddings=standard_concept_embeddings,
                         concept_ids=missing_concept_ids,
                         session=session,
-                        canonical_model_name=model_name,
-                        index_type=resolved_index_type,
+                        index_type=index_type,
                     )
 
                 # Re-attempt retrieval after update
@@ -183,7 +206,7 @@ def semantic_similarity(
             else:
                 param_dict = {
                     "text_embedding_model": text_embedding_model,
-                    "embedding_client": embedding_client,
+                    "embedding_writer": embedding_writer,
                     "text_embedding": text_embedding,
                     "index_type": index_type
                 }
@@ -231,8 +254,8 @@ def get_neareast_concepts(
     if not HAS_OMOP_EMB:
         return None
     
-    embedding_interface = get_embedding_interface(kg)
-    if not embedding_interface:
+    embedding_reader = get_embedding_reader_interface(kg)
+    if not embedding_reader:
         logger.info("Embedding interface not available in KG.")
         return None
     
@@ -259,16 +282,15 @@ def get_neareast_concepts(
         logger.info(f"Invalid embedding retrieval parameters: {exc}")
         return None
 
-    if not embedding_interface.is_model_registered(canonical_model_name=text_embedding_model, index_type=resolved_index_type):
+    if not embedding_reader.is_model_registered(index_type=resolved_index_type):
         logger.info(f"Model '{text_embedding_model}' not registered.")
         return None
 
     if text_embedding is None:
         return None
 
-    similarity_scores_tuple = embedding_interface.get_nearest_concepts(
+    similarity_scores_tuple = embedding_reader.get_nearest_concepts(
         session=session,
-        canonical_model_name=text_embedding_model,
         index_type=resolved_index_type,
         query_embedding=text_embedding,
         concept_filter=concept_filter,  # type: ignore
@@ -278,8 +300,9 @@ def get_neareast_concepts(
     if similarity_scores_tuple is None:
         logger.info("No similarity scores retrieved from embedding interface.")
         return None
-    
-    assert all(isinstance(d, dict) for d in similarity_scores_tuple), (
-        "Expected each item in similarity_scores_tuple to be a dictionary mapping concept IDs to scores."
-    )
+
+    if not all(isinstance(d, dict) for d in similarity_scores_tuple):
+        raise RuntimeError(
+            "Expected each item in similarity_scores_tuple to be a dictionary mapping concept IDs to scores."
+        )
     return similarity_scores_tuple
