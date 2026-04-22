@@ -34,10 +34,12 @@ from omop_graph.reasoning.resolvers import (
 from omop_graph.extensions.emb import (
     EmbeddingIndexType,
     EmbeddingMetricType,
-    get_embedding_interface,
+    get_embedding_writer_interface,
     semantic_similarity,
 )
-from omop_llm import LLMClient
+
+if TYPE_CHECKING:
+    from omop_emb import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,6 @@ def ground_term(
     text: str,
     text_embedding: Optional[np.ndarray],
     text_embedding_model: Optional[str],
-    embedding_client: Optional["LLMClient"],
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
     metric_type: Optional[EmbeddingMetricType] = None,
@@ -93,8 +94,6 @@ def ground_term(
         The embedding vector for the input text.
     text_embedding_model : str, optional
         The name of the embedding model used to generate `text_embedding`. Used for RAG retrieval from the database.
-    embedding_client : LLMClient, optional
-        The client to use for embedding concepts if RAG retrieval is not possible.
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
@@ -118,21 +117,16 @@ def ground_term(
     if search_constraints is not None:
         kg.check_search_constraints(search_constraints)
 
-    
-
     # Calculate the text embedding on demand if possible
-    embedding_interface = get_embedding_interface(kg)
+    embedding_writer = get_embedding_writer_interface(kg)
     if (
-        embedding_interface is not None and 
+        embedding_writer is not None and 
         text_embedding is None
     ):
-        if embedding_client is None:
+        if embedding_writer._embedding_client is None:
             logger.info("Embedding interface is available but no embedding_client provided. Skipping embedding-based scoring.")
         else:
-            text_embedding = embedding_interface.embed_texts(
-                texts=(text,),
-                embedding_client=embedding_client,
-            )
+            text_embedding = embedding_writer.embed_texts(texts=(text,))
 
     if text_embedding is not None:
         # TODO: Support grounding to more texts
@@ -185,7 +179,6 @@ def ground_term(
         standard_concepts=standard_concepts,
         text_embedding=text_embedding,
         text_embedding_model=text_embedding_model,
-        embedding_client=embedding_client,
         metric_type=metric_type,
         index_type=index_type,
     )

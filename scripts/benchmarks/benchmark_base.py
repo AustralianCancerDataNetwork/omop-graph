@@ -47,7 +47,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_llm import LLMClient
+from omop_emb import EmbeddingClient
 
 
 DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
@@ -193,7 +193,7 @@ def build_knowledge_graph(database_url: Optional[str]) -> KnowledgeGraph:
 def build_embedding_knowledge_graph(
     database_url: Optional[str],
     embedding_backend: Optional[str | BackendType],
-    embedding_client: Optional[LLMClient],
+    embedding_client: Optional[EmbeddingClient],
     embedding_storage_base_dir: Optional[str],
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
@@ -385,7 +385,7 @@ def _evaluate_grounded_case(
 
     text_embedding = cast(Optional[np.ndarray], grounding_kwargs.get("text_embedding"))
     text_embedding_model = cast(Optional[str], grounding_kwargs.get("text_embedding_model"))
-    embedding_client = cast(Optional[LLMClient], grounding_kwargs.get("embedding_client"))
+    embedding_client = cast(Optional[EmbeddingClient], grounding_kwargs.get("embedding_client"))
     metric_type = cast(Optional[MetricType], grounding_kwargs.get("metric_type"))
     index_type = cast(Optional[IndexType], grounding_kwargs.get("index_type"))
 
@@ -467,11 +467,13 @@ def run_grounded_benchmark(
         resolved_embedding_index_type = parse_index_type(embedding_index_type)
         resolved_embedding_metric_type = parse_metric_type(embedding_metric_type)
 
-        embedding_client = LLMClient(
+        embedding_client = EmbeddingClient(
             model=embedding_model,
             api_base=embedding_api_base,
             api_key=embedding_api_key or "ollama",
         )
+        canonical_model = embedding_client.provider.canonical_model_name(embedding_model)
+
         embedding_kg = build_embedding_knowledge_graph(
             database_url=database_url,
             embedding_backend=embedding_backend,
@@ -484,7 +486,7 @@ def run_grounded_benchmark(
 
         embedding_kg.emb.setup_and_register_model(
             engine=engine,
-            model_name=embedding_model,
+            canonical_model_name=canonical_model,
             dimensions=embedding_dim,
             index_type=IndexType(embedding_index_type),
         )

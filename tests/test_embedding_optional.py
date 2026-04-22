@@ -19,7 +19,9 @@ from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
 
-def test_get_neareast_concepts_returns_none_when_index_type_missing():
+def test_get_neareast_concepts_returns_none_when_index_type_missing(monkeypatch: pytest.MonkeyPatch):
+    mock_reader = Mock()
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda kg: mock_reader)
     kg = cast(KnowledgeGraph, SimpleNamespace(emb=SimpleNamespace()))
 
     result = emb_ext.get_neareast_concepts(
@@ -35,7 +37,9 @@ def test_get_neareast_concepts_returns_none_when_index_type_missing():
     assert result is None
 
 
-def test_get_neareast_concepts_returns_none_when_metric_type_missing():
+def test_get_neareast_concepts_returns_none_when_metric_type_missing(monkeypatch: pytest.MonkeyPatch):
+    mock_reader = Mock()
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda kg: mock_reader)
     kg = cast(KnowledgeGraph, SimpleNamespace(emb=SimpleNamespace()))
 
     result = emb_ext.get_neareast_concepts(
@@ -57,7 +61,7 @@ def test_get_embedding_interface_returns_none_for_missing_extension_error():
         def emb(self):
             raise MissingExtensionError()
 
-    assert emb_ext.get_embedding_interface(cast(KnowledgeGraph, BrokenKG())) is None
+    assert emb_ext.get_embedding_reader_interface(cast(KnowledgeGraph, BrokenKG())) is None
 
 
 def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavailable(monkeypatch: pytest.MonkeyPatch):
@@ -72,9 +76,7 @@ def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavai
 
     kg = object.__new__(KnowledgeGraph)
     kg._emb = None
-    kg._emb_backend = None
-    kg._emb_base_storage_dir = None
-    kg._emb_client = None
+    kg._emb_config = None
 
     with pytest.raises(MissingExtensionError):
         _ = kg.emb
@@ -99,6 +101,8 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
     being upserted.
     """
     class FakeEmbeddingInterface:
+        canonical_model_name = "test-model"
+
         def __init__(self):
             self.last_missing_kwargs = None
             self.last_add_kwargs = None
@@ -107,9 +111,8 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
             self.last_missing_kwargs = kwargs
             return {1: "alpha", 2: "beta"}
 
-        def embed_texts(self, texts, embedding_client):
+        def embed_texts(self, texts):
             assert tuple(texts) == ("alpha", "beta")
-            assert embedding_client is not None
             return np.zeros((2, 3), dtype=np.float32)
 
         def add_to_db(self, **kwargs):
@@ -130,7 +133,8 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
     fake_nearest.calls = 0
 
     monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
-    monkeypatch.setattr(emb_ext, "get_embedding_interface", lambda kg: emb_interface)
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda kg: emb_interface)
+    monkeypatch.setattr(emb_ext, "get_embedding_writer_interface", lambda kg: emb_interface)
     monkeypatch.setattr(emb_ext, "get_neareast_concepts", fake_nearest)
 
     result = emb_ext.semantic_similarity(
@@ -169,7 +173,6 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
         ],
         text_embedding=np.zeros((1, 3), dtype=np.float32),
         text_embedding_model="test-model",
-        embedding_client=Mock(),
         metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
         index_type=cast(emb_ext.EmbeddingIndexType, "flat"),
     )

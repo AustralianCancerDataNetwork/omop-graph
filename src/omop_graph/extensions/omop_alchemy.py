@@ -81,7 +81,7 @@ class RelationshipMappingElement:
 
 
 class RelationshipCache:
-    """Cachce for the RelationshipMapping table in-memory.
+    """Cache for the RelationshipMapping table in-memory.
     Allows quicker access."""
     _mapping: dict[str, RelationshipMappingElement] = {}
     _is_initialized: bool = False
