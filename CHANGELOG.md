@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.3...v1.0.4) (2026-04-29)
+
+
+### Bug Fixes
+
+* Correct on-demand embedding calculation ([#7](https://github.com/AustralianCancerDataNetwork/omop-graph/issues/7)) ([1495def](https://github.com/AustralianCancerDataNetwork/omop-graph/commit/1495defc816415974e857472604f61e4894e9536))
+
 ## [1.0.3](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.2...v1.0.3) (2026-04-22)
 
 
