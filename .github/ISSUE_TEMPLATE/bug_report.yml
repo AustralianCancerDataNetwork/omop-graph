@@ -1,0 +1,33 @@
+name: "🐞 Bug Report"
+description: Report a bug to help us improve the project
+labels: ["bug"]
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for the bug you encountered.
+      options:
+      - label: I have searched the existing issues
+        required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Bug summary
+      description: 1-2 short sentences describing the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Code for reproduction
+      description: Please provide a minimal self-contained example.
+      placeholder: Your python code here
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages
+      description: Paste the full error traceback here.
+      render: python-traceback

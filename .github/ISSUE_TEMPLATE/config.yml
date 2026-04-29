@@ -1,0 +1,5 @@
+blank_issues_enabled: false # Changed to false to force template use
+contact_links:
+  - name: ❓ Discussions
+    url: https://github.com/AustralianCancerDataNetwork/omop-graph/discussions
+    about: Ask questions or start a general discussion.
