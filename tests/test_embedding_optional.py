@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import contextlib
+import logging
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import Mock
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from omop_graph.extensions import emb as emb_ext
 from omop_graph.extensions.emb import MissingExtensionError
-from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
@@ -82,23 +83,15 @@ def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavai
         _ = kg.emb
 
 
-def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypatch: pytest.MonkeyPatch):
-    """Validate the fallback embedding flow when initial nearest retrieval returns no results.
+def test_write_path_forwards_index_type_and_only_missing_ids(monkeypatch: pytest.MonkeyPatch):
+    """Verify the omop-emb write-path contracts when compute_missing_embeddings is True.
 
-    This test forces ``semantic_similarity`` into its fallback branch by mocking
-    ``get_neareast_concepts`` to return ``None`` on the first call and a valid
-    score mapping on the second call.
+    1. ``index_type`` is forwarded to ``get_concepts_without_embedding``.
+    2. ``add_to_db`` receives only the IDs reported as missing — not the full
+       candidate set passed to ``semantic_similarity``.
 
-    It verifies two regression-critical contract details:
-    1. ``index_type`` is forwarded to
-       ``EmbeddingInterface.get_concepts_without_embedding``.
-    2. ``EmbeddingInterface.add_to_db`` receives only the concept IDs returned
-       as missing by ``get_concepts_without_embedding`` (not the full candidate
-       concept set).
-
-    These assertions protect against interface drift with omop-emb where
-    ``index_type`` is required and concept IDs must align with the embeddings
-    being upserted.
+    Concept 3 ("gamma") is in ``standard_concepts`` but is NOT returned by
+    ``get_concepts_without_embedding``, so ``add_to_db`` must receive only (1, 2).
     """
     class FakeEmbeddingInterface:
         canonical_model_name = "test-model"
@@ -121,14 +114,15 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
     emb_interface = FakeEmbeddingInterface()
 
     class FakeKG:
+        compute_missing_embeddings = True
+
         def session_factory(self):
             return contextlib.nullcontext(Mock(spec=Session))
 
+    # get_neareast_concepts is called once; return a proper tuple-of-dicts.
     def fake_nearest(*args, **kwargs):
         fake_nearest.calls += 1
-        if fake_nearest.calls == 1:
-            return None
-        return {1: 0.9, 2: 0.8}
+        return ({1: 0.9, 2: 0.8},)
 
     fake_nearest.calls = 0
 
@@ -178,8 +172,102 @@ def test_semantic_similarity_fallback_uses_missing_ids_with_index_type(monkeypat
     )
 
     assert result is not None
-    assert fake_nearest.calls == 2
+    assert fake_nearest.calls == 1
     assert emb_interface.last_missing_kwargs is not None
     assert emb_interface.last_missing_kwargs["index_type"] == "flat"
     assert emb_interface.last_add_kwargs is not None
     assert emb_interface.last_add_kwargs["concept_ids"] == (1, 2)
+
+
+# ── compute_missing_embeddings flag tests (using real KG + dummy CDM DB) ──
+
+def _make_standard_concept(concept_id: int, name: str) -> StandardConcept:
+    return StandardConcept(
+        concept_id=concept_id,
+        concept_name=name,
+        separation=0,
+        original_id=concept_id,
+        original_name=name,
+        matched_label=name,
+        match_kind=LabelMatchKind.EXACT,
+        synonym=False,
+    )
+
+
+def test_fallback_flag_true_logs_attempt_when_concepts_missing(
+    mock_cdm_kg: KnowledgeGraph,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """With compute_missing_embeddings=True and missing concepts, the debug
+    log confirming an on-the-fly computation attempt must be emitted.
+
+    The test uses the real KG backed by the in-memory CDM DB. Because no real
+    embedding model is available, the embedding interfaces are mocked. The
+    assertion is on log output rather than on actual embedding computation.
+    """
+    mock_cdm_kg._emb_config = KnowledgeGraphEmbeddingConfiguration(
+        compute_missing_embeddings=True,
+    )
+
+    fake_reader = Mock()
+    # concept 196653 ("Malignant tumor of kidney") exists in the dummy CDM DB
+    fake_reader.get_concepts_without_embedding.return_value = {
+        196653: "Malignant tumor of kidney"
+    }
+
+    monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
+    # No writer injected: simulates a read-only config with fallback flag set.
+    monkeypatch.setattr(emb_ext, "get_embedding_writer_interface", lambda _: None)
+    monkeypatch.setattr(emb_ext, "get_neareast_concepts", lambda **_: None)
+
+    with caplog.at_level(logging.DEBUG, logger="omop_graph.extensions.emb"):
+        emb_ext.semantic_similarity(
+            kg=mock_cdm_kg,
+            standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
+            text_embedding=np.zeros((1, 3), dtype=np.float32),
+            text_embedding_model="test-model",
+            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+            index_type=cast(emb_ext.EmbeddingIndexType, "flat"),
+        )
+
+    assert "Computing missing embeddings on-the-fly" in caplog.text
+
+
+def test_fallback_flag_false_logs_disabled_when_concepts_missing(
+    mock_cdm_kg: KnowledgeGraph,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """With compute_missing_embeddings=False and missing concepts, the info
+    log stating that the flag is disabled must be emitted and no computation
+    must be attempted.
+
+    The test uses the real KG backed by the in-memory CDM DB.
+    """
+    mock_cdm_kg._emb_config = KnowledgeGraphEmbeddingConfiguration(
+        compute_missing_embeddings=False,
+    )
+
+    fake_reader = Mock()
+    fake_reader.get_concepts_without_embedding.return_value = {
+        196653: "Malignant tumor of kidney"
+    }
+
+    monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
+    monkeypatch.setattr(emb_ext, "get_neareast_concepts", lambda **_: None)
+
+    with caplog.at_level(logging.INFO, logger="omop_graph.extensions.emb"):
+        emb_ext.semantic_similarity(
+            kg=mock_cdm_kg,
+            standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
+            text_embedding=np.zeros((1, 3), dtype=np.float32),
+            text_embedding_model="test-model",
+            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+            index_type=cast(emb_ext.EmbeddingIndexType, "flat"),
+        )
+
+    assert "compute_missing_embeddings is disabled" in caplog.text
+    fake_reader.embed_texts.assert_not_called()
