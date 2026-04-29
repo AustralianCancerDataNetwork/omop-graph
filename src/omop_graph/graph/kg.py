@@ -89,6 +89,12 @@ class KnowledgeGraphEmbeddingConfiguration:
         The canonical model name to use for the embedding reader interface (e.g., 'text-embedding-3-small:0.6b').
         Required for read-only embedding interface to determine which embeddings to retrieve for concepts.
         Obtained from client if a client is provided, otherwise must be set explicitly for read-only use cases.
+    compute_missing_embeddings : bool
+        If True, the system will compute embeddings on-the-fly for any concept that is not yet present
+        in the embedding store, and persist those embeddings back to the DB before running similarity scoring.
+        **Requires a write-capable interface**: a ``client`` must be provided in this configuration; without it
+        the KG only holds a read-only interface, the flag has no effect, and missing concepts are silently skipped.
+        Defaults to ``False`` so that unexpected writes do not occur when only a read-only configuration is given.
     """
 
     backend_type: Optional[EmbeddingBackendType] = None
@@ -96,6 +102,7 @@ class KnowledgeGraphEmbeddingConfiguration:
     client: Optional[EmbeddingClient] = None
     provider_type: Optional[EmbeddingProviderType] = None
     canonical_model_name: Optional[str] = None
+    compute_missing_embeddings: bool = field(default=False)
 
 class KnowledgeGraph(GraphBackend):
     """
@@ -179,7 +186,16 @@ class KnowledgeGraph(GraphBackend):
                 "Embedding functionality failed to initialize due to an import error in the optional embedding stack."
             )
             raise e
+        
+    @property
+    def embedding_configuration(self) -> Optional[KnowledgeGraphEmbeddingConfiguration]:
+        """Returns the current embedding configuration, if set."""
+        return self._emb_config
 
+    @property
+    def compute_missing_embeddings(self) -> bool:
+        """Indicates whether on-the-fly computation of missing concept embeddings is enabled."""
+        return self._emb_config.compute_missing_embeddings if self._emb_config else False
 
     @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:

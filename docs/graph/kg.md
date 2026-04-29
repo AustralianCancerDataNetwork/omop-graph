@@ -51,3 +51,72 @@ print(f"ID: {concept.concept_id}, Name: {concept.matched_label}")
 parents = kg.parents(concept.concept_id)
 print(f"Parent IDs: {parents}")
 ```
+
+---
+
+### Embedding Configuration
+
+To enable semantic similarity and RAG-based retrieval, pass a `KnowledgeGraphEmbeddingConfiguration` when initialising the graph.
+This requires the optional `omop-emb` package — see the [installation guide](../usage/installation.md#embedding-rag).
+
+#### Read-only (pre-computed embeddings already in the DB)
+
+Use this when embeddings have already been indexed and you only need retrieval:
+
+```python
+from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
+from omop_emb import BackendType, ProviderType
+
+emb_config = KnowledgeGraphEmbeddingConfiguration(
+    backend_type=BackendType.FAISS,
+    provider_type=ProviderType.OLLAMA,
+    canonical_model_name="text-embedding-3-small:0.6b",
+    base_storage_dir="/data/embeddings",
+)
+kg = KnowledgeGraph(SessionLocal, emb_config=emb_config)
+```
+
+#### Write-capable (generate and store embeddings at runtime)
+
+Provide an `EmbeddingClient` to enable both reading and writing embeddings:
+
+```python
+from omop_emb import EmbeddingClient
+from omop_emb import BackendType, ProviderType
+
+client = EmbeddingClient(...)  # configured for your provider
+
+emb_config = KnowledgeGraphEmbeddingConfiguration(
+    backend_type=BackendType.FAISS,
+    base_storage_dir="/data/embeddings",
+    client=client,
+)
+kg = KnowledgeGraph(SessionLocal, emb_config=emb_config)
+```
+The `provider_type` will be automatically determined from the `client`.
+
+#### Fallback embedding calculation
+
+When some concepts in the OMOP DB have not been pre-indexed, similarity scoring will silently skip them.
+Setting `compute_missing_embeddings=True` instructs the graph to compute and persist embeddings
+for any missing concepts on-the-fly during a similarity call.
+
+!!! warning
+    This flag has no effect unless a write-capable interface is configured (i.e. a `client` is provided).
+    Without a `client`, the graph holds a read-only interface and cannot write back to the embedding store.
+
+```python
+emb_config = KnowledgeGraphEmbeddingConfiguration(
+    backend_type="faiss",
+    base_storage_dir="/data/embeddings",
+    client=client,
+    compute_missing_embeddings=True,  # compute embeddings for concepts not yet in the store
+)
+kg = KnowledgeGraph(SessionLocal, emb_config=emb_config)
+```
+
+| `compute_missing_embeddings` | `client` present | Behaviour when concepts are missing |
+|---|---|---|
+| `False` (default) | any | Log at INFO and skip missing concepts in scoring |
+| `True` | no | Log warning that computation is not possible; skip missing concepts |
+| `True` | yes | Compute embeddings, persist to DB, then score |

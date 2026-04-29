@@ -143,10 +143,60 @@ def semantic_similarity(
         logger.info("Embedding reader interface not found in KG. Skipping similarity calculation.")
         return None
     
+    if index_type is None:
+        logger.info("Index type is required for similarity calculation but not provided. Skipping similarity calculation.")
+        return None
+    
     concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
     concept_filter = SearchConstraintConcept(concept_ids=concept_ids, limit=len(concept_ids))
 
     with kg.session_factory() as session:
+        missing_sc_embeddings = embedding_reader.get_concepts_without_embedding(
+            session=session,
+            concept_filter=concept_filter,  # type: ignore
+            index_type=index_type,
+        )
+
+        if missing_sc_embeddings:
+            if kg.compute_missing_embeddings:
+                logger.debug(f"Concepts missing embeddings: {missing_sc_embeddings}. Computing missing embeddings on-the-fly.")
+                embedding_writer = get_embedding_writer_interface(kg)
+                if (
+                    embedding_writer is not None and
+                    text_embedding_model is not None and
+                    text_embedding is not None
+                ):
+
+                    missing_concept_ids = tuple(missing_sc_embeddings.keys())
+                    missing_concept_texts = tuple(missing_sc_embeddings.values())
+                    calculated_embeddings = embedding_writer.embed_texts(texts=missing_concept_texts)
+                    embedding_writer.add_to_db(
+                        embeddings=calculated_embeddings,
+                        concept_ids=missing_concept_ids,
+                        session=session,
+                        index_type=index_type,
+                    )
+                    logger.debug(f"Computed and stored embeddings for missing concepts: {missing_concept_ids}")
+                else:
+                    param_dict = {
+                        "text_embedding_model": text_embedding_model,
+                        "embedding_writer": embedding_writer,
+                        "text_embedding": text_embedding,
+                        "index_type": index_type
+                    }
+                    none_params = [k for k, v in param_dict.items() if v is None]
+                    logger.info(
+                        f"Cannot compute missing embeddings due to missing parameters: {none_params}\n"
+                        "Ensure the KG was initialised with a write-capable client to enable on-the-fly embedding computation.\n"
+                        f"Expect missing embedding scores for concepts: {missing_sc_embeddings}"
+                    )
+            else:
+                logger.info(
+                    f"Concepts missing embeddings: {missing_sc_embeddings}.\n"
+                    "compute_missing_embeddings is disabled; these concepts will be skipped in similarity scoring.\n"
+                    "Expect missing embedding scores for these concepts in the results."
+                )
+
         similarity_scores_tuple_of_dicts = get_neareast_concepts(
             session=session,
             kg=kg,
@@ -156,66 +206,8 @@ def semantic_similarity(
             metric_type=metric_type,
             index_type=index_type,
         )
-
-        if not similarity_scores_tuple_of_dicts:
-            # Fallback logic if database retrieval fails
-            embedding_writer = get_embedding_writer_interface(kg)
-            
-            if (text_embedding_model is not None and
-                embedding_writer is not None and
-                text_embedding is not None and
-                index_type is not None
-            ):
-                logger.debug("Falling back to embedding client for similarity scores.")
-
-                if text_embedding_model != embedding_writer.canonical_model_name:
-                    raise ValueError(f"Text embedding model '{text_embedding_model}' does not match the model registered in the embedding writer interface ('{embedding_writer.canonical_model_name}'). Ensure that the text_embedding was generated using the same model as the one registered in the embedding interface for accurate similarity calculation.")
-
-                # Validate types at runtime since static checks won't catch this without the lib
-                if not isinstance(text_embedding, np.ndarray):
-                    raise TypeError("text_embedding must be a numpy array.")
-                
-                # Fetch missing embeddings and update DB
-                missing_sc_embeddings = embedding_writer.get_concepts_without_embedding(
-                    session=session,
-                    concept_filter=concept_filter,  # type: ignore
-                    index_type=index_type,
-                )
-
-                if missing_sc_embeddings:
-                    missing_concept_ids = tuple(missing_sc_embeddings.keys())
-                    standard_concept_embeddings = embedding_writer.embed_texts(
-                        texts=tuple(missing_sc_embeddings.values()),
-                    )
-
-                    embedding_writer.add_to_db(
-                        embeddings=standard_concept_embeddings,
-                        concept_ids=missing_concept_ids,
-                        session=session,
-                        index_type=index_type,
-                    )
-
-                # Re-attempt retrieval after update
-                similarity_scores_tuple_of_dicts = get_neareast_concepts(
-                    session=session,
-                    kg=kg,
-                    text_embedding_model=text_embedding_model,
-                    text_embedding=text_embedding,
-                    concept_filter=concept_filter,
-                    metric_type=metric_type,
-                    index_type=index_type
-                )
-            else:
-                param_dict = {
-                    "text_embedding_model": text_embedding_model,
-                    "embedding_writer": embedding_writer,
-                    "text_embedding": text_embedding,
-                    "index_type": index_type
-                }
-                none_params = [k for k, v in param_dict.items() if v is None]
-                logger.info(f"Fallback embedding calculation not possible for standard_concepts due to missing parameters: {none_params}")
-
-        return similarity_scores_tuple_of_dicts
+        
+    return similarity_scores_tuple_of_dicts
 
 def get_neareast_concepts(
     session: Session,

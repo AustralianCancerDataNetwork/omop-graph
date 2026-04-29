@@ -45,13 +45,13 @@ dependencies = [
 
 [project.optional-dependencies]
 faiss = [
-  "omop-emb[faiss]>=0.4.0",
+  "omop-emb[faiss]==0.4.0",
 ]
 pgvector = [
-  "omop-emb[pgvector]>=0.4.0",
+  "omop-emb[pgvector]==0.4.0",
 ]
 emb = [
-  "omop-emb[all]>=0.4.0"
+  "omop-emb[all]==0.4.0"
 ]
 
 [dependency-groups]
@@ -62,7 +62,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
-    "omop-emb[all]>=0.4.0",
+    "omop-emb[all]==0.4.0",
     "mkdocs<2.0",
     "mkdocs-material",
     "mkdocstrings[python]",
