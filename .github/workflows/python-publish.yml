@@ -1,15 +1,12 @@
 name: Publish to PyPI
-
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types:
-      - completed
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*' # Triggers only when a version tag is pushed
+  workflow_dispatch: # Allows you to manually trigger a fix
 
 jobs:
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -20,7 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0 # Required to verify branch history
+
+      - name: Verify tag is on main
+        run: |
+          if ! git branch -r --contains ${{ github.ref_name }} | grep -q "origin/main"; then
+            echo "Error: Tag ${{ github.ref_name }} is not on the main branch. Aborting."
+            exit 1
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
