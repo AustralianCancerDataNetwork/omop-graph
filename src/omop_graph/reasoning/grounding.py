@@ -126,7 +126,11 @@ def ground_term(
         if embedding_writer._embedding_client is None:
             logger.info("Embedding interface is available but no embedding_client provided. Skipping embedding-based scoring.")
         else:
-            text_embedding = embedding_writer.embed_texts(texts=(text,))
+            from omop_emb.embeddings import EmbeddingRole
+            text_embedding = embedding_writer.embed_texts(
+                texts=(text,),
+                embedding_role=EmbeddingRole.QUERY
+            )
 
     if text_embedding is not None:
         # TODO: Support grounding to more texts
@@ -143,6 +147,9 @@ def ground_term(
             index_type=index_type,
         )
     )
+    if not resolved:
+        logger.info(f"No candidates found for '{text}' using the resolver pipeline: {resolver_pipeline}")
+        return []
 
     # Anchoring
     for hit in resolved:
@@ -159,8 +166,8 @@ def ground_term(
             if not candidate_standard_concepts:
                 concept_name = kg.concept_view(hit.concept_id).concept_name
                 logger.debug(
-                    f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
-                    f"has no path to parents {constraints.parent_ids} with {constraints.max_depth} max depth and predicates {constraints.predicate_kinds}."
+                    f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) has no path to parents {constraints.parent_ids}\n"
+                    f"Params: `max_depth`({constraints.max_depth}), `predicates`({constraints.predicate_kinds})"
                 )
                 continue
             
@@ -174,7 +181,7 @@ def ground_term(
         return []
 
 
-    similarity_scores_with_concept_ids = semantic_similarity(
+    nearest_concept_matches = semantic_similarity(
         kg=kg,
         standard_concepts=standard_concepts,
         text_embedding=text_embedding,
@@ -188,7 +195,7 @@ def ground_term(
         text=text, 
         standard_concepts=tuple(standard_concepts),
         kg=kg,
-        similarity_scores_with_concept_ids=similarity_scores_with_concept_ids
+        nearest_concept_matches=nearest_concept_matches
     )
 
     # Keep one best-scoring entry per standard concept after scoring all evidence.

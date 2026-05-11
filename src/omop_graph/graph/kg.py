@@ -19,11 +19,13 @@ from __future__ import annotations
 
 import logging
 import re
+import os
 from datetime import date
 from functools import lru_cache
 from typing import Dict, Optional, Tuple, Union, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass, field
 
+from sqlalchemy import Engine, inspect
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.cdm.handlers.fulltext import FullTextError
@@ -32,7 +34,7 @@ if TYPE_CHECKING:
     from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface, EmbeddingClient
 
 # Local Application Imports
-from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType
+from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType, EmbeddingMetricType
 from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
@@ -77,18 +79,23 @@ class KnowledgeGraphEmbeddingConfiguration:
 
     Parameters
     ----------
+    metric_type : EmbeddingMetricType
+        The similarity/distance metric to use for embedding comparisons (e.g., cosine, euclidean).
+        This is required to ensure that the correct type of index is used in the backend and that
+        similarity computations are consistent.
+    model_name : str
+        The canonical model name to use for the embedding reader interface (e.g., 'text-embedding-3-small:0.6b').
+        Required for read-only embedding interface to determine which embeddings to retrieve for concepts.
+        Obtained from client if a client is provided, otherwise must be set explicitly for read-only use cases.
     backend_type : EmbeddingBackendType
         The embedding backend name (e.g., 'faiss', 'pinecone') or type to use.
-    base_storage_dir : str, optional
-        The directory where embeddings are stored.
     client : EmbeddingClient, optional
         An optional client instance for generating embeddings. If not provided, no writing operations can take place.
     provider_type : EmbeddingProviderType, optional
         The respective provider name (e.g., 'openai', 'ollama') or type if using a read-only embedding reader interface.
-    canonical_model_name : str, optional
-        The canonical model name to use for the embedding reader interface (e.g., 'text-embedding-3-small:0.6b').
-        Required for read-only embedding interface to determine which embeddings to retrieve for concepts.
-        Obtained from client if a client is provided, otherwise must be set explicitly for read-only use cases.
+    provider_type : EmbeddingProviderType, optional
+        The provider type to use for the embedding reader interface (e.g., 'ollama'). 
+        Required for read-only embedding interface to determine provider-specific canonical model name.
     compute_missing_embeddings : bool
         If True, the system will compute embeddings on-the-fly for any concept that is not yet present
         in the embedding store, and persist those embeddings back to the DB before running similarity scoring.
@@ -96,12 +103,11 @@ class KnowledgeGraphEmbeddingConfiguration:
         the KG only holds a read-only interface, the flag has no effect, and missing concepts are silently skipped.
         Defaults to ``False`` so that unexpected writes do not occur when only a read-only configuration is given.
     """
-
+    metric_type: EmbeddingMetricType
+    model_name: Optional[str] = None
     backend_type: Optional[EmbeddingBackendType] = None
-    base_storage_dir: Optional[str] = None
     client: Optional[EmbeddingClient] = None
     provider_type: Optional[EmbeddingProviderType] = None
-    canonical_model_name: Optional[str] = None
     compute_missing_embeddings: bool = field(default=False)
 
 class KnowledgeGraph(GraphBackend):
@@ -113,18 +119,17 @@ class KnowledgeGraph(GraphBackend):
 
     Parameters
     ----------
-    session_factory : sessionmaker
-        The SQLAlchemy sessionmaker factory capable of creating separate sessions for 
-        each database access.
-    
+    cdm_engine : Engine
+        The SQLAlchemy engine for the OMOP CDM database.
     """
 
     def __init__(
         self,
-        session_factory: sessionmaker,
+        cdm_engine: Engine,
         emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
     ):
-        self.session_factory = session_factory
+        self.cdm_engine = cdm_engine
+        self.session_factory = sessionmaker(bind=self.cdm_engine, future=True)
 
         # Populate the relationshipcache
         with self.session_factory() as session:
@@ -150,27 +155,42 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             from omop_emb.interface import EmbeddingWriterInterface, EmbeddingReaderInterface
-            
+            from omop_emb.config import (
+                ENV_OMOP_EMB_FAISS_CACHE_DIR,
+                ENV_OMOP_EMB_BACKEND,
+                BackendType
+            )
+            from omop_emb.backends.base_backend import resolve_backend
+
             if self._emb_config is None:
                 raise ValueError("Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features.")
+            
+            backend_type = self._emb_config.backend_type or os.getenv(ENV_OMOP_EMB_BACKEND, None)
+            if backend_type is None:
+                raise ValueError(f"Embedding backend type must be specified either in the configuration or via the {ENV_OMOP_EMB_BACKEND} environment variable.")
+
+            backend = resolve_backend(backend_type)
+
             if self._emb_config.client is not None:
                 # Write-capable interface
                 self._emb = EmbeddingWriterInterface(
                     embedding_client=self._emb_config.client,
-                    backend_name_or_type=self._emb_config.backend_type,
-                    storage_base_dir=self._emb_config.base_storage_dir,
+                    backend=backend,
+                    metric_type=self._emb_config.metric_type,
+                    omop_cdm_engine=self.cdm_engine,
                 )
             else:
                 if self._emb_config.provider_type is None:
                     raise ValueError("Provider type must be specified for read-only embedding interface.")
-                if self._emb_config.canonical_model_name is None:
+                if self._emb_config.model_name is None:
                     raise ValueError("Canonical model name must be specified for read-only embedding interface.")
                 # Read-only interface
                 self._emb = EmbeddingReaderInterface(
-                    canonical_model_name=self._emb_config.canonical_model_name,
-                    backend_name_or_type=self._emb_config.backend_type,
+                    model=self._emb_config.model_name,
+                    backend=backend,
+                    metric_type=self._emb_config.metric_type,
+                    omop_cdm_engine=self.cdm_engine,
                     provider_name_or_type=self._emb_config.provider_type,
-                    storage_base_dir=self._emb_config.base_storage_dir,
                 )
             return self._emb
 
@@ -305,15 +325,11 @@ class KnowledgeGraph(GraphBackend):
                 search_constraint=search_constraint,
                 synonym=synonym,
                 sort=sort,
+                engine=self.cdm_engine
             )
-        except FullTextError:
+        except FullTextError as e:
             if match_kind == LabelMatchKind.FTS:
-                logger.info(
-                    "Skipping full-text concept lookup because the optional OMOP "
-                    "Alchemy tsvector columns are not available. Run `omop-maint "
-                    "fulltext install` and `omop-maint fulltext populate` to enable "
-                    "this resolver."
-                )
+                logger.info(e)
                 return ()
             raise
 

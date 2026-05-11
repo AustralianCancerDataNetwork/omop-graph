@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Optional, Tuple, Literal, Union
 from datetime import date
 
-from sqlalchemy import and_, case, exists, func, literal, select
+from sqlalchemy import and_, case, exists, func, literal, select, Engine, inspect, column
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
@@ -213,6 +213,7 @@ def q_concept_name_match(
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
+    **kwargs,
 ) -> Select:
     """
     Query for exact case-insensitive matches on concept names.
@@ -257,6 +258,7 @@ def q_concept_name_ilike(
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
+    **kwargs
 ) -> Select:
     """
     Query for partial matches on concept names using ILIKE.
@@ -298,6 +300,8 @@ def q_concept_name_ilike(
 
 def q_concept_name_fulltext(
     term: str, 
+    *,
+    engine: Engine,
     search_constraint: Optional['SearchConstraintConcept'] = None,
     synonym: bool = False,
     sort: bool = True,
@@ -324,21 +328,21 @@ def q_concept_name_fulltext(
     """
     name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
-    if synonym:
-        vector = Concept_Synonym.__table__.c.get(CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN)
-        stmt = q_concept_synonym()
-    else:
-        vector = Concept.__table__.c.get(CONCEPT_NAME_TSVECTOR_COLUMN)
-        stmt = q_concept_name()
+    inspector = inspect(engine)
+    target_table = Concept_Synonym if synonym else Concept
+    target_col = CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN if synonym else CONCEPT_NAME_TSVECTOR_COLUMN
+    stmt = q_concept_synonym() if synonym else q_concept_name()
 
-    if vector is None:
+    tsvector_col = next((c["name"] for c in inspector.get_columns(target_table.__tablename__) 
+                      if c["name"] == target_col), None)
+
+    if tsvector_col is None:
         raise FullTextError(
-            "Full-text search is disabled because the optional OMOP Alchemy "
-            "tsvector columns are not registered on the current ORM metadata. "
-            "Run `omop-maint fulltext install` and `omop-maint fulltext populate` "
-            "to enable FTS, or skip LabelMatchKind.FTS resolvers."
+            f"Full-text search column '{target_col}' not found in table '{target_table.__tablename__}'. "
+            "Make sure to run 'omop-maint fulltext install' and 'omop-maint fulltext populate' to set up full-text search."
         )
-        
+    
+    vector = column(tsvector_col)
     query = func.plainto_tsquery("english", term)
     
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly

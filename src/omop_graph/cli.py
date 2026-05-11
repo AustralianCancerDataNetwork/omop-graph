@@ -49,13 +49,13 @@ ATHENA_INITIAL_LOAD = [
 ]
 
 
-ATHENA_SUBSEQUENT_LOAD: list[type[CDMTableBase]] = [
+ATHENA_SUBSEQUENT_LOAD = [
     Concept_Ancestor,
     Concept_Relationship,
     Concept_Synonym,
 ]
 
-ATHENA_RELATIONSHIP_CLASSIFICATION_LOAD: list[type[CDMTableBase]] = [
+ATHENA_RELATIONSHIP_CLASSIFICATION_LOAD = [
     RelationshipClass,
     RelationshipMapping
 ]
@@ -118,7 +118,6 @@ def omop_cdm(
     load_dotenv()
 
     engine_string = build_engine_string()
-    
     engine = sa.create_engine(engine_string, future=True, echo=False)
 
     # Drop all existing tables for a fresh bootstrap
@@ -168,12 +167,14 @@ def omop_cdm(
     if fulltext:
         try:
             _enable_fulltext_sidecars(engine, fulltext_regconfig)
+            logger.info("Successfully enabled PostgreSQL full-text sidecars.")
         except Exception as exc:
             logger.error(f"Failed to enable PostgreSQL full-text sidecars: {exc}")
             logger.info("Continuing with bootstrap without full-text sidecars. You can rerun `omop-maint fulltext install` and `omop-maint fulltext populate` later.")
 
     try:
        relationship_classification(pred_class_dir)
+       logger.info("Successfully ingested relationship classifications.")
     except Exception as e:
        logger.error(f"Failed to ingest predicate classifications: {e}")
        logger.info("Continuing with bootstrap without predicate classifications. Re-run cli `ingest-classification` command once the issue is resolved.")
@@ -184,13 +185,14 @@ def omop_cdm(
 @app.command()
 def relationship_classification(
     pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
+    env_file: Annotated[Optional[str], typer.Option("--env-file", "-e", help="Path to the .env file containing database connection variables. If not provided, will look for .env in the current working directory.")] = None,
     verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
     """
     Method to get the pre-classified predicates into the database.
     """
     configure_logging_level(verbosity)
-    load_dotenv()
+    load_dotenv(env_file)
 
     if pred_class_dir is None:
         pred_class_dir = str((Path(__file__).parent.parent.parent / "docs").resolve())
@@ -239,10 +241,7 @@ def relationship_classification(
     vocab_dir = Path(vocab_dir_env_var).resolve()
     assert vocab_dir.exists(), f"Source path {vocab_dir} does not exist"
 
-    engine_string = os.getenv('OMOP_CDM_DB_URL')
-    if engine_string is None:
-        raise RuntimeError("OMOP_CDM_DB_URL environment variable not set. Please set it in your .env file to point to your database.")
-    
+    engine_string = build_engine_string()
     engine = sa.create_engine(engine_string, future=True, echo=False)
     Session = sessionmaker(bind=engine, future=True)
     session = Session()

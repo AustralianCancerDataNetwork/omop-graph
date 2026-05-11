@@ -13,10 +13,16 @@ if TYPE_CHECKING:
     # Optional embedding-specific ones
     from omop_emb import BackendType, MetricType, IndexType, ProviderType
     from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface
+    from omop_emb.embeddings import EmbeddingRole
+    from omop_emb.utils.embedding_utils import NearestConceptMatch
+    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
+
+
     EmbeddingBackendType: TypeAlias = BackendType
     EmbeddingMetricType: TypeAlias = MetricType
     EmbeddingIndexType: TypeAlias = IndexType
     EmbeddingProviderType: TypeAlias = ProviderType
+    EmbeddingRoleType: TypeAlias = EmbeddingRole
 
     # Circular imports for static type hints
     from omop_graph.graph.kg import KnowledgeGraph
@@ -27,6 +33,7 @@ else:
     EmbeddingMetricType = str
     EmbeddingIndexType = str
     EmbeddingProviderType = str
+    EmbeddingRoleType = str
 
 SUPPORTED_BACKENDS: Tuple[str, ...] = ()
 SUPPORTED_METRICS: Tuple[str, ...] = ()
@@ -36,6 +43,7 @@ _PARSE_METRIC_TYPE = None
 if HAS_OMOP_EMB:
     try:
         from omop_emb import BackendType, MetricType
+        from omop_emb.embeddings import EmbeddingRole
         from omop_emb.config import parse_index_type, parse_metric_type
         from omop_emb import EmbeddingReaderInterface, EmbeddingWriterInterface
         # Extract the string values from the StrEnums
@@ -107,7 +115,7 @@ def semantic_similarity(
     text_embedding_model: Optional[str],
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
-) -> Optional[Tuple[Mapping[int, float], ...]]:
+) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
     """
     Calculates similarity between text embeddings and concept embeddings.
 
@@ -129,10 +137,8 @@ def semantic_similarity(
 
     Returns
     -------
-    Optional[Tuple[Mapping[int, float], ...]]
-        A tuple of dictionaries mapping concept IDs to similarity scores for each query embedding.
-        The outer tuple is of length q (number of query embeddings, shape[0] of text_embedding), and each inner dictionary contains up to k (the number of unique concepts) entries mapping concept IDs to their similarity scores with the query embedding.
-
+    Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]
+        A tuple of tuple of NearestConceptMatch objects containing similarity scores for each concept. The tuples are of shape (q, k) where q is the number of query vectors (usually 1 for a single text embedding) and k is the number of nearest neighbors returned by the embedding interface. 
     """
     if not HAS_OMOP_EMB:
         logger.info("Embedding functionality is not available. Ensure 'omop-emb' is installed to use this feature.")
@@ -147,85 +153,80 @@ def semantic_similarity(
         logger.info("Index type is required for similarity calculation but not provided. Skipping similarity calculation.")
         return None
     
+    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
+    
     concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
-    concept_filter = SearchConstraintConcept(concept_ids=concept_ids, limit=len(concept_ids))
+    concept_filter = EmbeddingConceptFilter(concept_ids=concept_ids, limit=len(concept_ids))
 
-    with kg.session_factory() as session:
-        missing_sc_embeddings = embedding_reader.get_concepts_without_embedding(
-            session=session,
-            concept_filter=concept_filter,  # type: ignore
-            index_type=index_type,
-        )
+    missing_sc_embeddings = embedding_reader.get_concepts_without_embedding(
+        omop_cdm_engine=kg.cdm_engine,
+        concept_filter=concept_filter,
+    )
 
-        if missing_sc_embeddings:
-            if kg.compute_missing_embeddings:
-                logger.debug(f"Concepts missing embeddings: {missing_sc_embeddings}. Computing missing embeddings on-the-fly.")
-                embedding_writer = get_embedding_writer_interface(kg)
-                if (
-                    embedding_writer is not None and
-                    text_embedding_model is not None and
-                    text_embedding is not None
-                ):
+    if missing_sc_embeddings:
+        if kg.compute_missing_embeddings:
+            logger.debug(f"Concepts missing embeddings: {missing_sc_embeddings}. Computing missing embeddings on-the-fly.")
+            embedding_writer = get_embedding_writer_interface(kg)
+            if (
+                embedding_writer is not None and
+                text_embedding_model is not None and
+                text_embedding is not None
+            ):
 
-                    missing_concept_ids = tuple(missing_sc_embeddings.keys())
-                    missing_concept_texts = tuple(missing_sc_embeddings.values())
-                    calculated_embeddings = embedding_writer.embed_texts(texts=missing_concept_texts)
-                    embedding_writer.add_to_db(
-                        embeddings=calculated_embeddings,
-                        concept_ids=missing_concept_ids,
-                        session=session,
-                        index_type=index_type,
-                    )
-                    logger.debug(f"Computed and stored embeddings for missing concepts: {missing_concept_ids}")
-                else:
-                    param_dict = {
-                        "text_embedding_model": text_embedding_model,
-                        "embedding_writer": embedding_writer,
-                        "text_embedding": text_embedding,
-                        "index_type": index_type
-                    }
-                    none_params = [k for k, v in param_dict.items() if v is None]
-                    logger.info(
-                        f"Cannot compute missing embeddings due to missing parameters: {none_params}\n"
-                        "Ensure the KG was initialised with a write-capable client to enable on-the-fly embedding computation.\n"
-                        f"Expect missing embedding scores for concepts: {missing_sc_embeddings}"
-                    )
-            else:
-                logger.info(
-                    f"Concepts missing embeddings: {missing_sc_embeddings}.\n"
-                    "compute_missing_embeddings is disabled; these concepts will be skipped in similarity scoring.\n"
-                    "Expect missing embedding scores for these concepts in the results."
+                missing_concept_ids = tuple(missing_sc_embeddings.keys())
+                missing_concept_texts = tuple(missing_sc_embeddings.values())
+
+                embedding_writer.embed_and_upsert_concepts(
+                    omop_cdm_engine=kg.cdm_engine,
+                    concept_ids=missing_concept_ids,
+                    concept_texts=missing_concept_texts,
                 )
+                logger.debug(f"Computed and stored embeddings for missing concepts: {missing_concept_ids}")
+            else:
+                param_dict = {
+                    "text_embedding_model": text_embedding_model,
+                    "embedding_writer": embedding_writer,
+                    "text_embedding": text_embedding,
+                    "index_type": index_type
+                }
+                none_params = [k for k, v in param_dict.items() if v is None]
+                logger.info(
+                    f"Cannot compute missing embeddings due to missing parameters: {none_params}\n"
+                    "Ensure the KG was initialised with a write-capable client to enable on-the-fly embedding computation.\n"
+                    f"Expect missing embedding scores for concepts: {missing_sc_embeddings}"
+                )
+        else:
+            logger.info(
+                f"Concepts missing embeddings: {missing_sc_embeddings}.\n"
+                "compute_missing_embeddings is disabled; these concepts will be skipped in similarity scoring.\n"
+                "Expect missing embedding scores for these concepts in the results."
+            )
 
-        similarity_scores_tuple_of_dicts = get_neareast_concepts(
-            session=session,
-            kg=kg,
-            text_embedding_model=text_embedding_model,
-            text_embedding=text_embedding,
-            concept_filter=concept_filter,
-            metric_type=metric_type,
-            index_type=index_type,
-        )
+    nearest_concept_matches = get_neareast_concepts(
+        kg=kg,
+        text_embedding_model=text_embedding_model,
+        text_embedding=text_embedding,
+        concept_filter=concept_filter,
+        metric_type=metric_type,
+        index_type=index_type,
+    )
         
-    return similarity_scores_tuple_of_dicts
+    return nearest_concept_matches
 
 def get_neareast_concepts(
-    session: Session,
     kg: KnowledgeGraph,
     text_embedding_model: Optional[str],
     text_embedding: Optional[np.ndarray],
-    concept_filter: Optional[SearchConstraintConcept],
+    concept_filter: Optional[EmbeddingConceptFilter],
     metric_type: Optional[EmbeddingMetricType],
     index_type: Optional[EmbeddingIndexType],
-) -> Optional[Tuple[Mapping[int, float], ...]]:
+) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
     """
     RAG retrieval for concept similarity scores. The text_embedding is used to retrieve the nearest concepts from the database
     using stored embeddings and the specified similarity metric.
 
     Parameters
     ----------
-    session : Session
-        SQLAlchemy session for any required relational access.
     kg : KnowledgeGraph
         The knowledge graph instance, used to access the embedding interface.
     text_embedding_model : Optional[str]
@@ -276,27 +277,18 @@ def get_neareast_concepts(
         logger.info(f"Invalid embedding retrieval parameters: {exc}")
         return None
 
-    if not embedding_reader.is_model_registered(index_type=resolved_index_type):
+    if not embedding_reader.is_model_registered():
         logger.info(f"Model '{text_embedding_model}' not registered.")
         return None
 
     if text_embedding is None:
         return None
 
-    similarity_scores_tuple = embedding_reader.get_nearest_concepts(
-        session=session,
-        index_type=resolved_index_type,
+    nearest_concepts = embedding_reader.get_nearest_concepts(
         query_embedding=text_embedding,
-        concept_filter=concept_filter,  # type: ignore
-        metric_type=resolved_metric_type,
+        concept_filter=concept_filter,
     )
-
-    if similarity_scores_tuple is None:
-        logger.info("No similarity scores retrieved from embedding interface.")
+    if not nearest_concepts:
+        logger.info("No nearest concepts found for the given query embedding and filter.")
         return None
-
-    if not all(isinstance(d, dict) for d in similarity_scores_tuple):
-        raise RuntimeError(
-            "Expected each item in similarity_scores_tuple to be a dictionary mapping concept IDs to scores."
-        )
-    return similarity_scores_tuple
+    return nearest_concepts

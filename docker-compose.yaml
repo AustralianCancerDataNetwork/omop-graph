@@ -1,0 +1,27 @@
+services:
+  omop-cdm-db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=${OMOP_CDM_DB_USER:-omop}
+      - POSTGRES_PASSWORD=${OMOP_CDM_DB_PASSWORD:-omop}
+      - POSTGRES_DB=${OMOP_CDM_DB_NAME:-omop}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - omop-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OMOP_CDM_DB_USER:-omop} -d ${OMOP_CDM_DB_NAME:-omop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+networks:
+  omop-net:
+    name: omop-net
+
+volumes:
+  db_data:

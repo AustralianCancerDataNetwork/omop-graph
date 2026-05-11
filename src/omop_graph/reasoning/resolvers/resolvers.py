@@ -28,6 +28,7 @@ from omop_graph.extensions.emb import (
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
+    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +226,7 @@ class EmbeddingResolver(CandidateResolver):
         self,
         kg: KnowledgeGraph,
         text: str,
-        constraints: Optional[SearchConstraintConcept] = None,
+        constraints: Optional[EmbeddingConceptFilter] = None,
         text_embedding: Optional[np.ndarray] = None,
         text_embedding_model: Optional[str] = None,
         metric_type: Optional[EmbeddingMetricType] = None,
@@ -233,38 +234,46 @@ class EmbeddingResolver(CandidateResolver):
         sort: bool = False,
     ) -> Tuple[LabelMatch, ...]:
         
-        with kg.session_factory() as session:
-            matches = get_neareast_concepts(
-                session=session,
-                kg=kg,
-                text_embedding=text_embedding,
-                text_embedding_model=text_embedding_model,
-                concept_filter=constraints,
-                metric_type=metric_type,
-                index_type=index_type,
+        from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
+        if isinstance(constraints, SearchConstraintConcept):
+            constraints = EmbeddingConceptFilter(
+                concept_ids=constraints.concept_ids,
+                domains=constraints.domains,
+                vocabularies=constraints.vocabularies,
+                require_standard=constraints.require_standard,
+                limit=constraints.limit
             )
-            if matches is None:
-                return ()
-            if text_embedding is not None:
-                assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single query."
-            assert len(matches) == 1, "Expected get_neareast_concepts to return a single dictionary given the text_embedding shape (1, embedding_dim)."
-            matches = matches[0]  # Unpack the single dictionary from the tuple
-            concept_views = kg.concept_views(
-                concept_ids=tuple(matches.keys()),
-                sort=sort
+        
+        matches = get_neareast_concepts(
+            kg=kg,
+            text_embedding=text_embedding,
+            text_embedding_model=text_embedding_model,
+            concept_filter=constraints,
+            metric_type=metric_type,
+            index_type=index_type,
+        )
+        if matches is None:
+            return ()
+        if text_embedding is not None:
+            assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single query."
+        assert len(matches) == 1, "Expected get_neareast_concepts to return a single dictionary given the text_embedding shape (1, embedding_dim)."
+        matches = matches[0]  # Unpack the single dictionary from the tuple
+        concept_views = kg.concept_views(
+            concept_ids=tuple(m.concept_id for m in matches),
+            sort=sort
+        )
+        label_matches = tuple(
+            LabelMatch(
+                input_label=text,
+                matched_label=cv.concept_name,
+                concept_id=int(cv.concept_id),
+                match_kind=LabelMatchKind.EMBEDDING,
+                is_standard=bool(cv.standard_concept),
+                is_active=cv.invalid_reason is None,
             )
-            label_matches = tuple(
-                LabelMatch(
-                    input_label=text,
-                    matched_label=cv.concept_name,
-                    concept_id=int(cv.concept_id),
-                    match_kind=LabelMatchKind.EMBEDDING,
-                    is_standard=bool(cv.standard_concept),
-                    is_active=cv.invalid_reason is None,
-                )
-                for cv in concept_views
-            )
-            return label_matches
+            for cv in concept_views
+        )
+        return label_matches
 
 
 # Default sequence of resolvers to be used in a pipeline

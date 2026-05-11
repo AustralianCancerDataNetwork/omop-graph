@@ -1,5 +1,6 @@
 import pytest
 
+from sqlalchemy import Engine
 from omop_alchemy.cdm.handlers.fulltext import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
     CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN,
@@ -14,7 +15,7 @@ from omop_graph.graph.queries import q_concept_name_fulltext
 
 
 @pytest.mark.parametrize("synonym", [False, True])
-def test_fulltext_query_requires_registered_tsvector_columns(synonym: bool):
+def test_fulltext_query_requires_registered_tsvector_columns(synonym: bool, mock_cdm_engine: Engine):
     """Full-text queries fail cleanly when optional tsvector metadata is absent."""
     had_name_column = CONCEPT_NAME_TSVECTOR_COLUMN in Concept.__table__.c
     had_synonym_column = CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN in Concept_Synonym.__table__.c
@@ -22,7 +23,7 @@ def test_fulltext_query_requires_registered_tsvector_columns(synonym: bool):
     unregister_optional_fulltext_columns()
     try:
         with pytest.raises(FullTextError):
-            q_concept_name_fulltext("kidney cancer", synonym=synonym)
+            q_concept_name_fulltext("kidney cancer", synonym=synonym, engine=mock_cdm_engine)
     finally:
         if had_name_column or had_synonym_column:
             register_optional_fulltext_columns()

@@ -31,7 +31,7 @@ LANGUAGE_CONCEPT_ID = 1
 
 
 @pytest.fixture(scope="module")
-def mock_cdm_session_factory() -> sessionmaker:
+def mock_cdm_engine() -> sa.Engine:
     engine = sa.create_engine("sqlite+pysqlite:///:memory:", future=True)
     tables = cast(
         list[sa.Table],
@@ -55,12 +55,12 @@ def mock_cdm_session_factory() -> sessionmaker:
     with session_local() as session:
         seed_mock_cdm(session)
 
-    return session_local
+    return engine
 
 
 @pytest.fixture()
 def mock_cdm_kg(
-    mock_cdm_session_factory: sessionmaker,
+    mock_cdm_engine: sa.Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> KnowledgeGraph:
     # Ensure cache does not leak between tests.
@@ -70,7 +70,7 @@ def mock_cdm_kg(
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr("omop_graph.reasoning.grounding.get_embedding_writer_interface", lambda _kg: None)
 
-    return KnowledgeGraph(session_factory=mock_cdm_session_factory)
+    return KnowledgeGraph(cdm_engine=mock_cdm_engine)
 
 
 def seed_mock_cdm(session: Session) -> None:

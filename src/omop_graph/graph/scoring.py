@@ -23,6 +23,7 @@ from omop_graph.graph.paths import StandardConcept
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
+    from omop_emb.utils.embedding_utils import NearestConceptMatch
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ def score_standard_concepts(
     text: str,
     standard_concepts: tuple[StandardConcept, ...],
     kg: "KnowledgeGraph",
-    similarity_scores_with_concept_ids: Optional[Tuple[Mapping[int, float], ...]] = None,
+    nearest_concept_matches: Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Rank a list of standard concepts against a query text.
@@ -100,8 +101,8 @@ def score_standard_concepts(
         The tuple of candidate concepts to score.
     kg : KnowledgeGraph
         The graph instance used for retrieving metadata (like ancestor counts).
-    similarity_scores_with_concept_ids : Tuple[Mapping[int, float], ...], optional
-        Pre-computed embedding similarity scores. The outer tuple corresponds to the query vectors in order, and each inner dictionary maps concept IDs to their similarity scores with the query embedding. 
+    nearest_concept_matches : Tuple[Tuple[NearestConceptMatch, ...], ...], optional
+        Pre-computed nearest concept matches. The outer tuple corresponds to the query vectors in order, and each inner tuple contains the nearest concept matches for the corresponding query vector.
 
     Returns
     -------
@@ -113,19 +114,28 @@ def score_standard_concepts(
     num_ancestors = kg.get_num_ancestors(tuple(sc_dict.keys()))
     
     # singular text
-    if similarity_scores_with_concept_ids is None:
-        similarity_scores_with_concept_ids = ({}, )
-
-    assert len(similarity_scores_with_concept_ids) == 1, "Currently only supports scoring with a single query embedding vector for the singular text input"
-    _similarity_scores_dict = similarity_scores_with_concept_ids[0]
+    if nearest_concept_matches is None:
+        nearest_concept_matches_dict = ({}, )
+    else:
+        nearest_concept_matches_dict = tuple(
+            {
+                match.concept_id: match.similarity
+                for match in matches_for_query
+            }
+            for matches_for_query in nearest_concept_matches
+        )
     
+
+    assert len(nearest_concept_matches_dict) == 1, "Currently only supports scoring with a single query embedding vector for the singular text input"
+    nearest_concept_matches_dict_for_single_query = nearest_concept_matches_dict[0]
+
     ranked_concepts = [
         _score_standard_concept(
             text=text,
             kg=kg,
             standard_concept=sc,
             num_ancestors=num_ancestors.get(sc.concept_id, 0),
-            similarity_score=_similarity_scores_dict.get(sc.concept_id, None),
+            similarity_score=nearest_concept_matches_dict_for_single_query.get(sc.concept_id, None),
         )
         for sc in standard_concepts
     ]

@@ -11,7 +11,9 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
+import typer
+app = typer.Typer()
 
 import sqlalchemy as sa
 from dotenv import load_dotenv
@@ -29,11 +31,16 @@ from omop_emb.config import (
     parse_index_type,
     parse_metric_type,
 )
+from omop_emb.embeddings import (
+    EmbeddingClient, 
+    EmbeddingRole
+)
+from omop_emb.backends.index_config import index_config_from_index_type
 from omop_graph.cli import configure_logging_level
-from omop_graph.extensions.emb import EmbeddingBackendType, MissingExtensionError
+from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
 from omop_graph.graph.constraints import SearchConstraintConcept
-from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
@@ -47,7 +54,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_emb import EmbeddingClient
+from omop_graph.db.session import make_session, make_engine
 
 
 DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
@@ -161,10 +168,10 @@ def build_session_factory(database_url: Optional[str]) -> sessionmaker:
     """Build a SQLAlchemy session factory for the configured OMOP database."""
 
     load_dotenv()
-    resolved_url = database_url or os.getenv("OMOP_DATABASE_URL")
+    resolved_url = database_url or os.getenv("OMOP_CDM_DB_URL")
     if not resolved_url:
         raise RuntimeError(
-            "No database URL provided. Pass --database-url or set OMOP_DATABASE_URL."
+            "No database URL provided. Pass --database-url or set OMOP_CDM_DB_URL."
         )
 
     engine = sa.create_engine(resolved_url, future=True, echo=False)
@@ -175,10 +182,10 @@ def build_engine(database_url: Optional[str]) -> sa.Engine:
     """Build a SQLAlchemy engine for the configured OMOP database."""
 
     load_dotenv()
-    resolved_url = database_url or os.getenv("OMOP_DATABASE_URL")
+    resolved_url = database_url or os.getenv("OMOP_CDM_DB_URL")
     if not resolved_url:
         raise RuntimeError(
-            "No database URL provided. Pass --database-url or set OMOP_DATABASE_URL."
+            "No database URL provided. Pass --database-url or set OMOP_CDM_DB_URL."
         )
 
     return sa.create_engine(resolved_url, future=True, echo=False)
@@ -186,25 +193,32 @@ def build_engine(database_url: Optional[str]) -> sa.Engine:
 
 def build_knowledge_graph(database_url: Optional[str]) -> KnowledgeGraph:
     """Create a KnowledgeGraph backed by the live OMOP CDM database."""
-
-    return KnowledgeGraph(session_factory=build_session_factory(database_url))
+    return KnowledgeGraph(cdm_engine=make_engine(database_url))
 
 
 def build_embedding_knowledge_graph(
     database_url: Optional[str],
+    embedding_metric: MetricType,
+    embedding_model: Optional[str],
     embedding_backend: Optional[str | BackendType],
     embedding_client: Optional[EmbeddingClient],
-    embedding_storage_base_dir: Optional[str],
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
-    session_factory = build_session_factory(database_url)
+    cdm_engine = make_engine(database_url)
     resolved_embedding_backend = parse_backend_type(embedding_backend) if embedding_backend is not None else None
+    resolved_metric_type = parse_metric_type(embedding_metric)
+
+    config = KnowledgeGraphEmbeddingConfiguration(
+        metric_type=resolved_metric_type,
+        backend_type=resolved_embedding_backend,
+        client=embedding_client,
+        compute_missing_embeddings=True,
+        model_name=embedding_model,
+    )
     return KnowledgeGraph(
-        session_factory=session_factory,
-        emb_backend=resolved_embedding_backend,
-        emb_base_storage_dir=embedding_storage_base_dir,
-        emb_client=embedding_client,
+        cdm_engine=cdm_engine,
+        emb_config=config
     )
 
 
@@ -332,6 +346,80 @@ def _order_cases_for_report(cases: Sequence[BenchmarkCase]) -> List[BenchmarkCas
     return sorted(cases, key=lambda case: (_bucket_sort_key(case.bucket), case.id))
 
 
+def _summarise_config(rows: Sequence[Dict[str, Any]], label: str) -> Dict[str, Any]:
+    """Aggregate case-level ranking metrics into one configuration summary."""
+
+    if not rows:
+        return {"config": label, "count": 0}
+    n = len(rows)
+    return {
+        "config": label,
+        "count": n,
+        "top1_accuracy": sum(float(r["top1_correct"]) for r in rows) / n,
+        "mrr": sum(float(r["mrr"]) for r in rows) / n,
+        "recall_at_k": sum(float(r["recall_at_k"]) for r in rows) / n,
+    }
+
+
+def _print_summary_report(
+    summaries: Dict[str, Dict[str, Any]],
+    bucket_summaries: Dict[str, Dict[str, Dict[str, Any]]],
+    significance: Dict[str, Dict[str, float]],
+    k: int,
+) -> None:
+    """Print a formatted benchmark summary table to stdout."""
+
+    rk_label = f"R@{k}"
+    col_w = (35, 8, 8, 8, 6)
+    header = f"{'Config':<{col_w[0]}} {'Top-1':>{col_w[1]}} {'MRR':>{col_w[2]}} {rk_label:>{col_w[3]}} {'N':>{col_w[4]}}"
+    sep = "-" * len(header)
+
+    def _row(name: str, s: Dict[str, Any]) -> str:
+        return (
+            f"{name:<{col_w[0]}} "
+            f"{float(s.get('top1_accuracy', 0.0)):>{col_w[1]}.3f} "
+            f"{float(s.get('mrr', 0.0)):>{col_w[2]}.3f} "
+            f"{float(s.get('recall_at_k', 0.0)):>{col_w[3]}.3f} "
+            f"{int(s.get('count', 0)):>{col_w[4]}}"
+        )
+
+    print("\n=== Benchmark Summary ===")
+    print(header)
+    print(sep)
+    for config_name, summary in summaries.items():
+        if int(summary.get("count", 0)) == 0:
+            continue
+        print(_row(config_name, summary))
+
+    all_buckets = sorted(
+        {b for bs in bucket_summaries.values() for b in bs},
+        key=_bucket_sort_key,
+    )
+    if all_buckets:
+        for bucket in all_buckets:
+            print(f"\n  -- {bucket.upper()} --")
+            print("  " + header)
+            print("  " + sep)
+            for config_name, by_bucket in bucket_summaries.items():
+                if bucket not in by_bucket:
+                    continue
+                bs = by_bucket[bucket]
+                if int(bs.get("count", 0)) == 0:
+                    continue
+                print("  " + _row(config_name, bs))
+
+    if significance:
+        print("\n--- McNemar significance tests ---")
+        for pair, result in significance.items():
+            print(
+                f"  {pair}: χ²={result.get('mcnemar_chi2_cc', 0.0):.3f}"
+                f"  (a_only={int(result.get('a_only_correct', 0))},"
+                f" b_only={int(result.get('b_only_correct', 0))})"
+            )
+
+    print()
+
+
 def _grounded_element_to_dict(
     concept: StandardConceptWithScore,
 ) -> Dict[str, object]:
@@ -385,7 +473,6 @@ def _evaluate_grounded_case(
 
     text_embedding = cast(Optional[np.ndarray], grounding_kwargs.get("text_embedding"))
     text_embedding_model = cast(Optional[str], grounding_kwargs.get("text_embedding_model"))
-    embedding_client = cast(Optional[EmbeddingClient], grounding_kwargs.get("embedding_client"))
     metric_type = cast(Optional[MetricType], grounding_kwargs.get("metric_type"))
     index_type = cast(Optional[IndexType], grounding_kwargs.get("index_type"))
 
@@ -395,7 +482,6 @@ def _evaluate_grounded_case(
         text=case.text,
         text_embedding=text_embedding,
         text_embedding_model=text_embedding_model,
-        embedding_client=embedding_client,
         constraints=GroundingConstraints(
             parent_ids=parent_ids,
             search_constraint=search_constraint,
@@ -423,27 +509,70 @@ def _evaluate_grounded_case(
     }
 
 
-def run_grounded_benchmark(
-    cases_path: Path,
-    k: int,
-    database_url: Optional[str] = None,
-    embedding_backend: Optional[str | BackendType] = None,
-    embedding_storage_base_dir: Optional[str] = None,
-    embedding_model: Optional[str] = None,
-    embedding_api_base: Optional[str] = None,
-    embedding_api_key: Optional[str] = None,
-    embedding_metric_type: str = "cosine",
-    embedding_index_type: str = "flat",
-    domain_filter: Optional[set[str]] = None,
-    vocab_filter: Optional[set[str]] = None,
-    grounding_parent_ids: Optional[Tuple[int, ...]] = None,
-) -> Dict[str, object]:
-    """Run the grounded benchmark and return a JSON-serialisable report object."""
+@app.command("Generalised benchmark interface.")
+def run_benchmark(
+    cases_file: Annotated[str, typer.Option(
+        "--cases-file", "-c", 
+        help="Path to the JSON file containing benchmark cases.")
+    ],
+    embedding_model: Annotated[str, typer.Option(
+        "--embedding-model", "-m",
+        help="Name of the embedding model to use (e.g., 'text-embedding-3-small').")
+    ],
+    embedding_api_base_url: Annotated[str, typer.Option(
+        "--embedding-api-base-url", "-u",
+        help="Base URL for the embedding API (e.g., 'http://localhost:8000').")
+    ],
+    embedding_api_key: Annotated[str, typer.Option(
+        "--embedding-api-key", "-k",
+        help="API key for the embedding service, if required.")
+    ],
+    embedding_metric_type: Annotated[str, typer.Option(
+        "--embedding-metric-type", "-M",
+        help="Distance metric type for embedding similarity (e.g., 'cosine').")
+    ],
+    embedding_index_type: Annotated[str, typer.Option(
+        "--embedding-index-type", "-I",
+        help="Index type for embedding retrieval (e.g., 'flat').")
+    ],
+    out_file: Annotated[Optional[str], typer.Option(
+        "--out-file", "-o",
+        help="Path to the output JSON file where results will be saved. If not provided, results will be printed to stdout.")
+    ] = None,
+    k: Annotated[int, typer.Option(
+        "--k", "-K",
+        help="Number of nearest neighbors to retrieve for each case.")
+    ] = 5,
+    allowed_domains: Annotated[Optional[str], typer.Option(
+        "--allowed-domains", "-D",
+        help="Comma-separated list of allowed OMOP domains to filter concepts (e.g., 'Condition,Drug'). If not provided, no domain filtering will be applied.")
+    ] = None,
+    allowed_vocabularies: Annotated[Optional[str], typer.Option(
+        "--allowed-vocabularies", "-V",
+        help="Comma-separated list of allowed vocabularies to filter concepts (e.g., 'SNOMED,LOINC'). If not provided, no vocabulary filtering will be applied.")
+    ] = None,
+    parent_ids: Annotated[Optional[str], typer.Option(
+        "--grounding-parent-ids", "-G",
+        help="Comma-separated list of OMOP concept IDs to use as parent nodes for grounding. If not provided, no parent ID filtering will be applied.")
+    ] = None,
+    database_url: Annotated[Optional[str], typer.Option(
+        "--database-url", "-d",
+        help="Database URL for the OMOP CDM database. If not provided, will use the environment variable specified by the library (e.g., OMOP_CDM_DATABASE_URL).")
+    ] = None,
+    embedding_backend: Annotated[Optional[str], typer.Option(
+        "--embedding-backend", "-e",
+        help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). If not provided, will use the environment variable specified by the library (e.g., OMOP_EMB_BACKEND).")
+    ] = None,
+    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
+):
+    configure_logging_level(verbosity)
 
-    cases = load_cases(cases_path)
-    if domain_filter:
+    cases = load_cases(Path(cases_file))
+    if allowed_domains:
+        domain_filter = set(allowed_domains.split(","))
         cases = [c for c in cases if c.domain in domain_filter]
-    if vocab_filter:
+    if allowed_vocabularies:
+        vocab_filter = set(allowed_vocabularies.split(","))
         cases = [
             c
             for c in cases
@@ -451,48 +580,51 @@ def run_grounded_benchmark(
         ]
     cases = _order_cases_for_report(cases)
 
+    grounding_parent_ids = tuple(map(int, parent_ids.split(","))) if parent_ids else None
     if grounding_parent_ids is None and all(c.parent_ids is None for c in cases):
         raise RuntimeError(
-            "No grounding parent IDs provided. Set --grounding-parent-id or add parent_ids per case."
+            "No grounding parent IDs provided."
         )
 
     embedding_client = None
     embedding_kg = None
     query_embeddings: Dict[str, np.ndarray] = {}
-    engine = build_engine(database_url)
     resolved_embedding_index_type: Optional[IndexType] = None
     resolved_embedding_metric_type: Optional[MetricType] = None
 
-    if embedding_model is not None and embedding_api_base is not None:
+    if embedding_model is not None and embedding_api_base_url is not None:
         resolved_embedding_index_type = parse_index_type(embedding_index_type)
         resolved_embedding_metric_type = parse_metric_type(embedding_metric_type)
 
         embedding_client = EmbeddingClient(
             model=embedding_model,
-            api_base=embedding_api_base,
+            api_base=embedding_api_base_url,
             api_key=embedding_api_key or "ollama",
         )
         canonical_model = embedding_client.provider.canonical_model_name(embedding_model)
 
         embedding_kg = build_embedding_knowledge_graph(
             database_url=database_url,
+            embedding_model=canonical_model,
+            embedding_metric=resolved_embedding_metric_type,
             embedding_backend=embedding_backend,
             embedding_client=embedding_client,
-            embedding_storage_base_dir=embedding_storage_base_dir,
         )
         embedding_dim = embedding_client.embedding_dim
         if embedding_dim is None:
             raise RuntimeError("Embedding client did not expose an embedding dimension.")
+        
+        embedding_writer = get_embedding_writer_interface(embedding_kg)
+        assert embedding_writer is not None, "Embedding backend does not support writing embeddings, which is required for this benchmark configuration."
 
-        embedding_kg.emb.setup_and_register_model(
-            engine=engine,
-            canonical_model_name=canonical_model,
-            dimensions=embedding_dim,
-            index_type=IndexType(embedding_index_type),
+        embedding_writer.register_model(
+            index_config=index_config_from_index_type(
+                index_type=resolved_embedding_index_type,
+            ),
         )
 
         query_embeddings = {
-            case.id: embedding_kg.emb.embed_texts(case.text)
+            case.id: embedding_writer.embed_texts(case.text, embedding_role=EmbeddingRole.QUERY)
             for case in cases
         }
 
@@ -500,47 +632,47 @@ def run_grounded_benchmark(
     configs = build_grounded_configs()
 
     errors: Dict[str, str] = {}
-    case_reports: List[Dict[str, object]] = []
+    case_reports: List[Dict[str, Any]] = []
     active_kg = embedding_kg if embedding_kg is not None else kg
 
     for case in cases:
-        config_results: List[Dict[str, object]] = []
+        config_results: List[Dict[str, Any]] = []
         for config in configs:
-            try:
-                if config.requires_embedding and embedding_kg is None:
-                    raise MissingExtensionError(
-                        "Embedding config requires omop-emb plus embedding model/api settings."
-                    )
-
-                grounding_kwargs: Optional[Dict[str, object]] = None
-                if embedding_kg is not None and embedding_model is not None:
-                    grounding_kwargs = {
-                        "text_embedding": query_embeddings.get(case.id),
-                        "text_embedding_model": embedding_model,
-                        "embedding_client": embedding_client,
-                        "metric_type": resolved_embedding_metric_type,
-                        "index_type": resolved_embedding_index_type,
-                    }
-
-                row = _evaluate_grounded_case(
-                    kg=active_kg,
-                    case=case,
-                    config=config,
-                    default_parent_ids=grounding_parent_ids,
-                    grounding_kwargs=grounding_kwargs,
+            #try:
+            if config.requires_embedding and embedding_kg is None:
+                raise MissingExtensionError(
+                    "Embedding config requires omop-emb plus embedding model/api settings."
                 )
-                config_results.append(row)
 
-            except Exception as exc:
-                errors[f"{case.id}:{config.name}"] = str(exc)
-                config_results.append(
-                    {
-                        "config": config.name,
-                        "error": str(exc),
-                        "predicted_top": {"concept_id": None, "concept_name": None, "total_score": 0.0, "relevance": 0.0, "embedding_score": 0.0},
-                        "target_total_score": 0.0,
-                    }
-                )
+            grounding_kwargs: Optional[Dict[str, object]] = None
+            if embedding_kg is not None and embedding_model is not None:
+                grounding_kwargs = {
+                    "text_embedding": query_embeddings.get(case.id),
+                    "text_embedding_model": embedding_model,
+                    "embedding_client": embedding_client,
+                    "metric_type": resolved_embedding_metric_type,
+                    "index_type": resolved_embedding_index_type,
+                }
+
+            row = _evaluate_grounded_case(
+                kg=active_kg,
+                case=case,
+                config=config,
+                default_parent_ids=grounding_parent_ids,
+                grounding_kwargs=grounding_kwargs,
+            )
+            config_results.append(row)
+
+            #except Exception as exc:
+            #    errors[f"{case.id}:{config.name}"] = str(exc)
+            #    config_results.append(
+            #        {
+            #            "config": config.name,
+            #            "error": str(exc),
+            #            "predicted_top": {"concept_id": None, "concept_name": None, "total_score": 0.0, "relevance": 0.0, "embedding_score": 0.0},
+            #            "target_total_score": 0.0,
+            #        }
+            #    )
 
         case_reports.append(
             {
@@ -553,149 +685,78 @@ def run_grounded_benchmark(
             }
         )
 
-    return {
+    # Build per-config ranking rows for summary statistics.
+    per_config: Dict[str, List[Dict[str, Any]]] = {}
+    for case_report in case_reports:
+        for cfg_result in case_report["config_results"]:
+            config_name = str(cfg_result.get("config", ""))
+            if "error" in cfg_result:
+                continue
+            target_idx = cfg_result.get("target_idx_in_grounded")
+            expected_id = case_report["expected_concept_id"]
+            if expected_id is None or target_idx is None:
+                top1, mrr_val, rak = 0.0, 0.0, 0.0
+            else:
+                top1 = 1.0 if target_idx == 0 else 0.0
+                mrr_val = 1.0 / (int(target_idx) + 1)
+                rak = 1.0 if int(target_idx) < k else 0.0
+            per_config.setdefault(config_name, []).append({
+                "case_id": case_report["case_id"],
+                "bucket": case_report["bucket"],
+                "top1_correct": top1,
+                "mrr": mrr_val,
+                "recall_at_k": rak,
+            })
+
+    summaries = {name: _summarise_config(rows, name) for name, rows in per_config.items()}
+
+    bucket_summaries: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for config_name, rows in per_config.items():
+        by_bucket: Dict[str, List[Dict[str, Any]]] = {}
+        for row in rows:
+            b = str(row["bucket"])
+            by_bucket.setdefault(b, []).append(row)
+        bucket_summaries[config_name] = {
+            b: _summarise_config(b_rows, f"{config_name}:{b}")
+            for b, b_rows in by_bucket.items()
+        }
+
+    significance: Dict[str, Dict[str, float]] = {}
+    if "basic" in per_config and "extended" in per_config:
+        significance["basic_vs_extended"] = mcnemar(per_config["basic"], per_config["extended"])
+    if "extended" in per_config and "full_text" in per_config:
+        significance["extended_vs_full_text"] = mcnemar(per_config["extended"], per_config["full_text"])
+    if "full_text" in per_config and "full_text_with_embedding" in per_config:
+        significance["full_text_vs_full_text_with_embedding"] = mcnemar(
+            per_config["full_text"], per_config["full_text_with_embedding"]
+        )
+
+    report = {
         "cases_evaluated": len(cases),
         "cases": case_reports,
+        "summaries": summaries,
+        "bucket_summaries": bucket_summaries,
+        "significance": significance,
         "errors": errors,
-        "database_url": database_url or os.getenv("OMOP_DATABASE_URL"),
+        "database_url": database_url or os.getenv("OMOP_CDM_DB_URL"),
         "embedding_model": embedding_model,
         "embedding_backend": embedding_backend,
-        "embedding_storage_base_dir": embedding_storage_base_dir,
         "embedding_metric_type": embedding_metric_type,
         "embedding_index_type": embedding_index_type,
         "grounding_parent_ids": grounding_parent_ids,
         "k": k,
     }
 
-
-def build_grounded_benchmark_parser(
-    *,
-    description: str,
-    default_cases: Path,
-    default_out: Optional[Path] = None,
-) -> argparse.ArgumentParser:
-    """Build the CLI parser for grounded benchmark scripts."""
-
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--cases",
-        type=Path,
-        default=default_cases,
-        help="Path to benchmark case JSON file.",
-    )
-    parser.add_argument(
-        "--database-url",
-        type=str,
-        default=None,
-        help="SQLAlchemy database URL for the local OMOP CDM.",
-    )
-    parser.add_argument(
-        "--embedding-backend",
-        type=str,
-        default=os.getenv("OMOP_EMB_BACKEND"),
-        help="Embedding backend. Defaults to OMOP_EMB_BACKEND.",
-    )
-    parser.add_argument(
-        "--embedding-storage-base-dir",
-        type=str,
-        default=os.getenv("OMOP_EMB_BASE_STORAGE_DIR"),
-        help="Optional base directory for file-backed embedding backends.",
-    )
-    parser.add_argument(
-        "--embedding-model",
-        type=str,
-        default=os.getenv("OMOP_EMB_MODEL"),
-        help="Embedding model name.",
-    )
-    parser.add_argument(
-        "--embedding-api-base",
-        type=str,
-        default=os.getenv("OMOP_OLLAMA_API_BASE"),
-        help="OpenAI-compatible API base for embedding calls.",
-    )
-    parser.add_argument(
-        "--embedding-api-key",
-        type=str,
-        default=os.getenv("OMOP_OLLAMA_API_KEY"),
-        help="Embedding API key.",
-    )
-    parser.add_argument(
-        "--embedding-metric-type",
-        type=str,
-        default="cosine",
-        help="Embedding similarity metric for retrieval/scoring.",
-    )
-    parser.add_argument(
-        "--embedding-index-type",
-        type=str,
-        default="flat",
-        help="Embedding index type for retrieval/scoring.",
-    )
-    parser.add_argument("--k", type=int, default=5, help="K for Recall@K.")
-    parser.add_argument(
-        "--grounding-parent-id",
-        type=int,
-        action="append",
-        default=None,
-        help="Grounding parent concept ID (repeatable).",
-    )
-    parser.add_argument(
-        "--domain",
-        action="append",
-        default=None,
-        help="Optional domain filter (repeatable).",
-    )
-    parser.add_argument(
-        "--vocabulary",
-        action="append",
-        default=None,
-        help="Optional vocabulary filter (repeatable).",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Increase logging verbosity; use -vv for DEBUG output.",
-    )
-    parser.add_argument("--out", type=Path, default=default_out, help="Optional output JSON path.")
-    return parser
-
-
-def run_grounded_benchmark_cli(
-    *,
-    description: str,
-    default_cases: Path,
-    default_out: Path,
-) -> None:
-    """Parse CLI args, run the grounded benchmark, and write JSON output."""
-
-    parser = build_grounded_benchmark_parser(
-        description=description,
-        default_cases=default_cases,
-        default_out=default_out,
-    )
-    args = parser.parse_args()
-
-    configure_logging_level(args.verbose)
-
-    report = run_grounded_benchmark(
-        cases_path=args.cases,
-        k=args.k,
-        database_url=args.database_url,
-        embedding_backend=args.embedding_backend,
-        embedding_storage_base_dir=args.embedding_storage_base_dir,
-        embedding_model=args.embedding_model,
-        embedding_api_base=args.embedding_api_base,
-        embedding_api_key=args.embedding_api_key,
-        embedding_metric_type=args.embedding_metric_type,
-        embedding_index_type=args.embedding_index_type,
-        domain_filter=set(args.domain) if args.domain else None,
-        vocab_filter=set(args.vocabulary) if args.vocabulary else None,
-        grounding_parent_ids=(tuple(args.grounding_parent_id) if args.grounding_parent_id else None),
-    )
-
     output = json.dumps(report, indent=2)
-    print(output)
-    if args.out is not None:
-        args.out.write_text(output + "\n", encoding="utf-8")
+    out_str = f"Results for {len(cases)} cases across {len(configs)} configs."
+    if out_file is not None:
+        with open(out_file, "w", encoding="utf-8") as f:
+            f.write(output)
+        out_str += f" Results saved to {out_file}"
+
+    _print_summary_report(summaries, bucket_summaries, significance, k)
+    print(out_str)
+
+
+if __name__ == "__main__":
+    app()

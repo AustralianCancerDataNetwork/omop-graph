@@ -898,27 +898,20 @@ class OMOPAlchemyImplementation(
 
         assert self.engine_string is not None, "No database URL provided for OMOPAlchemyImplementation"
         
-        self.engine = create_engine(self.engine_string, future=True, echo=False)
-        create_db(self.engine)
+        engine = create_engine(self.engine_string, future=True, echo=False)
+        create_db(engine)
 
-        self._session_factory = sessionmaker(self.engine)
         self._connection = None
 
         if kg is None:
             kg = KnowledgeGraph(
-                session_factory=self._session_factory,
                 emb_config=kg_emb_config,
+                cdm_engine=engine
             )
             bind_default_renderers(kg)
         
         super().__init__(kg=kg, **kwargs)
 
-    @property
-    def session_factory(self) -> sessionmaker:
-        """
-        Return the factory to a session.
-        """
-        return self._session_factory
 
     # TODO: Implement if necessary!
     def _all_relationships(self):
