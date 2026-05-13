@@ -155,8 +155,9 @@ class LabelMatchKind(Enum):
     - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
     - EMBEDDING: Match based on vector similarity.
 
-    It currently does not distinguish between synonym vs. concept_name matches as they are recognised as identical.
-    Could be extended in the future if needed.
+    It does not use synonym vs. concept_name as a ranking signal,
+    as these are treated as identical quality.
+    The ``LabelMatch.synonym`` field carries that distinction for callers that need it.
     """
 
     EXACT = 0
@@ -182,11 +183,15 @@ class LabelMatch:
     concept_id : int
         The ID of the matched concept.
     match_kind : LabelMatchKind
-        How the match was found (Exact, Synonym, etc.).
+        How the match was found (Exact, FTS, Partial, Embedding).
     is_standard : bool
         Whether the matched concept is Standard.
     is_active : bool
         Whether the matched concept is currently valid.
+    synonym : bool
+        True if the match came from the ``concept_synonym`` table rather than
+        the primary ``concept_name`` field.  This is informational only and does
+        not affect priority ordering. See ``LabelMatchKind`` for ranking.
     """
 
     input_label: str
@@ -196,6 +201,7 @@ class LabelMatch:
     match_kind: LabelMatchKind
     is_standard: bool
     is_active: bool
+    synonym: bool
 
     def _repr_html_(self) -> str:
         """

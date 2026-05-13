@@ -270,6 +270,7 @@ class EmbeddingResolver(CandidateResolver):
                 match_kind=LabelMatchKind.EMBEDDING,
                 is_standard=bool(cv.standard_concept),
                 is_active=cv.invalid_reason is None,
+                synonym=False,  # Embedding matches are based on the primary name, not synonyms
             )
             for cv in concept_views
         )

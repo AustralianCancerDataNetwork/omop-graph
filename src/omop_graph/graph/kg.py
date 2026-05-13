@@ -342,6 +342,7 @@ class KnowledgeGraph(GraphBackend):
                     match_kind=match_kind,
                     is_standard=is_standard,
                     is_active=is_active,
+                    synonym=synonym,
                 )
                 for cid, name, is_standard, is_active in session.execute(cn)
             )

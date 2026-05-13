@@ -35,6 +35,7 @@ class _KG:
                 match_kind=match_kind,
                 is_standard=True,
                 is_active=True,
+                synonym=synonym,
             )
             for cid in concept_ids
         )
