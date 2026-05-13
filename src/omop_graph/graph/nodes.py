@@ -282,7 +282,10 @@ class LabelMatchGroupView:
         for m in matches:
             grouped[m.concept_id].append(m)
 
-        grouped_tuple = {cid: tuple(ms) for cid, ms in grouped.items()}
+        grouped_tuple = {
+            cid: tuple(sorted(ms, key=lambda m: m.match_kind.value))
+            for cid, ms in grouped.items()
+        }
         return cls(groups=grouped_tuple)
 
     def __iter__(self):
