@@ -16,7 +16,7 @@ To allow reproduction and evaluation of this approach, we provide clear guidelin
 
 ??? "Expand to see the grouping classification of predicates"
     
-    {{ to_grouped_table('docs/predicate_classification.csv', [0, 1], [0, 1, 2, 3, 4], [0, 1],) }}
+    {{ to_grouped_table('config/predicate_classification.csv', [0, 1], [0, 1, 2, 3, 4], [0, 1],) }}
 
 ## Predicate Mappings
 Following the predicate classification guidelines of the previous seciton, we calssified the following predicates into their respective classification groups.
@@ -27,5 +27,5 @@ Following the predicate classification guidelines of the previous seciton, we ca
 
 ??? "Expand to see the classification of all edge connections"
     
-    {{ to_grouped_table('docs/predicate_mapping.csv', [0, 1], [0, 1, 2, 3], [0, 1], {"r_id": "relationship_id", "r_name": "relationship_name"}) }}
+    {{ to_grouped_table('config/predicate_mapping.csv', [0, 1], [0, 1, 2, 3], [0, 1], {"r_id": "relationship_id", "r_name": "relationship_name"}) }}
     

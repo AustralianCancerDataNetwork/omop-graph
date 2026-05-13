@@ -2,6 +2,7 @@ services:
   omop-cdm-db:
     image: postgres:16-alpine
     restart: always
+    env_file: .env
     environment:
       - POSTGRES_USER=${OMOP_CDM_DB_USER:-omop}
       - POSTGRES_PASSWORD=${OMOP_CDM_DB_PASSWORD:-omop}
