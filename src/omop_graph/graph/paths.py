@@ -795,7 +795,11 @@ class PathProfile:
         Analyze a path to determine the 'Standard Anchor'.
 
         The first Standard Concept encountered via an IDENTITY edge is promoted as
-        the anchor.  For zero-hop paths (source == target), ``source_concept_id``
+        the anchor.  
+        
+        Notes
+        -----
+        For zero-hop paths (source == target), ``source_concept_id``
         must be provided; a ``ValueError`` is raised otherwise.
 
         Parameters
@@ -803,8 +807,6 @@ class PathProfile:
         source_concept_id : int, optional
             Required when ``path`` has no steps (i.e. source == target).
         """
-        # Zero-hop case: find_shortest_paths returns GraphPath(steps=()) when source == target.
-        # path.nodes() returns () so get_view(0) would raise IndexError without this guard.
         if not path.steps:
             if source_concept_id is None:
                 raise ValueError(
