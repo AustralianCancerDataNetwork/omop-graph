@@ -645,7 +645,7 @@ class KnowledgeGraph(GraphBackend):
         """
         with self.session_factory() as session:
             rows = session.execute(q_concept_synonym_filtered(concept_id)).all()
-        return tuple(row.concept_synonym_name for row in rows)
+        return tuple(row.name for row in rows)
 
     def rollback_session(self) -> None:
         """
