@@ -614,38 +614,40 @@ def find_standard_paths(
     predicate_kinds: Optional[frozenset[Any]] = None,
     max_depth: int = 6,
     max_concepts: Optional[int] = None,
-    num_hops: int = 1,
     *args,
     **kwargs,
 ) -> List[StandardConcept]:
     """
-    Search for Standard Concepts related to a target ID, starting from a candidate.
+    Search for Standard Concepts reachable from a candidate, verified against a target ancestor.
 
-    This method traverses from the candidate (Non-Standard) concept to find
-    Standard Concepts, then verifies if those Standard Concepts are ancestors
-    of the target concept in the hierarchy.
+    Starting from the candidate, outgoing edges are walked and only Standard Concept
+    neighbors are enqueued (non-standard neighbors are skipped to prevent graph explosion).
+    When a Standard Concept is reached its ancestry is verified against ``target`` via
+    ``concept_ancestor``.
+    It is never expanded further to standard_concepts related to this standard_concept, 
+    as we want to find the closest standard_concept to the candidate that satisfies the
+    ancestor constraint, and expanding further would only find more distant standard_concepts,
+    thus diluting the results.
 
     Parameters
     ----------
     kg : KnowledgeGraph
         The graph instance.
     target : int
-        The ancestor concept ID to check against.
+        The ancestor concept ID to verify candidates against.
     candidate : CandidateHit
         The search hit to start traversal from.
     predicate_kinds : frozenset, optional
         Allowed edge types for traversal.
     max_depth : int
-        Max separation levels allowed in the ancestor check.
+        Maximum ``min_levels_of_separation`` allowed in the ``concept_ancestor`` check.
     max_concepts : int, optional
         Stop after finding this many unique standard concepts.
-    num_hops : int
-        Max hops allowed from the candidate to reach a standard concept.
 
     Returns
     -------
     list[StandardConcept]
-        The resolved concepts.
+        The resolved standard concepts that satisfy the ancestor constraint.
     """
     source_view = kg.concept_view(candidate.concept_id)
     source_is_std = source_view.standard_concept if source_view else False
@@ -675,10 +677,6 @@ def find_standard_paths(
 
         if max_concepts and len(found_standard_concepts) >= max_concepts:
             break
-
-        # Prevent infinite loops / deep traversals
-        if iterations > num_hops:
-            continue
 
         if subject_node.is_standard:
             # We found a standard concept -> Check ancestry with target
@@ -736,9 +734,6 @@ def find_standard_paths(
                 continue
 
             next_iterations = iterations + 1
-            if next_iterations > num_hops:
-                continue
-
             prev_best_iteration = visited_min_iteration.get(object_id)
             if prev_best_iteration is not None and prev_best_iteration <= next_iterations:
                 continue
