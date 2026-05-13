@@ -720,16 +720,15 @@ def find_standard_paths(
         if not edges:
             continue
 
-        # Singular trip to the DB for object views
-        object_ids = tuple(e.object_id for e in edges)
-        object_views = kg.concept_views(object_ids)
+        # Batch-fetch views keyed by concept_id. Using a dict avoids the silent
+        # misalignment that zip produces when two edges share an object id and
+        # concept_views deduplicates the result set.
+        unique_object_ids = tuple(dict.fromkeys(e.object_id for e in edges))
+        view_map = {v.concept_id: v for v in kg.concept_views(unique_object_ids)}
 
-        for edge, object_view in zip(edges, object_views):
+        for edge in edges:
             object_id = edge.object_id
-
-            if object_view.concept_id != object_id:
-                object_view = kg.concept_view(object_id)
-
+            object_view = view_map.get(object_id) or kg.concept_view(object_id)
             object_is_std = object_view.standard_concept
             
             # Optimization: Only traverse to Standard concepts
