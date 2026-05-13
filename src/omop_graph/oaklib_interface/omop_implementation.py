@@ -792,19 +792,16 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         )
 
         with self.kg.session_factory() as session:
-            # Consume and close the session
-            edges = self.kg.iter_edges(
+            for edge in self.kg.iter_edges(
                 session=session,
                 concept_ids=concept_id,
                 direction="in",
-                predicate_ids=frozenset(pred_filter) if pred_filter else None
-            )
-
-        for edge in edges:
-            yield (
-                self._predicate_curie(edge.predicate_id),
-                self._concept_curie(edge.subject_id),
-            )
+                predicate_ids=frozenset(pred_filter) if pred_filter else None,
+            ):
+                yield (
+                    self._predicate_curie(edge.predicate_id),
+                    self._concept_curie(edge.subject_id),
+                )
 
     def entailed_incoming_relationships_by_curie(
         self, *args, **kwargs
