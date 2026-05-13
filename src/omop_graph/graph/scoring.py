@@ -41,7 +41,8 @@ class StandardConceptWithScore(StandardConcept):
     embedding_score : float, optional
         The cosine similarity score from the embedding model.
     relevance : float
-        The composite relevance score (embedding * textual similarity).
+        The relevance score used for ranking: embedding similarity when available,
+        textual similarity otherwise.
     parsimony_penalty : float
         Penalty based on graph distance (separation).
     broadness_bonus : float
@@ -91,23 +92,31 @@ def score_standard_concepts(
     nearest_concept_matches: Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]] = None,
 ) -> List[StandardConceptWithScore]:
     """
-    Rank a list of standard concepts against a query text.
+    Attach scoring metrics to each standard concept.
+
+    Notes
+    -----
+    Scores are computed but the returned list preserves the input order.
+    Callers are responsible for sorting if ranking is required.
 
     Parameters
     ----------
     text : str
         The original query text.
     standard_concepts : tuple[StandardConcept, ...]
-        The tuple of candidate concepts to score.
+        The candidate concepts to score.
     kg : KnowledgeGraph
-        The graph instance used for retrieving metadata (like ancestor counts).
+        The graph instance used for retrieving metadata (ancestor counts).
     nearest_concept_matches : Tuple[Tuple[NearestConceptMatch, ...], ...], optional
-        Pre-computed nearest concept matches. The outer tuple corresponds to the query vectors in order, and each inner tuple contains the nearest concept matches for the corresponding query vector.
+        Pre-computed nearest-concept matches from the embedding index.  The outer
+        tuple corresponds to query vectors in order; each inner tuple holds the
+        nearest matches for that query vector.  Currently only a single query
+        vector is supported.
 
     Returns
     -------
     list[StandardConceptWithScore]
-        The list of concepts with scores attached.
+        Scored concepts in the same order as ``standard_concepts``.
     """
     # Get specificity scores (ancestor counts) for the standard concepts
     sc_dict = {sc.concept_id: sc for sc in standard_concepts}

@@ -191,7 +191,7 @@ def ground_term(
     )
 
     # Scoring
-    ranked_standard_concepts = score_standard_concepts(
+    standard_concepts_with_score = score_standard_concepts(
         text=text, 
         standard_concepts=tuple(standard_concepts),
         kg=kg,
@@ -200,7 +200,7 @@ def ground_term(
 
     # Keep one best-scoring entry per standard concept after scoring all evidence.
     best_by_concept_id: dict[int, StandardConceptWithScore] = {}
-    for concept in ranked_standard_concepts:
+    for concept in standard_concepts_with_score:
         existing = best_by_concept_id.get(concept.concept_id)
         if existing is None or concept.total_score > existing.total_score:
             best_by_concept_id[concept.concept_id] = concept

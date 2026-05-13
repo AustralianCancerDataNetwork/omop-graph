@@ -90,10 +90,15 @@ TotalScore = Relevance - ParsimonyPenalty + BroadnessBonus
 $$
 
 #### 1. Relevance
-Relevance represents the initial semantic fit. It is the product of:
+Relevance represents the initial semantic fit and is computed as **either** embedding similarity **or** textual similarity — not both simultaneously:
 
-- **Embedding Similarity**: Cosine similarity between the input text and the concept embedding. Requires `omop-graph[emb]` and a configured `KnowledgeGraphEmbeddingConfiguration` — see the [Knowledge Graph docs](../graph/kg.md#embedding-configuration) and the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/) for setup. Falls back to 1.0 when embeddings are not available.
-- **Textual Similarity**: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name.
+- **Without embeddings**: textual similarity is used exclusively.
+- **With embeddings** (default when `omop-graph[emb]` is installed and configured): embedding cosine similarity **replaces** the textual score entirely.
+
+The two scoring modes:
+
+- **Embedding Similarity**: Cosine similarity between the input text embedding and the concept embedding. Requires `omop-graph[emb]` and a configured `KnowledgeGraphEmbeddingConfiguration` — see the [Knowledge Graph docs](../graph/kg.md#embedding-configuration) and the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/) for setup.
+- **Textual Similarity**: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name. Used as a fallback when no embedding is available.
 
 #### 2. Parsimony: Distance Penalty
 OMOP is a deep hierarchy. A concept that is 1 hop away from your search term is more likely to be correct than one found 5 hops away.
@@ -113,10 +118,11 @@ Scoring is performed in a batch operation to minimize database overhead:
 ```python
 from omop_graph.graph.scoring import score_standard_concepts
 
-ranked = score_standard_concepts(
+scored = score_standard_concepts(
     text="Hodgkin lymphoma",
     standard_concepts=candidates,
     kg=kg,
-    similarity_scores=embeddings_array
+    nearest_concept_matches=nearest_matches,  # optional; from omop-emb embedding index
 )
+ranked = sorted(scored, key=lambda s: s.total_score, reverse=True)
 ```
