@@ -456,14 +456,14 @@ def q_edges(
     Obj = aliased(Concept)
 
     stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
+        Concept_Relationship.concept_id_1.label("subject_id"),
+        Concept_Relationship.relationship_id.label("predicate_id"),
+        Concept_Relationship.concept_id_2.label("object_id"),
         Concept_Relationship.valid_start_date,
         Concept_Relationship.valid_end_date,
         Concept_Relationship.invalid_reason,
         RelationshipMapping.class_id,
-        RelationshipMapping.subclass_id
+        RelationshipMapping.subclass_id,
     ).join(
         RelationshipMapping, 
         Concept_Relationship.relationship_id == RelationshipMapping.relationship_id
