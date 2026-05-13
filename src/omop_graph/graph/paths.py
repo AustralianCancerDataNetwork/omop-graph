@@ -172,10 +172,27 @@ class GraphPath:
         return "\n  ↳ ".join(parts)
 
 
-def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
+def reconstruct_paths(
+    source,
+    target,
+    meet,
+    parents_fwd,
+    parents_bwd,
+    concept_standard_map: Dict[int, bool],
+):
     """
-    Helper function to reconstruct full paths from bidirectional BFS parent pointers.
+    Reconstruct full paths from bidirectional BFS parent pointers.
+
+    Parameters
+    ----------
+    concept_standard_map : dict[int, bool]
+        Mapping of concept_id → is_standard for all nodes discovered during BFS.
+        Built with a single batched ``kg.concept_views`` call after the BFS completes
+        so that every ``Node`` carries the correct flag with zero extra DB round-trips.
     """
+
+    def std(cid: int) -> bool:
+        return concept_standard_map.get(cid, False)
 
     def left(n):
         if n == source:
@@ -183,16 +200,7 @@ def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
         out = []
         for p, pred in parents_fwd[n]:
             for L in left(p):
-                # We need to construct Nodes here. In raw BFS we only tracked IDs.
-                # NOTE: This reconstruction assumes we fetch 'is_standard' later or ignore it here.
-                # For strictly typing PathStep, we create dummy Nodes here or need access to KG.
-                # Assuming simple reconstruction for now.
-                # To fix strictly: BFS needs to store Node info or we look it up.
-                # For now, we instantiate Nodes with is_standard=False as placeholders if strictly required,
-                # but usually the calling function enriches this.
-                subj = Node(p, False)
-                obj = Node(n, False)
-                out.append(L + (PathStep(subj, pred, obj),))
+                out.append(L + (PathStep(Node(p, std(p)), pred, Node(n, std(n))),))
         return out
 
     def right(n):
@@ -201,9 +209,7 @@ def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
         out = []
         for nxt, pred in parents_bwd[n]:
             for R in right(nxt):
-                subj = Node(n, False)
-                obj = Node(nxt, False)
-                out.append((PathStep(subj, pred, obj),) + R)
+                out.append((PathStep(Node(n, std(n)), pred, Node(nxt, std(nxt))),) + R)
         return out
 
     return [GraphPath(L + R) for L in left(meet) for R in right(meet)]
@@ -376,11 +382,18 @@ def find_shortest_paths(
             else None
         )
 
+    # One batched lookup to get is_standard for every discovered concept so that
+    # reconstructed Node objects carry the correct flag (zero extra per-node DB calls).
+    all_discovered = tuple(set(depth_fwd.keys()) | set(depth_bwd.keys()))
+    concept_standard_map: Dict[int, bool] = {
+        v.concept_id: v.standard_concept for v in kg.concept_views(all_discovered)
+    }
+
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
-        # Note: reconstruction logic needs careful implementation to create proper Node objects
-        # if using the simplified 'reconstruct_paths' helper above.
-        paths.extend(reconstruct_paths(source, target, meet, parents_fwd, parents_bwd))
+        paths.extend(
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
+        )
         if len(paths) >= max_paths:
             break
 
@@ -536,13 +549,19 @@ def find_shortest_paths_batch(
         else:
             bwd_frontier = next_frontier
 
-    # Reconstruct paths
     if not meeting_nodes:
         return []
 
+    all_discovered = tuple(set(depth_fwd.keys()) | set(depth_bwd.keys()))
+    concept_standard_map: Dict[int, bool] = {
+        v.concept_id: v.standard_concept for v in kg.concept_views(all_discovered)
+    }
+
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
-        paths.extend(reconstruct_paths(source, target, meet, parents_fwd, parents_bwd))
+        paths.extend(
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
+        )
         if len(paths) >= max_paths:
             break
 
