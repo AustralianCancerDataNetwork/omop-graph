@@ -661,7 +661,7 @@ def q_concept_vocabulary_ids() -> Select:
 
 def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
     """
-    Check if a parent is an ancestor of a child (separation > 1).
+    Check if a parent is an ancestor of a child (including immediate parent).
     """
     return select(
         Concept_Ancestor.ancestor_concept_id,
@@ -671,7 +671,7 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
         and_(
             Concept_Ancestor.ancestor_concept_id == parent_id,
             Concept_Ancestor.descendant_concept_id == child_id,
-            Concept_Ancestor.min_levels_of_separation > 1,
+            Concept_Ancestor.min_levels_of_separation > 0,
         )
     )
 
