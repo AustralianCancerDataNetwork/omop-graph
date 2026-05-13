@@ -18,9 +18,11 @@ Supported Relationships
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy.engine import Row
 
 from ..extensions.omop_alchemy import ClassIDEnum
 
@@ -84,8 +86,8 @@ class EdgeView:
         return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
     
     @classmethod
-    def from_query(cls, entry) -> "EdgeView":
-        data = dict(zip([f.name for f in fields(cls)], entry))
+    def from_query(cls, entry: Row) -> "EdgeView":
+        data = dict(entry._mapping)
         if "class_id" in data:
             data["class_id"] = ClassIDEnum(data["class_id"])
         return cls(**data)
