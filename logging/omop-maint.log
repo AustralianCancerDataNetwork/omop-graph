@@ -1,2 +1,0 @@
-2026-05-11 01:28:14,757 | INFO     | sql_loader.omop_alchemy.config | Environment variables loaded from .env file
-2026-05-11 01:28:14,758 | INFO     | sql_loader.omop_alchemy.config | Default database engine configured

@@ -16,3 +16,4 @@ docs/omop_relationships.csv
 .env
 resources/
 *.DS_Store
+logging/
