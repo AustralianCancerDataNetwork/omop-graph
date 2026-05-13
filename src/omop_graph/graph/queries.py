@@ -426,17 +426,24 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
 
 
 def q_all_predicates_with_ancestry() -> Select:
-    """Query all predicates with derived ancestry direction flags."""
+    """Query all predicates with derived ancestry direction flags and classification."""
     Rel = Relationship
     Rev = aliased(Relationship)
-    return select(
-        Rel.relationship_id,
-        Rel.relationship_name,
-        Rel.reverse_relationship_id,
-        Rel.is_hierarchical,
-        Rel.defines_ancestry.label("anc_down"),
-        Rev.defines_ancestry.label("anc_up"),
-    ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
+    Rm = aliased(RelationshipMapping)
+    return (
+        select(
+            Rel.relationship_id,
+            Rel.relationship_name,
+            Rel.reverse_relationship_id,
+            Rel.is_hierarchical,
+            Rel.defines_ancestry.label("anc_down"),
+            Rev.defines_ancestry.label("anc_up"),
+            Rm.class_id,
+            Rm.subclass_id,
+        )
+        .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
+        .join(Rm, Rel.relationship_id == Rm.relationship_id)
+    )
 
 
 def q_edges(
