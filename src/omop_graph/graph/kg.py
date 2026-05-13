@@ -131,9 +131,16 @@ class KnowledgeGraph(GraphBackend):
         self.cdm_engine = cdm_engine
         self.session_factory = sessionmaker(bind=self.cdm_engine, future=True)
 
-        # Populate the relationshipcache
-        with self.session_factory() as session:
-            RelationshipCache.load(session)
+        try:
+            with self.session_factory() as session:
+                RelationshipCache.load(session)
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to load RelationshipCache. "
+                "The KnowledgeGraph requires relationship classification data. "
+                "Run `omop-graph relationship-classification` to populate it, "
+                "or `omop-graph omop-cdm` for a full bootstrap."
+            ) from exc
 
         # Embedding-specific private args
         self._emb_config = emb_config
