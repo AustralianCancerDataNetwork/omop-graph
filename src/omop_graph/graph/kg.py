@@ -439,8 +439,9 @@ class KnowledgeGraph(GraphBackend):
 
         Yields
         -------
-        Tuple[CURIE, PRED_CURIE, CURIE]
-            Triples (subject, predicate, object).
+        Tuple[int, str, int]
+            Triples of (subject_concept_id, relationship_id, object_concept_id).
+            When ``invert=True``, the triple is (object_concept_id, relationship_id, subject_concept_id).
         """
         if invert:
             for s, p, o in self.relationships(
@@ -451,17 +452,15 @@ class KnowledgeGraph(GraphBackend):
             ):
                 yield o, p, s
             return
-        
 
-
-        for s,p,o in session.execute(
+        for s, p, o in session.execute(
             q_relationships(
-                subjects=objects,
+                subjects=subjects,
                 predicates=predicates,
-                objects=subjects,
+                objects=objects,
             )
         ):
-            yield o, p, s
+            yield s, p, o
 
 
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
