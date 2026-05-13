@@ -19,8 +19,22 @@ load finishes.
 
 Before running the command, ensure your environment is configured with a `.env` file or exported variables:
 
-- **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql://user:pass@localhost:5432/omop`).
-- **`SOURCE_PATH`**: Local directory path containing the Athena CSV files (e.g., `CONCEPT.csv`, `VOCABULARY.csv`).
+**Option A — single URL:**
+
+- **`OMOP_CDM_DB_URL`**: Full SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). When set, all individual component variables below are ignored.
+
+**Option B — component variables:**
+
+- **`OMOP_CDM_DB_DRIVER`**: SQLAlchemy driver (e.g., `postgresql+psycopg`).
+- **`OMOP_CDM_DB_USER`**: Database user.
+- **`OMOP_CDM_DB_PASSWORD`**: Database password.
+- **`OMOP_CDM_DB_HOST`**: Database host.
+- **`OMOP_CDM_DB_PORT`**: Database port.
+- **`OMOP_CDM_DB_NAME`**: Database name.
+
+**Additional:**
+
+- **`OMOP_VOCABULARY_DIR`**: Local directory path containing the Athena CSV files (e.g., `CONCEPT.csv`, `VOCABULARY.csv`).
 
 ### Usage
 If installed as a package:
@@ -61,8 +75,8 @@ Before running the command, ensure your environment is configured with a `.env` 
 2. **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
 3. **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
 4. Set following environment variables:
-    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql://user:pass@localhost:5432/omop`).
-    - **`SOURCE_PATH`**: Local directory path containing the Athena CSV files (e.g., `CONCEPT.csv`, `VOCABULARY.csv`). This is required as the new connections/tables are stored there after creation.
+    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). See [`omop-cdm` prerequisites](#prerequisites) for the full list of component variable alternatives.
+    - **`OMOP_VOCABULARY_DIR`**: Local directory path where the generated classification tables will be written as CSV files.
 
 ### Usage
 
