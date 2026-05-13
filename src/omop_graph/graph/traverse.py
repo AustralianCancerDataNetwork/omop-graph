@@ -198,8 +198,15 @@ def traverse(
                 TraceStep(depth=depth, node=node, expanded_edges=tuple(expanded))
             )
 
-    # Deduplicate edges found (multiple paths might traverse the same edge)
-    dedup = {(e.subject_id, e.predicate_id, e.object_id): e for e in edges_out}
+    # Deduplicate edges and drop any that target an unvisited node.
+    # The latter can happen when max_nodes terminates the loop while neighbour
+    # nodes are still queued but never expanded, which would break the invariant
+    # that every edge in the Subgraph is closed over its node set.
+    dedup = {
+        (e.subject_id, e.predicate_id, e.object_id): e
+        for e in edges_out
+        if e.object_id in visited
+    }
     sg = Subgraph(nodes=frozenset(visited), edges=tuple(dedup.values()))
 
     graph_trace = (
