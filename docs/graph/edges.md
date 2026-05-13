@@ -19,7 +19,7 @@ To allow reproduction and evaluation of this approach, we provide clear guidelin
     {{ to_grouped_table('config/predicate_classification.csv', [0, 1], [0, 1, 2, 3, 4], [0, 1],) }}
 
 ## Predicate Mappings
-Following the predicate classification guidelines of the previous seciton, we calssified the following predicates into their respective classification groups.
+Following the predicate classification guidelines of the previous section, we classified the following predicates into their respective classification groups.
 
 !!! warning
     

@@ -42,6 +42,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+emb = [
+  "omop-emb>=1.0.0",
+]
 faiss-cpu = [
   "omop-emb[faiss-cpu]>=1.0.0",
 ]
