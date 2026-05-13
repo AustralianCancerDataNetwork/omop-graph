@@ -746,10 +746,16 @@ class KnowledgeGraph(GraphBackend):
         Clear all LRU caches associated with the graph.
         """
         self.concept_view.cache_clear()
+        self.concept_views.cache_clear()
         self.concept_id_by_code.cache_clear()
         self.concept_ids_by_label.cache_clear()
         self.concept_lookup.cache_clear()
         self.predicate.cache_clear()
         self.predicate_name.cache_clear()
         self.parents.cache_clear()
+        self.children.cache_clear()
+        self.roots.cache_clear()
+        self.leaves.cache_clear()
+        self.singletons.cache_clear()
+        self.synonyms_for_concept.cache_clear()
         self.edges.cache_clear()
