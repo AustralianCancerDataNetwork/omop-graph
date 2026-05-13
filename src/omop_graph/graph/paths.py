@@ -22,14 +22,11 @@ from typing import (
     Any,
     Dict,
     List,
-    Literal,
     Optional,
     Set,
     Tuple,
     Union,
 )
-
-import numpy as np
 
 # Local Application Imports
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
@@ -792,56 +789,58 @@ class PathProfile:
         kg: "KnowledgeGraph",
         path: GraphPath,
         match_kind: LabelMatchKind,
-        embedding_sims: Optional[np.ndarray] = None,
+        source_concept_id: Optional[int] = None,
     ) -> "PathProfile":
         """
         Analyze a path to determine the 'Standard Anchor'.
 
-        It traverses the path from the candidate term. The first Standard Concept
-        encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.
+        The first Standard Concept encountered via an IDENTITY edge is promoted as
+        the anchor.  For zero-hop paths (source == target), ``source_concept_id``
+        must be provided; a ``ValueError`` is raised otherwise.
+
+        Parameters
+        ----------
+        source_concept_id : int, optional
+            Required when ``path`` has no steps (i.e. source == target).
         """
-        # Path Traversal
-        standard_anchor: Optional[Tuple[int, str]] = None
-
-        # Pre-fetch views to check standard status
-        # path.nodes() returns tuple of IDs (start + all objects)
-        node_ids = path.nodes()
-        concept_views = kg.concept_views(node_ids)
-        
-        # NOTE: kg.concept_views usually returns tuple.
-        # If order is guaranteed, we can index by step.
-        # Ideally, map by ID to be safe.
-        view_map = {v.concept_id: v for v in concept_views}
-        
-        # Helper to get view by index in path sequence
-        def get_view(idx):
-            cid = node_ids[idx]
-            return view_map[cid]
-
-        predicate_kinds = kg.predicate_kinds(tuple(p.predicate for p in path.steps))
-
-        for step_idx in range(len(path.steps)):
-            predicate_kind = predicate_kinds[step_idx]
-
-            # We promote the first swap to a standard concept as the anchor point
-            # Check Next Node (index + 1)
-            next_view = get_view(step_idx + 1)
-            
-            is_translation_edge = predicate_kind in (
-                ClassIDEnum.IDENTITY,
+        # Zero-hop case: find_shortest_paths returns GraphPath(steps=()) when source == target.
+        # path.nodes() returns () so get_view(0) would raise IndexError without this guard.
+        if not path.steps:
+            if source_concept_id is None:
+                raise ValueError(
+                    "source_concept_id is required for zero-hop paths "
+                    "(find_shortest_paths was called with source == target)."
+                )
+            view = kg.concept_view(source_concept_id)
+            return cls(
+                concept_id=source_concept_id,
+                concept_name=view.concept_name,
+                is_standard=view.standard_concept,
+                original_concept_id=source_concept_id,
+                original_concept_name=view.concept_name,
+                path=path,
             )
 
+        node_ids = path.nodes()
+        view_map = {v.concept_id: v for v in kg.concept_views(node_ids)}
+
+        def get_view(idx):
+            return view_map[node_ids[idx]]
+
+        predicate_kinds = kg.predicate_kinds(tuple(p.predicate for p in path.steps))
+        standard_anchor: Optional[Tuple[int, str]] = None
+
+        for step_idx in range(len(path.steps)):
+            next_view = get_view(step_idx + 1)
             if (
-                is_translation_edge
+                predicate_kinds[step_idx] is ClassIDEnum.IDENTITY
                 and not standard_anchor
                 and next_view.standard_concept
             ):
                 standard_anchor = (next_view.concept_id, next_view.concept_name)
-            
-            # Logic for scoring/indices removed as it wasn't used in return
 
         first_view = get_view(0)
-        
+
         if standard_anchor is None:
             concept_id = first_view.concept_id
             concept_name = first_view.concept_name
@@ -892,7 +891,8 @@ class PathExplanation:
         Construct an explanation by combining the path, the trace log, and semantic profiles.
         """
         steps: List[PathExplanationStep] = []
-        profile = PathProfile.from_path(kg, path, match_kind=match_kind)
+        source = path.steps[0].subject.concept_id if path.steps else (trace.seeds[0] if trace.seeds else None)
+        profile = PathProfile.from_path(kg, path, match_kind=match_kind, source_concept_id=source)
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)
