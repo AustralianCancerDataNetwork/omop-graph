@@ -685,10 +685,11 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
             func.count(Concept_Ancestor.ancestor_concept_id).label("num_ancestors"),
         )
         .join(
-            Concept_Ancestor, 
+            Concept_Ancestor,
             Concept.concept_id == Concept_Ancestor.descendant_concept_id
         )
         .where(Concept.concept_id.in_(concept_ids))
+        .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)
     )
 
@@ -706,6 +707,7 @@ def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
             Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id
         )
         .where(Concept.concept_id.in_(concept_ids))
+        .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)
     )
 
