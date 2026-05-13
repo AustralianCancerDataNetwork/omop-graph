@@ -177,7 +177,7 @@ def omop_cdm(
        logger.info("Successfully ingested relationship classifications.")
     except Exception as e:
        logger.error(f"Failed to ingest predicate classifications: {e}")
-       logger.info("Continuing with bootstrap without predicate classifications. Re-run cli `ingest-classification` command once the issue is resolved.")
+       logger.info("Continuing with bootstrap without predicate classifications. Re-run cli `relationship-classification` command once the issue is resolved.")
 
     if add_test_data:
         populate_test_data(session)
