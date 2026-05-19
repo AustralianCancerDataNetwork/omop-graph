@@ -141,6 +141,6 @@ class ResolverPipeline:
                     yield hit
 
             # Early stopping
-            if type(resolver) == self._stop_at:
+            if type(resolver) is self._stop_at:
                 logger.info(f"Stopping pipeline after resolver {type(resolver).__name__} as configured.")
                 break

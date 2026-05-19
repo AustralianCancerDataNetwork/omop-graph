@@ -57,11 +57,8 @@ def test_grounding_resolves_expected_standard_concepts(
         kg=mock_cdm_kg,
         text=input_text,
         text_embedding=None,
-        text_embedding_model=None,
         constraints=_constraints(),
         max_candidates=1,
-        metric_type=None,
-        index_type=None,
     )
 
     assert ranked, f"Expected at least one grounding for: {input_text}"
@@ -78,11 +75,8 @@ def test_grounding_maps_non_standard_candidate_via_relationships(
         kg=mock_cdm_kg,
         text="Kidney carcinoma term",
         text_embedding=None,
-        text_embedding_model=None,
         constraints=_constraints(),
         max_candidates=1,
-        metric_type=None,
-        index_type=None,
     )
 
     assert ranked, "Expected non-standard concept to map to a valid standard concept"
@@ -99,11 +93,8 @@ def test_grounding_rejects_concepts_outside_anchored_hierarchy(
         kg=mock_cdm_kg,
         text="Meta concept",
         text_embedding=None,
-        text_embedding_model=None,
         constraints=_constraints(),
         max_candidates=1,
-        metric_type=None,
-        index_type=None,
     )
 
     assert ranked == []

@@ -20,39 +20,6 @@ from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
 
-def test_get_neareast_concepts_returns_none_when_index_type_missing(monkeypatch: pytest.MonkeyPatch):
-    mock_reader = Mock()
-    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda kg: mock_reader)
-    kg = cast(KnowledgeGraph, SimpleNamespace(emb=SimpleNamespace()))
-
-    result = emb_ext.get_neareast_concepts(
-        kg=kg,
-        text_embedding_model="test-model",
-        text_embedding=np.zeros((1, 2), dtype=np.float32),
-        concept_filter=None,
-        metric_type=None,
-        index_type=None,
-    )
-
-    assert result is None
-
-
-def test_get_neareast_concepts_returns_none_when_metric_type_missing(monkeypatch: pytest.MonkeyPatch):
-    mock_reader = Mock()
-    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda kg: mock_reader)
-    kg = cast(KnowledgeGraph, SimpleNamespace(emb=SimpleNamespace()))
-
-    result = emb_ext.get_neareast_concepts(
-        kg=kg,
-        text_embedding_model="test-model",
-        text_embedding=np.zeros((1, 2), dtype=np.float32),
-        concept_filter=None,
-        metric_type=None,
-        index_type=cast(emb_ext.EmbeddingIndexType, "flat"),
-    )
-
-    assert result is None
-
 
 def test_get_embedding_interface_returns_none_for_missing_extension_error():
     class BrokenKG:
@@ -130,9 +97,6 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
             kg=mock_cdm_kg,
             standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
             text_embedding=np.zeros((1, 3), dtype=np.float32),
-            text_embedding_model="test-model",
-            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
-            index_type=cast(emb_ext.EmbeddingIndexType, "flat"),
         )
 
     assert "Computing missing embeddings on-the-fly" in caplog.text
@@ -168,9 +132,6 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
             kg=mock_cdm_kg,
             standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
             text_embedding=np.zeros((1, 3), dtype=np.float32),
-            text_embedding_model="test-model",
-            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
-            index_type=cast(emb_ext.EmbeddingIndexType, "flat"),
         )
 
     assert "compute_missing_embeddings is disabled" in caplog.text

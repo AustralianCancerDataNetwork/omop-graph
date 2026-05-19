@@ -21,14 +21,11 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 from omop_graph.extensions.emb import (
     HAS_OMOP_EMB,
-    EmbeddingIndexType,
-    EmbeddingMetricType,
     get_neareast_concepts,
 )
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
-    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
 logger = logging.getLogger(__name__)
 
@@ -226,31 +223,33 @@ class EmbeddingResolver(CandidateResolver):
         self,
         kg: KnowledgeGraph,
         text: str,
-        constraints: Optional[EmbeddingConceptFilter] = None,
-        text_embedding: Optional[np.ndarray] = None,
-        text_embedding_model: Optional[str] = None,
-        metric_type: Optional[EmbeddingMetricType] = None,
-        index_type: Optional[EmbeddingIndexType] = None,
+        constraints: Optional[SearchConstraintConcept] = None,
         sort: bool = False,
+        text_embedding: Optional[np.ndarray] = None,
+        **kwargs,
     ) -> Tuple[LabelMatch, ...]:
-        
+
         from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
-        if isinstance(constraints, SearchConstraintConcept):
-            constraints = EmbeddingConceptFilter(
+        concept_filter: Optional[EmbeddingConceptFilter] = (
+            EmbeddingConceptFilter(
                 concept_ids=constraints.concept_ids,
                 domains=constraints.domains,
                 vocabularies=constraints.vocabularies,
                 require_standard=constraints.require_standard,
-                limit=constraints.limit
+                limit=constraints.limit,
             )
-        
+            if isinstance(constraints, SearchConstraintConcept)
+            else None
+        )
+
+        if text_embedding is None:
+            logger.warning(f"No text embedding provided for {self.__class__.__name__}. Returning no matches.")
+            return ()
+
         matches = get_neareast_concepts(
             kg=kg,
             text_embedding=text_embedding,
-            text_embedding_model=text_embedding_model,
-            concept_filter=constraints,
-            metric_type=metric_type,
-            index_type=index_type,
+            concept_filter=concept_filter,
         )
         if matches is None:
             return ()
