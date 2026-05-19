@@ -1,10 +1,6 @@
 from __future__ import annotations
-from datetime import date
-from functools import wraps
-import warnings
 import os
 from typing import Optional, Union
-from sqlalchemy.exc import PendingRollbackError, InvalidRequestError
 from sqlalchemy import create_engine, URL, make_url
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -17,30 +13,6 @@ from omop_graph.config import (
     ENV_OMOP_CDM_DB_URL,
     ENV_OMOP_CDM_DB_USER
 )
-
-def safe_execute(method):
-    """
-    Decorator for OmopKnowledgeGraph methods.
-
-    If the session is in a failed transaction state, roll back and re-raise.
-    Does NOT clear caches.
-    """
-    @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return method(self, *args, **kwargs)
-        except PendingRollbackError:
-            warnings.warn(
-                f"Session rollback triggered in {method.__name__}",
-                RuntimeWarning,
-            )
-            self.rollback_session()
-            raise
-        except InvalidRequestError as e:
-            if "rollback" in str(e).lower():
-                self.rollback_session()
-            raise
-    return wrapper
 
 
 def make_engine(

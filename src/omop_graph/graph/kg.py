@@ -19,10 +19,9 @@ import re
 import os
 from datetime import date
 from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sqlalchemy import Engine
-from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.cdm.handlers.fulltext import FullTextError
 
@@ -88,8 +87,6 @@ class KnowledgeGraphEmbeddingConfiguration:
     client : EmbeddingClient, optional
         An optional client instance for generating embeddings. If not provided, no writing operations can take place.
     provider_type : EmbeddingProviderType, optional
-        The respective provider name (e.g., 'openai', 'ollama') or type if using a read-only embedding reader interface.
-    provider_type : EmbeddingProviderType, optional
         The provider type to use for the embedding reader interface (e.g., 'ollama'). 
         Required for read-only embedding interface to determine provider-specific canonical model name.
     compute_missing_embeddings : bool
@@ -104,7 +101,7 @@ class KnowledgeGraphEmbeddingConfiguration:
     backend_type: Optional[EmbeddingBackendType] = None
     client: Optional[EmbeddingClient] = None
     provider_type: Optional[EmbeddingProviderType] = None
-    compute_missing_embeddings: bool = field(default=False)
+    compute_missing_embeddings: bool = False
 
 class KnowledgeGraph(GraphBackend):
     """
@@ -311,7 +308,7 @@ class KnowledgeGraph(GraphBackend):
         elif match_kind == LabelMatchKind.PARTIAL:
             fn = q_concept_name_ilike
         elif match_kind == LabelMatchKind.FTS:
-            fn = q_concept_name_fulltext
+            fn = functools.partial(q_concept_name_fulltext, engine=self.cdm_engine)
         else:
             raise ValueError(f"Unsupported search mode: {match_kind}")
         try:
@@ -320,7 +317,6 @@ class KnowledgeGraph(GraphBackend):
                 search_constraint=search_constraint,
                 synonym=synonym,
                 sort=sort,
-                engine=self.cdm_engine
             )
         except FullTextError as e:
             if match_kind == LabelMatchKind.FTS:
@@ -347,13 +343,12 @@ class KnowledgeGraph(GraphBackend):
         """
         Find concept IDs that match the label exactly (case-insensitive).
         """
-
+        label = self._normalise_query_term(label)
         with self.session_factory() as session:
             rows = session.execute(q_concept_name_match(label)).scalars()
         return tuple(rows)
 
 
-    @validate_mapping_table
     def predicate(self, relationship_id: str) -> Predicate:
         """
         Retrieve a Predicate object by its relationship ID.
@@ -394,10 +389,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Classify the predicate into a semantic kind.
         """
-        try:
-            return RelationshipCache.get(relationship_id).class_id
-        except AttributeError as e:
-            raise AttributeError(e)
+        return RelationshipCache.get(relationship_id).class_id
     
     def predicate_kinds(
         self, relationship_ids: tuple[str, ...]
@@ -630,17 +622,6 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_synonym_filtered(concept_id)).all()
         return tuple(row.name for row in rows)
 
-    def rollback_session(self) -> None:
-        """
-        Safely rollback the session if in a pending state.
-        """
-        try:
-            with self.session_factory() as session:
-                session.rollback()
-        except (PendingRollbackError, InvalidRequestError):
-            pass
-    
-    @validate_mapping_table
     def predicates(self) -> tuple[Predicate, ...]:
         """
         Return all predicates known to the knowledge graph.

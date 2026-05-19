@@ -497,37 +497,37 @@ def find_shortest_paths_batch(
                 on=on,
             )
 
-        next_frontier = set()
+            next_frontier = set()
 
-        # 3. Process edges in memory
-        for e in batch_edges:
-            # Identify Start (u) and End (v) relative to traversal direction
-            u = e.subject_id if expand_forward else e.object_id
-            v = e.object_id if expand_forward else e.subject_id
+            # 3. Process edges in memory
+            for e in batch_edges:
+                # Identify Start (u) and End (v) relative to traversal direction
+                u = e.subject_id if expand_forward else e.object_id
+                v = e.object_id if expand_forward else e.subject_id
 
-            d = current_depth_map[u]
-            nd = d + 1
+                d = current_depth_map[u]
+                nd = d + 1
 
-            if nd > max_depth:
-                continue
+                if nd > max_depth:
+                    continue
 
-            # Update visited/parents
-            if v not in current_depth_map:
-                current_depth_map[v] = nd
-                next_frontier.add(v)
-                current_parents[v].append((u, e.predicate_id))
-            elif current_depth_map[v] == nd:
-                # Found another path to the same node at the same optimal depth
-                current_parents[v].append((u, e.predicate_id))
+                # Update visited/parents
+                if v not in current_depth_map:
+                    current_depth_map[v] = nd
+                    next_frontier.add(v)
+                    current_parents[v].append((u, e.predicate_id))
+                elif current_depth_map[v] == nd:
+                    # Found another path to the same node at the same optimal depth
+                    current_parents[v].append((u, e.predicate_id))
 
-            # Check for collision (Did we meet the other side?)
-            if v in other_depth_map:
-                total = nd + other_depth_map[v]
-                if best_total_depth is None or total < best_total_depth:
-                    best_total_depth = total
-                    meeting_nodes = {v}
-                elif total == best_total_depth:
-                    meeting_nodes.add(v)
+                # Check for collision (Did we meet the other side?)
+                if v in other_depth_map:
+                    total = nd + other_depth_map[v]
+                    if best_total_depth is None or total < best_total_depth:
+                        best_total_depth = total
+                        meeting_nodes = {v}
+                    elif total == best_total_depth:
+                        meeting_nodes.add(v)
 
         # 4. Stop Condition check
         if best_total_depth is not None:
@@ -939,18 +939,9 @@ def trace_contains_step(trace: GraphTrace, step: PathStep) -> Optional[TraceStep
     Check if a specific path step appears in the search trace.
     """
     for ts in trace.steps:
-        # Check if the expansion node matches subject
         if ts.node != step.subject.concept_id:
-             # step.subject is Node object, trace uses ID (int) usually.
-             # In BFS above, `cur` was int.
-             # Adjusted check:
-             if ts.node != step.subject.concept_id:
-                 continue
-        
+            continue
         for e in ts.expanded_edges:
-            if (
-                e.object_id == step.object.concept_id
-                and e.predicate_id == step.predicate
-            ):
+            if e.object_id == step.object.concept_id and e.predicate_id == step.predicate:
                 return ts
     return None

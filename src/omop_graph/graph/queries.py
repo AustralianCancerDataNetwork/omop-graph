@@ -209,11 +209,10 @@ def q_concept_synonym() -> Select:
 
 
 def q_concept_name_match(
-    query_concept_name: str, 
+    query_concept_name: str,
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
-    **kwargs,
 ) -> Select:
     """
     Query for exact case-insensitive matches on concept names.
@@ -254,11 +253,10 @@ def q_concept_name_match(
 
 
 def q_concept_name_ilike(
-    query_concept_name: str, 
+    query_concept_name: str,
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
-    **kwargs
 ) -> Select:
     """
     Query for partial matches on concept names using ILIKE.

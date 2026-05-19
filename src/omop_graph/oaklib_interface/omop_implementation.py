@@ -412,7 +412,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._predicate_curie(cid)
+                    yield self._concept_curie(cid)
 
         if SearchProperty.ALIAS.text in props:
             matches = self.kg.concept_lookup(
@@ -424,7 +424,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._predicate_curie(cid)
+                    yield self._concept_curie(cid)
 
         if (
             SearchProperty.IDENTIFIER.text in props
@@ -436,7 +436,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                     cid = self.kg.concept_id_by_code(vocab, code)
                     if cid not in seen:
                         seen.add(cid)
-                        yield self._predicate_curie(cid)
+                        yield self._concept_curie(cid)
                 except Exception:
                     pass
 
@@ -495,8 +495,8 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Retrieve direct children of the concept.
         """
         concept_id = self._parse_concept(curie)
-        for parent_id in self.kg.parents(concept_id):
-            yield self._concept_curie(parent_id)
+        for child_id in self.kg.children(concept_id):
+            yield self._concept_curie(child_id)
 
     @property
     def default_language(self) -> Optional[str]:
@@ -647,6 +647,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
                 subjects=subject_ids,
                 predicates=predicate_ids,
                 objects=object_ids,
+                invert=invert
             ))
 
         for s,p,o in relationships:
