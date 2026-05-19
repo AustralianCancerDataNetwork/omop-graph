@@ -4,13 +4,16 @@ The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local 
 
 ---
 
-## `omop-maint load-vocab-source` {: #load-vocab-source }
+## `omop-cdm`
 
 !!! info "Moved to `omop-maint`"
-    Vocabulary loading was previously exposed as `omop-graph omop-cdm`. It is now provided by the [`OMOP_Alchemy`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/) package under the `omop-maint` CLI.
+    Vocabulary loading was previously exposed as `omop-graph omop-cdm`. It is now provided by the [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy) package under the [`omop-maint` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/).
 
 Load Athena vocabulary CSV files from a configured source path into the OMOP CDM database using the ORM staged CSV loader.
 
+## `populate_with_test_data`
+
+This command adds synthetic patient data into the OMOP CDM after populating the vocabularies using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/)
 
 ## `relationship-classification` {: #relationship-classification }
 
@@ -21,11 +24,11 @@ The standard OMOP `relationship` table provides basic metadata, but lacks unifie
 
 ### Prerequisites
 Before running the command, ensure your environment is configured with a `.env` file or exported variables:
-1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](#load-vocab-source))
+1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
 2. **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
 3. **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
 4. Set following environment variables:
-    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). See [`omop-maint load-vocab-source` options](#load-vocab-source) for connection configuration details.
+    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). See [`omop-maint load-vocab-source` options](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) for connection configuration details.
     - **`OMOP_VOCABULARY_DIR`**: Local directory path where the generated classification tables will be written as CSV files.
 
 ### Usage
@@ -38,6 +41,5 @@ omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 
 | Option | Short | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **`--pred-class-dir`** | | `String` | `./docs` | Path to the directory containing the classification CSVs. |
+| **`--pred-class-dir`** | | `String` | **Required** | Path to the directory containing the classification CSVs. |
 | **`--verbose`** | `-v` | `Count` | `0` | Increase logging verbosity (use `-v` or `-vv`). |
----

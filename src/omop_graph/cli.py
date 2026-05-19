@@ -66,7 +66,7 @@ def populate_with_test_data():
 
 @app.command()
 def relationship_classification(
-    pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
+    pred_class_dir: Annotated[str, typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")],
     env_file: Annotated[Optional[str], typer.Option("--env-file", "-e", help="Path to the .env file containing database connection variables. If not provided, will look for .env in the current working directory.")] = None,
     verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
@@ -76,10 +76,9 @@ def relationship_classification(
     configure_logging_level(verbosity)
     load_dotenv(env_file)
 
-    if pred_class_dir is None:
-        pred_class_dir = str((Path(__file__).parent.parent.parent / "docs").resolve())
-
     pred_class_dir_pl = Path(pred_class_dir)
+    if not pred_class_dir_pl.is_dir():
+        raise NotADirectoryError(f"{pred_class_dir} is not a valid directory.")
 
     pred_mapping_file = pred_class_dir_pl / "predicate_mapping.csv"
     if not pred_mapping_file.is_file():
@@ -139,7 +138,7 @@ def relationship_classification(
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp:
             csv_path = tmp.name
             df.to_csv(csv_path, index=False)
-            logger.info(f"Saved {len(df)} records to `{csv_path}` for model `{model.__name__}`")
+            logger.info(f"Temporarily saved {len(df)} records to `{csv_path}` for model `{model.__name__}` for loading.")
 
             with bulk_load_context(session):
                 model.load_csv(  # type: ignore

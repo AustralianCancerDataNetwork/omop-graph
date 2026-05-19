@@ -100,7 +100,7 @@ def populate_observation_periods(
         )
         .join(Death, Death.person_id==Visit_Occurrence.person_id, isouter=True)
         .join(Observation_Period, Observation_Period.person_id==Visit_Occurrence.person_id, isouter=True)
-        .filter(Observation_Period.observation_period_id==None)
+        .filter(Observation_Period.observation_period_id.is_(None))
         .group_by(Visit_Occurrence.person_id)
         .all()
     )
