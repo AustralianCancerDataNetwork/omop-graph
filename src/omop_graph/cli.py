@@ -15,6 +15,7 @@ from orm_loader.helpers.metadata import Base
 
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from omop_graph.oaklib_interface.omop_factory import build_engine_string
+from .cli_utils.cli_add_test_data import populate_test_data
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
@@ -52,6 +53,16 @@ def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> Non
             logger_instance.setLevel(logging.CRITICAL + 1)
             logger_instance.propagate = False
 
+
+@app.command()
+def populate_with_test_data():
+    """
+    Method to populate the database withsynthetic test data 
+    """
+    engine_string = build_engine_string()
+    engine = sa.create_engine(engine_string, future=True, echo=False)
+    Session = sessionmaker(bind=engine, future=True)
+    populate_test_data(Session())
 
 @app.command()
 def relationship_classification(
