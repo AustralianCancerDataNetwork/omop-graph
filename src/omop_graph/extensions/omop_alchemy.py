@@ -2,10 +2,10 @@
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from orm_loader.helpers import Base
-from omop_alchemy.cdm.base import ReferenceTable, cdm_table, CDMTableBase, ReferenceContext
+from omop_alchemy.cdm.base import ReferenceTable, cdm_table, CDMTableBase
 
 import functools
-from enum import Enum, auto
+from enum import Enum
 from dataclasses import dataclass
 
 class ClassIDEnum(Enum):

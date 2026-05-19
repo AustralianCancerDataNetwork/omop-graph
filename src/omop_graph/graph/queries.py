@@ -34,7 +34,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
 )
 
-from ..extensions.omop_alchemy import RelationshipClass, RelationshipMapping, ClassIDEnum
+from ..extensions.omop_alchemy import RelationshipMapping, ClassIDEnum
 from .constraints import SearchConstraintConcept
 
 

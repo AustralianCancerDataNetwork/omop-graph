@@ -22,10 +22,10 @@ import re
 import os
 from datetime import date
 from functools import lru_cache
-from typing import Dict, Optional, Tuple, Union, Literal, Generator, TYPE_CHECKING
+from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass, field
 
-from sqlalchemy import Engine, inspect
+from sqlalchemy import Engine
 from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.cdm.handlers.fulltext import FullTextError
@@ -162,11 +162,7 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             from omop_emb.interface import EmbeddingWriterInterface, EmbeddingReaderInterface
-            from omop_emb.config import (
-                ENV_OMOP_EMB_FAISS_CACHE_DIR,
-                ENV_OMOP_EMB_BACKEND,
-                BackendType
-            )
+            from omop_emb.config import ENV_OMOP_EMB_BACKEND
             from omop_emb.backends.base_backend import resolve_backend
 
             if self._emb_config is None:

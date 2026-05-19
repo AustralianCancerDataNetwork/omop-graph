@@ -14,7 +14,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, List, Optional, Tuple, Mapping
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import numpy as np
 

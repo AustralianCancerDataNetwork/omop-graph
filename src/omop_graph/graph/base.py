@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date
+from functools import lru_cache
 from typing import Iterable, Optional, Literal
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,7 @@ class GraphBackend(ABC):
     """
 
     @abstractmethod
+    @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:
         ...
 
@@ -25,6 +27,7 @@ class GraphBackend(ABC):
         ...
 
     @abstractmethod
+    @lru_cache(maxsize=10_000)
     def predicate_name(self, relationship_id: str) -> str:
         ...
 
@@ -59,7 +62,7 @@ class GraphBackend(ABC):
             'out' for outgoing, 'in' for incoming.
         predicate_ids : frozenset[str], optional
             Filter by specific relationship IDs.
-        predicate_kinds : Set[PredicateKind], optional
+        predicate_kinds : Set[ClassIDEnum], optional
             Filter by semantic kind of relationship.
         active_only : bool
             If True, return only valid/active edges.

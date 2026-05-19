@@ -238,8 +238,8 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     def annotate_text(
         self,
         text: str,
-        query_embedding: Optional[np.ndarray] = None,
         configuration: Optional[TextAnnotationConfiguration] = None,
+        query_embedding: Optional[np.ndarray] = None,
         annotations: Optional[Dict[str, Annotation]] = None,
     ) -> Iterator[TextAnnotation]:
         """
@@ -462,7 +462,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def supports_reasoning(self) -> bool:
         return False
 
-    def entity_aliases(self, curie: CURIE) -> Iterable[str]:
+    def entity_aliases(self, curie: CURIE) -> List[str]:
         """
         Retrieve aliases (synonyms and codes) for a given entity.
 
@@ -473,7 +473,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         Returns
         -------
-        Iterable[str]
+        List[str]
             A sorted list of aliases.
         """
         cid = self._parse_concept(curie)
@@ -487,7 +487,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         # vocabulary-qualified code alias
         aliases.add(f"{cv.vocabulary_id}:{cv.concept_code}")
 
-        return sorted(aliases)
+        return list(sorted(aliases))
 
     def parents(self, curie: CURIE) -> Iterable[CURIE]:
         """
@@ -521,7 +521,11 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def multilingual(self) -> bool:
         return False
 
-    def entities(
+    @multilingual.setter
+    def multilingual(self, value: bool) -> None:
+        pass  # OMOP is always monolingual; setter required by base interface contract
+
+    def entities(  # type: ignore[override]
         self,
         domain: str | None = None,
         standard_only: bool = True,
@@ -612,24 +616,25 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         cids = self.kg.concept_ids_by_label(label.strip())
         return [self._concept_curie(cid) for cid in cids]
 
-    def relationships(
+    def relationships( # type: ignore[override]
         self,
-        subjects: list[CURIE] | None = None,
-        predicates: list[str] | None = None,
-        objects: list[CURIE] | None = None,
+        subjects: Iterable[CURIE] | None = None,
+        predicates: Iterable[str] | None = None,
+        objects: Iterable[CURIE] | None = None,
         invert: bool = False,
+        **kwargs,
     ) -> Iterable[Tuple[CURIE, PRED_CURIE, CURIE]]:
         """
         Query relationships between concepts.
 
         Parameters
         ----------
-        subjects : list[CURIE] | None
-            List of subject CURIEs.
-        predicates : list[str] | None
-            List of predicate (relationship) IDs.
-        objects : list[CURIE] | None
-            List of object CURIEs.
+        subjects : Iterable[CURIE] | None
+            Subject CURIEs to filter on.
+        predicates : Iterable[str] | None
+            Predicate (relationship) IDs to filter on.
+        objects : Iterable[CURIE] | None
+            Object CURIEs to filter on.
         invert : bool
             If True, swaps subjects and objects in the query and result.
 
@@ -826,7 +831,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             yield self._predicate_curie("is_a")
 
 
-class OMOPAlchemyImplementation(
+class OMOPAlchemyImplementation( # type: ignore[override]
     OMOPRelationGraphInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,

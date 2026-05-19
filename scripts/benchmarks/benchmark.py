@@ -13,15 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
 import typer
-app = typer.Typer()
 
 import sqlalchemy as sa
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 
-import argparse
-import statistics
-import time
 import numpy as np
 from omop_emb.config import (
     BackendType,
@@ -54,8 +50,8 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_graph.db.session import make_session, make_engine
-
+from omop_graph.db.session import make_engine
+app = typer.Typer()
 
 DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
 
