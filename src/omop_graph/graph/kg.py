@@ -12,16 +12,12 @@ Responsibilities
 * **Edge/Node Retrieval:** Provides methods to traverse the graph (parents, children, edges).
 """
 
-# IMPORTANT: The lru_cache has access to self in each cache. We need to avoid this if we use it
-# TODO: Get rid of the LRU cache and instead optimise the queries!
-
 from __future__ import annotations
 
 import logging
 import re
 import os
 from datetime import date
-from functools import lru_cache
 from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass, field
 
@@ -220,7 +216,6 @@ class KnowledgeGraph(GraphBackend):
         """Indicates whether on-the-fly computation of missing concept embeddings is enabled."""
         return self._emb_config.compute_missing_embeddings if self._emb_config else False
 
-    @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:
         """
         Retrieve a single concept view by ID.
@@ -239,7 +234,6 @@ class KnowledgeGraph(GraphBackend):
             row = session.execute(q_concept_view(concept_id)).one()
         return ConceptView.from_row(row)
 
-    @lru_cache(maxsize=200_000)
     def concept_views(self, concept_ids: tuple[int, ...], sort: bool = True) -> tuple[ConceptView, ...]:
         """
         Retrieve multiple concept views in a batch.
@@ -261,7 +255,6 @@ class KnowledgeGraph(GraphBackend):
             )
         return concept_views
 
-    @lru_cache(maxsize=200_000)
     def concept_id_by_code(self, vocabulary_id: str, concept_code: str) -> int:
         """
         Look up a Concept ID using the vocabulary ID and concept code.
@@ -286,7 +279,6 @@ class KnowledgeGraph(GraphBackend):
             )
         return concept_id
 
-    @lru_cache(maxsize=600_000)
     def concept_lookup(
         self,
         query_term: str,
@@ -351,8 +343,6 @@ class KnowledgeGraph(GraphBackend):
             )
         return matches
 
-
-    @lru_cache(maxsize=200_000)
     def concept_ids_by_label(self, label: str) -> Tuple[int, ...]:
         """
         Find concept IDs that match the label exactly (case-insensitive).
@@ -362,7 +352,7 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_name_match(label)).scalars()
         return tuple(rows)
 
-    @lru_cache(maxsize=10_000)
+
     @validate_mapping_table
     def predicate(self, relationship_id: str) -> Predicate:
         """
@@ -391,7 +381,6 @@ class KnowledgeGraph(GraphBackend):
             subclass_id=row.subclass_id
         )
 
-    @lru_cache(maxsize=10_000)
     def predicate_name(self, relationship_id: str) -> str:
         """
         Retrieve the human-readable name of a relationship.
@@ -478,7 +467,6 @@ class KnowledgeGraph(GraphBackend):
         """
         return re.sub(r"\s+", " ", query_term.strip().lower())
        
-    @lru_cache(maxsize=1_000_000)
     def edges(
         self,
         concept_ids: Tuple[int, ...] | int,
@@ -560,7 +548,6 @@ class KnowledgeGraph(GraphBackend):
             return 1.0
         return 1.0 / len(out_edges)
 
-    @lru_cache(maxsize=500_000)
     def parents(self, concept_id: int) -> tuple[int, ...]:
         """
         Retrieve parent Concept IDs of concept using Concept_Ancestor table.
@@ -569,7 +556,6 @@ class KnowledgeGraph(GraphBackend):
             parents = tuple(session.execute(q_parents(concept_id)).scalars())
         return parents
 
-    @lru_cache(maxsize=500_000)
     def children(self, concept_id) -> tuple[int, ...]:
         """
         Retrieve children Concept IDs of concept using Concept_Ancestor table.
@@ -595,8 +581,6 @@ class KnowledgeGraph(GraphBackend):
         for row in session.execute(query):
             yield int(row.concept_id)
         
-
-    @lru_cache(maxsize=20_000)
     def roots(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
     ) -> tuple[int, ...]:
@@ -611,7 +595,6 @@ class KnowledgeGraph(GraphBackend):
             )
         return roots 
 
-    @lru_cache(maxsize=20_000)
     def leaves(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
     ) -> tuple[int, ...]:
@@ -626,7 +609,6 @@ class KnowledgeGraph(GraphBackend):
             )
         return leaves
 
-    @lru_cache(maxsize=20_000)
     def singletons(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
     ) -> tuple[int, ...]:
@@ -640,7 +622,6 @@ class KnowledgeGraph(GraphBackend):
                 ).scalars()
             )
 
-    @lru_cache(maxsize=50_000)
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
         """
         Retrieve all synonyms for a concept.
@@ -742,22 +723,3 @@ class KnowledgeGraph(GraphBackend):
                     f"Invalid vocabulary constraint(s): {invalid}. "
                     f"Available vocabularies: {sorted(list(valid_vocabs))}"
                 )
-
-    def clear_caches(self) -> None:
-        """
-        Clear all LRU caches associated with the graph.
-        """
-        self.concept_view.cache_clear()
-        self.concept_views.cache_clear()
-        self.concept_id_by_code.cache_clear()
-        self.concept_ids_by_label.cache_clear()
-        self.concept_lookup.cache_clear()
-        self.predicate.cache_clear()
-        self.predicate_name.cache_clear()
-        self.parents.cache_clear()
-        self.children.cache_clear()
-        self.roots.cache_clear()
-        self.leaves.cache_clear()
-        self.singletons.cache_clear()
-        self.synonyms_for_concept.cache_clear()
-        self.edges.cache_clear()

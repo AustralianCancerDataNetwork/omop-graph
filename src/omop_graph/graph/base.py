@@ -1,7 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date
-from functools import lru_cache
 from typing import Iterable, Optional, Literal
 from sqlalchemy.orm import Session
 
@@ -18,7 +17,6 @@ class GraphBackend(ABC):
     """
 
     @abstractmethod
-    @lru_cache(maxsize=200_000)
     def concept_view(self, concept_id: int) -> ConceptView:
         ...
 
@@ -27,7 +25,6 @@ class GraphBackend(ABC):
         ...
 
     @abstractmethod
-    @lru_cache(maxsize=10_000)
     def predicate_name(self, relationship_id: str) -> str:
         ...
 
@@ -78,6 +75,3 @@ class GraphBackend(ABC):
         """
         ...
 
-    def clear_caches(self) -> None:
-        """Optional hook for cache invalidation."""
-        return None

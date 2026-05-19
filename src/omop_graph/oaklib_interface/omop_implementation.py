@@ -201,13 +201,6 @@ class OMOPBaseInterface:
             raise ValueError(f"Unsupported predicate CURIE: {pred}")
         return local
 
-    def precompute_lookups(self) -> None:
-        """
-        Pre-cache concept views for root nodes in the Knowledge Graph.
-        """
-        # Warm vocab/domain roots (cheap enough)
-        for cid in self.kg.roots():
-            self.kg.concept_view(self._concept_curie(cid))
 
 
 class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
