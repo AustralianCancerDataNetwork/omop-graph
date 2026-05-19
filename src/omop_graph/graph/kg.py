@@ -14,6 +14,7 @@ Responsibilities
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
 import os
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType, EmbeddingMetricType
-from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache, validate_mapping_table
+from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
 from .edges import EdgeView, Predicate
@@ -134,6 +135,12 @@ class KnowledgeGraph(GraphBackend):
                 "Run `omop-graph relationship-classification` to populate it, "
                 "or `omop-graph omop-cdm` for a full bootstrap."
             ) from exc
+
+        if not RelationshipCache._mapping:
+            raise RuntimeError(
+                "RelationshipMapping table is empty. "
+                "Run `omop-graph relationship-classification` to populate it."
+            )
 
         # Embedding-specific private args
         self._emb_config = emb_config
@@ -503,7 +510,6 @@ class KnowledgeGraph(GraphBackend):
                 )
         return edges
 
-    @validate_mapping_table
     def iter_edges(
         self,
         session: Session,
@@ -642,21 +648,17 @@ class KnowledgeGraph(GraphBackend):
             for row in rows
         )
 
-    def get_all_concept_domain_ids(self) -> tuple[str, ...]:
-        """
-        Retrieve all distinct Domain IDs present in the concept table.
-        """
+    @functools.cached_property
+    def _valid_domains(self) -> frozenset[str]:
         with self.session_factory() as session:
             rows = session.execute(q_concept_domain_ids()).all()
-        return tuple(row.domain_id for row in rows)
+        return frozenset(row.domain_id for row in rows)
 
-    def get_all_concept_vocabulary_ids(self) -> tuple[str, ...]:
-        """
-        Retrieve all distinct Vocabulary IDs present in the concept table.
-        """
+    @functools.cached_property
+    def _valid_vocabularies(self) -> frozenset[str]:
         with self.session_factory() as session:
             rows = session.execute(q_concept_vocabulary_ids()).all()
-        return tuple(row.vocabulary_id for row in rows)
+        return frozenset(row.vocabulary_id for row in rows)
 
     def get_potential_ancestor(
         self, child_id: int, parent_id: int
@@ -688,19 +690,17 @@ class KnowledgeGraph(GraphBackend):
 
     def check_search_constraints(self, constraints: SearchConstraintConcept) -> None:
         if constraints.domains is not None:
-            valid_domains = self.get_all_concept_domain_ids()
-            invalid = [d for d in constraints.domains if d not in valid_domains]
+            invalid = [d for d in constraints.domains if d not in self._valid_domains]
             if invalid:
                 raise ValueError(
                     f"Invalid domain constraint(s): {invalid}. "
-                    f"Available domains: {sorted(list(valid_domains))}"
+                    f"Available domains: {sorted(self._valid_domains)}"
                 )
 
         if constraints.vocabularies is not None:
-            valid_vocabs = self.get_all_concept_vocabulary_ids()
-            invalid = [v for v in constraints.vocabularies if v not in valid_vocabs]
+            invalid = [v for v in constraints.vocabularies if v not in self._valid_vocabularies]
             if invalid:
                 raise ValueError(
                     f"Invalid vocabulary constraint(s): {invalid}. "
-                    f"Available vocabularies: {sorted(list(valid_vocabs))}"
+                    f"Available vocabularies: {sorted(self._valid_vocabularies)}"
                 )
