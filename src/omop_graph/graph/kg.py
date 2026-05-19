@@ -293,18 +293,18 @@ class KnowledgeGraph(GraphBackend):
     @lru_cache(maxsize=600_000)
     def concept_lookup(
         self,
-        label: str,
+        query_term: str,
         match_kind: LabelMatchKind,
         synonym: bool = False,
         search_constraint: Optional[SearchConstraintConcept] = None,
         sort: bool = True
     ) -> tuple[LabelMatch, ...]:
         """
-        Resolve a label to concept_id(s).
+        Resolve a query to concept_id(s).
         
         Parameters
         ----------
-        label : str
+        query_label : str
             The term to search for.
         match_kind : LabelMatchKind
             The kind of match to perform (exact, fulltext, partial).
@@ -314,8 +314,8 @@ class KnowledgeGraph(GraphBackend):
             Additional filters for domain/vocabulary.
 
         """
-        input_label = self._normalise_label(label)
-        if not input_label:
+        input_query_term = self._normalise_query_term(query_term)
+        if not input_query_term:
             return ()
 
         if match_kind == LabelMatchKind.EXACT:
@@ -328,7 +328,7 @@ class KnowledgeGraph(GraphBackend):
             raise ValueError(f"Unsupported search mode: {match_kind}")
         try:
             cn = fn(
-                input_label,
+                input_query_term,
                 search_constraint=search_constraint,
                 synonym=synonym,
                 sort=sort,
@@ -343,9 +343,9 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             matches = tuple(
                 LabelMatch(
-                    input_label=input_label,
-                    matched_label=name,
-                    concept_id=int(cid),
+                    input_query=input_query_term,
+                    matched_concept_label=name,
+                    matched_concept_id=int(cid),
                     match_kind=match_kind,
                     is_standard=is_standard,
                     is_active=is_active,
@@ -476,11 +476,11 @@ class KnowledgeGraph(GraphBackend):
         """
         return self.predicate(relationship_id).reverse_id
 
-    def _normalise_label(self, s: str) -> str:
+    def _normalise_query_term(self, query_term: str) -> str:
         """
         Normalize a string for lookup (lowercase, single spaces).
         """
-        return re.sub(r"\s+", " ", s.strip().lower())
+        return re.sub(r"\s+", " ", query_term.strip().lower())
        
     @lru_cache(maxsize=1_000_000)
     def edges(

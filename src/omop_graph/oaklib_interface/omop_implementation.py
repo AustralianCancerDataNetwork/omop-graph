@@ -238,8 +238,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     def annotate_text(
         self,
         text: str,
-        text_embedding: Optional[np.ndarray] = None,
-        text_embedding_model: Optional[str] = None,
+        query_embedding: Optional[np.ndarray] = None,
         configuration: Optional[TextAnnotationConfiguration] = None,
         annotations: Optional[Dict[str, Annotation]] = None,
     ) -> Iterator[TextAnnotation]:
@@ -250,8 +249,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         ----------
         text : str
             The input text to annotate.
-        text_embedding : np.ndarray
-            The embedding of the input text.
+        query_embedding : np.ndarray
+            Pre-computed query embedding for the input text. When None and the KG
+            has a writer interface, the embedding is computed on demand.
         configuration : TextAnnotationConfiguration, optional
             Configuration settings for annotation (e.g., token exclusion).
         annotations : Dict[str, Annotation], optional
@@ -339,10 +339,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         grounded = ground_term(
             resolver_pipeline=resolver_pipeline,
             kg=self.kg,
-            text=text,
+            query=text,
             constraints=constraints,
-            text_embedding=text_embedding,
-            text_embedding_model=text_embedding_model,
+            query_embedding=query_embedding,
         )
 
         if not grounded:
@@ -417,7 +416,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 synonym=False,
             )
             for lm in matches:
-                cid = lm.concept_id
+                cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
                     yield self._predicate_curie(cid)
@@ -429,7 +428,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 synonym=True,
             )
             for lm in matches:
-                cid = lm.concept_id
+                cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
                     yield self._predicate_curie(cid)
@@ -670,7 +669,6 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         return [self._concept_curie(p) for p in parents]
 
     def simple_mappings_by_curie(self, curie: CURIE):
-        cid = self._parse_concept(curie)
         raise NotImplementedError(
             "TODO: need to implement mapping interface and have self.sssom_mappings"
         )
@@ -754,7 +752,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             pred_curie = self._predicate_curie(edge.predicate_id)
 
             # hierarchical entailment
-            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.ONTO_UP:
+            if self.kg.predicate_kind(edge.predicate_id) == ClassIDEnum.HIERARCHY:
                 yield pred_curie, self._concept_curie(edge.object_id)
 
                 for parent in self.kg.parents(edge.object_id):

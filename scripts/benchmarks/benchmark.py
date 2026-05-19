@@ -431,7 +431,7 @@ def _grounded_element_to_dict(
         "relevance": float(concept.relevance),
         "embedding_score": float(concept.embedding_score) if concept.embedding_score is not None else 0.0,
         "separation": int(concept.separation),
-        "matched_label": concept.matched_label,
+        "matched_concept_label": concept.matched_concept_label,
         "match_kind": str(concept.match_kind),
         "synonym": concept.synonym,
     }
@@ -472,16 +472,12 @@ def _evaluate_grounded_case(
     grounding_kwargs = grounding_kwargs or {}
 
     text_embedding = cast(Optional[np.ndarray], grounding_kwargs.get("text_embedding"))
-    text_embedding_model = cast(Optional[str], grounding_kwargs.get("text_embedding_model"))
-    metric_type = cast(Optional[MetricType], grounding_kwargs.get("metric_type"))
-    index_type = cast(Optional[IndexType], grounding_kwargs.get("index_type"))
 
     grounded = ground_term(
         resolver_pipeline=resolver_pipeline,
         kg=kg,
-        text=case.text,
-        text_embedding=text_embedding,
-        text_embedding_model=text_embedding_model,
+        query=case.text,
+        query_embedding=text_embedding,
         constraints=GroundingConstraints(
             parent_ids=parent_ids,
             search_constraint=search_constraint,
@@ -489,8 +485,6 @@ def _evaluate_grounded_case(
             predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
         ),
         max_candidates=10,
-        metric_type=metric_type,
-        index_type=index_type,
     )
 
     return {

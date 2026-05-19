@@ -194,7 +194,7 @@ def _score_standard_concept(
 
     if similarity_score is None:
         relevance = _textual_similarity_score(
-        query_text=text, matched_label=standard_concept.matched_label
+        query_text=text, matched_concept_label=standard_concept.matched_concept_label
     )
     else:
         relevance = similarity_score
@@ -216,7 +216,7 @@ def _score_standard_concept(
 
 def _textual_similarity_score(
     query_text: str,
-    matched_label: str,
+    matched_concept_label: str,
     similarity_threshold: float = 0.85,
     missing_penalty: float = 2.0,
     extra_penalty: float = 0.5,
@@ -232,7 +232,7 @@ def _textual_similarity_score(
     ----------
     query_text : str
         The user's query.
-    matched_label : str
+    matched_concept_label : str
         The label of the candidate concept.
     similarity_threshold : float, optional
         Minimum Levenshtein ratio to consider two tokens a 'match'. Default 0.85.
@@ -254,7 +254,7 @@ def _textual_similarity_score(
         return [t for t in tokens if t not in stop_words]
 
     q_tokens = tokenize(query_text)
-    m_tokens = tokenize(matched_label)
+    m_tokens = tokenize(matched_concept_label)
 
     if not q_tokens or not m_tokens:
         return 0.0

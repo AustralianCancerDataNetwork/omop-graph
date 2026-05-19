@@ -209,7 +209,7 @@ def q_concept_synonym() -> Select:
 
 
 def q_concept_name_match(
-    name: str, 
+    query_concept_name: str, 
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
@@ -220,7 +220,7 @@ def q_concept_name_match(
 
     Parameters
     ----------
-    name : str
+    query_concept_name : str
         The concept name to match.
     search_constraint : SearchConstraintConcept, optional
         Additional filters (domain, vocab).
@@ -236,11 +236,11 @@ def q_concept_name_match(
 
     if synonym:
         base_stmt = q_concept_synonym().where(
-            func.lower(name_expr) == func.lower(name)
+            func.lower(name_expr) == func.lower(query_concept_name)
         )
     else:
         base_stmt = q_concept_name().where(
-            func.lower(name_expr) == func.lower(name)
+            func.lower(name_expr) == func.lower(query_concept_name)
         )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
@@ -254,7 +254,7 @@ def q_concept_name_match(
 
 
 def q_concept_name_ilike(
-    term: str, 
+    query_concept_name: str, 
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
@@ -265,8 +265,8 @@ def q_concept_name_ilike(
 
     Parameters
     ----------
-    term : str
-        The search term (without wildcards; wildcards are added automatically).
+    query_concept_name : str
+        The concept name to search for.
     search_constraint : SearchConstraintConcept, optional
         Additional filters.
     synonym : bool, optional
@@ -279,13 +279,16 @@ def q_concept_name_ilike(
     """
     name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
+    if "%" in query_concept_name:
+        raise ValueError("query_concept_name should not contain wildcards like '%'.")
+
     if synonym:
         base_stmt = q_concept_synonym().where(
-            name_expr.ilike(f"%{term}%")
+            name_expr.ilike(f"%{query_concept_name}%")
         )
     else:
         base_stmt = q_concept_name().where(
-            name_expr.ilike(f"%{term}%")
+            name_expr.ilike(f"%{query_concept_name}%")
         )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
@@ -299,7 +302,7 @@ def q_concept_name_ilike(
 
 
 def q_concept_name_fulltext(
-    term: str, 
+    query_concept_name: str, 
     *,
     engine: Engine,
     search_constraint: Optional['SearchConstraintConcept'] = None,
@@ -318,8 +321,8 @@ def q_concept_name_fulltext(
 
     Parameters
     ----------
-    term : str
-        The search term to match.
+    query_concept_name : str
+        The concept name to search for.
     search_constraint : SearchConstraintConcept, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
@@ -343,7 +346,7 @@ def q_concept_name_fulltext(
         )
     
     vector = column(tsvector_col)
-    query = func.plainto_tsquery("english", term)
+    query = func.plainto_tsquery("english", query_concept_name)
     
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 

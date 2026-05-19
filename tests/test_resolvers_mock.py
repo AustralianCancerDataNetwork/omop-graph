@@ -24,14 +24,14 @@ class _KG:
     def __init__(self, case: _Case) -> None:
         self.case = case
 
-    def concept_lookup(self, label: str, match_kind: LabelMatchKind, synonym: bool = False, search_constraint=None, sort: bool = False):
+    def concept_lookup(self, query_term: str, match_kind: LabelMatchKind, synonym: bool = False, search_constraint=None, sort: bool = False):
         key = _key(match_kind, synonym)
         concept_ids = self.case.hits.get(key, [])
         return tuple(
             LabelMatch(
-                input_label=label,
-                matched_label=f"concept-{cid}",
-                concept_id=cid,
+                input_query=query_term,
+                matched_concept_label=f"concept-{cid}",
+                matched_concept_id=cid,
                 match_kind=match_kind,
                 is_standard=True,
                 is_active=True,

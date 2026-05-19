@@ -66,8 +66,8 @@ class GroundingConstraints:
 def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
-    text: str,
-    text_embedding: Optional[np.ndarray],
+    query: str,
+    query_embedding: Optional[np.ndarray],
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
 ) -> List[StandardConceptWithScore]:
@@ -80,11 +80,11 @@ def ground_term(
         The pipeline of search strategies to find initial candidates.
     kg : KnowledgeGraph
         The OMOP Knowledge Graph instance.
-    text : str
-        The input text to ground.
-    text_embedding : np.ndarray
-        The embedding vector for the input text. When None and a writer interface is
-        available, the embedding is computed on demand from ``text``.
+    query : str
+        The input query to ground.
+    query_embedding : np.ndarray
+        The embedding vector for the input query. When None and a writer interface is
+        available, the embedding is computed on demand from ``query``.
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
@@ -108,35 +108,35 @@ def ground_term(
 
     # If no embedding was passed, try to compute one on demand via the writer interface.
     # Falls back to None, which disables embedding-based features for this call.
-    if text_embedding is None:
+    if query_embedding is None:
         embedding_writer = get_embedding_writer_interface(kg)
         if embedding_writer is not None:
             from omop_emb.embeddings import EmbeddingRole
-            text_embedding = embedding_writer.embed_texts(
-                texts=(text,),
+            query_embedding = embedding_writer.embed_texts(
+                texts=(query,),
                 embedding_role=EmbeddingRole.QUERY,
             )
 
-    if text_embedding is not None:
-        assert text_embedding.shape[0] == 1, (
-            "text_embedding must have shape (1, D) — one vector per call to ground_term."
+    if query_embedding is not None:
+        assert query_embedding.shape[0] == 1, (
+            "query_embedding must have shape (1, D) — one vector per call to ground_term."
         )
     else:
         logger.info(
-            f"No text embedding provided for '{text}' and no embedding_writer available. "
+            f"No text embedding provided for '{query}' and no embedding_writer available. "
             "Embedding-based features will be disabled for this grounding operation."
         )
 
     resolved = list(
         resolver_pipeline.resolve(
             kg,
-            text,
+            query,
             constraints=search_constraints,
-            text_embedding=text_embedding,
+            query_embedding=query_embedding,
         )
     )
     if not resolved:
-        logger.info(f"No candidates found for '{text}' using the resolver pipeline: {resolver_pipeline}")
+        logger.info(f"No candidates found for '{query}' using the resolver pipeline: {resolver_pipeline}")
         return []
 
     # Hierarchy anchoring
@@ -163,17 +163,17 @@ def ground_term(
             raise NotImplementedError("Grounding without parent_ids is not supported.")
 
     if not standard_concepts:
-        logger.info(f"No standard concepts found for '{text}' after hierarchy validation.")
+        logger.info(f"No standard concepts found for '{query}' after hierarchy validation.")
         return []
 
     nearest_concept_matches = (
-        semantic_similarity(kg=kg, standard_concepts=standard_concepts, text_embedding=text_embedding)
-        if text_embedding is not None
+        semantic_similarity(kg=kg, standard_concepts=standard_concepts, query_embedding=query_embedding)
+        if query_embedding is not None
         else None
     )
 
     standard_concepts_with_score = score_standard_concepts(
-        text=text,
+        text=query,
         standard_concepts=tuple(standard_concepts),
         kg=kg,
         nearest_concept_matches=nearest_concept_matches,

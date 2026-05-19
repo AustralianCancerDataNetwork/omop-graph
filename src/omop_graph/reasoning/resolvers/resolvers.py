@@ -40,13 +40,13 @@ class CandidateHit:
         The OMOP Concept ID.
     match_kind : LabelMatchKind
         The kind of match of this hit.
-    matched_label : str
+    matched_concept_label : str
         The specific text in the database (name or synonym) that matched.
     """
 
     concept_id: int
     match_kind: LabelMatchKind
-    matched_label: str
+    matched_concept_label: str
     synonym: bool
 
 
@@ -82,7 +82,7 @@ class CandidateResolver:
     def get_matches(
         self,
         kg: KnowledgeGraph,
-        text: str,
+        query: str,
         constraints: Optional[SearchConstraintConcept] = None,
         sort: bool = False,
         **kwargs
@@ -94,8 +94,8 @@ class CandidateResolver:
         ----------
         kg : KnowledgeGraph
             The graph instance.
-        text : str
-            The input text to search for.
+        query : str
+            The input query to search for.
         constraints : SearchConstraintConcept, optional
             Filters for domain/vocabulary.
         sort : bool, default False
@@ -108,7 +108,7 @@ class CandidateResolver:
         """
         return tuple(
             kg.concept_lookup(
-                label=text, 
+                query_term=query, 
                 match_kind=self.match_kind, 
                 synonym=self.synonym, 
                 search_constraint=constraints,
@@ -119,7 +119,7 @@ class CandidateResolver:
     def resolve(
         self,
         kg: KnowledgeGraph,
-        text: str,
+        query: str,
         constraints: Optional[SearchConstraintConcept] = None,
         **kwargs
     ) -> Iterable[CandidateHit]:
@@ -130,8 +130,8 @@ class CandidateResolver:
         ----------
         kg : KnowledgeGraph
             The graph instance.
-        text : str
-            The input text.
+        query : str
+            The input query.
         constraints : SearchConstraintConcept, optional
             Filters for concepts to consider in the search. Also limits the number of candidates returned
             using the `limit` field. 
@@ -141,12 +141,12 @@ class CandidateResolver:
         Iterable[CandidateHit]
             The formatted candidate hits.
         """
-        matches = self.get_matches(kg, text, constraints=constraints, **kwargs)
+        matches = self.get_matches(kg, query, constraints=constraints, **kwargs)
         hits = [
             CandidateHit(
-                concept_id=m.concept_id,
+                concept_id=m.matched_concept_id,
                 match_kind=self.match_kind,
-                matched_label=m.matched_label,
+                matched_concept_label=m.matched_concept_label,
                 synonym=self.synonym
             )
             for m in matches
@@ -222,10 +222,10 @@ class EmbeddingResolver(CandidateResolver):
     def get_matches(
         self,
         kg: KnowledgeGraph,
-        text: str,
+        query: str,
         constraints: Optional[SearchConstraintConcept] = None,
         sort: bool = False,
-        text_embedding: Optional[np.ndarray] = None,
+        query_embedding: Optional[np.ndarray] = None,
         **kwargs,
     ) -> Tuple[LabelMatch, ...]:
 
@@ -242,20 +242,20 @@ class EmbeddingResolver(CandidateResolver):
             else None
         )
 
-        if text_embedding is None:
+        if query_embedding is None:
             logger.warning(f"No text embedding provided for {self.__class__.__name__}. Returning no matches.")
             return ()
 
         matches = get_neareast_concepts(
             kg=kg,
-            text_embedding=text_embedding,
+            query_embedding=query_embedding,
             concept_filter=concept_filter,
         )
         if matches is None:
             return ()
-        if text_embedding is not None:
-            assert text_embedding.shape[0] == 1, "text_embedding should have shape (1, embedding_dim) for a single query."
-        assert len(matches) == 1, "Expected get_neareast_concepts to return a single dictionary given the text_embedding shape (1, embedding_dim)."
+        if query_embedding is not None:
+            assert query_embedding.shape[0] == 1, "query_embedding should have shape (1, embedding_dim) for a single query."
+        assert len(matches) == 1, "Expected get_neareast_concepts to return a single dictionary given the query_embedding shape (1, embedding_dim)."
         matches = matches[0]  # Unpack the single dictionary from the tuple
         concept_views = kg.concept_views(
             concept_ids=tuple(m.concept_id for m in matches),
@@ -263,9 +263,9 @@ class EmbeddingResolver(CandidateResolver):
         )
         label_matches = tuple(
             LabelMatch(
-                input_label=text,
-                matched_label=cv.concept_name,
-                concept_id=int(cv.concept_id),
+                input_query=query,
+                matched_concept_label=cv.concept_name,
+                matched_concept_id=int(cv.concept_id),
                 match_kind=LabelMatchKind.EMBEDDING,
                 is_standard=bool(cv.standard_concept),
                 is_active=cv.invalid_reason is None,

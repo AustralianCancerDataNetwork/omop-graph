@@ -16,7 +16,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum, auto
+from enum import Enum
 from html import escape
 from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -176,12 +176,12 @@ class LabelMatch:
 
     Parameters
     ----------
-    input_label : str
+    input_query : str
         The original text that was searched.
-    matched_label : str
+    matched_concept_label : str
         The text in the database that matched (concept name or synonym).
-    concept_id : int
-        The ID of the matched concept.
+    matched_concept_id : int
+        The OMOP Concept ID of the matched concept.
     match_kind : LabelMatchKind
         How the match was found (Exact, FTS, Partial, Embedding).
     is_standard : bool
@@ -194,9 +194,9 @@ class LabelMatch:
         not affect priority ordering. See ``LabelMatchKind`` for ranking.
     """
 
-    input_label: str
-    matched_label: str
-    concept_id: int
+    input_query: str
+    matched_concept_label: str
+    matched_concept_id: int
 
     match_kind: LabelMatchKind
     is_standard: bool
@@ -230,8 +230,8 @@ class LabelMatch:
         return f"""
         <div style="border-bottom:1px solid #eee; padding:4px 0;">
           <div>
-            <code>{escape(self.matched_label)}</code>
-            → concept_id <b>{self.concept_id}</b>
+            <code>{escape(self.matched_concept_label)}</code>
+            → concept_id <b>{self.matched_concept_id}</b>
           </div>
           <div style="font-size:0.8em; margin-top:2px;">
             {kind_badge} {std_badge} {active_badge}
@@ -280,7 +280,7 @@ class LabelMatchGroupView:
         """
         grouped: Dict[int, List[LabelMatch]] = defaultdict(list)
         for m in matches:
-            grouped[m.concept_id].append(m)
+            grouped[m.matched_concept_id].append(m)
 
         grouped_tuple = {
             cid: tuple(sorted(ms, key=lambda m: m.match_kind.value))
@@ -331,12 +331,12 @@ class LabelMatchGroupView:
             reasons.append("active" if best.is_active else "inactive")
 
             # Collect other matched synonyms
-            other_labels = ", ".join(escape(m.matched_label) for m in ms[1:])
+            other_labels = ", ".join(escape(m.matched_concept_label) for m in ms[1:])
 
             rows.append(f"""
               <tr>
                 <td><code>{cid}</code></td>
-                <td>{escape(best.matched_label)}</td>
+                <td>{escape(best.matched_concept_label)}</td>
                 <td>{escape(", ".join(reasons))}</td>
                 <td style="font-size:0.85em; color:#666;">
                   {other_labels if other_labels else "—"}

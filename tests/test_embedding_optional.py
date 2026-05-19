@@ -57,7 +57,7 @@ def _make_standard_concept(concept_id: int, name: str) -> StandardConcept:
         separation=0,
         original_id=concept_id,
         original_name=name,
-        matched_label=name,
+        matched_concept_label=name,
         match_kind=LabelMatchKind.EXACT,
         synonym=False,
     )
@@ -96,7 +96,7 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
         emb_ext.semantic_similarity(
             kg=mock_cdm_kg,
             standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
-            text_embedding=np.zeros((1, 3), dtype=np.float32),
+            query_embedding=np.zeros((1, 3), dtype=np.float32),
         )
 
     assert "Computing missing embeddings on-the-fly" in caplog.text
@@ -131,7 +131,7 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
         emb_ext.semantic_similarity(
             kg=mock_cdm_kg,
             standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
-            text_embedding=np.zeros((1, 3), dtype=np.float32),
+            query_embedding=np.zeros((1, 3), dtype=np.float32),
         )
 
     assert "compute_missing_embeddings is disabled" in caplog.text

@@ -589,7 +589,7 @@ class StandardConcept:
     separation: int
     original_id: int
     original_name: str
-    matched_label: str
+    matched_concept_label: str
     match_kind: LabelMatchKind
     synonym: bool
     hierarchy_cost: float = 0.0
@@ -714,7 +714,7 @@ def find_standard_paths(
                         separation=potential_ancestor.min_levels_of_separation,
                         original_id=candidate.concept_id,
                         original_name=source_view.concept_name,
-                        matched_label=candidate.matched_label,
+                        matched_concept_label=candidate.matched_concept_label,
                         match_kind=mk,
                         synonym=candidate.synonym,
                     )

@@ -106,19 +106,19 @@ def get_embedding_writer_interface(kg: KnowledgeGraph) -> Optional["EmbeddingWri
 def semantic_similarity(
     kg: KnowledgeGraph,
     standard_concepts: Sequence[StandardConcept],
-    text_embedding: np.ndarray,
+    query_embedding: np.ndarray,
 ) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
     """
-    Calculates similarity between text embeddings and concept embeddings.
+    Calculates similarity between a query embedding and stored concept embeddings.
 
     Parameters
     ----------
     kg : KnowledgeGraph
         The knowledge graph instance, used to access the embedding interface.
     standard_concepts : Sequence[StandardConcept]
-        A sequence of standard concepts for which to calculate similarity scores against using the text_embedding.
-    text_embedding : np.ndarray
-        The embedding vector to compare against concept embeddings. Expected shape is (q, dimension) where q is the number of query vectors and dimension is the size of the embedding space for the model. Note: q=1 for a single text embedding.
+        A sequence of standard concepts to score against the query embedding.
+    query_embedding : np.ndarray
+        The query vector to compare against concept embeddings. Expected shape is (1, D).
 
     Returns
     -------
@@ -174,7 +174,7 @@ def semantic_similarity(
 
     nearest_concept_matches = get_neareast_concepts(
         kg=kg,
-        text_embedding=text_embedding,
+        query_embedding=query_embedding,
         concept_filter=concept_filter,
     )
         
@@ -182,11 +182,11 @@ def semantic_similarity(
 
 def get_neareast_concepts(
     kg: KnowledgeGraph,
-    text_embedding: np.ndarray,
+    query_embedding: np.ndarray,
     concept_filter: Optional[EmbeddingConceptFilter],
 ) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
     """
-    RAG retrieval for concept similarity scores. The text_embedding is compared against
+    RAG retrieval for concept similarity scores. The query_embedding is compared against
     stored embeddings using the metric and model already configured on the KG's embedding
     reader interface.
 
@@ -194,8 +194,8 @@ def get_neareast_concepts(
     ----------
     kg : KnowledgeGraph
         The knowledge graph instance, used to access the embedding interface.
-    text_embedding : np.ndarray
-        The embedding vector to search with. Expected shape is (q, dimension).
+    query_embedding : np.ndarray
+        The query vector to search with. Expected shape is (q, D).
     concept_filter : Optional[EmbeddingConceptFilter]
         Pre-filter applied during KNN (concept IDs, domain, vocabulary, standard).
         Also caps k to ``concept_filter.limit`` when set.
@@ -219,7 +219,7 @@ def get_neareast_concepts(
         return None
 
     nearest_concepts = embedding_reader.get_nearest_concepts(
-        query_embedding=text_embedding,
+        query_embedding=query_embedding,
         concept_filter=concept_filter,
     )
     if not nearest_concepts:
