@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import logging
 import importlib.util
-from typing import TYPE_CHECKING, Optional, Sequence, Mapping, TypeAlias, Tuple
+from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias, Tuple
 import numpy as np
-from sqlalchemy.orm import Session
-from omop_graph.graph.constraints import SearchConstraintConcept
 
 HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
 
@@ -83,8 +81,11 @@ def _get_embedding_interface(kg: KnowledgeGraph) -> Optional[EmbeddingReaderInte
     """
     try:
         return kg.emb
-    except (MissingExtensionError, ValueError) as exc:
-        logger.error(f"Embedding interface not available: {exc}")
+    except ValueError:
+        logger.debug("Embedding interface not available: no EmbeddingConfiguration provided.")
+        return None
+    except MissingExtensionError as exc:
+        logger.warning(f"Embedding interface not available: {exc}")
         return None
     
 def get_embedding_reader_interface(kg: KnowledgeGraph) -> Optional["EmbeddingReaderInterface"]:
