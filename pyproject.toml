@@ -33,9 +33,8 @@ classifiers = [
 ]
 
 dependencies = [
-  "omop-alchemy>=0.6.0",
-  "orm-loader>=0.3.15",
-  "psycopg[binary]>=3.1.0",
+  "omop-alchemy>=0.6.0,<=0.6.2",
+  "orm-loader>=0.3.27,<0.4.0",
   "sqlalchemy>=2.0.45",
   "typing-extensions>=4.15.0",
   "typer",
@@ -52,6 +51,9 @@ faiss-cpu = [
 pgvector = [
   "omop-emb[pgvector]>=1.0.0",
 ]
+postgres = [
+  "omop-alchemy[postgres]",
+]
 
 
 [dependency-groups]
@@ -62,7 +64,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
-    "omop-emb[faiss-cpu,pgvector]>=1.0.0",
+    "omop-graph[emb,faiss-cpu,pgvector,postgres]",
     "mkdocs<2.0",
     "mkdocs-material",
     "mkdocstrings[python]",

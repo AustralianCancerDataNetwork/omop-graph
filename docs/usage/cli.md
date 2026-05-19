@@ -4,63 +4,13 @@ The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local 
 
 ---
 
-## `omop-cdm` {: #omop-cdm }
+## `omop-maint load-vocab-source` {: #load-vocab-source }
 
-Bootstrap the OMOP CDM and load reference data from Athena into a local database.
+!!! info "Moved to `omop-maint`"
+    Vocabulary loading was previously exposed as `omop-graph omop-cdm`. It is now provided by the [`OMOP_Alchemy`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/) package under the `omop-maint` CLI.
 
-If you want PostgreSQL full-text sidecars for `concept` and `concept_synonym`, pass
-`--fulltext`. The command will install and populate the sidecars after the vocabulary
-load finishes.
+Load Athena vocabulary CSV files from a configured source path into the OMOP CDM database using the ORM staged CSV loader.
 
-!!! danger "Warning"
-    This command will wipe the existing database in the target container before loading new data.
-
-### Prerequisites
-
-Before running the command, ensure your environment is configured with a `.env` file or exported variables:
-
-**Option A — single URL:**
-
-- **`OMOP_CDM_DB_URL`**: Full SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). When set, all individual component variables below are ignored.
-
-**Option B — component variables:**
-
-- **`OMOP_CDM_DB_DRIVER`**: SQLAlchemy driver (e.g., `postgresql+psycopg`).
-- **`OMOP_CDM_DB_USER`**: Database user.
-- **`OMOP_CDM_DB_PASSWORD`**: Database password.
-- **`OMOP_CDM_DB_HOST`**: Database host.
-- **`OMOP_CDM_DB_PORT`**: Database port.
-- **`OMOP_CDM_DB_NAME`**: Database name.
-
-**Additional:**
-
-- **`OMOP_VOCABULARY_DIR`**: Local directory path containing the Athena CSV files (e.g., `CONCEPT.csv`, `VOCABULARY.csv`).
-
-### Usage
-If installed as a package:
-```bash
-omop-graph omop-cdm [--add-test-data] [--fulltext] --chunk-size=<chunk_size>
-```
-
-**Example Usage:**
-```bash
-# Instantiate with test data and a custom chunk size of 10,000
-omop-graph omop-cdm --add-test-data --chunk-size=10000
-```
-```bash
-# Display the help
-omop-graph omop-cdm --help
-```
-
-### Command Arguments
-| Argument | Type | Default | Description |
-| :--- | :--- | :---: | :--- |
-| **`--add-test-data`** | `Boolean` | False | Whether to add synthetic test data after loading Athena data.|
-| **`--chunk-size`**, **`-c`** | `Integer` | `5000` | Number of rows to process in each chunk. Adjust based on your system's memory capacity to avoid OOM errors. |
-| **`--fulltext`** | `Boolean` | False | Install and populate PostgreSQL full-text sidecars for `concept` and `concept_synonym` after the vocabulary load. |
-| **`--fulltext-regconfig`** | `String` | `english` | PostgreSQL text search configuration used when populating the full-text sidecars. |
-
----
 
 ## `relationship-classification` {: #relationship-classification }
 
@@ -71,11 +21,11 @@ The standard OMOP `relationship` table provides basic metadata, but lacks unifie
 
 ### Prerequisites
 Before running the command, ensure your environment is configured with a `.env` file or exported variables:
-1. Prepopulated OMOP CDM (e.g. using command [`omop-cdm`](#omop-cdm))
+1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](#load-vocab-source))
 2. **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
 3. **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
 4. Set following environment variables:
-    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). See [`omop-cdm` prerequisites](#prerequisites) for the full list of component variable alternatives.
+    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). See [`omop-maint load-vocab-source` options](#load-vocab-source) for connection configuration details.
     - **`OMOP_VOCABULARY_DIR`**: Local directory path where the generated classification tables will be written as CSV files.
 
 ### Usage

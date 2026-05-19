@@ -1,64 +1,24 @@
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
-from typing import Annotated, Optional, Protocol
+from typing import Annotated, Optional
 import pandas as pd
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 import typer
+import tempfile
 import logging
+
+from orm_loader.helpers import bulk_load_context
+from orm_loader.loaders.loader_interface import PandasLoader
+from orm_loader.helpers.metadata import Base
+
+from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
+from omop_graph.oaklib_interface.omop_factory import build_engine_string
+
 app = typer.Typer()
 logger = logging.getLogger(__name__)
 
-from orm_loader.helpers import create_db, bulk_load_context
-from orm_loader.loaders.loader_interface import PandasLoader
-from orm_loader.helpers.metadata import Base
-from omop_alchemy.cdm.handlers import (
-    install_fulltext_columns,
-    populate_fulltext_columns,
-)
-from omop_alchemy.cdm.base import (
-    CDMTableBase,
-)
-
-from omop_alchemy.cdm.model.vocabulary import (
-    Domain,
-    Vocabulary,
-    Concept_Class,
-    Relationship,
-    Concept,
-    Concept_Ancestor,
-    Concept_Relationship,
-    Concept_Synonym
-)
-from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
-from omop_graph.oaklib_interface.omop_factory import build_engine_string
-from omop_graph.config import ENV_OMOP_VOCABULARY_DIR
-from omop_graph.cli_utils import (
-    populate_test_data
-)
-
-
-ATHENA_INITIAL_LOAD = [
-    Domain,
-    Vocabulary,
-    Concept_Class,
-    Relationship,
-    Concept
-]
-
-
-ATHENA_SUBSEQUENT_LOAD = [
-    Concept_Ancestor,
-    Concept_Relationship,
-    Concept_Synonym,
-]
-
-ATHENA_RELATIONSHIP_CLASSIFICATION_LOAD = [
-    RelationshipClass,
-    RelationshipMapping
-]
 
 def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> None:
     """Configure global logging."""
@@ -93,95 +53,6 @@ def configure_logging_level(verbosity: int, reduce_logging: bool = False) -> Non
             logger_instance.propagate = False
 
 
-def _enable_fulltext_sidecars(engine: sa.Engine, regconfig: str) -> None:
-    install_fulltext_columns(engine)
-    populate_fulltext_columns(engine, regconfig=regconfig)
-
-
-
-@app.command()
-def omop_cdm(
-    add_test_data: Annotated[bool, typer.Option(help="Whether to add synthetic test data after loading Athena data. Omit if not used.")] = False,
-    chunk_size: Annotated[int, typer.Option(
-        "--chunk-size", "-c", 
-        help="Number of rows to process in each chunk when loading large tables with fallback pandas loader.")] = 5000,
-    pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
-    fulltext: Annotated[bool, typer.Option("--fulltext/--no-fulltext", help="Install and populate PostgreSQL full-text sidecars after loading the vocabulary tables.")] = False,
-    fulltext_regconfig: Annotated[str, typer.Option("--fulltext-regconfig", help="PostgreSQL text search configuration to use when populating the full-text sidecars.")] = "english",
-    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
-):
-    """
-    Instantiate the database from scratch by loading the Athena vocabularies.
-    IMPORTANT: This will wipe the entire existing database in the db container.
-    """
-    configure_logging_level(verbosity)
-    load_dotenv()
-
-    engine_string = build_engine_string()
-    engine = sa.create_engine(engine_string, future=True, echo=False)
-
-    # Drop all existing tables for a fresh bootstrap
-    metadata = Base.metadata
-    metadata.reflect(bind=engine)
-    metadata.drop_all(engine)
-    
-    # Re-init tables
-    create_db(engine)
-
-    Session = sessionmaker(bind=engine, future=True)
-    session = Session()
-
-    loader = PandasLoader()
-
-    vocab_dir_env_var = os.getenv(ENV_OMOP_VOCABULARY_DIR)
-    if vocab_dir_env_var is None:
-        raise RuntimeError(f"{ENV_OMOP_VOCABULARY_DIR} environment variable not set. Please set it in your .env file to point to the Athena vocabulary CSV files directory.")
-    vocab_dir = Path(vocab_dir_env_var).resolve()
-    assert vocab_dir.exists(), f"Source path {vocab_dir} does not exist"
-
-    with bulk_load_context(session):
-       for model in ATHENA_INITIAL_LOAD:
-           model.load_csv(
-               session,
-               vocab_dir / f"{model.__tablename__.upper()}.csv",
-               dedupe=True,
-               merge_strategy="upsert",
-               loader=loader
-           )
-           logger.info(f"Loaded {model.__tablename__} table with Athena data.")
-       session.commit()
-
-    with bulk_load_context(session):
-        for model in ATHENA_SUBSEQUENT_LOAD:
-            model.load_csv(
-                session,
-                vocab_dir / f"{model.__tablename__.upper()}.csv",
-                dedupe=True,
-                chunksize=chunk_size,
-                merge_strategy="replace",
-                loader=loader
-            )
-            logger.info(f"Loaded {model.__tablename__} table with Athena data.")
-            session.commit()
-
-    if fulltext:
-        try:
-            _enable_fulltext_sidecars(engine, fulltext_regconfig)
-            logger.info("Successfully enabled PostgreSQL full-text sidecars.")
-        except Exception as exc:
-            logger.error(f"Failed to enable PostgreSQL full-text sidecars: {exc}")
-            logger.info("Continuing with bootstrap without full-text sidecars. You can rerun `omop-maint fulltext install` and `omop-maint fulltext populate` later.")
-
-    try:
-       relationship_classification(pred_class_dir)
-       logger.info("Successfully ingested relationship classifications.")
-    except Exception as e:
-       logger.error(f"Failed to ingest predicate classifications: {e}")
-       logger.info("Continuing with bootstrap without predicate classifications. Re-run cli `relationship-classification` command once the issue is resolved.")
-
-    if add_test_data:
-        populate_test_data(session)
-
 @app.command()
 def relationship_classification(
     pred_class_dir: Annotated[Optional[str], typer.Option(help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`.")] = None,
@@ -203,7 +74,7 @@ def relationship_classification(
     if not pred_mapping_file.is_file():
         raise FileNotFoundError(f"`predicate_mapping.csv` not found in {pred_class_dir_pl}")
     pred_class_file = pred_class_dir_pl / "predicate_classification.csv"
-    if not pred_class_file:
+    if not pred_class_file.is_file():
         raise FileNotFoundError(f"`predicate_classification.csv` not found in {pred_class_dir_pl}")
 
     df_class = pd.read_csv(pred_class_file)
@@ -234,13 +105,6 @@ def relationship_classification(
     df_rel_mapping = df_rel_mapping.dropna(subset=['class_id', 'subclass_id'], how='any')
     df_rel_mapping_to_export = df_rel_mapping.drop_duplicates(subset=["relationship_id", "class_id", "subclass_id"])
 
-    # Save and then load again
-    vocab_dir_env_var = os.getenv(ENV_OMOP_VOCABULARY_DIR)
-    if vocab_dir_env_var is None:
-        raise RuntimeError(f"{ENV_OMOP_VOCABULARY_DIR} environment variable not set. Please set it in your .env file to point to the Athena vocabulary CSV files directory.")
-    vocab_dir = Path(vocab_dir_env_var).resolve()
-    assert vocab_dir.exists(), f"Source path {vocab_dir} does not exist"
-
     engine_string = build_engine_string()
     engine = sa.create_engine(engine_string, future=True, echo=False)
     Session = sessionmaker(bind=engine, future=True)
@@ -259,20 +123,22 @@ def relationship_classification(
     Base.metadata.drop_all(bind=engine, tables=tables_to_drop, checkfirst=True)  # type: ignore
     Base.metadata.create_all(bind=engine, tables=tables_to_drop)  # type: ignore
 
+    # Save to temporary file and then reload from there
     for model, df in zip([RelationshipClass, RelationshipMapping], [df_rel_cls_to_export, df_rel_mapping_to_export]):
-        csv_path = vocab_dir / f"{model.__tablename__.upper()}.csv"
-        df.to_csv(csv_path, index=False)
-        logger.info(f"Saved {len(df)} records to `{csv_path}` for model `{model.__name__}`")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp:
+            csv_path = tmp.name
+            df.to_csv(csv_path, index=False)
+            logger.info(f"Saved {len(df)} records to `{csv_path}` for model `{model.__name__}`")
 
-        with bulk_load_context(session):
-            model.load_csv(  # type: ignore
-                session,
-                csv_path,
-                dedupe=True,
-                merge_strategy="replace",
-                loader=PandasLoader()
-            )
-            session.commit()
+            with bulk_load_context(session):
+                model.load_csv(  # type: ignore
+                    session,
+                    csv_path,
+                    dedupe=True, 
+                    merge_strategy="replace",
+                    loader=PandasLoader()
+                )
+                session.commit()
 
 if __name__ == "__main__":
     app()

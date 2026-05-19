@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from dotenv import load_dotenv
@@ -29,13 +29,11 @@ from oaklib.interfaces.basic_ontology_interface import (
 from oaklib.interfaces.text_annotator_interface import nen_annotation
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_alchemy.cdm.model import Concept, Concept_Relationship
 from omop_graph.graph import (
     KnowledgeGraph, 
     KnowledgeGraphEmbeddingConfiguration
 )
 from omop_graph.extensions.omop_alchemy import ClassIDEnum
-from omop_graph.extensions.emb import EmbeddingBackendType, MissingExtensionError, get_embedding_writer_interface
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -45,13 +43,9 @@ from omop_graph.utils.text_utils import cava_tokenizer
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.omop_factory import omop_resource
 
-if TYPE_CHECKING:
-    from omop_emb import EmbeddingClient
 
-from orm_loader.helpers.bootstrap import create_db
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +234,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     def _simple_tokenizer(self, text: str):
         for m in re.finditer(r"\b[\w\- ]{3,}\b", text):
             yield m.start(), m.end(), m.group()
-
+    
     def annotate_text(
         self,
         text: str,
@@ -896,7 +890,6 @@ class OMOPAlchemyImplementation(
         assert self.engine_string is not None, "No database URL provided for OMOPAlchemyImplementation"
         
         engine = create_engine(self.engine_string, future=True, echo=False)
-        create_db(engine)
 
         self._connection = None
 
