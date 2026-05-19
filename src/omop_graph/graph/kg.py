@@ -300,7 +300,7 @@ class KnowledgeGraph(GraphBackend):
         
         Parameters
         ----------
-        query_label : str
+        query_term : str
             The term to search for.
         match_kind : LabelMatchKind
             The kind of match to perform (exact, fulltext, partial).
