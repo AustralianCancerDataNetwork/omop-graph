@@ -20,7 +20,7 @@ This command adds synthetic patient data into the OMOP CDM after populating the 
 This command ingests pre-defined relationship classifications and mappings into the database. It categorizes standard OMOP relationships into semantic groups (e.g., Hierarchical, Lateral, Mapping) to enable more intelligent graph reasoning.
 
 ### Rationale
-The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific `ClassIDEnum` (like `HIERARCHY`, `IDENTITY`, or `ASSOCIATION`) and provides detailed inference descriptions used by the `KnowledgeGraph` facade.
+The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific `PredicateKind` (like `HIERARCHY`, `IDENTITY`, or `ASSOCIATION`) and provides detailed inference descriptions used by the `KnowledgeGraph` facade.
 
 ### Prerequisites
 Before running the command, ensure your environment is configured with a `.env` file or exported variables:

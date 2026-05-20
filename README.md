@@ -59,7 +59,7 @@ parents = kg.parents(concept.concept_id)
 
 Nodes are OMOP Concepts; Edges are OMOP Concept_Relationships.
 
-Relationships are pre-classified into semantic kinds (`ClassIDEnum`):
+Relationships are pre-classified into semantic kinds (`PredicateKind`):
 
 - `HIERARCHY` — parent/child ontological relationships
 - `IDENTITY` — mapping to standard concepts
@@ -73,7 +73,7 @@ This classification drives traversal filtering and scoring.
 
 ```python
 from omop_graph.graph.paths import find_shortest_paths
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 
 ingredient = kg.concept_id_by_code("RxNorm", "6809")    # Metformin
 drug = kg.concept_id_by_code("RxNorm", "860975")         # Metformin 500 MG Oral Tablet
@@ -82,7 +82,7 @@ paths, trace = find_shortest_paths(
     kg,
     source=drug,
     target=ingredient,
-    predicate_kinds=frozenset({ClassIDEnum.HIERARCHY, ClassIDEnum.IDENTITY}),
+    predicate_kinds=frozenset({PredicateKind.HIERARCHY, PredicateKind.IDENTITY}),
     max_depth=6,
     traced=True,
 )

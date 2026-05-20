@@ -18,7 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
-    ClassIDEnum,
+    PredicateKind,
     RelationshipClass,
     RelationshipMapping,
 )
@@ -251,21 +251,21 @@ def seed_mock_cdm(session: Session) -> None:
     session.add_all(
         [
             RelationshipClass(
-                class_id=ClassIDEnum.IDENTITY,
-                subclass_id="mapping",
+                predicate_kind=PredicateKind.IDENTITY,
+                predicate_subkind="mapping",
                 description="Identity mapping",
                 semantics="identity",
                 inference="none",
             ),
             RelationshipMapping(
                 relationship_id="maps to",
-                class_id=ClassIDEnum.IDENTITY,
-                subclass_id="mapping",
+                predicate_kind=PredicateKind.IDENTITY,
+                predicate_subkind="mapping",
             ),
             RelationshipMapping(
                 relationship_id="mapped from",
-                class_id=ClassIDEnum.IDENTITY,
-                subclass_id="mapping",
+                predicate_kind=PredicateKind.IDENTITY,
+                predicate_subkind="mapping",
             ),
         ]
     )

@@ -17,7 +17,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple
 
 # Local Application Imports
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ class GraphTrace:
 def traverse(
     kg: "KnowledgeGraph",
     seeds: Iterable[int],
-    predicate_kinds: Optional[Set[ClassIDEnum]],
+    predicate_kinds: Optional[Set[PredicateKind]],
     max_depth: int,
     on: Optional[date],
     max_nodes: Optional[int],
@@ -129,7 +129,7 @@ def traverse(
         The graph instance to query.
     seeds : Iterable[int]
         The starting Concept IDs.
-    predicate_kinds : set[ClassIDEnum], optional
+    predicate_kinds : set[PredicateKind], optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum distance from seeds to explore.

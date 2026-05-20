@@ -34,7 +34,7 @@ from omop_emb.embeddings import (
 from omop_emb.backends.index_config import index_config_from_index_type
 from omop_graph.cli import configure_logging_level
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.scoring import StandardConceptWithScore
@@ -478,7 +478,7 @@ def _evaluate_grounded_case(
             parent_ids=parent_ids,
             search_constraint=search_constraint,
             max_depth=6,
-            predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
+            predicate_kinds=frozenset({PredicateKind.IDENTITY}),
         ),
         max_candidates=10,
     )

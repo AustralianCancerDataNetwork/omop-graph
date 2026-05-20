@@ -34,7 +34,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
 )
 
-from ..extensions.omop_alchemy import RelationshipMapping, ClassIDEnum
+from ..extensions.omop_alchemy import RelationshipMapping, PredicateKind
 from .constraints import SearchConstraintConcept
 
 
@@ -414,8 +414,8 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
             Rel.is_hierarchical,
             Rel.defines_ancestry.label("anc_down"),
             Rev.defines_ancestry.label("anc_up"),
-            Rm.class_id,
-            Rm.subclass_id
+            Rm.predicate_kind,
+            Rm.predicate_subkind
         )
         .join(
             Rev, Rel.reverse_relationship_id == Rev.relationship_id,
@@ -439,8 +439,8 @@ def q_all_predicates_with_ancestry() -> Select:
             Rel.is_hierarchical,
             Rel.defines_ancestry.label("anc_down"),
             Rev.defines_ancestry.label("anc_up"),
-            Rm.class_id,
-            Rm.subclass_id,
+            Rm.predicate_kind,
+            Rm.predicate_subkind,
         )
         .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
         .join(Rm, Rel.relationship_id == Rm.relationship_id)
@@ -451,7 +451,7 @@ def q_edges(
     concept_ids: Union[Tuple[int, ...], int], 
     direction: Literal["in", "out"],
     predicate_ids: Optional[frozenset[str]] = None,
-    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+    predicate_kinds: Optional[frozenset[PredicateKind]] = None,
     active_only: bool = False,
     on: Optional[date] = None,
     within_domain: bool = False
@@ -470,8 +470,8 @@ def q_edges(
         Concept_Relationship.valid_start_date,
         Concept_Relationship.valid_end_date,
         Concept_Relationship.invalid_reason,
-        RelationshipMapping.class_id,
-        RelationshipMapping.subclass_id,
+        RelationshipMapping.predicate_kind,
+        RelationshipMapping.predicate_subkind,
     ).join(
         RelationshipMapping, 
         Concept_Relationship.relationship_id == RelationshipMapping.relationship_id
@@ -500,7 +500,7 @@ def q_edges(
     if predicate_ids:  # Exact ID's
         stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
     if predicate_kinds: # Global categories
-        stmt = stmt.where(RelationshipMapping.class_id.in_(predicate_kinds))
+        stmt = stmt.where(RelationshipMapping.predicate_kind.in_(predicate_kinds))
 
     return stmt
 
@@ -722,7 +722,7 @@ def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
 def q_relationship_class(relationship_id: str) -> Select:
     return (
         select(
-            RelationshipMapping.class_id
+            RelationshipMapping.predicate_kind
         )
         .where(RelationshipMapping.relationship_id == relationship_id)
     )

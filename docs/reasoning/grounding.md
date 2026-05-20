@@ -43,7 +43,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | `parent_ids` | `tuple[int, ...]` | `None` | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). |
 | `search_constraint` | `SearchConstraintConcept` | `None` | Filters applied to the initial resolver query (domain, vocabulary, standard flag). |
 | `max_depth` | `int` | `6` | Maximum hop distance allowed between a candidate and its standard anchor. |
-| `predicate_kinds` | `frozenset[ClassIDEnum]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. |
+| `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. |
 
 ### SearchConstraintConcept
 
@@ -62,7 +62,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 ```python
 from omop_graph.reasoning.grounding import ground_term, GroundingConstraints
 from omop_graph.graph.constraints import SearchConstraintConcept
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 
 constraints = GroundingConstraints(
     parent_ids=(441484,),   # 'Clinical Finding' — only accept descendants of this ancestor
@@ -72,7 +72,7 @@ constraints = GroundingConstraints(
         require_standard=True,
     ),
     max_depth=6,
-    predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
+    predicate_kinds=frozenset({PredicateKind.IDENTITY}),
 )
 
 results = ground_term(pipeline, kg, "chest pain", text_embedding=None, text_embedding_model=None, constraints=constraints)

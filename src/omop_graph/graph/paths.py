@@ -29,7 +29,7 @@ from typing import (
 )
 
 # Local Application Imports
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.graph.nodes import LabelMatchKind
@@ -219,7 +219,7 @@ def find_shortest_paths(
     kg: "KnowledgeGraph",
     source: int,
     target: int,
-    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+    predicate_kinds: Optional[frozenset[PredicateKind]] = None,
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
@@ -236,7 +236,7 @@ def find_shortest_paths(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[ClassIDEnum], optional
+    predicate_kinds : set[PredicateKind], optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum path length.
@@ -414,7 +414,7 @@ def find_shortest_paths_batch(
     kg: "KnowledgeGraph",
     source: int,
     target: int,
-    predicate_kinds: Union[Set[ClassIDEnum], frozenset[ClassIDEnum], None] = None,
+    predicate_kinds: Union[Set[PredicateKind], frozenset[PredicateKind], None] = None,
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
@@ -433,7 +433,7 @@ def find_shortest_paths_batch(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[ClassIDEnum], frozenset[ClassIDEnum] optional
+    predicate_kinds : set[PredicateKind], frozenset[PredicateKind] optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum path length.
@@ -854,7 +854,7 @@ class PathProfile:
         for step_idx in range(len(path.steps)):
             next_view = get_view(step_idx + 1)
             if (
-                predicate_kinds[step_idx] is ClassIDEnum.IDENTITY
+                predicate_kinds[step_idx] is PredicateKind.IDENTITY
                 and not standard_anchor
                 and next_view.standard_concept
             ):
@@ -887,7 +887,7 @@ class PathExplanationStep:
     """
     step: PathStep
     traversal_depth: Optional[int]
-    predicate_kind: ClassIDEnum
+    predicate_kind: PredicateKind
     reason: str
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -25,7 +25,7 @@ def _constraints() -> GroundingConstraints:
             require_standard=False,
         ),
         max_depth=6,
-        predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
+        predicate_kinds=frozenset({PredicateKind.IDENTITY}),
     )
 
 

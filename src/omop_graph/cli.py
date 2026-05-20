@@ -92,28 +92,28 @@ def relationship_classification(
     
 
     # 1. RelationshipClass
-    df_rel_cls = df_class.rename(columns={"class": "class_id", "subclass": "subclass_id"})
+    df_rel_cls = df_class.rename(columns={"class": "predicate_kind", "subclass": "predicate_subkind"})
 
-    # Only allow that a subclass_id maps exactly to one semantic and inference description
-    check = df_rel_cls.groupby(["class_id", "subclass_id"])[["description", "semantics", "inference"]].nunique(dropna=True)
+    # Only allow that a predicate_subkind maps exactly to one semantic and inference description
+    check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[["description", "semantics", "inference"]].nunique(dropna=True)
     violations = check[(check > 1).any(axis=1)]
     if not violations.empty:
-        conflicting_data = df_rel_cls[df_rel_cls["subclass_id"].isin(violations.index)].sort_values("subclass_id")
-        logger.error(f"Validation Failed! {len(violations)} subclass_ids have conflicting definitions: {conflicting_data}")        
+        conflicting_data = df_rel_cls[df_rel_cls["predicate_subkind"].isin(violations.index)].sort_values("predicate_subkind")
+        logger.error(f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}")        
         raise AttributeError("Validation not passed")
-    df_rel_cls_to_export = df_rel_cls.groupby(["class_id", "subclass_id"], as_index=False).first()
+    df_rel_cls_to_export = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"], as_index=False).first()
 
     # 2. RelationshipMapping
-    df_rel_mapping = df_mapping.rename(columns={"class": "class_id", "subclass": "subclass_id", "r_id": "relationship_id"})
+    df_rel_mapping = df_mapping.rename(columns={"class": "predicate_kind", "subclass": "predicate_subkind", "r_id": "relationship_id"})
     # Same order as relationship_class.py
-    df_rel_mapping = df_rel_mapping[["relationship_id", "class_id", "subclass_id"]].dropna(subset=['class_id', 'subclass_id'], how='all')
-    invalid_mask = df_rel_mapping[['class_id', 'subclass_id']].isna().any(axis=1)
+    df_rel_mapping = df_rel_mapping[["relationship_id", "predicate_kind", "predicate_subkind"]].dropna(subset=['predicate_kind', 'predicate_subkind'], how='all')
+    invalid_mask = df_rel_mapping[['predicate_kind', 'predicate_subkind']].isna().any(axis=1)
     dropped_ids = df_rel_mapping.loc[invalid_mask, 'relationship_id'].unique().tolist()
 
     if dropped_ids:
         logger.warning(f"Dropping {len(dropped_ids)} relationships due to missing parent or child class: {dropped_ids}")
-    df_rel_mapping = df_rel_mapping.dropna(subset=['class_id', 'subclass_id'], how='any')
-    df_rel_mapping_to_export = df_rel_mapping.drop_duplicates(subset=["relationship_id", "class_id", "subclass_id"])
+    df_rel_mapping = df_rel_mapping.dropna(subset=['predicate_kind', 'predicate_subkind'], how='any')
+    df_rel_mapping_to_export = df_rel_mapping.drop_duplicates(subset=["relationship_id", "predicate_kind", "predicate_subkind"])
 
     engine_string = build_engine_string()
     engine = sa.create_engine(engine_string, future=True, echo=False)
@@ -124,7 +124,7 @@ def relationship_classification(
     with engine.begin() as conn:
         conn.execute(sa.text(f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"))  # type: ignore
         conn.execute(sa.text(f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"))  # type: ignore
-        conn.execute(sa.text("DROP TYPE IF EXISTS classidenum CASCADE;"))
+        conn.execute(sa.text("DROP TYPE IF EXISTS predicatekindenum CASCADE;"))
 
     tables_to_drop = [
         RelationshipMapping.__table__, 

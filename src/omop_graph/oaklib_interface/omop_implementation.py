@@ -33,7 +33,7 @@ from omop_graph.graph import (
     KnowledgeGraph, 
     KnowledgeGraphEmbeddingConfiguration
 )
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -325,7 +325,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 require_standard=parent_ids is None,
             ),
             max_depth=6,
-            predicate_kinds=frozenset([ClassIDEnum.IDENTITY]),
+            predicate_kinds=frozenset([PredicateKind.IDENTITY]),
         )
 
         resolver_pipeline = ResolverPipeline.with_all_resolvers()
@@ -751,7 +751,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             pred_curie = self._predicate_curie(edge.predicate_id)
 
             # hierarchical entailment
-            if self.kg.predicate_kind(edge.predicate_id) == ClassIDEnum.HIERARCHY:
+            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
                 yield pred_curie, self._concept_curie(edge.object_id)
 
                 for parent in self.kg.parents(edge.object_id):

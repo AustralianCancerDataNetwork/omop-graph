@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType, EmbeddingMetricType
-from ..extensions.omop_alchemy import ClassIDEnum, RelationshipMappingElement, load_relationship_mapping
+from ..extensions.omop_alchemy import PredicateKind, RelationshipMappingElement, load_relationship_mapping
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
 from .edges import EdgeView, Predicate
@@ -378,8 +378,8 @@ class KnowledgeGraph(GraphBackend):
             is_hierarchical=bool(row.is_hierarchical),
             anc_up=bool(int(row.anc_up)),
             anc_down=bool(int(row.anc_down)),
-            class_id=ClassIDEnum(row.class_id),
-            subclass_id=row.subclass_id
+            predicate_kind=PredicateKind(row.predicate_kind),
+            predicate_subkind=row.predicate_subkind,
         )
 
     def predicate_name(self, relationship_id: str) -> str:
@@ -391,19 +391,19 @@ class KnowledgeGraph(GraphBackend):
             predicate_name = session.execute(q_predicate_name(relationship_id)).scalar_one()
         return predicate_name
 
-    def predicate_kind(self, relationship_id: str) -> ClassIDEnum:
+    def predicate_kind(self, relationship_id: str) -> PredicateKind:
         """
         Classify the predicate into a semantic kind.
         """
         item = self._relationship_mapping.get(relationship_id)
         if item is None:
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
-        return item.class_id
+        return item.predicate_kind
 
     
     def predicate_kinds(
         self, relationship_ids: tuple[str, ...]
-    ) -> Tuple[ClassIDEnum, ...]:
+    ) -> Tuple[PredicateKind, ...]:
         """
         Classify a batch of predicates.
         """
@@ -474,7 +474,7 @@ class KnowledgeGraph(GraphBackend):
         concept_ids: Tuple[int, ...] | int,
         direction: Literal["in", "out"],
         predicate_ids: Optional[frozenset[str]] = None,
-        predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = True,
@@ -490,7 +490,7 @@ class KnowledgeGraph(GraphBackend):
             'out' for outgoing, 'in' for incoming.
         predicate_ids : frozenset[str], optional
             Filter by specific relationship IDs.
-        predicate_kinds : Set[ClassIDEnum], optional
+        predicate_kinds : Set[PredicateKind], optional
             Filter by semantic kind of relationship.
         active_only : bool
             If True, return only valid/active edges.
@@ -519,7 +519,7 @@ class KnowledgeGraph(GraphBackend):
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
         predicate_ids: Optional[frozenset[str]] = None,
-        predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = True,
@@ -645,8 +645,8 @@ class KnowledgeGraph(GraphBackend):
                 is_hierarchical=bool(int(row.is_hierarchical)),
                 anc_up=bool(int(row.anc_up)),
                 anc_down=bool(int(row.anc_down)),
-                class_id=ClassIDEnum(row.class_id),
-                subclass_id=row.subclass_id
+                predicate_kind=PredicateKind(row.predicate_kind),
+                predicate_subkind=row.predicate_subkind,
             )
             for row in rows
         )

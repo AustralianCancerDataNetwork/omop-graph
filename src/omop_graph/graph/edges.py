@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.engine import Row
 
-from ..extensions.omop_alchemy import ClassIDEnum
+from ..extensions.omop_alchemy import PredicateKind
 
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
@@ -51,6 +51,10 @@ class EdgeView:
         The date the relationship became invalid.
     invalid_reason : str, optional
         The reason for invalidation (e.g., 'D' for deleted), if applicable.
+    predicate_kind : PredicateKind
+        The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).
+    predicate_subkind : str
+        The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)
     """
 
     subject_id: int
@@ -59,8 +63,8 @@ class EdgeView:
     valid_start_date: Optional[date]
     valid_end_date: Optional[date]
     invalid_reason: Optional[str]
-    class_id: ClassIDEnum
-    subclass_id: str
+    predicate_kind: PredicateKind
+    predicate_subkind: str
 
     def __repr__(self) -> str:
         return f"Edge({self.subject_id} -[{self.predicate_id}]-> {self.object_id})"
@@ -88,8 +92,8 @@ class EdgeView:
     @classmethod
     def from_query(cls, entry: Row) -> "EdgeView":
         data = dict(entry._mapping)
-        if "class_id" in data:
-            data["class_id"] = ClassIDEnum(data["class_id"])
+        if "predicate_kind" in data:
+            data["predicate_kind"] = PredicateKind(data["predicate_kind"])
         return cls(**data)
 
 @dataclass(frozen=True)
@@ -111,7 +115,10 @@ class Predicate:
         Whether this relationship defines 'defines_ancestry' upwards (deprecated logic).
     anc_down : bool
         Whether this relationship defines 'defines_ancestry' downwards (deprecated logic).
-    
+    predicate_kind : PredicateKind
+        The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).
+    predicate_subkind : str
+        The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)
     """
 
     relationship_id: str
@@ -120,8 +127,8 @@ class Predicate:
     is_hierarchical: bool
     anc_up: bool
     anc_down: bool
-    class_id: ClassIDEnum
-    subclass_id: str
+    predicate_kind: PredicateKind
+    predicate_subkind: str
 
     @property
     def defines_ancestry(self) -> bool:

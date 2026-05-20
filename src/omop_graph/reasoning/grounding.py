@@ -19,7 +19,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.paths import (
@@ -53,14 +53,14 @@ class GroundingConstraints:
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
         Maximum allowed distance in the hierarchy between a candidate and a parent.
-    predicate_kinds : frozenset[ClassIDEnum], optional
+    predicate_kinds : frozenset[PredicateKind], optional
         The types of relationships allowed during pathfinding.
     """
 
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
     max_depth: int = 6
-    predicate_kinds: frozenset[ClassIDEnum] = frozenset({ClassIDEnum.IDENTITY,})
+    predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY,})
 
 
 def ground_term(
@@ -196,7 +196,7 @@ def find_standard_concepts(
     parent_ids: Tuple[int, ...],
     max_depth: int,
     max_paths: Optional[int] = 3,
-    predicate_kinds: frozenset[ClassIDEnum] = frozenset({ClassIDEnum.IDENTITY}),
+    predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
     lowest_cost: Optional[float] = None,
 ) -> List[StandardConcept]:
     """
