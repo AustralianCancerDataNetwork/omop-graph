@@ -32,19 +32,19 @@ The `KnowledgeGraph` can be used standalone after connecting to the OMOP CDM dat
 ```python
 from sqlalchemy import create_engine
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatchKind
 
 engine = create_engine("postgresql://user:pass@localhost/omop")
 kg = KnowledgeGraph(engine)
 
 # Lookup a concept by its label
-match_group = kg.label_lookup("Atrial Fibrillation", fuzzy=False)
-concept = match_group.best_match
+matches = kg.concept_lookup("Atrial Fibrillation", match_kind=LabelMatchKind.EXACT)
+if matches:
+    print(f"ID: {matches[0].matched_concept_id}, Name: {matches[0].matched_concept_label}")
 
-print(f"ID: {concept.concept_id}, Name: {concept.matched_label}")
-
-# Traverse the hierarchy
-parents = kg.parents(concept.concept_id)
-print(f"Parent IDs: {parents}")
+    # Traverse the hierarchy
+    parents = kg.parents(matches[0].matched_concept_id)
+    print(f"Parent IDs: {parents}")
 ```
 
 ---

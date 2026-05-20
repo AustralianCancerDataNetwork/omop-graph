@@ -835,37 +835,31 @@ class OMOPAlchemyImplementation( # type: ignore[override]
     conforming to the OMOP CDM.
 
     To connect, either use OMOPAlchemyImplementation directly:
-    >>> from omop_spires.implementation.omop_implementation import OMOPAlchemyImplementation
-    >>> from omop_spires.resource import omop_resource
+
+    >>> from omop_graph.oaklib_interface import OMOPAlchemyImplementation
+    >>> from omop_graph.oaklib_interface.omop_factory import omop_resource
     >>> resource = omop_resource(url='postgresql+psycopg2://uid:pid@host:5432/dbname')
     >>> adapter = OMOPAlchemyImplementation(resource=resource)
 
-    or
-    >>> from omop_spires import get_adapter
-    >>> adapter = get_adapter("sqlite://///path/to/your/sqlite/test.db")
+    or pass a connection string directly:
+
+    >>> adapter = OMOPAlchemyImplementation(engine_string="sqlite:////path/to/omop.db")
 
     Parameters
     ----------
     engine_string : str | URL | None, optional
-        The database connection string.
+        The database connection string. If omitted, ``OMOP_CDM_DB_URL`` (or the
+        individual ``OMOP_CDM_DB_*`` variables) are read from the environment.
     resource : OMOPOntologyResource | None, optional
-        An existing resource object.
+        An existing resource object. Takes precedence over ``engine_string`` when
+        both are supplied.
     kg : KnowledgeGraph | None, optional
-        An existing Knowledge Graph instance. If None, one is created.
-    kg_emb_backend : EmbeddingBackendName, optional
-        Optional embedding backend for ``KnowledgeGraph`` construction when
-        ``kg`` is not provided.
-        Resolution order:
-        1. explicit ``kg_emb_backend`` argument
-        2. ``OMOP_EMB_BACKEND`` environment variable (inside ``omop_emb``)
-        If both are missing, embedding initialization fails only when embedding
-        operations are accessed.
-    kg_emb_base_storage_dir : str | None, optional
-        Optional base directory forwarded to the embedding backend constructor.
-        Typical resolution order:
-        1. explicit ``kg_emb_base_storage_dir`` argument
-        2. ``OMOP_EMB_BASE_STORAGE_DIR`` environment variable
-        3. backend default directory
+        An existing Knowledge Graph instance. If None, one is created from
+        ``engine_string`` / ``resource``.
+    kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
+        Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
+        Required to enable embedding-based similarity. See
+        :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
     """
 
     def __init__(
