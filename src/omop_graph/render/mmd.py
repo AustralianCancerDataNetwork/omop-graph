@@ -24,11 +24,11 @@ def path_mermaid(kg, path: GraphPath) -> str:
     lines = ["graph LR"]
 
     for step in path.steps:
-        s = kg.concept_view(step.subject)
-        o = kg.concept_view(step.object)
+        s = kg.concept_view(step.subject.concept_id)
+        o = kg.concept_view(step.object.concept_id)
         lines.append(
-            f'{step.subject}["{s.concept_name}"] -->|{step.predicate}| '
-            f'{step.object}["{o.concept_name}"]'
+            f'{step.subject.concept_id}["{s.concept_name}"] -->|{step.predicate}| '
+            f'{step.object.concept_id}["{o.concept_name}"]'
         )
 
     return "\n".join(lines)
