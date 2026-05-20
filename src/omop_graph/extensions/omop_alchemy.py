@@ -79,32 +79,11 @@ class RelationshipMappingElement:
 
 
 
-class RelationshipCache:
-    """Cache for the RelationshipMapping table in-memory.
-    Allows quicker access."""
-    _mapping: dict[str, RelationshipMappingElement] = {}
-    _is_initialized: bool = False
+def load_relationship_mapping(session: so.Session) -> dict[str, RelationshipMappingElement]:
+    """Load the entire RelationshipMapping table and return it as a dict keyed by relationship_id."""
+    results = session.query(RelationshipMapping).all()
+    return {
+        row.relationship_id: RelationshipMappingElement.from_relationship_mapping_entry(row)
+        for row in results
+    }
 
-    @classmethod
-    def load(cls, session: so.Session):
-        """Loads the entire PredicateMapping table into memory."""
-        if cls._is_initialized:
-            return
-        
-        results = session.query(RelationshipMapping).all()
-        cls._mapping = {row.relationship_id: RelationshipMappingElement.from_relationship_mapping_entry(row) for row in results}
-        cls._is_initialized = True
-
-    @classmethod
-    def get(cls, source_concept_id: str) -> RelationshipMappingElement:
-        """Retrieves a mapped concept, strictly from memory."""
-        if cls._mapping is None:
-            raise RuntimeError(
-                "PredicateCache was accessed before being initialized. "
-                "Ensure PredicateCache.load(session) is called at application startup."
-            )
-        item = cls._mapping.get(source_concept_id, None)
-        if item is None:
-            raise AttributeError(f"`{source_concept_id}` not in mapping.")
-        return item
-    

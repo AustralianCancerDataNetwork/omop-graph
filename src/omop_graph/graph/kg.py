@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType, EmbeddingMetricType
-from ..extensions.omop_alchemy import ClassIDEnum, RelationshipCache
+from ..extensions.omop_alchemy import ClassIDEnum, RelationshipMappingElement, load_relationship_mapping
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
 from .edges import EdgeView, Predicate
@@ -127,16 +127,15 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             with self.session_factory() as session:
-                RelationshipCache.load(session)
+                self._relationship_mapping: dict[str, RelationshipMappingElement] = load_relationship_mapping(session)
         except Exception as exc:
             raise RuntimeError(
-                "Failed to load RelationshipCache. "
+                "Failed to load relationship mapping. "
                 "The KnowledgeGraph requires relationship classification data. "
-                "Run `omop-graph relationship-classification` to populate it, "
-                "or `omop-graph omop-cdm` for a full bootstrap."
+                "Run `omop-graph relationship-classification` to populate it."
             ) from exc
 
-        if not RelationshipCache._mapping:
+        if not self._relationship_mapping:
             raise RuntimeError(
                 "RelationshipMapping table is empty. "
                 "Run `omop-graph relationship-classification` to populate it."
@@ -396,7 +395,11 @@ class KnowledgeGraph(GraphBackend):
         """
         Classify the predicate into a semantic kind.
         """
-        return RelationshipCache.get(relationship_id).class_id
+        item = self._relationship_mapping.get(relationship_id)
+        if item is None:
+            raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
+        return item.class_id
+
     
     def predicate_kinds(
         self, relationship_ids: tuple[str, ...]

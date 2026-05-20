@@ -19,7 +19,6 @@ from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
     ClassIDEnum,
-    RelationshipCache,
     RelationshipClass,
     RelationshipMapping,
 )
@@ -63,10 +62,6 @@ def mock_cdm_kg(
     mock_cdm_engine: sa.Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> KnowledgeGraph:
-    # Ensure cache does not leak between tests.
-    RelationshipCache._mapping = {}
-    RelationshipCache._is_initialized = False
-
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr("omop_graph.reasoning.grounding.get_embedding_writer_interface", lambda _kg: None)
 
