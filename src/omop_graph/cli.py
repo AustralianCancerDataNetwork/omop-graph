@@ -133,10 +133,10 @@ def relationship_classification(
     Base.metadata.drop_all(bind=engine, tables=tables_to_drop, checkfirst=True)  # type: ignore
     Base.metadata.create_all(bind=engine, tables=tables_to_drop)  # type: ignore
 
-    # Save to temporary file and then reload from there
-    for model, df in zip([RelationshipClass, RelationshipMapping], [df_rel_cls_to_export, df_rel_mapping_to_export]):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp:
-            csv_path = tmp.name
+    # Save to temporary files named after the table (required by load_csv) and reload from there
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for model, df in zip([RelationshipClass, RelationshipMapping], [df_rel_cls_to_export, df_rel_mapping_to_export]):
+            csv_path = Path(tmp_dir) / f"{model.__tablename__}.csv"
             df.to_csv(csv_path, index=False)
             logger.info(f"Temporarily saved {len(df)} records to `{csv_path}` for model `{model.__name__}` for loading.")
 
@@ -144,7 +144,7 @@ def relationship_classification(
                 model.load_csv(  # type: ignore
                     session,
                     csv_path,
-                    dedupe=True, 
+                    dedupe=True,
                     merge_strategy="replace",
                     loader=PandasLoader()
                 )
