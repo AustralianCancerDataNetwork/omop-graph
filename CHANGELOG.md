@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.4...v1.1.0) (2026-05-25)
+
+
+### Features
+
+* support omop emb 1.0.0 ([#9](https://github.com/AustralianCancerDataNetwork/omop-graph/issues/9)) ([8fa726b](https://github.com/AustralianCancerDataNetwork/omop-graph/commit/8fa726b432f19844522f2f31f148b475e18503b2))
+
 ## [1.0.4](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.3...v1.0.4) (2026-04-29)
 
 
