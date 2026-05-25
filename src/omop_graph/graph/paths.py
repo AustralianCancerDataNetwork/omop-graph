@@ -224,6 +224,7 @@ def find_shortest_paths(
     on: Optional[Any] = None,
     max_paths: int = 20,
     traced: bool = False,
+    within_domain: bool = True,
 ) -> Tuple[List[GraphPath], Optional[GraphTrace]]:
     """
     Find shortest paths between source and target using bidirectional BFS.
@@ -246,6 +247,10 @@ def find_shortest_paths(
         Maximum number of paths to return.
     traced : bool
         If True, returns a GraphTrace object recording the search process.
+    within_domain : bool
+        If True (default), only traverse edges where both concepts share the
+        same domain_id.  Set to False to allow cross-domain edges such as
+        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -294,6 +299,7 @@ def find_shortest_paths(
                     direction="out",
                     predicate_kinds=predicate_kinds,
                     on=on,
+                    within_domain=within_domain,
                 ):
                     nxt = e.object_id
                     nd = d + 1
@@ -331,6 +337,7 @@ def find_shortest_paths(
                     direction="in",
                     predicate_kinds=predicate_kinds,
                     on=on,
+                    within_domain=within_domain,
                 ):
                     expanded.append(e)
                     prev = e.subject_id
@@ -636,6 +643,7 @@ def find_standard_paths(
     predicate_kinds: Optional[frozenset[Any]] = None,
     max_depth: int = 6,
     max_concepts: Optional[int] = None,
+    within_domain: bool = True,
     *args,
     **kwargs,
 ) -> List[StandardConcept]:
@@ -646,7 +654,7 @@ def find_standard_paths(
     neighbors are enqueued (non-standard neighbors are skipped to prevent graph explosion).
     When a Standard Concept is reached its ancestry is verified against ``target`` via
     ``concept_ancestor``.
-    It is never expanded further to standard_concepts related to this standard_concept, 
+    It is never expanded further to standard_concepts related to this standard_concept,
     as we want to find the closest standard_concept to the candidate that satisfies the
     ancestor constraint, and expanding further would only find more distant standard_concepts,
     thus diluting the results.
@@ -665,6 +673,10 @@ def find_standard_paths(
         Maximum ``min_levels_of_separation`` allowed in the ``concept_ancestor`` check.
     max_concepts : int, optional
         Stop after finding this many unique standard concepts.
+    within_domain : bool
+        If True (default), only traverse edges where both concepts share the
+        same domain_id.  Set to False to allow cross-domain edges such as
+        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -735,6 +747,7 @@ def find_standard_paths(
                     concept_ids=subject_node.concept_id,
                     direction="out",
                     predicate_kinds=predicate_kinds,
+                    within_domain=within_domain,
                 )
             )
         if not edges:
