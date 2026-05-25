@@ -103,19 +103,19 @@ class ResolverPipeline:
     def resolve(
         self,
         kg: KnowledgeGraph,
-        text: str,
+        query: str,
         constraints: Optional[SearchConstraintConcept] = None,
         **kwargs
     ) -> Generator[CandidateHit, None, None]:
         """
-        Execute the pipeline to find candidate concepts for the input text.
+        Execute the pipeline to find candidate concepts for the input query.
 
         Parameters
         ----------
         kg : KnowledgeGraph
             The graph instance used for lookups.
-        text : str
-            The input text to resolve.
+        query : str
+            The input query to resolve.
         constraints : SearchConstraintConcept, optional
             Domain or vocabulary restrictions to apply to the search.
             Determines also the number of candidates returned for each resolver using the `limit` field. If None, no additional filtering is applied.
@@ -129,8 +129,8 @@ class ResolverPipeline:
 
         for resolver in self.resolvers:
             hits = resolver.resolve(
-                kg,
-                text,
+                kg=kg,
+                query=query,
                 constraints=constraints,
                 **kwargs
             )
@@ -141,6 +141,6 @@ class ResolverPipeline:
                     yield hit
 
             # Early stopping
-            if type(resolver) == self._stop_at:
+            if type(resolver) is self._stop_at:
                 logger.info(f"Stopping pipeline after resolver {type(resolver).__name__} as configured.")
                 break

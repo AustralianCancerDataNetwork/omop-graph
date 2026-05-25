@@ -27,29 +27,24 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 
 ### Basic Usage
 
-The `KnowledgeGraph` can be used standalone after connecting to the OMOP CDM database on disk.
+The `KnowledgeGraph` can be used standalone after connecting to the OMOP CDM database.
 
 ```python
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatchKind
 
-# Setup your SQLAlchemy session
 engine = create_engine("postgresql://user:pass@localhost/omop")
-SessionLocal = sessionmaker(bind=engine)
-
-# Initialize the Virtual Knowledge Graph
-kg = KnowledgeGraph(SessionLocal)
+kg = KnowledgeGraph(engine)
 
 # Lookup a concept by its label
-match_group = kg.label_lookup("Atrial Fibrillation", fuzzy=False)
-concept = match_group.best_match
+matches = kg.concept_lookup("Atrial Fibrillation", match_kind=LabelMatchKind.EXACT)
+if matches:
+    print(f"ID: {matches[0].matched_concept_id}, Name: {matches[0].matched_concept_label}")
 
-print(f"ID: {concept.concept_id}, Name: {concept.matched_label}")
-
-# Traverse the hierarchy
-parents = kg.parents(concept.concept_id)
-print(f"Parent IDs: {parents}")
+    # Traverse the hierarchy
+    parents = kg.parents(matches[0].matched_concept_id)
+    print(f"Parent IDs: {parents}")
 ```
 
 ---
@@ -59,41 +54,53 @@ print(f"Parent IDs: {parents}")
 To enable semantic similarity and RAG-based retrieval, pass a `KnowledgeGraphEmbeddingConfiguration` when initialising the graph.
 This requires the optional `omop-emb` package — see the [installation guide](../usage/installation.md#embedding-rag).
 
+!!! info "omop-emb documentation"
+    `omop-emb` manages all embedding storage, backends, and retrieval. Full documentation — including backend setup, CLI reference, FAISS sidecar, and configuration — is available at [australiancancerdatanetwork.github.io/omop-emb](https://australiancancerdatanetwork.github.io/omop-emb/).
+
 #### Read-only (pre-computed embeddings already in the DB)
 
 Use this when embeddings have already been indexed and you only need retrieval:
 
 ```python
+from sqlalchemy import create_engine
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
-from omop_emb import BackendType, ProviderType
+from omop_emb.config import BackendType, MetricType, ProviderType
+
+engine = create_engine("postgresql://user:pass@localhost/omop")
 
 emb_config = KnowledgeGraphEmbeddingConfiguration(
-    backend_type=BackendType.FAISS,
+    backend_type=BackendType.PGVECTOR,      # or BackendType.SQLITEVEC
     provider_type=ProviderType.OLLAMA,
-    canonical_model_name="text-embedding-3-small:0.6b",
-    base_storage_dir="/data/embeddings",
+    model_name="nomic-embed-text:v1.5",     # must match the name used at ingestion time
+    metric_type=MetricType.COSINE,
 )
-kg = KnowledgeGraph(SessionLocal, emb_config=emb_config)
+kg = KnowledgeGraph(engine, emb_config=emb_config)
 ```
+
+The backend is resolved from `backend_type` or, as a fallback, from the `OMOP_EMB_BACKEND` environment variable.
+See the [omop-emb configuration reference](https://australiancancerdatanetwork.github.io/omop-emb/usage/configuration/) for all connection variables.
 
 #### Write-capable (generate and store embeddings at runtime)
 
-Provide an `EmbeddingClient` to enable both reading and writing embeddings:
+Provide an `EmbeddingClient` to enable both reading and writing embeddings. The `provider_type` and `model_name`
+are derived automatically from the client:
 
 ```python
 from omop_emb import EmbeddingClient
-from omop_emb import BackendType, ProviderType
+from omop_emb.config import BackendType, MetricType
 
-client = EmbeddingClient(...)  # configured for your provider
+client = EmbeddingClient(
+    model="nomic-embed-text:v1.5",
+    api_base="http://ollama:11434/v1",
+)
 
 emb_config = KnowledgeGraphEmbeddingConfiguration(
-    backend_type=BackendType.FAISS,
-    base_storage_dir="/data/embeddings",
+    backend_type=BackendType.PGVECTOR,
+    metric_type=MetricType.COSINE,
     client=client,
 )
-kg = KnowledgeGraph(SessionLocal, emb_config=emb_config)
+kg = KnowledgeGraph(engine, emb_config=emb_config)
 ```
-The `provider_type` will be automatically determined from the `client`.
 
 #### Fallback embedding calculation
 
@@ -107,12 +114,12 @@ for any missing concepts on-the-fly during a similarity call.
 
 ```python
 emb_config = KnowledgeGraphEmbeddingConfiguration(
-    backend_type="faiss",
-    base_storage_dir="/data/embeddings",
+    backend_type=BackendType.PGVECTOR,
+    metric_type=MetricType.COSINE,
     client=client,
-    compute_missing_embeddings=True,  # compute embeddings for concepts not yet in the store
+    compute_missing_embeddings=True,
 )
-kg = KnowledgeGraph(SessionLocal, emb_config=emb_config)
+kg = KnowledgeGraph(engine, emb_config=emb_config)
 ```
 
 | `compute_missing_embeddings` | `client` present | Behaviour when concepts are missing |

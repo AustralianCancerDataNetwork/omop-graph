@@ -18,8 +18,6 @@ keywords = [
   "knowledge-graph",
   "LLM-grounding",
   "real-world-evidence",
-  "rapidfuzz",
-  "omop-llm",
 ]
 
 classifiers = [
@@ -29,30 +27,32 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Medical Science Apps.",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 dependencies = [
-  "omop-alchemy>=0.6.0",
-  "orm-loader>=0.3.15",
-  "psycopg2-binary>=2.9.11",
+  "omop-alchemy>=0.6.3",
   "sqlalchemy>=2.0.45",
   "typing-extensions>=4.15.0",
   "typer",
+  "oaklib",
 ]
 
 [project.optional-dependencies]
-faiss = [
-  "omop-emb[faiss]==0.4.0",
+emb = [
+  "omop-emb>=1.0.0",
+]
+faiss-cpu = [
+  "omop-emb[faiss-cpu]>=1.0.0",
 ]
 pgvector = [
-  "omop-emb[pgvector]==0.4.0",
+  "omop-emb[pgvector]>=1.0.0",
 ]
-emb = [
-  "omop-emb[all]==0.4.0"
+postgres = [
+  "omop-alchemy[postgres]",
 ]
+
 
 [dependency-groups]
 dev = [
@@ -62,7 +62,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
     "ruff>=0.14.10",
-    "omop-emb[all]==0.4.0",
+    "omop-graph[emb,faiss-cpu,pgvector,postgres]",
     "mkdocs<2.0",
     "mkdocs-material",
     "mkdocstrings[python]",

@@ -29,12 +29,12 @@ class OMOPOntologyResource(OntologyResource):
         Whether the resource is read-only. Defaults to True.
     """
 
-    url: Optional[Union[str, URL]] = None
-    slug: Optional[str] = None
-    scheme: str = "omop_alchemy"
-    local: bool = False
-    in_memory: bool = False
-    readonly: bool = True
+    url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
+    slug: Optional[str] = None  # type: ignore[assignment]
+    scheme: str = "omop_alchemy"  # type: ignore[assignment]
+    local: bool = False  # type: ignore[assignment]
+    in_memory: bool = False  # type: ignore[assignment]
+    readonly: bool = True  # type: ignore[assignment]
 
     def _parsed_url(self) -> Optional[URL]:
         """

@@ -49,22 +49,26 @@ def trace_text(kg, trace: GraphTrace) -> str:
 def path_text(kg, path: GraphPath) -> str:
     parts = []
     for step in path.steps:
-        s = kg.concept_view(step.subject)
-        o = kg.concept_view(step.object)
+        s = kg.concept_view(step.subject.concept_id)
+        o = kg.concept_view(step.object.concept_id)
         parts.append(f"{s.concept_name} --[{step.predicate}]--> {o.concept_name}")
     return "\n".join(parts)
 
 
 def explained_path_text(kg, explanation: PathExplanation) -> str:
-    lines = [f"Path score: {explanation.profile.path_rank():.2f}", "Steps:"]
-
+    profile = explanation.profile
+    std_flag = "standard" if profile.is_standard else "non-standard"
+    lines = [
+        f"Original: {profile.original_concept_name}",
+        f"Resolved: {profile.concept_name} (ID: {profile.concept_id}, {std_flag})",
+        "Steps:",
+    ]
     for s in explanation.steps:
-        subj = kg.concept_view(s.step.subject)
-        obj = kg.concept_view(s.step.object)
+        subj = kg.concept_view(s.step.subject.concept_id)
+        obj = kg.concept_view(s.step.object.concept_id)
+        depth = f"depth={s.traversal_depth}" if s.traversal_depth is not None else "depth=?"
         lines.append(
-            f"- {subj.concept_name} --[{s.step.predicate}]--> {obj.concept_name} "
-            f"({s.predicate_kind.name}, "#Δ={s.score_delta:+.2f}) "
-            f"{s.reason}"
+            f"  {subj.concept_name} --[{s.step.predicate}]--> {obj.concept_name} "
+            f"({s.predicate_kind.name}, {depth}) {s.reason}"
         )
-
     return "\n".join(lines)

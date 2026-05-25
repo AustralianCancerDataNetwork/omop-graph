@@ -22,17 +22,14 @@ from typing import (
     Any,
     Dict,
     List,
-    Literal,
     Optional,
     Set,
     Tuple,
     Union,
 )
 
-import numpy as np
-
 # Local Application Imports
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.graph.nodes import LabelMatchKind
@@ -175,10 +172,27 @@ class GraphPath:
         return "\n  ↳ ".join(parts)
 
 
-def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
+def reconstruct_paths(
+    source,
+    target,
+    meet,
+    parents_fwd,
+    parents_bwd,
+    concept_standard_map: Dict[int, bool],
+):
     """
-    Helper function to reconstruct full paths from bidirectional BFS parent pointers.
+    Reconstruct full paths from bidirectional BFS parent pointers.
+
+    Parameters
+    ----------
+    concept_standard_map : dict[int, bool]
+        Mapping of concept_id → is_standard for all nodes discovered during BFS.
+        Built with a single batched ``kg.concept_views`` call after the BFS completes
+        so that every ``Node`` carries the correct flag with zero extra DB round-trips.
     """
+
+    def std(cid: int) -> bool:
+        return concept_standard_map.get(cid, False)
 
     def left(n):
         if n == source:
@@ -186,16 +200,7 @@ def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
         out = []
         for p, pred in parents_fwd[n]:
             for L in left(p):
-                # We need to construct Nodes here. In raw BFS we only tracked IDs.
-                # NOTE: This reconstruction assumes we fetch 'is_standard' later or ignore it here.
-                # For strictly typing PathStep, we create dummy Nodes here or need access to KG.
-                # Assuming simple reconstruction for now.
-                # To fix strictly: BFS needs to store Node info or we look it up.
-                # For now, we instantiate Nodes with is_standard=False as placeholders if strictly required,
-                # but usually the calling function enriches this.
-                subj = Node(p, False)
-                obj = Node(n, False)
-                out.append(L + (PathStep(subj, pred, obj),))
+                out.append(L + (PathStep(Node(p, std(p)), pred, Node(n, std(n))),))
         return out
 
     def right(n):
@@ -204,9 +209,7 @@ def reconstruct_paths(source, target, meet, parents_fwd, parents_bwd):
         out = []
         for nxt, pred in parents_bwd[n]:
             for R in right(nxt):
-                subj = Node(n, False)
-                obj = Node(nxt, False)
-                out.append((PathStep(subj, pred, obj),) + R)
+                out.append((PathStep(Node(n, std(n)), pred, Node(nxt, std(nxt))),) + R)
         return out
 
     return [GraphPath(L + R) for L in left(meet) for R in right(meet)]
@@ -216,11 +219,12 @@ def find_shortest_paths(
     kg: "KnowledgeGraph",
     source: int,
     target: int,
-    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+    predicate_kinds: Optional[frozenset[PredicateKind]] = None,
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
     traced: bool = False,
+    within_domain: bool = True,
 ) -> Tuple[List[GraphPath], Optional[GraphTrace]]:
     """
     Find shortest paths between source and target using bidirectional BFS.
@@ -233,7 +237,7 @@ def find_shortest_paths(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[ClassIDEnum], optional
+    predicate_kinds : set[PredicateKind], optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum path length.
@@ -243,6 +247,10 @@ def find_shortest_paths(
         Maximum number of paths to return.
     traced : bool
         If True, returns a GraphTrace object recording the search process.
+    within_domain : bool
+        If True (default), only traverse edges where both concepts share the
+        same domain_id.  Set to False to allow cross-domain edges such as
+        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -291,6 +299,7 @@ def find_shortest_paths(
                     direction="out",
                     predicate_kinds=predicate_kinds,
                     on=on,
+                    within_domain=within_domain,
                 ):
                     nxt = e.object_id
                     nd = d + 1
@@ -328,6 +337,7 @@ def find_shortest_paths(
                     direction="in",
                     predicate_kinds=predicate_kinds,
                     on=on,
+                    within_domain=within_domain,
                 ):
                     expanded.append(e)
                     prev = e.subject_id
@@ -379,11 +389,18 @@ def find_shortest_paths(
             else None
         )
 
+    # One batched lookup to get is_standard for every discovered concept so that
+    # reconstructed Node objects carry the correct flag (zero extra per-node DB calls).
+    all_discovered = tuple(set(depth_fwd.keys()) | set(depth_bwd.keys()))
+    concept_standard_map: Dict[int, bool] = {
+        v.concept_id: v.standard_concept for v in kg.concept_views(all_discovered)
+    }
+
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
-        # Note: reconstruction logic needs careful implementation to create proper Node objects
-        # if using the simplified 'reconstruct_paths' helper above.
-        paths.extend(reconstruct_paths(source, target, meet, parents_fwd, parents_bwd))
+        paths.extend(
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
+        )
         if len(paths) >= max_paths:
             break
 
@@ -404,10 +421,11 @@ def find_shortest_paths_batch(
     kg: "KnowledgeGraph",
     source: int,
     target: int,
-    predicate_kinds: Union[Set[ClassIDEnum], frozenset[ClassIDEnum], None] = None,
+    predicate_kinds: Union[Set[PredicateKind], frozenset[PredicateKind], None] = None,
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
+    within_domain: bool = True,
 ) -> List[GraphPath]:
     """
     Find shortest paths using an optimized batch-BFS approach.
@@ -423,7 +441,7 @@ def find_shortest_paths_batch(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[ClassIDEnum], frozenset[ClassIDEnum] optional
+    predicate_kinds : set[PredicateKind], frozenset[PredicateKind] optional
         Restrict traversal to specific edge types.
     max_depth : int
         Maximum path length.
@@ -431,6 +449,10 @@ def find_shortest_paths_batch(
         Date for validity checks.
     max_paths : int
         Maximum number of paths to return.
+    within_domain : bool
+        If True (default), only traverse edges where both concepts share the
+        same domain_id.  Set to False to allow cross-domain edges such as
+        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -485,39 +507,40 @@ def find_shortest_paths_batch(
                 direction=direction,
                 predicate_kinds=frozenset(predicate_kinds) if predicate_kinds else None,
                 on=on,
+                within_domain=within_domain,
             )
 
-        next_frontier = set()
+            next_frontier = set()
 
-        # 3. Process edges in memory
-        for e in batch_edges:
-            # Identify Start (u) and End (v) relative to traversal direction
-            u = e.subject_id if expand_forward else e.object_id
-            v = e.object_id if expand_forward else e.subject_id
+            # 3. Process edges in memory
+            for e in batch_edges:
+                # Identify Start (u) and End (v) relative to traversal direction
+                u = e.subject_id if expand_forward else e.object_id
+                v = e.object_id if expand_forward else e.subject_id
 
-            d = current_depth_map[u]
-            nd = d + 1
+                d = current_depth_map[u]
+                nd = d + 1
 
-            if nd > max_depth:
-                continue
+                if nd > max_depth:
+                    continue
 
-            # Update visited/parents
-            if v not in current_depth_map:
-                current_depth_map[v] = nd
-                next_frontier.add(v)
-                current_parents[v].append((u, e.predicate_id))
-            elif current_depth_map[v] == nd:
-                # Found another path to the same node at the same optimal depth
-                current_parents[v].append((u, e.predicate_id))
+                # Update visited/parents
+                if v not in current_depth_map:
+                    current_depth_map[v] = nd
+                    next_frontier.add(v)
+                    current_parents[v].append((u, e.predicate_id))
+                elif current_depth_map[v] == nd:
+                    # Found another path to the same node at the same optimal depth
+                    current_parents[v].append((u, e.predicate_id))
 
-            # Check for collision (Did we meet the other side?)
-            if v in other_depth_map:
-                total = nd + other_depth_map[v]
-                if best_total_depth is None or total < best_total_depth:
-                    best_total_depth = total
-                    meeting_nodes = {v}
-                elif total == best_total_depth:
-                    meeting_nodes.add(v)
+                # Check for collision (Did we meet the other side?)
+                if v in other_depth_map:
+                    total = nd + other_depth_map[v]
+                    if best_total_depth is None or total < best_total_depth:
+                        best_total_depth = total
+                        meeting_nodes = {v}
+                    elif total == best_total_depth:
+                        meeting_nodes.add(v)
 
         # 4. Stop Condition check
         if best_total_depth is not None:
@@ -539,13 +562,19 @@ def find_shortest_paths_batch(
         else:
             bwd_frontier = next_frontier
 
-    # Reconstruct paths
     if not meeting_nodes:
         return []
 
+    all_discovered = tuple(set(depth_fwd.keys()) | set(depth_bwd.keys()))
+    concept_standard_map: Dict[int, bool] = {
+        v.concept_id: v.standard_concept for v in kg.concept_views(all_discovered)
+    }
+
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
-        paths.extend(reconstruct_paths(source, target, meet, parents_fwd, parents_bwd))
+        paths.extend(
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
+        )
         if len(paths) >= max_paths:
             break
 
@@ -573,7 +602,7 @@ class StandardConcept:
     separation: int
     original_id: int
     original_name: str
-    matched_label: str
+    matched_concept_label: str
     match_kind: LabelMatchKind
     synonym: bool
     hierarchy_cost: float = 0.0
@@ -614,38 +643,45 @@ def find_standard_paths(
     predicate_kinds: Optional[frozenset[Any]] = None,
     max_depth: int = 6,
     max_concepts: Optional[int] = None,
-    num_hops: int = 1,
+    within_domain: bool = True,
     *args,
     **kwargs,
 ) -> List[StandardConcept]:
     """
-    Search for Standard Concepts related to a target ID, starting from a candidate.
+    Search for Standard Concepts reachable from a candidate, verified against a target ancestor.
 
-    This method traverses from the candidate (Non-Standard) concept to find
-    Standard Concepts, then verifies if those Standard Concepts are ancestors
-    of the target concept in the hierarchy.
+    Starting from the candidate, outgoing edges are walked and only Standard Concept
+    neighbors are enqueued (non-standard neighbors are skipped to prevent graph explosion).
+    When a Standard Concept is reached its ancestry is verified against ``target`` via
+    ``concept_ancestor``.
+    It is never expanded further to standard_concepts related to this standard_concept,
+    as we want to find the closest standard_concept to the candidate that satisfies the
+    ancestor constraint, and expanding further would only find more distant standard_concepts,
+    thus diluting the results.
 
     Parameters
     ----------
     kg : KnowledgeGraph
         The graph instance.
     target : int
-        The ancestor concept ID to check against.
+        The ancestor concept ID to verify candidates against.
     candidate : CandidateHit
         The search hit to start traversal from.
     predicate_kinds : frozenset, optional
         Allowed edge types for traversal.
     max_depth : int
-        Max separation levels allowed in the ancestor check.
+        Maximum ``min_levels_of_separation`` allowed in the ``concept_ancestor`` check.
     max_concepts : int, optional
         Stop after finding this many unique standard concepts.
-    num_hops : int
-        Max hops allowed from the candidate to reach a standard concept.
+    within_domain : bool
+        If True (default), only traverse edges where both concepts share the
+        same domain_id.  Set to False to allow cross-domain edges such as
+        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
     list[StandardConcept]
-        The resolved concepts.
+        The resolved standard concepts that satisfy the ancestor constraint.
     """
     source_view = kg.concept_view(candidate.concept_id)
     source_is_std = source_view.standard_concept if source_view else False
@@ -676,10 +712,6 @@ def find_standard_paths(
         if max_concepts and len(found_standard_concepts) >= max_concepts:
             break
 
-        # Prevent infinite loops / deep traversals
-        if iterations > num_hops:
-            continue
-
         if subject_node.is_standard:
             # We found a standard concept -> Check ancestry with target
             potential_ancestor = kg.get_potential_ancestor(
@@ -700,7 +732,7 @@ def find_standard_paths(
                         separation=potential_ancestor.min_levels_of_separation,
                         original_id=candidate.concept_id,
                         original_name=source_view.concept_name,
-                        matched_label=candidate.matched_label,
+                        matched_concept_label=candidate.matched_concept_label,
                         match_kind=mk,
                         synonym=candidate.synonym,
                     )
@@ -715,21 +747,21 @@ def find_standard_paths(
                     concept_ids=subject_node.concept_id,
                     direction="out",
                     predicate_kinds=predicate_kinds,
+                    within_domain=within_domain,
                 )
             )
         if not edges:
             continue
 
-        # Singular trip to the DB for object views
-        object_ids = tuple(e.object_id for e in edges)
-        object_views = kg.concept_views(object_ids)
+        # Batch-fetch views keyed by concept_id. Using a dict avoids the silent
+        # misalignment that zip produces when two edges share an object id and
+        # concept_views deduplicates the result set.
+        unique_object_ids = tuple(dict.fromkeys(e.object_id for e in edges))
+        view_map = {v.concept_id: v for v in kg.concept_views(unique_object_ids)}
 
-        for edge, object_view in zip(edges, object_views):
+        for edge in edges:
             object_id = edge.object_id
-
-            if object_view.concept_id != object_id:
-                object_view = kg.concept_view(object_id)
-
+            object_view = view_map.get(object_id) or kg.concept_view(object_id)
             object_is_std = object_view.standard_concept
             
             # Optimization: Only traverse to Standard concepts
@@ -737,9 +769,6 @@ def find_standard_paths(
                 continue
 
             next_iterations = iterations + 1
-            if next_iterations > num_hops:
-                continue
-
             prev_best_iteration = visited_min_iteration.get(object_id)
             if prev_best_iteration is not None and prev_best_iteration <= next_iterations:
                 continue
@@ -798,56 +827,60 @@ class PathProfile:
         kg: "KnowledgeGraph",
         path: GraphPath,
         match_kind: LabelMatchKind,
-        embedding_sims: Optional[np.ndarray] = None,
+        source_concept_id: Optional[int] = None,
     ) -> "PathProfile":
         """
         Analyze a path to determine the 'Standard Anchor'.
 
-        It traverses the path from the candidate term. The first Standard Concept
-        encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.
+        The first Standard Concept encountered via an IDENTITY edge is promoted as
+        the anchor.  
+        
+        Notes
+        -----
+        For zero-hop paths (source == target), ``source_concept_id``
+        must be provided; a ``ValueError`` is raised otherwise.
+
+        Parameters
+        ----------
+        source_concept_id : int, optional
+            Required when ``path`` has no steps (i.e. source == target).
         """
-        # Path Traversal
-        standard_anchor: Optional[Tuple[int, str]] = None
-
-        # Pre-fetch views to check standard status
-        # path.nodes() returns tuple of IDs (start + all objects)
-        node_ids = path.nodes()
-        concept_views = kg.concept_views(node_ids)
-        
-        # NOTE: kg.concept_views usually returns tuple.
-        # If order is guaranteed, we can index by step.
-        # Ideally, map by ID to be safe.
-        view_map = {v.concept_id: v for v in concept_views}
-        
-        # Helper to get view by index in path sequence
-        def get_view(idx):
-            cid = node_ids[idx]
-            return view_map[cid]
-
-        predicate_kinds = kg.predicate_kinds(tuple(p.predicate for p in path.steps))
-
-        for step_idx in range(len(path.steps)):
-            predicate_kind = predicate_kinds[step_idx]
-
-            # We promote the first swap to a standard concept as the anchor point
-            # Check Next Node (index + 1)
-            next_view = get_view(step_idx + 1)
-            
-            is_translation_edge = predicate_kind in (
-                ClassIDEnum.IDENTITY,
+        if not path.steps:
+            if source_concept_id is None:
+                raise ValueError(
+                    "source_concept_id is required for zero-hop paths "
+                    "(find_shortest_paths was called with source == target)."
+                )
+            view = kg.concept_view(source_concept_id)
+            return cls(
+                concept_id=source_concept_id,
+                concept_name=view.concept_name,
+                is_standard=view.standard_concept,
+                original_concept_id=source_concept_id,
+                original_concept_name=view.concept_name,
+                path=path,
             )
 
+        node_ids = path.nodes()
+        view_map = {v.concept_id: v for v in kg.concept_views(node_ids)}
+
+        def get_view(idx):
+            return view_map[node_ids[idx]]
+
+        predicate_kinds = kg.predicate_kinds(tuple(p.predicate for p in path.steps))
+        standard_anchor: Optional[Tuple[int, str]] = None
+
+        for step_idx in range(len(path.steps)):
+            next_view = get_view(step_idx + 1)
             if (
-                is_translation_edge
+                predicate_kinds[step_idx] is PredicateKind.IDENTITY
                 and not standard_anchor
                 and next_view.standard_concept
             ):
                 standard_anchor = (next_view.concept_id, next_view.concept_name)
-            
-            # Logic for scoring/indices removed as it wasn't used in return
 
         first_view = get_view(0)
-        
+
         if standard_anchor is None:
             concept_id = first_view.concept_id
             concept_name = first_view.concept_name
@@ -873,7 +906,7 @@ class PathExplanationStep:
     """
     step: PathStep
     traversal_depth: Optional[int]
-    predicate_kind: ClassIDEnum
+    predicate_kind: PredicateKind
     reason: str
 
 
@@ -898,7 +931,8 @@ class PathExplanation:
         Construct an explanation by combining the path, the trace log, and semantic profiles.
         """
         steps: List[PathExplanationStep] = []
-        profile = PathProfile.from_path(kg, path, match_kind=match_kind)
+        source = path.steps[0].subject.concept_id if path.steps else (trace.seeds[0] if trace.seeds else None)
+        profile = PathProfile.from_path(kg, path, match_kind=match_kind, source_concept_id=source)
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)
@@ -924,18 +958,9 @@ def trace_contains_step(trace: GraphTrace, step: PathStep) -> Optional[TraceStep
     Check if a specific path step appears in the search trace.
     """
     for ts in trace.steps:
-        # Check if the expansion node matches subject
         if ts.node != step.subject.concept_id:
-             # step.subject is Node object, trace uses ID (int) usually.
-             # In BFS above, `cur` was int.
-             # Adjusted check:
-             if ts.node != step.subject.concept_id:
-                 continue
-        
+            continue
         for e in ts.expanded_edges:
-            if (
-                e.object_id == step.object.concept_id
-                and e.predicate_id == step.predicate
-            ):
+            if e.object_id == step.object.concept_id and e.predicate_id == step.predicate:
                 return ts
     return None

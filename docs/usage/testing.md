@@ -44,7 +44,7 @@ The grounding test suite is now structured with parametrized cases so each clini
 Create a local `.env` file in the `omop-graph` repo root:
 
 ```dotenv
-OMOP_DATABASE_URL=postgresql://omop:omop@db-omop:5432/omop
+OMOP_CDM_DB_URL=postgresql://omop:omop@db-omop:5432/omop
 OMOP_OLLAMA_API_BASE=http://ollama:11434/v1
 OMOP_EMB_BACKEND=pgvector
 ```

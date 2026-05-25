@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from dotenv import load_dotenv
@@ -29,13 +29,11 @@ from oaklib.interfaces.basic_ontology_interface import (
 from oaklib.interfaces.text_annotator_interface import nen_annotation
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_alchemy.cdm.model import Concept, Concept_Relationship
 from omop_graph.graph import (
     KnowledgeGraph, 
     KnowledgeGraphEmbeddingConfiguration
 )
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
-from omop_graph.extensions.emb import EmbeddingBackendType, MissingExtensionError, get_embedding_writer_interface
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -45,13 +43,9 @@ from omop_graph.utils.text_utils import cava_tokenizer
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.omop_factory import omop_resource
 
-if TYPE_CHECKING:
-    from omop_emb import EmbeddingClient
 
-from orm_loader.helpers.bootstrap import create_db
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -207,13 +201,6 @@ class OMOPBaseInterface:
             raise ValueError(f"Unsupported predicate CURIE: {pred}")
         return local
 
-    def precompute_lookups(self) -> None:
-        """
-        Pre-cache concept views for root nodes in the Knowledge Graph.
-        """
-        # Warm vocab/domain roots (cheap enough)
-        for cid in self.kg.roots():
-            self.kg.concept_view(self._concept_curie(cid))
 
 
 class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
@@ -240,13 +227,12 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     def _simple_tokenizer(self, text: str):
         for m in re.finditer(r"\b[\w\- ]{3,}\b", text):
             yield m.start(), m.end(), m.group()
-
+    
     def annotate_text(
         self,
         text: str,
-        text_embedding: Optional[np.ndarray] = None,
-        text_embedding_model: Optional[str] = None,
         configuration: Optional[TextAnnotationConfiguration] = None,
+        query_embedding: Optional[np.ndarray] = None,
         annotations: Optional[Dict[str, Annotation]] = None,
     ) -> Iterator[TextAnnotation]:
         """
@@ -256,8 +242,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         ----------
         text : str
             The input text to annotate.
-        text_embedding : np.ndarray
-            The embedding of the input text.
+        query_embedding : np.ndarray
+            Pre-computed query embedding for the input text. When None and the KG
+            has a writer interface, the embedding is computed on demand.
         configuration : TextAnnotationConfiguration, optional
             Configuration settings for annotation (e.g., token exclusion).
         annotations : Dict[str, Annotation], optional
@@ -338,17 +325,16 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 require_standard=parent_ids is None,
             ),
             max_depth=6,
-            predicate_kinds=frozenset([ClassIDEnum.IDENTITY]),
+            predicate_kinds=frozenset([PredicateKind.IDENTITY]),
         )
 
         resolver_pipeline = ResolverPipeline.with_all_resolvers()
         grounded = ground_term(
             resolver_pipeline=resolver_pipeline,
             kg=self.kg,
-            text=text,
+            query=text,
             constraints=constraints,
-            text_embedding=text_embedding,
-            text_embedding_model=text_embedding_model,
+            query_embedding=query_embedding,
         )
 
         if not grounded:
@@ -423,10 +409,10 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 synonym=False,
             )
             for lm in matches:
-                cid = lm.concept_id
+                cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._predicate_curie(cid)
+                    yield self._concept_curie(cid)
 
         if SearchProperty.ALIAS.text in props:
             matches = self.kg.concept_lookup(
@@ -435,10 +421,10 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 synonym=True,
             )
             for lm in matches:
-                cid = lm.concept_id
+                cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._predicate_curie(cid)
+                    yield self._concept_curie(cid)
 
         if (
             SearchProperty.IDENTIFIER.text in props
@@ -450,7 +436,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                     cid = self.kg.concept_id_by_code(vocab, code)
                     if cid not in seen:
                         seen.add(cid)
-                        yield self._predicate_curie(cid)
+                        yield self._concept_curie(cid)
                 except Exception:
                     pass
 
@@ -469,7 +455,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def supports_reasoning(self) -> bool:
         return False
 
-    def entity_aliases(self, curie: CURIE) -> Iterable[str]:
+    def entity_aliases(self, curie: CURIE) -> List[str]:
         """
         Retrieve aliases (synonyms and codes) for a given entity.
 
@@ -480,7 +466,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         Returns
         -------
-        Iterable[str]
+        List[str]
             A sorted list of aliases.
         """
         cid = self._parse_concept(curie)
@@ -494,7 +480,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         # vocabulary-qualified code alias
         aliases.add(f"{cv.vocabulary_id}:{cv.concept_code}")
 
-        return sorted(aliases)
+        return list(sorted(aliases))
 
     def parents(self, curie: CURIE) -> Iterable[CURIE]:
         """
@@ -509,8 +495,8 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Retrieve direct children of the concept.
         """
         concept_id = self._parse_concept(curie)
-        for parent_id in self.kg.parents(concept_id):
-            yield self._concept_curie(parent_id)
+        for child_id in self.kg.children(concept_id):
+            yield self._concept_curie(child_id)
 
     @property
     def default_language(self) -> Optional[str]:
@@ -528,7 +514,11 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def multilingual(self) -> bool:
         return False
 
-    def entities(
+    @multilingual.setter
+    def multilingual(self, value: bool) -> None:
+        pass  # OMOP is always monolingual; setter required by base interface contract
+
+    def entities(  # type: ignore[override]
         self,
         domain: str | None = None,
         standard_only: bool = True,
@@ -619,24 +609,25 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         cids = self.kg.concept_ids_by_label(label.strip())
         return [self._concept_curie(cid) for cid in cids]
 
-    def relationships(
+    def relationships( # type: ignore[override]
         self,
-        subjects: list[CURIE] | None = None,
-        predicates: list[str] | None = None,
-        objects: list[CURIE] | None = None,
+        subjects: Iterable[CURIE] | None = None,
+        predicates: Iterable[str] | None = None,
+        objects: Iterable[CURIE] | None = None,
         invert: bool = False,
+        **kwargs,
     ) -> Iterable[Tuple[CURIE, PRED_CURIE, CURIE]]:
         """
         Query relationships between concepts.
 
         Parameters
         ----------
-        subjects : list[CURIE] | None
-            List of subject CURIEs.
-        predicates : list[str] | None
-            List of predicate (relationship) IDs.
-        objects : list[CURIE] | None
-            List of object CURIEs.
+        subjects : Iterable[CURIE] | None
+            Subject CURIEs to filter on.
+        predicates : Iterable[str] | None
+            Predicate (relationship) IDs to filter on.
+        objects : Iterable[CURIE] | None
+            Object CURIEs to filter on.
         invert : bool
             If True, swaps subjects and objects in the query and result.
 
@@ -656,6 +647,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
                 subjects=subject_ids,
                 predicates=predicate_ids,
                 objects=object_ids,
+                invert=invert
             ))
 
         for s,p,o in relationships:
@@ -676,7 +668,6 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         return [self._concept_curie(p) for p in parents]
 
     def simple_mappings_by_curie(self, curie: CURIE):
-        cid = self._parse_concept(curie)
         raise NotImplementedError(
             "TODO: need to implement mapping interface and have self.sssom_mappings"
         )
@@ -760,7 +751,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             pred_curie = self._predicate_curie(edge.predicate_id)
 
             # hierarchical entailment
-            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.ONTO_UP:
+            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
                 yield pred_curie, self._concept_curie(edge.object_id)
 
                 for parent in self.kg.parents(edge.object_id):
@@ -792,19 +783,16 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         )
 
         with self.kg.session_factory() as session:
-            # Consume and close the session
-            edges = self.kg.iter_edges(
+            for edge in self.kg.iter_edges(
                 session=session,
                 concept_ids=concept_id,
                 direction="in",
-                predicate_ids=frozenset(pred_filter) if pred_filter else None
-            )
-
-        for edge in edges:
-            yield (
-                self._predicate_curie(edge.predicate_id),
-                self._concept_curie(edge.subject_id),
-            )
+                predicate_ids=frozenset(pred_filter) if pred_filter else None,
+            ):
+                yield (
+                    self._predicate_curie(edge.predicate_id),
+                    self._concept_curie(edge.subject_id),
+                )
 
     def entailed_incoming_relationships_by_curie(
         self, *args, **kwargs
@@ -837,7 +825,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             yield self._predicate_curie("is_a")
 
 
-class OMOPAlchemyImplementation(
+class OMOPAlchemyImplementation( # type: ignore[override]
     OMOPRelationGraphInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,
@@ -847,37 +835,31 @@ class OMOPAlchemyImplementation(
     conforming to the OMOP CDM.
 
     To connect, either use OMOPAlchemyImplementation directly:
-    >>> from omop_spires.implementation.omop_implementation import OMOPAlchemyImplementation
-    >>> from omop_spires.resource import omop_resource
+
+    >>> from omop_graph.oaklib_interface import OMOPAlchemyImplementation
+    >>> from omop_graph.oaklib_interface.omop_factory import omop_resource
     >>> resource = omop_resource(url='postgresql+psycopg2://uid:pid@host:5432/dbname')
     >>> adapter = OMOPAlchemyImplementation(resource=resource)
 
-    or
-    >>> from omop_spires import get_adapter
-    >>> adapter = get_adapter("sqlite://///path/to/your/sqlite/test.db")
+    or pass a connection string directly:
+
+    >>> adapter = OMOPAlchemyImplementation(engine_string="sqlite:////path/to/omop.db")
 
     Parameters
     ----------
     engine_string : str | URL | None, optional
-        The database connection string.
+        The database connection string. If omitted, ``OMOP_CDM_DB_URL`` (or the
+        individual ``OMOP_CDM_DB_*`` variables) are read from the environment.
     resource : OMOPOntologyResource | None, optional
-        An existing resource object.
+        An existing resource object. Takes precedence over ``engine_string`` when
+        both are supplied.
     kg : KnowledgeGraph | None, optional
-        An existing Knowledge Graph instance. If None, one is created.
-    kg_emb_backend : EmbeddingBackendName, optional
-        Optional embedding backend for ``KnowledgeGraph`` construction when
-        ``kg`` is not provided.
-        Resolution order:
-        1. explicit ``kg_emb_backend`` argument
-        2. ``OMOP_EMB_BACKEND`` environment variable (inside ``omop_emb``)
-        If both are missing, embedding initialization fails only when embedding
-        operations are accessed.
-    kg_emb_base_storage_dir : str | None, optional
-        Optional base directory forwarded to the embedding backend constructor.
-        Typical resolution order:
-        1. explicit ``kg_emb_base_storage_dir`` argument
-        2. ``OMOP_EMB_BASE_STORAGE_DIR`` environment variable
-        3. backend default directory
+        An existing Knowledge Graph instance. If None, one is created from
+        ``engine_string`` / ``resource``.
+    kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
+        Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
+        Required to enable embedding-based similarity. See
+        :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
     """
 
     def __init__(
@@ -898,27 +880,19 @@ class OMOPAlchemyImplementation(
 
         assert self.engine_string is not None, "No database URL provided for OMOPAlchemyImplementation"
         
-        self.engine = create_engine(self.engine_string, future=True, echo=False)
-        create_db(self.engine)
+        engine = create_engine(self.engine_string, future=True, echo=False)
 
-        self._session_factory = sessionmaker(self.engine)
         self._connection = None
 
         if kg is None:
             kg = KnowledgeGraph(
-                session_factory=self._session_factory,
                 emb_config=kg_emb_config,
+                cdm_engine=engine
             )
             bind_default_renderers(kg)
         
         super().__init__(kg=kg, **kwargs)
 
-    @property
-    def session_factory(self) -> sessionmaker:
-        """
-        Return the factory to a session.
-        """
-        return self._session_factory
 
     # TODO: Implement if necessary!
     def _all_relationships(self):

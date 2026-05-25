@@ -4,7 +4,7 @@ from datetime import date
 from typing import Iterable, Optional, Literal
 from sqlalchemy.orm import Session
 
-from ..extensions.omop_alchemy import ClassIDEnum
+from ..extensions.omop_alchemy import PredicateKind
 from .edges import EdgeView
 from .nodes import ConceptView
 
@@ -21,7 +21,7 @@ class GraphBackend(ABC):
         ...
 
     @abstractmethod
-    def predicate_kind(self, relationship_id: str) -> ClassIDEnum:
+    def predicate_kind(self, relationship_id: str) -> PredicateKind:
         ...
 
     @abstractmethod
@@ -39,7 +39,7 @@ class GraphBackend(ABC):
         concept_ids: int | tuple[int, ...], 
         direction: Literal["in", "out"], 
         predicate_ids: frozenset[str] | None,
-        predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = True,
@@ -75,6 +75,3 @@ class GraphBackend(ABC):
         """
         ...
 
-    def clear_caches(self) -> None:
-        """Optional hook for cache invalidation."""
-        return None

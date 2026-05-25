@@ -114,8 +114,8 @@ def trace_html_with_cards(kg, trace: GraphTrace) -> str:
 def path_html(kg, path: GraphPath) -> str:
     lines = []
     for step in path.steps:
-        s = kg.concept_view(step.subject)
-        o = kg.concept_view(step.object)
+        s = kg.concept_view(step.subject.concept_id)
+        o = kg.concept_view(step.object.concept_id)
         lines.append(
             f"{escape(s.concept_name)} "
             f"<b>--[{escape(step.predicate)}]--></b> "
@@ -125,30 +125,40 @@ def path_html(kg, path: GraphPath) -> str:
 
 
 def explained_path_html(kg, explanation: PathExplanation) -> str:
+    profile = explanation.profile
     rows = []
     for s in explanation.steps:
-        subj = kg.concept_view(s.step.subject)
-        obj = kg.concept_view(s.step.object)
+        subj = kg.concept_view(s.step.subject.concept_id)
+        obj = kg.concept_view(s.step.object.concept_id)
+        depth = str(s.traversal_depth) if s.traversal_depth is not None else "—"
         rows.append(f"""
         <tr>
             <td>{escape(subj.concept_name)}</td>
             <td>{escape(s.step.predicate)}</td>
             <td>{escape(obj.concept_name)}</td>
             <td>{s.predicate_kind.name}</td>
+            <td>{depth}</td>
             <td>{escape(s.reason)}</td>
         </tr>
         """)
 
+    std_badge = "&#10003;" if profile.is_standard else "&#10007;"
     return f"""
     <div>
-        <h4>Path explanation (score={explanation.profile.path_rank():.2f})</h4>
+        <h4>Path explanation</h4>
+        <p>
+            <b>Original:</b> {escape(profile.original_concept_name)}
+            &rarr;
+            <b>Resolved:</b> {escape(profile.concept_name)} {std_badge}
+            (ID: {profile.concept_id})
+        </p>
         <table border="1" cellpadding="4" cellspacing="0">
             <tr>
                 <th>From</th>
                 <th>Predicate</th>
                 <th>To</th>
                 <th>Kind</th>
-                <th>Δ</th>
+                <th>Depth</th>
                 <th>Reason</th>
             </tr>
             {''.join(rows)}

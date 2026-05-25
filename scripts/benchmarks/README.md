@@ -2,7 +2,7 @@
 
 This benchmark evaluates resolver configurations against a live OMOP CDM database.
 
-Set `OMOP_DATABASE_URL` or pass `--database-url` to point the benchmark at your local database.
+Set `OMOP_CDM_DB_URL` or pass `--database-url` to point the benchmark at your local database.
 
 ## What It Measures
 

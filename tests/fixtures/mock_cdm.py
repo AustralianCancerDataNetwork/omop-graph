@@ -18,8 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
-    ClassIDEnum,
-    RelationshipCache,
+    PredicateKind,
     RelationshipClass,
     RelationshipMapping,
 )
@@ -31,7 +30,7 @@ LANGUAGE_CONCEPT_ID = 1
 
 
 @pytest.fixture(scope="module")
-def mock_cdm_session_factory() -> sessionmaker:
+def mock_cdm_engine() -> sa.Engine:
     engine = sa.create_engine("sqlite+pysqlite:///:memory:", future=True)
     tables = cast(
         list[sa.Table],
@@ -55,22 +54,18 @@ def mock_cdm_session_factory() -> sessionmaker:
     with session_local() as session:
         seed_mock_cdm(session)
 
-    return session_local
+    return engine
 
 
 @pytest.fixture()
 def mock_cdm_kg(
-    mock_cdm_session_factory: sessionmaker,
+    mock_cdm_engine: sa.Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> KnowledgeGraph:
-    # Ensure cache does not leak between tests.
-    RelationshipCache._mapping = {}
-    RelationshipCache._is_initialized = False
-
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr("omop_graph.reasoning.grounding.get_embedding_writer_interface", lambda _kg: None)
 
-    return KnowledgeGraph(session_factory=mock_cdm_session_factory)
+    return KnowledgeGraph(cdm_engine=mock_cdm_engine)
 
 
 def seed_mock_cdm(session: Session) -> None:
@@ -256,21 +251,21 @@ def seed_mock_cdm(session: Session) -> None:
     session.add_all(
         [
             RelationshipClass(
-                class_id=ClassIDEnum.IDENTITY,
-                subclass_id="mapping",
+                predicate_kind=PredicateKind.IDENTITY,
+                predicate_subkind="mapping",
                 description="Identity mapping",
                 semantics="identity",
                 inference="none",
             ),
             RelationshipMapping(
                 relationship_id="maps to",
-                class_id=ClassIDEnum.IDENTITY,
-                subclass_id="mapping",
+                predicate_kind=PredicateKind.IDENTITY,
+                predicate_subkind="mapping",
             ),
             RelationshipMapping(
                 relationship_id="mapped from",
-                class_id=ClassIDEnum.IDENTITY,
-                subclass_id="mapping",
+                predicate_kind=PredicateKind.IDENTITY,
+                predicate_subkind="mapping",
             ),
         ]
     )

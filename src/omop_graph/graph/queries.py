@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Optional, Tuple, Literal, Union
 from datetime import date
 
-from sqlalchemy import and_, case, exists, func, literal, select
+from sqlalchemy import and_, case, exists, func, literal, select, Engine, inspect, column
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
@@ -34,7 +34,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
 )
 
-from ..extensions.omop_alchemy import RelationshipClass, RelationshipMapping, ClassIDEnum
+from ..extensions.omop_alchemy import RelationshipMapping, PredicateKind
 from .constraints import SearchConstraintConcept
 
 
@@ -209,7 +209,7 @@ def q_concept_synonym() -> Select:
 
 
 def q_concept_name_match(
-    name: str, 
+    query_concept_name: str,
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
@@ -219,7 +219,7 @@ def q_concept_name_match(
 
     Parameters
     ----------
-    name : str
+    query_concept_name : str
         The concept name to match.
     search_constraint : SearchConstraintConcept, optional
         Additional filters (domain, vocab).
@@ -235,11 +235,11 @@ def q_concept_name_match(
 
     if synonym:
         base_stmt = q_concept_synonym().where(
-            func.lower(name_expr) == func.lower(name)
+            func.lower(name_expr) == func.lower(query_concept_name)
         )
     else:
         base_stmt = q_concept_name().where(
-            func.lower(name_expr) == func.lower(name)
+            func.lower(name_expr) == func.lower(query_concept_name)
         )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
@@ -253,7 +253,7 @@ def q_concept_name_match(
 
 
 def q_concept_name_ilike(
-    term: str, 
+    query_concept_name: str,
     search_constraint: Optional[SearchConstraintConcept] = None,
     synonym: bool = False,
     sort: bool = True,
@@ -263,8 +263,8 @@ def q_concept_name_ilike(
 
     Parameters
     ----------
-    term : str
-        The search term (without wildcards; wildcards are added automatically).
+    query_concept_name : str
+        The concept name to search for.
     search_constraint : SearchConstraintConcept, optional
         Additional filters.
     synonym : bool, optional
@@ -277,13 +277,16 @@ def q_concept_name_ilike(
     """
     name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
+    if "%" in query_concept_name:
+        raise ValueError("query_concept_name should not contain wildcards like '%'.")
+
     if synonym:
         base_stmt = q_concept_synonym().where(
-            name_expr.ilike(f"%{term}%")
+            name_expr.ilike(f"%{query_concept_name}%")
         )
     else:
         base_stmt = q_concept_name().where(
-            name_expr.ilike(f"%{term}%")
+            name_expr.ilike(f"%{query_concept_name}%")
         )
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
@@ -297,7 +300,9 @@ def q_concept_name_ilike(
 
 
 def q_concept_name_fulltext(
-    term: str, 
+    query_concept_name: str, 
+    *,
+    engine: Engine,
     search_constraint: Optional['SearchConstraintConcept'] = None,
     synonym: bool = False,
     sort: bool = True,
@@ -314,8 +319,8 @@ def q_concept_name_fulltext(
 
     Parameters
     ----------
-    term : str
-        The search term to match.
+    query_concept_name : str
+        The concept name to search for.
     search_constraint : SearchConstraintConcept, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
@@ -324,22 +329,22 @@ def q_concept_name_fulltext(
     """
     name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
-    if synonym:
-        vector = Concept_Synonym.__table__.c.get(CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN)
-        stmt = q_concept_synonym()
-    else:
-        vector = Concept.__table__.c.get(CONCEPT_NAME_TSVECTOR_COLUMN)
-        stmt = q_concept_name()
+    inspector = inspect(engine)
+    target_table = Concept_Synonym if synonym else Concept
+    target_col = CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN if synonym else CONCEPT_NAME_TSVECTOR_COLUMN
+    stmt = q_concept_synonym() if synonym else q_concept_name()
 
-    if vector is None:
+    tsvector_col = next((c["name"] for c in inspector.get_columns(target_table.__tablename__) 
+                      if c["name"] == target_col), None)
+
+    if tsvector_col is None:
         raise FullTextError(
-            "Full-text search is disabled because the optional OMOP Alchemy "
-            "tsvector columns are not registered on the current ORM metadata. "
-            "Run `omop-maint fulltext install` and `omop-maint fulltext populate` "
-            "to enable FTS, or skip LabelMatchKind.FTS resolvers."
+            f"Full-text search column '{target_col}' not found in table '{target_table.__tablename__}'. "
+            "Make sure to run 'omop-maint fulltext install' and 'omop-maint fulltext populate' to set up full-text search."
         )
-        
-    query = func.plainto_tsquery("english", term)
+    
+    vector = column(tsvector_col)
+    query = func.plainto_tsquery("english", query_concept_name)
     
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
@@ -409,8 +414,8 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
             Rel.is_hierarchical,
             Rel.defines_ancestry.label("anc_down"),
             Rev.defines_ancestry.label("anc_up"),
-            Rm.class_id,
-            Rm.subclass_id
+            Rm.predicate_kind,
+            Rm.predicate_subkind
         )
         .join(
             Rev, Rel.reverse_relationship_id == Rev.relationship_id,
@@ -422,24 +427,31 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
 
 
 def q_all_predicates_with_ancestry() -> Select:
-    """Query all predicates with derived ancestry direction flags."""
+    """Query all predicates with derived ancestry direction flags and classification."""
     Rel = Relationship
     Rev = aliased(Relationship)
-    return select(
-        Rel.relationship_id,
-        Rel.relationship_name,
-        Rel.reverse_relationship_id,
-        Rel.is_hierarchical,
-        Rel.defines_ancestry.label("anc_down"),
-        Rev.defines_ancestry.label("anc_up"),
-    ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
+    Rm = aliased(RelationshipMapping)
+    return (
+        select(
+            Rel.relationship_id,
+            Rel.relationship_name,
+            Rel.reverse_relationship_id,
+            Rel.is_hierarchical,
+            Rel.defines_ancestry.label("anc_down"),
+            Rev.defines_ancestry.label("anc_up"),
+            Rm.predicate_kind,
+            Rm.predicate_subkind,
+        )
+        .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
+        .join(Rm, Rel.relationship_id == Rm.relationship_id)
+    )
 
 
 def q_edges(
     concept_ids: Union[Tuple[int, ...], int], 
     direction: Literal["in", "out"],
     predicate_ids: Optional[frozenset[str]] = None,
-    predicate_kinds: Optional[frozenset[ClassIDEnum]] = None,
+    predicate_kinds: Optional[frozenset[PredicateKind]] = None,
     active_only: bool = False,
     on: Optional[date] = None,
     within_domain: bool = False
@@ -452,14 +464,14 @@ def q_edges(
     Obj = aliased(Concept)
 
     stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
+        Concept_Relationship.concept_id_1.label("subject_id"),
+        Concept_Relationship.relationship_id.label("predicate_id"),
+        Concept_Relationship.concept_id_2.label("object_id"),
         Concept_Relationship.valid_start_date,
         Concept_Relationship.valid_end_date,
         Concept_Relationship.invalid_reason,
-        RelationshipMapping.class_id,
-        RelationshipMapping.subclass_id
+        RelationshipMapping.predicate_kind,
+        RelationshipMapping.predicate_subkind,
     ).join(
         RelationshipMapping, 
         Concept_Relationship.relationship_id == RelationshipMapping.relationship_id
@@ -488,7 +500,7 @@ def q_edges(
     if predicate_ids:  # Exact ID's
         stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
     if predicate_kinds: # Global categories
-        stmt = stmt.where(RelationshipMapping.class_id.in_(predicate_kinds))
+        stmt = stmt.where(RelationshipMapping.predicate_kind.in_(predicate_kinds))
 
     return stmt
 
@@ -657,7 +669,7 @@ def q_concept_vocabulary_ids() -> Select:
 
 def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
     """
-    Check if a parent is an ancestor of a child (separation > 1).
+    Check if a parent is an ancestor of a child (including immediate parent).
     """
     return select(
         Concept_Ancestor.ancestor_concept_id,
@@ -667,7 +679,7 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
         and_(
             Concept_Ancestor.ancestor_concept_id == parent_id,
             Concept_Ancestor.descendant_concept_id == child_id,
-            Concept_Ancestor.min_levels_of_separation > 1,
+            Concept_Ancestor.min_levels_of_separation > 0,
         )
     )
 
@@ -681,10 +693,11 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
             func.count(Concept_Ancestor.ancestor_concept_id).label("num_ancestors"),
         )
         .join(
-            Concept_Ancestor, 
+            Concept_Ancestor,
             Concept.concept_id == Concept_Ancestor.descendant_concept_id
         )
         .where(Concept.concept_id.in_(concept_ids))
+        .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)
     )
 
@@ -702,13 +715,14 @@ def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
             Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id
         )
         .where(Concept.concept_id.in_(concept_ids))
+        .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)
     )
 
 def q_relationship_class(relationship_id: str) -> Select:
     return (
         select(
-            RelationshipMapping.class_id
+            RelationshipMapping.predicate_kind
         )
         .where(RelationshipMapping.relationship_id == relationship_id)
     )

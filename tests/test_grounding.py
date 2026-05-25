@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from omop_graph.extensions.omop_alchemy import ClassIDEnum
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -25,12 +25,12 @@ def _constraints() -> GroundingConstraints:
             require_standard=False,
         ),
         max_depth=6,
-        predicate_kinds=frozenset({ClassIDEnum.IDENTITY}),
+        predicate_kinds=frozenset({PredicateKind.IDENTITY}),
     )
 
 
 @pytest.mark.parametrize(
-    "input_text,expected_concept_id",
+    "query,expected_concept_id",
     [
         pytest.param("Hodgkin's disease (clinical)", 4038835, id="exact-hodgkin"),
         pytest.param("Malignant neoplasm of ovary", 4181351, id="exact-ovary"),
@@ -40,7 +40,7 @@ def _constraints() -> GroundingConstraints:
 )
 def test_grounding_resolves_expected_standard_concepts(
     mock_cdm_kg: KnowledgeGraph,
-    input_text: str,
+    query: str,
     expected_concept_id: int,
 ) -> None:
     pipeline = ResolverPipeline(
@@ -55,16 +55,13 @@ def test_grounding_resolves_expected_standard_concepts(
     ranked = ground_term(
         resolver_pipeline=pipeline,
         kg=mock_cdm_kg,
-        text=input_text,
-        text_embedding=None,
-        text_embedding_model=None,
+        query=query,
+        query_embedding=None,
         constraints=_constraints(),
         max_candidates=1,
-        metric_type=None,
-        index_type=None,
     )
 
-    assert ranked, f"Expected at least one grounding for: {input_text}"
+    assert ranked, f"Expected at least one grounding for: {query}"
     assert ranked[0].concept_id == expected_concept_id
 
 
@@ -76,13 +73,10 @@ def test_grounding_maps_non_standard_candidate_via_relationships(
     ranked = ground_term(
         resolver_pipeline=pipeline,
         kg=mock_cdm_kg,
-        text="Kidney carcinoma term",
-        text_embedding=None,
-        text_embedding_model=None,
+        query="Kidney carcinoma term",
+        query_embedding=None,
         constraints=_constraints(),
         max_candidates=1,
-        metric_type=None,
-        index_type=None,
     )
 
     assert ranked, "Expected non-standard concept to map to a valid standard concept"
@@ -97,13 +91,10 @@ def test_grounding_rejects_concepts_outside_anchored_hierarchy(
     ranked = ground_term(
         resolver_pipeline=pipeline,
         kg=mock_cdm_kg,
-        text="Meta concept",
-        text_embedding=None,
-        text_embedding_model=None,
+        query="Meta concept",
+        query_embedding=None,
         constraints=_constraints(),
         max_candidates=1,
-        metric_type=None,
-        index_type=None,
     )
 
     assert ranked == []

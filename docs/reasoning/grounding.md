@@ -21,9 +21,9 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
     The following steps summarise the entire grounding approach and are found in `omop_graph.reasoning.grounding`
 
 1. **Configuration**: Determine graph restrictions using [`GroundingConstraints`](#grounding-constraints)
-    - `parent_id`: The `concept_id` of the parent Ontology. This attribute is **required** and allows testing whether a standard concept is part of the correct branch
-    - `domains`: The OMOP CDM domains that are allowed to be searched for. Each Ontolgoy has an associated domain as described in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept). Specifying multiple permits all specified domains.
-    - `vocabs`: The OMOP CDM vocabularies that are allowed to be searched for. Each Ontology is also part of a vocabulary as described in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept). Specifying multiple values permits all specified vocabularies.
+    - `parent_ids`: OMOP Concept IDs that act as required ancestors — any valid result must be a descendant of at least one of these.
+    - `search_constraint`: A [`SearchConstraintConcept`](#searchconstraintconcept) that filters the initial resolver query by domain, vocabulary, and/or standard status.
+    - `max_depth` / `predicate_kinds`: Control how far and along which relationship kinds the anchor walk is allowed to travel.
 
 2.  **Resolve**: Use the [`ResolverPipeline`](resolvers.md) to find any concepts (Standard or Non-Standard) matching the text.
 3.  **Anchor**: For each candidate, find the nearest **Standard Concept**. This is required for Step 3 as all standard concepts are in `concept_ancestor`.
@@ -35,22 +35,47 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
     - Details of scoring algorithm shown [here](#scoring)
 
 ## Grounding Constraints
-You can restrict the search using `GroundingConstraints`:
-- **parent_ids**: Only return concepts that fall under these ancestors (e.g., only search within "Procedures").
-- **search_constraint**: Limit search to specific vocabularies or domains (e.g., "RxNorm" only).
-- `parent_ids`: Restricts the search to descendants of specific OMOP concepts (e.g., only search for concepts under `Condition`).
-- `vocabs`: Restricts the search to specific vocabularies (e.g., `SNOMED`, `RxNorm`).
-- `domains`: Restricts by OMOP Domain ID (e.g., `Condition`, `Drug`).
+
+`GroundingConstraints` is composed of two layers:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `parent_ids` | `tuple[int, ...]` | `None` | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). |
+| `search_constraint` | `SearchConstraintConcept` | `None` | Filters applied to the initial resolver query (domain, vocabulary, standard flag). |
+| `max_depth` | `int` | `6` | Maximum hop distance allowed between a candidate and its standard anchor. |
+| `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. |
+
+### SearchConstraintConcept
+
+`SearchConstraintConcept` controls which concepts are even considered as candidates during the resolve step. All fields are optional and composable:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `concept_ids` | `tuple[int, ...]` | `None` | Restrict to a specific set of concept IDs. |
+| `domains` | `tuple[str, ...]` | `None` | Restrict by OMOP Domain ID (e.g. `"Condition"`, `"Drug"`). |
+| `vocabularies` | `tuple[str, ...]` | `None` | Restrict by Vocabulary ID (e.g. `"SNOMED"`, `"RxNorm"`). |
+| `require_standard` | `bool` | `False` | When `True`, only concepts with `standard_concept` in `('S', 'C')` are returned. |
+| `limit` | `int` | `None` | Cap the number of candidates returned from the resolver query. |
+
+### Example
 
 ```python
 from omop_graph.reasoning.grounding import ground_term, GroundingConstraints
+from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_graph.extensions.omop_alchemy import PredicateKind
 
 constraints = GroundingConstraints(
-    parent_ids=(441484,), # 'Clinical Finding'
-    max_depth=6
+    parent_ids=(441484,),   # 'Clinical Finding' — only accept descendants of this ancestor
+    search_constraint=SearchConstraintConcept(
+        domains=("Condition",),
+        vocabularies=("SNOMED",),
+        require_standard=True,
+    ),
+    max_depth=6,
+    predicate_kinds=frozenset({PredicateKind.IDENTITY}),
 )
 
-results = ground_term(pipeline, kg, "chest pain", constraints)
+results = ground_term(pipeline, kg, "chest pain", text_embedding=None, text_embedding_model=None, constraints=constraints)
 ```
 
 ## Scoring
@@ -65,10 +90,15 @@ TotalScore = Relevance - ParsimonyPenalty + BroadnessBonus
 $$
 
 #### 1. Relevance
-Relevance represents the initial semantic fit. It is the product of:
+Relevance represents the initial semantic fit and is computed as **either** embedding similarity **or** textual similarity — not both simultaneously:
 
-- **Embedding Similarity**: Cosine similarity between the input text and the concept name.
-- **Textual Similarity**: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name.
+- **Without embeddings**: textual similarity is used exclusively.
+- **With embeddings** (default when `omop-graph[emb]` is installed and configured): embedding cosine similarity **replaces** the textual score entirely.
+
+The two scoring modes:
+
+- **Embedding Similarity**: Cosine similarity between the input text embedding and the concept embedding. Requires `omop-graph[emb]` and a configured `KnowledgeGraphEmbeddingConfiguration` — see the [Knowledge Graph docs](../graph/kg.md#embedding-configuration) and the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/) for setup.
+- **Textual Similarity**: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name. Used as a fallback when no embedding is available.
 
 #### 2. Parsimony: Distance Penalty
 OMOP is a deep hierarchy. A concept that is 1 hop away from your search term is more likely to be correct than one found 5 hops away.
@@ -88,10 +118,11 @@ Scoring is performed in a batch operation to minimize database overhead:
 ```python
 from omop_graph.graph.scoring import score_standard_concepts
 
-ranked = score_standard_concepts(
+scored = score_standard_concepts(
     text="Hodgkin lymphoma",
     standard_concepts=candidates,
     kg=kg,
-    similarity_scores=embeddings_array
+    nearest_concept_matches=nearest_matches,  # optional; from omop-emb embedding index
 )
+ranked = sorted(scored, key=lambda s: s.total_score, reverse=True)
 ```
