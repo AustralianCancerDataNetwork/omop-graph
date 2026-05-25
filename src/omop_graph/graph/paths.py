@@ -418,6 +418,7 @@ def find_shortest_paths_batch(
     max_depth: int = 6,
     on: Optional[Any] = None,
     max_paths: int = 20,
+    within_domain: bool = True,
 ) -> List[GraphPath]:
     """
     Find shortest paths using an optimized batch-BFS approach.
@@ -441,6 +442,10 @@ def find_shortest_paths_batch(
         Date for validity checks.
     max_paths : int
         Maximum number of paths to return.
+    within_domain : bool
+        If True (default), only traverse edges where both concepts share the
+        same domain_id.  Set to False to allow cross-domain edges such as
+        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -495,6 +500,7 @@ def find_shortest_paths_batch(
                 direction=direction,
                 predicate_kinds=frozenset(predicate_kinds) if predicate_kinds else None,
                 on=on,
+                within_domain=within_domain,
             )
 
             next_frontier = set()

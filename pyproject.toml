@@ -32,7 +32,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "omop-alchemy>=0.6.2",
+  "omop-alchemy>=0.6.3",
   "sqlalchemy>=2.0.45",
   "typing-extensions>=4.15.0",
   "typer",
