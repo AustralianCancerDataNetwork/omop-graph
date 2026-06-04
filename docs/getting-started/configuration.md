@@ -63,6 +63,21 @@ docker compose up
 The `.env` file is only read by Docker Compose for variable substitution — it is not
 loaded by omop-graph at runtime.
 
+## Multiple instances
+
+omop-graph reads from the `cdm_db` resource owned by omop-alchemy. To point
+it at a second CDM database (e.g. for production), configure omop-alchemy with
+a second resource:
+
+```bash
+omop-config configure omop_alchemy --resource-name cdm_db_prod
+```
+
+Configure automatically prompts you to choose the default at the end of the same
+run — no second invocation needed.
+
+See the [oa-configurator integration guide](https://AustralianCancerDataNetwork.github.io/oa-configurator/integration/#multiple-environments) for the full multi-environment guide.
+
 ## Further reading
 
 - [oa-configurator integration guide](https://AustralianCancerDataNetwork.github.io/oa-configurator/integration/) — full config reference, profiles, multi-package setups

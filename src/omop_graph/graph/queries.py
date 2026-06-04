@@ -21,7 +21,7 @@ from sqlalchemy import and_, case, exists, func, literal, select, Engine, inspec
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from omop_alchemy.cdm.handlers.fulltext import (
+from omop_alchemy.backends import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
     CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN,
     FullTextError

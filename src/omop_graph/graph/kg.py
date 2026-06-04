@@ -17,14 +17,13 @@ from __future__ import annotations
 import functools
 import logging
 import re
-import os
 from datetime import date
 from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
-from omop_alchemy.cdm.handlers.fulltext import FullTextError
+from omop_alchemy.backends import FullTextError
 
 if TYPE_CHECKING:
     from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface, EmbeddingClient
