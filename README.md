@@ -114,3 +114,41 @@ omop_graph/
 ├── api.py          # stable public API surface
 └── db/             # session helpers
 ```
+
+---
+
+## Configuration
+
+omop-graph reads database connection settings from
+[oa-configurator](https://github.com/AustralianCancerDataNetwork/oa-configurator).
+It requires the CDM database configured by omop-alchemy.
+
+Run once after installation:
+
+```bash
+omop-config init
+omop-config configure omop_alchemy
+omop-config configure omop_graph
+```
+
+See [Configuration](docs/getting-started/configuration.md) for full details.
+
+---
+
+## Docker Compose
+
+The included `docker-compose.yaml` provides a PostgreSQL CDM database and a Python
+container with all optional backends pre-installed (`[postgres,emb,pgvector,faiss-cpu]`).
+Default credentials work out of the box:
+
+```bash
+docker compose up
+```
+
+The `python-graph` service runs `omop-config configure` at startup. To override
+credentials:
+
+```bash
+cp .env.example .env
+docker compose up
+```

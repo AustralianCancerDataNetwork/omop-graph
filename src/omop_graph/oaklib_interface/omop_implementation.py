@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
-from dotenv import load_dotenv
+
 from linkml_runtime.linkml_model.annotations import Annotation
 from oaklib.datamodels.search import (
     SearchConfiguration,
@@ -874,7 +874,6 @@ class OMOPAlchemyImplementation( # type: ignore[override]
             self.engine_string = engine_string
             self.resource = resource or omop_resource(url=self.engine_string)
         else:
-            load_dotenv()
             self.resource = resource or omop_resource()
             self.engine_string = self.resource.url
 

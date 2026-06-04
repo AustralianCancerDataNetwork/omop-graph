@@ -37,6 +37,7 @@ dependencies = [
   "typing-extensions>=4.15.0",
   "typer",
   "oaklib",
+  #"oa-configurator>=0.0.1",  # uncomment once published to PyPI
 ]
 
 [project.optional-dependencies]
@@ -73,6 +74,9 @@ dev = [
 
 [project.scripts]
 omop-graph = "omop_graph.cli:app"
+
+[project.entry-points."omop.config"]
+omop_graph = "omop_graph.config:OmopGraphConfig"
 
 [build-system]
 requires = ["hatchling"]
