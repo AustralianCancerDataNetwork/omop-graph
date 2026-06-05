@@ -29,6 +29,7 @@ from typing import (
 )
 
 # Local Application Imports
+from omop_graph.config import get_config
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
@@ -220,9 +221,9 @@ def find_shortest_paths(
     source: int,
     target: int,
     predicate_kinds: Optional[frozenset[PredicateKind]] = None,
-    max_depth: int = 6,
+    max_depth: Optional[int] = None,
     on: Optional[Any] = None,
-    max_paths: int = 20,
+    max_paths: Optional[int] = None,
     traced: bool = False,
     within_domain: bool = True,
 ) -> Tuple[List[GraphPath], Optional[GraphTrace]]:
@@ -257,6 +258,12 @@ def find_shortest_paths(
     tuple[list[GraphPath], GraphTrace | None]
         A list of paths and optionally the trace object.
     """
+    cfg = get_config()
+    if max_depth is None:
+        max_depth = cfg.max_depth
+    if max_paths is None:
+        max_paths = cfg.max_paths
+
     if source == target:
         path = GraphPath(steps=())
         trace = (
@@ -422,9 +429,9 @@ def find_shortest_paths_batch(
     source: int,
     target: int,
     predicate_kinds: Union[Set[PredicateKind], frozenset[PredicateKind], None] = None,
-    max_depth: int = 6,
+    max_depth: Optional[int] = None,
     on: Optional[Any] = None,
-    max_paths: int = 20,
+    max_paths: Optional[int] = None,
     within_domain: bool = True,
 ) -> List[GraphPath]:
     """
@@ -461,6 +468,12 @@ def find_shortest_paths_batch(
     """
     if source == target:
         return [GraphPath(steps=())]
+
+    cfg = get_config()
+    if max_depth is None:
+        max_depth = cfg.max_depth
+    if max_paths is None:
+        max_paths = cfg.max_paths
 
     # Frontiers: The set of nodes we are currently expanding
     fwd_frontier = {source}
@@ -641,7 +654,7 @@ def find_standard_paths(
     target: int,
     candidate: CandidateHit,
     predicate_kinds: Optional[frozenset[Any]] = None,
-    max_depth: int = 6,
+    max_depth: Optional[int] = None,
     max_concepts: Optional[int] = None,
     within_domain: bool = True,
     *args,
@@ -683,6 +696,9 @@ def find_standard_paths(
     list[StandardConcept]
         The resolved standard concepts that satisfy the ancestor constraint.
     """
+    if max_depth is None:
+        max_depth = get_config().max_depth
+
     source_view = kg.concept_view(candidate.concept_id)
     source_is_std = source_view.standard_concept if source_view else False
 

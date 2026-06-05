@@ -324,7 +324,6 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 vocabularies=vocabs,
                 require_standard=parent_ids is None,
             ),
-            max_depth=6,
             predicate_kinds=frozenset([PredicateKind.IDENTITY]),
         )
 
