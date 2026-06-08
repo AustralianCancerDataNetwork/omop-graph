@@ -38,8 +38,7 @@ docker compose up
 
 The `python-graph` container runs `omop-config configure` for both `omop_alchemy` and
 `omop_graph` at startup. Your `~/.config/omop/config.toml` on the host is written on
-first start and skipped on subsequent starts (`--skip-if-configured` makes this
-idempotent).
+safe to re-run on subsequent starts: connection flags always apply, and any values already stored in `config.toml` are preserved for fields not explicitly provided.
 
 ### Overriding default values
 
