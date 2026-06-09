@@ -7,13 +7,13 @@ from typing import Optional, Union
 from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker, Session
 
-from omop_graph.config import get_resolver
+from oa_configurator import Resolver
 from omop_alchemy.config import CDM_DB_RESOURCE
 
 
 def get_engine():
     """Return a SQLAlchemy engine for the CDM database via oa-configurator."""
-    return get_resolver().resolve_resource(CDM_DB_RESOURCE).create_engine()
+    return Resolver.from_active_config().resolve_resource(CDM_DB_RESOURCE).create_engine()
 
 
 def make_engine(

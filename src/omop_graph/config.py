@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import ClassVar, Final
 
 from pydantic import Field
-from oa_configurator import PackageConfigBase, ResourceSpec, Resolver, load_stack_config
+from oa_configurator import PackageConfigBase, ResourceSpec, Resolver
 from oa_configurator import configure_logging as _configure_logging
 from omop_alchemy.config import CDM_DB_RESOURCE
 
@@ -31,16 +31,6 @@ class OmopGraphConfig(PackageConfigBase):
         default=20,
         description="Maximum number of shortest paths returned per query.",
     )
-
-
-def get_resolver() -> Resolver:
-    """Return a Resolver loaded from the active stack config."""
-    return Resolver(load_stack_config())
-
-
-def get_config() -> OmopGraphConfig:
-    """Return the omop-graph typed config from the active stack config."""
-    return OmopGraphConfig.from_stack(load_stack_config())
 
 
 def configure_logging(verbosity: int = 0) -> None:

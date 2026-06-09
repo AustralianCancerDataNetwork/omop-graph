@@ -29,7 +29,7 @@ from typing import (
 )
 
 # Local Application Imports
-from omop_graph.config import get_config
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
@@ -258,7 +258,7 @@ def find_shortest_paths(
     tuple[list[GraphPath], GraphTrace | None]
         A list of paths and optionally the trace object.
     """
-    cfg = get_config()
+    cfg = OmopGraphConfig.get_config()
     if max_depth is None:
         max_depth = cfg.max_depth
     if max_paths is None:
@@ -469,7 +469,7 @@ def find_shortest_paths_batch(
     if source == target:
         return [GraphPath(steps=())]
 
-    cfg = get_config()
+    cfg = OmopGraphConfig.get_config()
     if max_depth is None:
         max_depth = cfg.max_depth
     if max_paths is None:
@@ -697,7 +697,7 @@ def find_standard_paths(
         The resolved standard concepts that satisfy the ancestor constraint.
     """
     if max_depth is None:
-        max_depth = get_config().max_depth
+        max_depth = OmopGraphConfig.get_config().max_depth
 
     source_view = kg.concept_view(candidate.concept_id)
     source_is_std = source_view.standard_concept if source_view else False

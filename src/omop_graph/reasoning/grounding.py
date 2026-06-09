@@ -19,7 +19,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from omop_graph.config import get_config
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
@@ -60,7 +60,7 @@ class GroundingConstraints:
 
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
-    max_depth: int = field(default_factory=lambda: get_config().max_depth)
+    max_depth: int = field(default_factory=lambda: OmopGraphConfig.get_config().max_depth)
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
 

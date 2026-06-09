@@ -160,13 +160,13 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             from omop_emb.interface import EmbeddingWriterInterface, EmbeddingReaderInterface
-            from omop_emb.config import get_config as get_emb_config
+            from omop_emb.config import OmopEmbConfig
             from omop_emb.backends.base_backend import resolve_backend
 
             if self._emb_config is None:
                 raise ValueError("Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features.")
 
-            backend_type = self._emb_config.backend_type or get_emb_config().backend
+            backend_type = self._emb_config.backend_type or OmopEmbConfig.get_config().backend
 
             backend = resolve_backend(backend_type)
 
