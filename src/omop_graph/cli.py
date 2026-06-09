@@ -12,7 +12,7 @@ from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
 
-from omop_graph.config import configure_logging
+from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import get_engine
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from .cli_utils.cli_add_test_data import populate_test_data
@@ -28,7 +28,7 @@ def _main(
         typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG)."),
     ] = 0,
 ) -> None:
-    configure_logging(verbosity=verbose)
+    OmopGraphConfig.configure_logging(verbosity=verbose)
 
 
 @app.command()

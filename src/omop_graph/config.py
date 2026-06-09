@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import ClassVar, Final
 
 from pydantic import Field
-from oa_configurator import PackageConfigBase, ResourceSpec, Resolver
-from oa_configurator import configure_logging as _configure_logging
+from oa_configurator import PackageConfigBase, ResourceSpec
 from omop_alchemy.config import CDM_DB_RESOURCE
 
 TOOL_NAME: Final[str] = "omop_graph"
@@ -20,6 +19,7 @@ class OmopGraphConfig(PackageConfigBase):
     """
 
     tool_name: ClassVar[str] = TOOL_NAME
+    extra_logging_namespaces: ClassVar[tuple[str, ...]] = ("omop_alchemy", "omop_emb")
     required_resources: ClassVar[tuple[str, ...]] = (CDM_DB_RESOURCE,)
     owned_resources: ClassVar[tuple[ResourceSpec, ...]] = ()
 
@@ -33,6 +33,3 @@ class OmopGraphConfig(PackageConfigBase):
     )
 
 
-def configure_logging(verbosity: int = 0) -> None:
-    """Configure logging for omop-graph and its dependencies."""
-    _configure_logging(verbosity=verbosity, extra_namespaces=["omop_alchemy", "omop_emb", TOOL_NAME])
