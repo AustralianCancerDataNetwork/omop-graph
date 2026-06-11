@@ -6,7 +6,7 @@ from omop_graph.graph.traverse import Subgraph, GraphTrace
 
 def subgraph_text(kg, sg: Subgraph) -> str:
     lines = [
-        f"Subgraph:",
+        "Subgraph:",
         f"  Nodes: {len(sg.nodes)}",
         f"  Edges: {len(sg.edges)}",
         "",

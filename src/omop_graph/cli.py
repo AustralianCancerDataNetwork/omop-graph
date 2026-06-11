@@ -1,7 +1,7 @@
 import logging
 import tempfile
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import pandas as pd
 import sqlalchemy as sa
@@ -63,15 +63,15 @@ def relationship_classification(
 
     check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[["description", "semantics", "inference"]].nunique(dropna=True)
     violations = check[(check > 1).any(axis=1)]
-    if not violations.empty:
-        conflicting_data = df_rel_cls[df_rel_cls["predicate_subkind"].isin(violations.index)].sort_values("predicate_subkind")
+    if not violations.empty:  # type: ignore[union-attr]
+        conflicting_data = df_rel_cls[df_rel_cls["predicate_subkind"].isin(violations.index)].sort_values("predicate_subkind")  # type: ignore[union-attr, arg-type, call-overload]
         logger.error(f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}")
         raise AttributeError("Validation not passed")
     df_rel_cls_to_export = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"], as_index=False).first()
 
     # 2. RelationshipMapping
     df_rel_mapping = df_mapping.rename(columns={"class": "predicate_kind", "subclass": "predicate_subkind", "r_id": "relationship_id"})
-    df_rel_mapping = df_rel_mapping[["relationship_id", "predicate_kind", "predicate_subkind"]].dropna(subset=['predicate_kind', 'predicate_subkind'], how='all')
+    df_rel_mapping = df_rel_mapping[["relationship_id", "predicate_kind", "predicate_subkind"]].dropna(subset=['predicate_kind', 'predicate_subkind'], how='all')  # type: ignore[call-overload]
     invalid_mask = df_rel_mapping[['predicate_kind', 'predicate_subkind']].isna().any(axis=1)
     dropped_ids = df_rel_mapping.loc[invalid_mask, 'relationship_id'].unique().tolist()
 

@@ -32,7 +32,7 @@ from omop_emb.embeddings import (
     EmbeddingRole
 )
 from omop_emb.backends.index_config import index_config_from_index_type
-from omop_graph.cli import configure_logging_level
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
@@ -555,7 +555,7 @@ def run_benchmark(
     ] = None,
     verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
-    configure_logging_level(verbosity)
+    OmopGraphConfig.configure_logging(verbosity=verbosity)
 
     cases = load_cases(Path(cases_file))
     if allowed_domains:

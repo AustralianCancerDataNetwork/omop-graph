@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Protocol, Iterable, Tuple, TYPE_CHECKING
+from typing import Protocol, Iterable, Tuple
 
 try:
     from cava_nlp import CaVaLang # type: ignore

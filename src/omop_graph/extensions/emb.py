@@ -151,12 +151,17 @@ def semantic_similarity(
             if embedding_writer is not None:
 
                 missing_concept_ids = tuple(missing_sc_embeddings.keys())
-                missing_concept_texts = tuple(missing_sc_embeddings.values())
+                missing_concept_texts = tuple(row.concept_name for row in missing_sc_embeddings.values())
+
+                from omop_emb.utils.cdm import fetch_cdm_concepts_for_filter
+                from omop_emb.utils.embedding_utils import EmbeddingConceptFilter as _ECF
+                missing_filter = _ECF(concept_ids=missing_concept_ids, limit=len(missing_concept_ids))
+                concept_meta = fetch_cdm_concepts_for_filter(missing_filter, cdm_engine=kg.cdm_engine)
 
                 embedding_writer.embed_and_upsert_concepts(
-                    omop_cdm_engine=kg.cdm_engine,
                     concept_ids=missing_concept_ids,
                     concept_texts=missing_concept_texts,
+                    concept_meta=concept_meta,
                 )
                 logger.debug(f"Computed and stored embeddings for missing concepts: {missing_concept_ids}")
             else:

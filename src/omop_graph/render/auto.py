@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import Subgraph, GraphTrace
@@ -28,7 +28,7 @@ Format = Literal["auto", "html", "text", "mmd"]
 
 def _in_notebook() -> bool:
     try:
-        from IPython.core.getipython import get_ipython
+        from IPython.core.getipython import get_ipython  # type: ignore[import-unresolved]
         ip = get_ipython()
         return ip is not None and "IPKernelApp" in ip.config
     except Exception:

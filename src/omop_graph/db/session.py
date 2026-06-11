@@ -8,12 +8,12 @@ from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker, Session
 
 from oa_configurator import Resolver
-from omop_alchemy.config import CDM_DB_RESOURCE
+from omop_alchemy.config import OmopAlchemyConfig
 
 
 def get_engine():
     """Return a SQLAlchemy engine for the CDM database via oa-configurator."""
-    return Resolver.from_active_config().resolve_resource(CDM_DB_RESOURCE).create_engine()
+    return Resolver.from_active_config().resolve_resource(OmopAlchemyConfig.CDM_DB.semantic_name).create_engine()
 
 
 def make_engine(

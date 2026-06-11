@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from collections import defaultdict
 from typing import Dict, Set, List
 from omop_graph.graph.kg import KnowledgeGraph

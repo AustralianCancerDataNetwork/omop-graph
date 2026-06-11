@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import builtins
-import contextlib
 import logging
-from types import SimpleNamespace
 from typing import cast
 from unittest.mock import Mock
 
 import numpy as np
 import pytest
-from sqlalchemy import Engine
 
 from omop_graph.extensions import emb as emb_ext
 from omop_graph.extensions.emb import MissingExtensionError
