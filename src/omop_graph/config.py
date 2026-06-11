@@ -6,7 +6,7 @@ from typing import ClassVar, Final
 
 from pydantic import Field
 from oa_configurator import PackageConfigBase, ResourceSpec
-from omop_alchemy.config import CDM_DB_RESOURCE
+from omop_alchemy.config import OmopAlchemyConfig
 
 TOOL_NAME: Final[str] = "omop_graph"
 
@@ -19,8 +19,8 @@ class OmopGraphConfig(PackageConfigBase):
     """
 
     tool_name: ClassVar[str] = TOOL_NAME
-    extra_logging_namespaces: ClassVar[tuple[str, ...]] = ("omop_alchemy", "omop_emb")
-    required_resources: ClassVar[tuple[str, ...]] = (CDM_DB_RESOURCE,)
+    extra_logging_namespaces: ClassVar[tuple[str, ...]] = ("orm_loader", "omop_alchemy", "omop_emb")
+    required_resources: ClassVar[tuple[str, ...]] = (OmopAlchemyConfig.CDM_DB.semantic_name,)
     owned_resources: ClassVar[tuple[ResourceSpec, ...]] = ()
 
     max_depth: int = Field(

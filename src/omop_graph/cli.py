@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def _main(
     verbose: Annotated[
         int,
-        typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG)."),
+        typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG). Must come before the subcommand name."),
     ] = 0,
 ) -> None:
     OmopGraphConfig.configure_logging(verbosity=verbose)
