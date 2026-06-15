@@ -15,7 +15,7 @@ from orm_loader.loaders.loader_interface import PandasLoader
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import get_engine
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
-from .cli_utils.cli_add_test_data import populate_test_data
+from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
