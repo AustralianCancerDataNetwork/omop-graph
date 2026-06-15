@@ -8,14 +8,12 @@ consistent behavior and report semantics.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
 import typer
 
 import sqlalchemy as sa
-from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 
 import numpy as np
@@ -52,6 +50,16 @@ from omop_graph.reasoning.resolvers.resolvers import (
 )
 from omop_graph.db.session import make_engine
 app = typer.Typer()
+
+
+@app.callback()
+def _main(
+    verbose: Annotated[
+        int,
+        typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG). Must come before the subcommand name."),
+    ] = 0,
+) -> None:
+    OmopGraphConfig.configure_logging(verbosity=verbose)
 
 DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
 
@@ -160,40 +168,22 @@ def load_cases(path: Path) -> List[BenchmarkCase]:
     raise TypeError(f"Unsupported benchmark case file shape: {type(payload).__name__}")
 
 
-def build_session_factory(database_url: Optional[str]) -> sessionmaker:
-    """Build a SQLAlchemy session factory for the configured OMOP database."""
-
-    load_dotenv()
-    resolved_url = database_url or os.getenv("OMOP_CDM_DB_URL")
-    if not resolved_url:
-        raise RuntimeError(
-            "No database URL provided. Pass --database-url or set OMOP_CDM_DB_URL."
-        )
-
-    engine = sa.create_engine(resolved_url, future=True, echo=False)
-    return sessionmaker(bind=engine, future=True)
+def build_session_factory() -> sessionmaker:
+    """Build a SQLAlchemy session factory via oa-configurator."""
+    return sessionmaker(bind=make_engine(), future=True)
 
 
-def build_engine(database_url: Optional[str]) -> sa.Engine:
-    """Build a SQLAlchemy engine for the configured OMOP database."""
-
-    load_dotenv()
-    resolved_url = database_url or os.getenv("OMOP_CDM_DB_URL")
-    if not resolved_url:
-        raise RuntimeError(
-            "No database URL provided. Pass --database-url or set OMOP_CDM_DB_URL."
-        )
-
-    return sa.create_engine(resolved_url, future=True, echo=False)
+def build_engine() -> sa.Engine:
+    """Build a SQLAlchemy engine via oa-configurator."""
+    return make_engine()
 
 
-def build_knowledge_graph(database_url: Optional[str]) -> KnowledgeGraph:
+def build_knowledge_graph() -> KnowledgeGraph:
     """Create a KnowledgeGraph backed by the live OMOP CDM database."""
-    return KnowledgeGraph(cdm_engine=make_engine(database_url))
+    return KnowledgeGraph(cdm_engine=make_engine())
 
 
 def build_embedding_knowledge_graph(
-    database_url: Optional[str],
     embedding_metric: MetricType,
     embedding_model: Optional[str],
     embedding_backend: Optional[str | BackendType],
@@ -201,7 +191,7 @@ def build_embedding_knowledge_graph(
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
-    cdm_engine = make_engine(database_url)
+    cdm_engine = make_engine()
     resolved_embedding_backend = parse_backend_type(embedding_backend) if embedding_backend is not None else None
     resolved_metric_type = parse_metric_type(embedding_metric)
 
@@ -499,7 +489,7 @@ def _evaluate_grounded_case(
     }
 
 
-@app.command("Generalised benchmark interface.")
+@app.command()
 def run_benchmark(
     cases_file: Annotated[str, typer.Option(
         "--cases-file", "-c", 
@@ -545,18 +535,12 @@ def run_benchmark(
         "--grounding-parent-ids", "-G",
         help="Comma-separated list of OMOP concept IDs to use as parent nodes for grounding. If not provided, no parent ID filtering will be applied.")
     ] = None,
-    database_url: Annotated[Optional[str], typer.Option(
-        "--database-url", "-d",
-        help="Database URL for the OMOP CDM database. If not provided, will use the environment variable specified by the library (e.g., OMOP_CDM_DATABASE_URL).")
-    ] = None,
     embedding_backend: Annotated[Optional[str], typer.Option(
         "--embedding-backend", "-e",
         help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). If not provided, will use the environment variable specified by the library (e.g., OMOP_EMB_BACKEND).")
     ] = None,
-    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
-    OmopGraphConfig.configure_logging(verbosity=verbosity)
-
+    """Generalised benchmark interface."""
     cases = load_cases(Path(cases_file))
     if allowed_domains:
         domain_filter = set(allowed_domains.split(","))
@@ -594,7 +578,6 @@ def run_benchmark(
         canonical_model = embedding_client.provider.canonical_model_name(embedding_model)
 
         embedding_kg = build_embedding_knowledge_graph(
-            database_url=database_url,
             embedding_model=canonical_model,
             embedding_metric=resolved_embedding_metric_type,
             embedding_backend=embedding_backend,
@@ -618,7 +601,7 @@ def run_benchmark(
             for case in cases
         }
 
-    kg = build_knowledge_graph(database_url)
+    kg = build_knowledge_graph()
     configs = build_grounded_configs()
 
     errors: Dict[str, str] = {}
@@ -728,7 +711,6 @@ def run_benchmark(
         "bucket_summaries": bucket_summaries,
         "significance": significance,
         "errors": errors,
-        "database_url": database_url or os.getenv("OMOP_CDM_DB_URL"),
         "embedding_model": embedding_model,
         "embedding_backend": embedding_backend,
         "embedding_metric_type": embedding_metric_type,
