@@ -37,7 +37,7 @@ dependencies = [
   "typing-extensions>=4.15.0",
   "typer",
   "oaklib",
-  #"oa-configurator>=0.0.1",  # uncomment once published to PyPI
+  "oa-configurator>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -69,7 +69,8 @@ dev = [
     "mkdocstrings[python]",
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
-    "mkdocs-macros-plugin", 
+    "mkdocs-macros-plugin",
+    "oa-configurator[postgres]>=0.1.0"
 ]
 
 [project.scripts]
