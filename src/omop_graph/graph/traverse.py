@@ -180,7 +180,9 @@ def traverse(
                 session=session,
                 concept_ids=node,
                 direction="out",
-                predicate_kinds=frozenset(predicate_kinds) if predicate_kinds is not None else None,
+                predicate_kinds=frozenset(predicate_kinds)
+                if predicate_kinds is not None
+                else None,
                 active_only=True,
                 on=on,
             ):

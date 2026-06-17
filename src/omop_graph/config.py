@@ -19,8 +19,14 @@ class OmopGraphConfig(PackageConfigBase):
     """
 
     tool_name: ClassVar[str] = TOOL_NAME
-    extra_logging_namespaces: ClassVar[tuple[str, ...]] = ("orm_loader", "omop_alchemy", "omop_emb")
-    required_resources: ClassVar[tuple[str, ...]] = (OmopAlchemyConfig.CDM_DB.semantic_name,)
+    extra_logging_namespaces: ClassVar[tuple[str, ...]] = (
+        "orm_loader",
+        "omop_alchemy",
+        "omop_emb",
+    )
+    required_resources: ClassVar[tuple[str, ...]] = (
+        OmopAlchemyConfig.CDM_DB.semantic_name,
+    )
     owned_resources: ClassVar[tuple[ResourceSpec, ...]] = ()
 
     max_depth: int = Field(
@@ -31,5 +37,3 @@ class OmopGraphConfig(PackageConfigBase):
         default=20,
         description="Maximum number of shortest paths returned per query.",
     )
-
-

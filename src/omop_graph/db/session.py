@@ -13,7 +13,11 @@ from omop_alchemy.config import OmopAlchemyConfig
 
 def get_engine():
     """Return a SQLAlchemy engine for the CDM database via oa-configurator."""
-    return Resolver.from_active_config().resolve_resource(OmopAlchemyConfig.CDM_DB.semantic_name).create_engine()
+    return (
+        Resolver.from_active_config()
+        .resolve_resource(OmopAlchemyConfig.CDM_DB.semantic_name)
+        .create_engine()
+    )
 
 
 def make_engine(
@@ -30,6 +34,7 @@ def make_engine(
     if url is None:
         return get_engine()
     from sqlalchemy import make_url as _make_url
+
     if isinstance(url, str):
         url = _make_url(url)
     kwargs = {}

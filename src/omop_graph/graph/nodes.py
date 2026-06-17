@@ -240,7 +240,6 @@ class LabelMatch:
         """
 
 
-
 @dataclass(frozen=True)
 class LabelMatchGroupView:
     """
@@ -359,7 +358,7 @@ class LabelMatchGroupView:
               </tr>
             </thead>
             <tbody>
-              {''.join(rows)}
+              {"".join(rows)}
             </tbody>
           </table>
         </div>

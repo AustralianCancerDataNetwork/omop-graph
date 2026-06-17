@@ -34,7 +34,9 @@ def omop_resource(
     OMOPOntologyResource
     """
     if url is None:
-        resource = Resolver.from_active_config().resolve_resource(OmopAlchemyConfig.CDM_DB.semantic_name)
+        resource = Resolver.from_active_config().resolve_resource(
+            OmopAlchemyConfig.CDM_DB.semantic_name
+        )
         url = resource.database.url
 
     return OMOPOntologyResource(

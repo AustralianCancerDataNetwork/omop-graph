@@ -2,7 +2,8 @@
 
 This benchmark evaluates resolver configurations against a live OMOP CDM database.
 
-Set `OMOP_CDM_DB_URL` or pass `--database-url` to point the benchmark at your local database.
+Database connection is resolved automatically from `~/.config/omop/config.toml` via oa-configurator.
+No environment variables or `--database-url` flags are needed.
 
 ## What It Measures
 
@@ -15,7 +16,7 @@ Set `OMOP_CDM_DB_URL` or pass `--database-url` to point the benchmark at your lo
 - Candidate pruning ratio (raw hits vs deduplicated predictions)
 - McNemar-style paired comparison statistics between ablations
 
-Additional grounded metrics (when `--grounding-parent-id` is provided):
+Additional grounded metrics (when `--grounding-parent-ids` is provided):
 
 - `ground_top1`, `ground_mrr`, `ground_recall_at_k`
 - `ground_false_grounding_rate`, `ground_safe_null_rate`
@@ -68,13 +69,11 @@ For each config (`basic`, `extended`, `full_text`, `full_text_with_embedding`):
 
 If your local OMOP CDM does not have the full-text columns or indexes available, the `full_text` entry will be reported under `errors` in the JSON output.
 
-The embedding ablation requires all of the following to be configured:
+The embedding ablation requires the embedding model to be configured in `~/.config/omop/config.toml`
+under the `tools.omop_emb` section (fields: `embedding_model`, `ollama_api_base`, `api_key`).
 
-- `OMOP_EMB_BACKEND` or `--embedding-backend`
-- `OMOP_EMB_MODEL` or `--embedding-model`
-- `OMOP_OLLAMA_API_BASE` or `--embedding-api-base`
-
-If any of those are missing, the benchmark will still run the non-embedding configs and report the embedding run under `errors`.
+If the embedding configuration is missing, the benchmark will still run the non-embedding configs
+and report the embedding run under `errors`.
 
 Note: scoring comparison fields (`score_*_emb`) are populated whenever the
 benchmark has a working embedding client and model configuration, even for
@@ -83,96 +82,72 @@ a single run.
 
 ## Run
 
-From repository root:
+From the repository root, using the VS Code launch configs or directly:
 
 ```bash
-python scripts/benchmarks/benchmark_resolvers.py --k 5
+python scripts/benchmarks/benchmark.py -vv run-benchmark \
+    --cases-file=scripts/benchmarks/benchmark_cases/resolver_cases.json \
+    --k=5
 ```
 
-Run with grounding metrics enabled (repeatable parent IDs):
+With grounding (hierarchy-anchored evaluation):
 
 ```bash
-python scripts/benchmarks/benchmark_resolvers.py \
-	--k 5 \
-	--grounding-parent-id 441840
+python scripts/benchmarks/benchmark.py -vv run-benchmark \
+    --cases-file=scripts/benchmarks/benchmark_cases/resolver_cases.json \
+    --k=5 \
+    --grounding-parent-ids=441840
 ```
 
-Optional filters:
+With embedding:
 
 ```bash
-python scripts/benchmarks/benchmark_resolvers.py --domain Condition --vocabulary SNOMED
+python scripts/benchmarks/benchmark.py -vv run-benchmark \
+    --cases-file=scripts/benchmarks/benchmark_cases/resolver_cases.json \
+    --k=5 \
+    --grounding-parent-ids=441840 \
+    --embedding-model=medembed-small-v0.1-local:f16 \
+    --embedding-api-base-url=http://host.docker.internal:11434/v1 \
+    --embedding-metric-type=cosine \
+    --embedding-index-type=flat \
+    --embedding-api-key=ollama
 ```
 
 Write report to disk:
 
 ```bash
-python scripts/benchmarks/benchmark_resolvers.py --out scripts/benchmarks/report.json
+python scripts/benchmarks/benchmark.py -vv run-benchmark \
+    --cases-file=scripts/benchmarks/benchmark_cases/resolver_cases.json \
+    --k=5 \
+    --out-file=/home/vscode/benchmark_report.json
 ```
 
-Embedding example:
+## Trace Tool
+
+`trace_example.py` runs a single query through every resolver stage and produces a detailed
+JSON trace and optional SVG flowchart — useful for debugging individual cases and ablation
+analysis (per-resolver ranking, target rank per resolver).
 
 ```bash
-python scripts/benchmarks/benchmark_resolvers.py \
-	--embedding-backend pgvector \
-	--embedding-model nomic-embed-text \
-	--embedding-api-base http://ollama:11434/v1
+python scripts/benchmarks/trace_example.py -vv trace \
+    --cases-file=scripts/benchmarks/benchmark_cases/resolver_cases.json \
+    --case-id=easy_hodgkin_lymphoma \
+    --parent-ids=443392 \
+    --top-n=5 \
+    --out-file=results/trace_example.json
 ```
 
-Embedding + grounding example:
+Generate SVG flowchart from a trace:
 
 ```bash
-python scripts/benchmarks/benchmark_resolvers.py \
-	--k 5 \
-	--embedding-backend pgvector \
-	--embedding-model nomic-embed-text \
-	--embedding-api-base http://ollama:11434/v1 \
-	--grounding-parent-id 441840
+python scripts/benchmarks/trace_example.py svg \
+    --trace-file=results/trace_example.json \
+    --out-file=results/trace_example.svg
 ```
-
-## Poster-Oriented Grounded Benchmark
-
-Use `benchmark_poster.py` to run an end-to-end grounded evaluation with
-`ground_term` and produce case-level showcase rows suitable for poster tables.
-
-```bash
-python scripts/benchmarks/benchmark_poster.py \
-	--k 5 \
-	--grounding-parent-id 441840 \
-	--embedding-backend pgvector \
-	--embedding-model nomic-embed-text \
-	--embedding-api-base http://ollama:11434/v1 \
-	--out scripts/benchmarks/poster_report.json
-```
-
-The poster report includes:
-
-- normal summary and bucket summaries per config
-- significance comparisons
-- `representative_cases`: top case-level improvements from `basic` to
-	`full_text_with_embedding` (rank and score deltas)
-
-## Cancer NSW Grounded Benchmark
-
-Use `benchmark_cancer_nsw.py` to run the same grounded benchmark flow against
-the dedicated cancer-focused case set.
-
-```bash
-python scripts/benchmarks/benchmark_cancer_nsw.py \
-	--k 5 \
-	--grounding-parent-id 441840 \
-	--embedding-backend pgvector \
-	--embedding-model nomic-embed-text \
-	--embedding-api-base http://ollama:11434/v1
-```
-
-This wrapper defaults to:
-
-- `--cases scripts/benchmarks/cancer_nsw_cases.json`
-- `--out /home/vscode/benchmark_cancer_nsw.json`
 
 ## Cases
 
-Cases are configuration files in `scripts/benchmarks/`:
+Cases are configuration files in `scripts/benchmarks/benchmark_cases/`:
 
 - `resolver_cases.json` for general poster/resolver evaluation
 - `cancer_nsw_cases.json` for cancer-specific benchmarking

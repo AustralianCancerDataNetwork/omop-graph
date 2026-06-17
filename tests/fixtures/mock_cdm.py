@@ -63,7 +63,10 @@ def mock_cdm_kg(
     monkeypatch: pytest.MonkeyPatch,
 ) -> KnowledgeGraph:
     # Grounding tests here focus on SQL + resolver + path pipeline.
-    monkeypatch.setattr("omop_graph.reasoning.grounding.get_embedding_writer_interface", lambda _kg: None)
+    monkeypatch.setattr(
+        "omop_graph.reasoning.grounding.get_embedding_writer_interface",
+        lambda _kg: None,
+    )
 
     return KnowledgeGraph(cdm_engine=mock_cdm_engine)
 
@@ -198,8 +201,16 @@ def seed_mock_cdm(session: Session) -> None:
 
     session.add_all(
         [
-            Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=CONCEPT_META_ID),
-            Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=CONCEPT_META_ID),
+            Domain(
+                domain_id="Metadata",
+                domain_name="Metadata",
+                domain_concept_id=CONCEPT_META_ID,
+            ),
+            Domain(
+                domain_id="Condition",
+                domain_name="Condition",
+                domain_concept_id=CONCEPT_META_ID,
+            ),
             Vocabulary(
                 vocabulary_id="OMOP",
                 vocabulary_name="OMOP",

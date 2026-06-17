@@ -1,13 +1,13 @@
 """
 Semantic Grounding Orchestration.
 
-This module provides the high-level `ground_term` function, which orchestrates 
+This module provides the high-level `ground_term` function, which orchestrates
 the full grounding pipeline:
 1.  **Candidate Resolution**: Finding raw concepts that match the input text.
-2.  **Hierarchy Validation**: Ensuring candidates have a valid relationship path 
+2.  **Hierarchy Validation**: Ensuring candidates have a valid relationship path
     to required parent concepts.
 3.  **Standardization**: Mapping non-standard candidates to standard OMOP concepts.
-4.  **Semantic Ranking**: Using embeddings and graph-based scoring to select the 
+4.  **Semantic Ranking**: Using embeddings and graph-based scoring to select the
     best mapping.
 """
 
@@ -40,7 +40,6 @@ from omop_graph.extensions.emb import (
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass(frozen=True)
 class GroundingConstraints:
     """
@@ -60,7 +59,9 @@ class GroundingConstraints:
 
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
-    max_depth: int = field(default_factory=lambda: OmopGraphConfig.get_config().max_depth)
+    max_depth: int = field(
+        default_factory=lambda: OmopGraphConfig.get_config().max_depth
+    )
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
 
@@ -113,6 +114,7 @@ def ground_term(
         embedding_writer = get_embedding_writer_interface(kg)
         if embedding_writer is not None:
             from omop_emb.embeddings import EmbeddingRole
+
             query_embedding = embedding_writer.embed_texts(
                 texts=(query,),
                 embedding_role=EmbeddingRole.QUERY,
@@ -137,7 +139,9 @@ def ground_term(
         )
     )
     if not resolved:
-        logger.info(f"No candidates found for '{query}' using the resolver pipeline: {resolver_pipeline}")
+        logger.info(
+            f"No candidates found for '{query}' using the resolver pipeline: {resolver_pipeline}"
+        )
         return []
 
     # Hierarchy anchoring
@@ -164,11 +168,15 @@ def ground_term(
             raise NotImplementedError("Grounding without parent_ids is not supported.")
 
     if not standard_concepts:
-        logger.info(f"No standard concepts found for '{query}' after hierarchy validation.")
+        logger.info(
+            f"No standard concepts found for '{query}' after hierarchy validation."
+        )
         return []
 
     nearest_concept_matches = (
-        semantic_similarity(kg=kg, standard_concepts=standard_concepts, query_embedding=query_embedding)
+        semantic_similarity(
+            kg=kg, standard_concepts=standard_concepts, query_embedding=query_embedding
+        )
         if query_embedding is not None
         else None
     )
@@ -186,9 +194,14 @@ def ground_term(
         if existing is None or concept.total_score > existing.total_score:
             best_by_concept_id[concept.concept_id] = concept
 
-    deduped_ranked = sorted(best_by_concept_id.values(), key=lambda sc: sc.total_score, reverse=True)
-    return deduped_ranked[:max_candidates] if max_candidates is not None else deduped_ranked
-
+    deduped_ranked = sorted(
+        best_by_concept_id.values(), key=lambda sc: sc.total_score, reverse=True
+    )
+    return (
+        deduped_ranked[:max_candidates]
+        if max_candidates is not None
+        else deduped_ranked
+    )
 
 
 def find_standard_concepts(

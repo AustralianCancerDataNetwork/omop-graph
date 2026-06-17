@@ -17,17 +17,20 @@ from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
 
-
 def test_get_embedding_interface_returns_none_for_missing_extension_error():
     class BrokenKG:
         @property
         def emb(self):
             raise MissingExtensionError()
 
-    assert emb_ext.get_embedding_reader_interface(cast(KnowledgeGraph, BrokenKG())) is None
+    assert (
+        emb_ext.get_embedding_reader_interface(cast(KnowledgeGraph, BrokenKG())) is None
+    )
 
 
-def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavailable(monkeypatch: pytest.MonkeyPatch):
+def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+):
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -46,6 +49,7 @@ def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavai
 
 
 # ── compute_missing_embeddings flag tests (using real KG + dummy CDM DB) ──
+
 
 def _make_standard_concept(concept_id: int, name: str) -> StandardConcept:
     return StandardConcept(
@@ -84,7 +88,9 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
     }
 
     monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
-    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
+    monkeypatch.setattr(
+        emb_ext, "get_embedding_reader_interface", lambda _: fake_reader
+    )
     # No writer injected: simulates a read-only config with fallback flag set.
     monkeypatch.setattr(emb_ext, "get_embedding_writer_interface", lambda _: None)
     monkeypatch.setattr(emb_ext, "get_neareast_concepts", lambda **_: None)
@@ -92,7 +98,9 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
     with caplog.at_level(logging.DEBUG, logger="omop_graph.extensions.emb"):
         emb_ext.semantic_similarity(
             kg=mock_cdm_kg,
-            standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
+            standard_concepts=[
+                _make_standard_concept(196653, "Malignant tumor of kidney")
+            ],
             query_embedding=np.zeros((1, 3), dtype=np.float32),
         )
 
@@ -121,13 +129,17 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
     }
 
     monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
-    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
+    monkeypatch.setattr(
+        emb_ext, "get_embedding_reader_interface", lambda _: fake_reader
+    )
     monkeypatch.setattr(emb_ext, "get_neareast_concepts", lambda **_: None)
 
     with caplog.at_level(logging.INFO, logger="omop_graph.extensions.emb"):
         emb_ext.semantic_similarity(
             kg=mock_cdm_kg,
-            standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
+            standard_concepts=[
+                _make_standard_concept(196653, "Malignant tumor of kidney")
+            ],
             query_embedding=np.zeros((1, 3), dtype=np.float32),
         )
 

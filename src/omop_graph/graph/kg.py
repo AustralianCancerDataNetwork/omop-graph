@@ -26,11 +26,24 @@ from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.backends import FullTextError
 
 if TYPE_CHECKING:
-    from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface, EmbeddingClient
+    from omop_emb import (
+        EmbeddingWriterInterface,
+        EmbeddingReaderInterface,
+        EmbeddingClient,
+    )
 
 # Local Application Imports
-from ..extensions.emb import MissingExtensionError, EmbeddingBackendType, EmbeddingProviderType, EmbeddingMetricType
-from ..extensions.omop_alchemy import PredicateKind, RelationshipMappingElement, load_relationship_mapping
+from ..extensions.emb import (
+    MissingExtensionError,
+    EmbeddingBackendType,
+    EmbeddingProviderType,
+    EmbeddingMetricType,
+)
+from ..extensions.omop_alchemy import (
+    PredicateKind,
+    RelationshipMappingElement,
+    load_relationship_mapping,
+)
 from .base import GraphBackend
 from .constraints import SearchConstraintConcept
 from .edges import EdgeView, Predicate
@@ -62,10 +75,11 @@ from .queries import (
     q_roots,
     q_singletons,
     q_entities,
-    q_relationships
+    q_relationships,
 )
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class KnowledgeGraphEmbeddingConfiguration:
@@ -87,7 +101,7 @@ class KnowledgeGraphEmbeddingConfiguration:
     client : EmbeddingClient, optional
         An optional client instance for generating embeddings. If not provided, no writing operations can take place.
     provider_type : EmbeddingProviderType, optional
-        The provider type to use for the embedding reader interface (e.g., 'ollama'). 
+        The provider type to use for the embedding reader interface (e.g., 'ollama').
         Required for read-only embedding interface to determine provider-specific canonical model name.
     compute_missing_embeddings : bool
         If True, the system will compute embeddings on-the-fly for any concept that is not yet present
@@ -96,12 +110,14 @@ class KnowledgeGraphEmbeddingConfiguration:
         the KG only holds a read-only interface, the flag has no effect, and missing concepts are silently skipped.
         Defaults to ``False`` so that unexpected writes do not occur when only a read-only configuration is given.
     """
+
     metric_type: EmbeddingMetricType
     model_name: Optional[str] = None
     backend_type: Optional[EmbeddingBackendType] = None
     client: Optional[EmbeddingClient] = None
     provider_type: Optional[EmbeddingProviderType] = None
     compute_missing_embeddings: bool = False
+
 
 class KnowledgeGraph(GraphBackend):
     """
@@ -126,7 +142,9 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             with self.session_factory() as session:
-                self._relationship_mapping: dict[str, RelationshipMappingElement] = load_relationship_mapping(session)
+                self._relationship_mapping: dict[str, RelationshipMappingElement] = (
+                    load_relationship_mapping(session)
+                )
         except Exception as exc:
             raise RuntimeError(
                 "Failed to load relationship mapping. "
@@ -159,14 +177,21 @@ class KnowledgeGraph(GraphBackend):
             return self._emb
 
         try:
-            from omop_emb.interface import EmbeddingWriterInterface, EmbeddingReaderInterface
+            from omop_emb.interface import (
+                EmbeddingWriterInterface,
+                EmbeddingReaderInterface,
+            )
             from omop_emb.config import OmopEmbConfig
             from omop_emb.backends.base_backend import resolve_backend
 
             if self._emb_config is None:
-                raise ValueError("Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features.")
+                raise ValueError(
+                    "Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features."
+                )
 
-            backend_type = self._emb_config.backend_type or OmopEmbConfig.get_config().backend
+            backend_type = (
+                self._emb_config.backend_type or OmopEmbConfig.get_config().backend
+            )
 
             backend = resolve_backend(backend_type)
 
@@ -180,9 +205,13 @@ class KnowledgeGraph(GraphBackend):
                 )
             else:
                 if self._emb_config.provider_type is None:
-                    raise ValueError("Provider type must be specified for read-only embedding interface.")
+                    raise ValueError(
+                        "Provider type must be specified for read-only embedding interface."
+                    )
                 if self._emb_config.model_name is None:
-                    raise ValueError("Canonical model name must be specified for read-only embedding interface.")
+                    raise ValueError(
+                        "Canonical model name must be specified for read-only embedding interface."
+                    )
                 # Read-only interface
                 self._emb = EmbeddingReaderInterface(
                     model=self._emb_config.model_name,
@@ -205,7 +234,7 @@ class KnowledgeGraph(GraphBackend):
                 "Embedding functionality failed to initialize due to an import error in the optional embedding stack."
             )
             raise e
-        
+
     @property
     def embedding_configuration(self) -> Optional[KnowledgeGraphEmbeddingConfiguration]:
         """Returns the current embedding configuration, if set."""
@@ -214,7 +243,9 @@ class KnowledgeGraph(GraphBackend):
     @property
     def compute_missing_embeddings(self) -> bool:
         """Indicates whether on-the-fly computation of missing concept embeddings is enabled."""
-        return self._emb_config.compute_missing_embeddings if self._emb_config else False
+        return (
+            self._emb_config.compute_missing_embeddings if self._emb_config else False
+        )
 
     def concept_view(self, concept_id: int) -> ConceptView:
         """
@@ -234,7 +265,9 @@ class KnowledgeGraph(GraphBackend):
             row = session.execute(q_concept_view(concept_id)).one()
         return ConceptView.from_row(row)
 
-    def concept_views(self, concept_ids: tuple[int, ...], sort: bool = True) -> tuple[ConceptView, ...]:
+    def concept_views(
+        self, concept_ids: tuple[int, ...], sort: bool = True
+    ) -> tuple[ConceptView, ...]:
         """
         Retrieve multiple concept views in a batch.
 
@@ -285,11 +318,11 @@ class KnowledgeGraph(GraphBackend):
         match_kind: LabelMatchKind,
         synonym: bool = False,
         search_constraint: Optional[SearchConstraintConcept] = None,
-        sort: bool = True
+        sort: bool = True,
     ) -> tuple[LabelMatch, ...]:
         """
         Resolve a query to concept_id(s).
-        
+
         Parameters
         ----------
         query_term : str
@@ -351,7 +384,6 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_name_match(label)).scalars()
         return tuple(rows)
 
-
     def predicate(self, relationship_id: str) -> Predicate:
         """
         Retrieve a Predicate object by its relationship ID.
@@ -385,7 +417,9 @@ class KnowledgeGraph(GraphBackend):
         """
         # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
         with self.session_factory() as session:
-            predicate_name = session.execute(q_predicate_name(relationship_id)).scalar_one()
+            predicate_name = session.execute(
+                q_predicate_name(relationship_id)
+            ).scalar_one()
         return predicate_name
 
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
@@ -397,7 +431,6 @@ class KnowledgeGraph(GraphBackend):
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
         return item.predicate_kind
 
-    
     def predicate_kinds(
         self, relationship_ids: tuple[str, ...]
     ) -> Tuple[PredicateKind, ...]:
@@ -405,7 +438,7 @@ class KnowledgeGraph(GraphBackend):
         Classify a batch of predicates.
         """
         return tuple(self.predicate_kind(rel_id) for rel_id in relationship_ids)
-    
+
     def relationships(
         self,
         session: Session,
@@ -453,7 +486,6 @@ class KnowledgeGraph(GraphBackend):
         ):
             yield s, p, o
 
-
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
         """
         Get the reverse relationship ID, if it exists.
@@ -465,7 +497,7 @@ class KnowledgeGraph(GraphBackend):
         Normalize a string for lookup (lowercase, single spaces).
         """
         return re.sub(r"\s+", " ", query_term.strip().lower())
-       
+
     def edges(
         self,
         concept_ids: Tuple[int, ...] | int,
@@ -500,14 +532,15 @@ class KnowledgeGraph(GraphBackend):
             edges = tuple(
                 self.iter_edges(
                     session=session,
-                    concept_ids=concept_ids, 
+                    concept_ids=concept_ids,
                     predicate_ids=predicate_ids,
                     direction=direction,
                     predicate_kinds=predicate_kinds,
                     active_only=active_only,
                     on=on,
-                    within_domain=within_domain)
+                    within_domain=within_domain,
                 )
+            )
         return edges
 
     def iter_edges(
@@ -521,20 +554,19 @@ class KnowledgeGraph(GraphBackend):
         on: Optional[date] = None,
         within_domain: bool = True,
     ) -> Generator[EdgeView, None, None]:
-        
+
         stmt = q_edges(
-            concept_ids=concept_ids, 
+            concept_ids=concept_ids,
             predicate_ids=predicate_ids,
             direction=direction,
             predicate_kinds=predicate_kinds,
             active_only=active_only,
             on=on,
-            within_domain=within_domain
+            within_domain=within_domain,
         )
 
         for row in session.execute(stmt):
             yield EdgeView.from_query(row)
-
 
     def specificity(self, concept_id: int) -> float:
         """
@@ -569,16 +601,16 @@ class KnowledgeGraph(GraphBackend):
         standard_only: bool = True,
         filter_obsoletes: bool = True,
     ) -> Generator[int, None, None]:
-        
+
         query = q_entities(
             domain=domain,
             standard_only=standard_only,
-            filter_obsoletes=filter_obsoletes
+            filter_obsoletes=filter_obsoletes,
         )
-        
+
         for row in session.execute(query):
             yield int(row.concept_id)
-        
+
     def roots(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
     ) -> tuple[int, ...]:
@@ -591,7 +623,7 @@ class KnowledgeGraph(GraphBackend):
                     q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
                 ).scalars()
             )
-        return roots 
+        return roots
 
     def leaves(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
@@ -698,7 +730,9 @@ class KnowledgeGraph(GraphBackend):
                 )
 
         if constraints.vocabularies is not None:
-            invalid = [v for v in constraints.vocabularies if v not in self._valid_vocabularies]
+            invalid = [
+                v for v in constraints.vocabularies if v not in self._valid_vocabularies
+            ]
             if invalid:
                 raise ValueError(
                     f"Invalid vocabulary constraint(s): {invalid}. "

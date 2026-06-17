@@ -5,7 +5,8 @@ description = "Explainable, OMOP-native knowledge graph traversal and pathfindin
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-  { name = "Georgie Kennedy", email = "georgie.kennedy@unsw.edu.au" }
+  { name = "Georgie Kennedy", email = "georgie.kennedy@unsw.edu.au" },
+  { name = "Nico Loesch", email = "n.loesch@unsw.edu.au" }
 ]
 license = "Apache-2.0"
 
@@ -32,12 +33,11 @@ classifiers = [
 ]
 
 dependencies = [
-  "omop-alchemy>=0.6.3",
-  "sqlalchemy>=2.0.45",
+  "omop-alchemy>=0.7.0",
   "typing-extensions>=4.15.0",
   "typer",
   "oaklib",
-  "oa-configurator>=0.1.0",
+  "oa-configurator>=0.1.1"
 ]
 
 [project.optional-dependencies]
@@ -70,7 +70,7 @@ dev = [
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
     "mkdocs-macros-plugin",
-    "oa-configurator[postgres]>=0.1.0"
+    "oa-configurator[postgres]>=0.1.1"
 ]
 
 [project.scripts]

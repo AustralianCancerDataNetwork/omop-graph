@@ -4,7 +4,7 @@ Scoring algorithms for ranking resolved concepts.
 This module implements the logic for scoring candidate OMOP concepts based on:
 1.  **Relevance:** How well the text matches the query (embeddings + string similarity).
 2.  **Parsimony:** Penalizing deep graph traversals (finding a concept far away).
-3.  **Broadness:** Rewarding concepts that are more general (higher ancestor count), 
+3.  **Broadness:** Rewarding concepts that are more general (higher ancestor count),
     often useful for finding category headers.
 """
 
@@ -89,7 +89,9 @@ def score_standard_concepts(
     text: str,
     standard_concepts: tuple[StandardConcept, ...],
     kg: "KnowledgeGraph",
-    nearest_concept_matches: Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]] = None,
+    nearest_concept_matches: Optional[
+        Tuple[Tuple[NearestConceptMatch, ...], ...]
+    ] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Attach scoring metrics to each standard concept.
@@ -121,21 +123,19 @@ def score_standard_concepts(
     # Get specificity scores (ancestor counts) for the standard concepts
     sc_dict = {sc.concept_id: sc for sc in standard_concepts}
     num_ancestors = kg.get_num_ancestors(tuple(sc_dict.keys()))
-    
+
     # singular text
     if nearest_concept_matches is None:
-        nearest_concept_matches_dict = ({}, )
+        nearest_concept_matches_dict = ({},)
     else:
         nearest_concept_matches_dict = tuple(
-            {
-                match.concept_id: match.similarity
-                for match in matches_for_query
-            }
+            {match.concept_id: match.similarity for match in matches_for_query}
             for matches_for_query in nearest_concept_matches
         )
-    
 
-    assert len(nearest_concept_matches_dict) == 1, "Currently only supports scoring with a single query embedding vector for the singular text input"
+    assert len(nearest_concept_matches_dict) == 1, (
+        "Currently only supports scoring with a single query embedding vector for the singular text input"
+    )
     nearest_concept_matches_dict_for_single_query = nearest_concept_matches_dict[0]
 
     ranked_concepts = [
@@ -144,7 +144,9 @@ def score_standard_concepts(
             kg=kg,
             standard_concept=sc,
             num_ancestors=num_ancestors.get(sc.concept_id, 0),
-            similarity_score=nearest_concept_matches_dict_for_single_query.get(sc.concept_id, None),
+            similarity_score=nearest_concept_matches_dict_for_single_query.get(
+                sc.concept_id, None
+            ),
         )
         for sc in standard_concepts
     ]
@@ -194,8 +196,9 @@ def _score_standard_concept(
 
     if similarity_score is None:
         relevance = _textual_similarity_score(
-        query_text=text, matched_concept_label=standard_concept.matched_concept_label
-    )
+            query_text=text,
+            matched_concept_label=standard_concept.matched_concept_label,
+        )
     else:
         relevance = similarity_score
 

@@ -36,7 +36,9 @@ def standardise_ids(
     """
     mapping: Dict[int, int] = {}
 
-    raise NotImplementedError("predicate search has changed. Needs to change here too. Subsumes no longer valid.")
+    raise NotImplementedError(
+        "predicate search has changed. Needs to change here too. Subsumes no longer valid."
+    )
     for cid in ids:
         mapped = None
         # Look for the first 'Maps to' relationship

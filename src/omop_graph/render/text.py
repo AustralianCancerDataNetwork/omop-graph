@@ -46,6 +46,7 @@ def trace_text(kg, trace: GraphTrace) -> str:
 
     return "\n".join(lines)
 
+
 def path_text(kg, path: GraphPath) -> str:
     parts = []
     for step in path.steps:
@@ -66,7 +67,9 @@ def explained_path_text(kg, explanation: PathExplanation) -> str:
     for s in explanation.steps:
         subj = kg.concept_view(s.step.subject.concept_id)
         obj = kg.concept_view(s.step.object.concept_id)
-        depth = f"depth={s.traversal_depth}" if s.traversal_depth is not None else "depth=?"
+        depth = (
+            f"depth={s.traversal_depth}" if s.traversal_depth is not None else "depth=?"
+        )
         lines.append(
             f"  {subj.concept_name} --[{s.step.predicate}]--> {obj.concept_name} "
             f"({s.predicate_kind.name}, {depth}) {s.reason}"

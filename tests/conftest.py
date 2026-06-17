@@ -1,4 +1,3 @@
-
 import logging
 import os
 from pathlib import Path
@@ -12,6 +11,7 @@ pytest_plugins = ("fixtures.mock_cdm",)
 TEST_ENV_FILE_ENV_VAR = "OMOP_GRAPH_TEST_ENV_FILE"
 DEFAULT_TEST_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
+
 class WhitelistFilter(logging.Filter):
     def __init__(self, whitelist):
         self.whitelist = whitelist
@@ -22,6 +22,7 @@ class WhitelistFilter(logging.Filter):
             return True
         # 2. Allow logs from your specific modules
         return any(record.name.startswith(prefix) for prefix in self.whitelist)
+
 
 @pytest.fixture(autouse=True, scope="session")
 def load_test_environment():
@@ -37,13 +38,13 @@ def configure_logging_whitelist():
     """
     # Your allowed list
     my_whitelisted_loggers = ["omop_graph", "orm_loader", "omop_spires", "tests"]
-    
+
     # Instantiate the filter
     my_filter = WhitelistFilter(my_whitelisted_loggers)
-    
+
     # Get the root logger
     root_logger = logging.getLogger()
-    
+
     # --- THE FIX ---
     # We iterate over the handlers (Console, File, etc.) and attach the filter there.
     # This forces the check to happen right before the text hits the screen.

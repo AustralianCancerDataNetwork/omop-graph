@@ -166,9 +166,7 @@ class GraphPath:
             obj = kg.concept_view(s.object.concept_id)
             pred = kg.predicate(s.predicate)
 
-            parts.append(
-                f"{subj.concept_name} " f"-[{pred.name}]-> " f"{obj.concept_name}"
-            )
+            parts.append(f"{subj.concept_name} -[{pred.name}]-> {obj.concept_name}")
 
         return "\n  ↳ ".join(parts)
 
@@ -291,14 +289,14 @@ def find_shortest_paths(
     while q_fwd and q_bwd:
         expand_forward = len(q_fwd) <= len(q_bwd)
         expanded: List[EdgeView] = []
-        
+
         if expand_forward:
             cur = q_fwd.popleft()
             d = depth_fwd[cur]
 
             if d >= max_depth:
                 continue
-            
+
             with kg.session_factory() as session:
                 for e in kg.iter_edges(
                     session=session,
@@ -406,7 +404,9 @@ def find_shortest_paths(
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
         paths.extend(
-            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
+            reconstruct_paths(
+                source, target, meet, parents_fwd, parents_bwd, concept_standard_map
+            )
         )
         if len(paths) >= max_paths:
             break
@@ -492,7 +492,6 @@ def find_shortest_paths_batch(
 
     # Loop until frontiers are empty
     while fwd_frontier and bwd_frontier:
-
         # 1. Expand the smaller frontier (Optimization: Balanced Bi-BFS)
         expand_forward = len(fwd_frontier) <= len(bwd_frontier)
 
@@ -586,7 +585,9 @@ def find_shortest_paths_batch(
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
         paths.extend(
-            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
+            reconstruct_paths(
+                source, target, meet, parents_fwd, parents_bwd, concept_standard_map
+            )
         )
         if len(paths) >= max_paths:
             break
@@ -714,10 +715,10 @@ def find_standard_paths(
     # Track the shallowest iteration we have enqueued per concept to avoid
     # unbounded duplicate growth in high-degree neighborhoods.
     visited_min_iteration: Dict[int, int] = {candidate.concept_id: 0}
-    
+
     # Track found concepts to respect max_concepts
     found_standard_concepts: List[StandardConcept] = []
-    
+
     while queue:
         item = heapq.heappop(queue)
         subject_node = item.node
@@ -733,7 +734,7 @@ def find_standard_paths(
             potential_ancestor = kg.get_potential_ancestor(
                 child_id=subject_node.concept_id, parent_id=target
             )
-            
+
             if potential_ancestor is not None:
                 if potential_ancestor.min_levels_of_separation > max_depth:
                     continue
@@ -779,19 +780,22 @@ def find_standard_paths(
             object_id = edge.object_id
             object_view = view_map.get(object_id) or kg.concept_view(object_id)
             object_is_std = object_view.standard_concept
-            
+
             # Optimization: Only traverse to Standard concepts
             if not object_is_std:
                 continue
 
             next_iterations = iterations + 1
             prev_best_iteration = visited_min_iteration.get(object_id)
-            if prev_best_iteration is not None and prev_best_iteration <= next_iterations:
+            if (
+                prev_best_iteration is not None
+                and prev_best_iteration <= next_iterations
+            ):
                 continue
             visited_min_iteration[object_id] = next_iterations
 
             new_cost = cost
-            #new_cost = cost + COST_PREDICATES[converted_predicate_kind]  # Not punishing on the mapping to standard concept
+            # new_cost = cost + COST_PREDICATES[converted_predicate_kind]  # Not punishing on the mapping to standard concept
 
             heapq.heappush(
                 queue,
@@ -849,8 +853,8 @@ class PathProfile:
         Analyze a path to determine the 'Standard Anchor'.
 
         The first Standard Concept encountered via an IDENTITY edge is promoted as
-        the anchor.  
-        
+        the anchor.
+
         Notes
         -----
         For zero-hop paths (source == target), ``source_concept_id``
@@ -920,6 +924,7 @@ class PathExplanationStep:
     """
     A single step in the explanation of a path.
     """
+
     step: PathStep
     traversal_depth: Optional[int]
     predicate_kind: PredicateKind
@@ -931,6 +936,7 @@ class PathExplanation:
     """
     A full explanation of a graph path, including semantic reasoning.
     """
+
     path: GraphPath
     profile: PathProfile
     steps: tuple[PathExplanationStep, ...]
@@ -947,8 +953,14 @@ class PathExplanation:
         Construct an explanation by combining the path, the trace log, and semantic profiles.
         """
         steps: List[PathExplanationStep] = []
-        source = path.steps[0].subject.concept_id if path.steps else (trace.seeds[0] if trace.seeds else None)
-        profile = PathProfile.from_path(kg, path, match_kind=match_kind, source_concept_id=source)
+        source = (
+            path.steps[0].subject.concept_id
+            if path.steps
+            else (trace.seeds[0] if trace.seeds else None)
+        )
+        profile = PathProfile.from_path(
+            kg, path, match_kind=match_kind, source_concept_id=source
+        )
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)
@@ -977,6 +989,9 @@ def trace_contains_step(trace: GraphTrace, step: PathStep) -> Optional[TraceStep
         if ts.node != step.subject.concept_id:
             continue
         for e in ts.expanded_edges:
-            if e.object_id == step.object.concept_id and e.predicate_id == step.predicate:
+            if (
+                e.object_id == step.object.concept_id
+                and e.predicate_id == step.predicate
+            ):
                 return ts
     return None
