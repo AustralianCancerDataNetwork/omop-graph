@@ -495,26 +495,26 @@ def run_benchmark(
         "--cases-file", "-c", 
         help="Path to the JSON file containing benchmark cases.")
     ],
-    embedding_model: Annotated[str, typer.Option(
+    embedding_model: Annotated[Optional[str], typer.Option(
         "--embedding-model", "-m",
-        help="Name of the embedding model to use (e.g., 'text-embedding-3-small').")
-    ],
-    embedding_api_base_url: Annotated[str, typer.Option(
+        help="Name of the embedding model to use (e.g., 'text-embedding-3-small'). Falls back to config.toml")
+    ] = None,
+    embedding_api_base_url: Annotated[Optional[str], typer.Option(
         "--embedding-api-base-url", "-u",
-        help="Base URL for the embedding API (e.g., 'http://localhost:8000').")
-    ],
-    embedding_api_key: Annotated[str, typer.Option(
+        help="Base URL for the embedding API (e.g., 'http://localhost:8000'). Falls back to config.toml.")
+    ] = None,
+    embedding_api_key: Annotated[Optional[str], typer.Option(
         "--embedding-api-key", "-k",
-        help="API key for the embedding service, if required.")
-    ],
-    embedding_metric_type: Annotated[str, typer.Option(
+        help="API key for the embedding service, if required. Falls back to config.toml.")
+    ] = None,
+    embedding_metric_type: Annotated[MetricType, typer.Option(
         "--embedding-metric-type", "-M",
-        help="Distance metric type for embedding similarity (e.g., 'cosine').")
-    ],
-    embedding_index_type: Annotated[str, typer.Option(
+        help="Distance metric type for embedding similarity.")
+    ] = MetricType.COSINE,
+    embedding_index_type: Annotated[IndexType, typer.Option(
         "--embedding-index-type", "-I",
-        help="Index type for embedding retrieval (e.g., 'flat').")
-    ],
+        help="Index type for embedding retrieval (e.g., 'flat'). Has to match the registered model.")
+    ] = IndexType.FLAT,
     out_file: Annotated[Optional[str], typer.Option(
         "--out-file", "-o",
         help="Path to the output JSON file where results will be saved. If not provided, results will be printed to stdout.")
@@ -523,27 +523,29 @@ def run_benchmark(
         "--k", "-K",
         help="Number of nearest neighbors to retrieve for each case.")
     ] = 5,
-    allowed_domains: Annotated[Optional[str], typer.Option(
+    domains: Annotated[Optional[List[str]], typer.Option(
         "--allowed-domains", "-D",
-        help="Comma-separated list of allowed OMOP domains to filter concepts (e.g., 'Condition,Drug'). If not provided, no domain filtering will be applied.")
+        help="Used to filter cases within the case file. For multiple domains, repeat the option (e.g., -D Condition -D Procedure).")
     ] = None,
-    allowed_vocabularies: Annotated[Optional[str], typer.Option(
+    allowed_vocabularies: Annotated[Optional[List[str]], typer.Option(
         "--allowed-vocabularies", "-V",
-        help="Comma-separated list of allowed vocabularies to filter concepts (e.g., 'SNOMED,LOINC'). If not provided, no vocabulary filtering will be applied.")
+        help="Used to filter cases within the case file. For multiple vocabularies, repeat the option (e.g., -V SNOMED -V ICDO3).")
     ] = None,
-    parent_ids: Annotated[Optional[str], typer.Option(
+    parent_ids: Annotated[Optional[List[str]], typer.Option(
         "--grounding-parent-ids", "-G",
-        help="Comma-separated list of OMOP concept IDs to use as parent nodes for grounding. If not provided, no parent ID filtering will be applied.")
+        help="Overwrites the parent_ids specified in individual cases. For multiple IDs, repeat the option (e.g., -G 443392 -G 413015).")
     ] = None,
     embedding_backend: Annotated[Optional[str], typer.Option(
         "--embedding-backend", "-e",
-        help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). If not provided, will use the environment variable specified by the library (e.g., OMOP_EMB_BACKEND).")
+        help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). Defaults to config.toml or OMOP_EMB_BACKEND environment variable.")
     ] = None,
 ):
     """Generalised benchmark interface."""
     cases = load_cases(Path(cases_file))
-    if allowed_domains:
-        domain_filter = set(allowed_domains.split(","))
+
+    
+    if domains:
+        domain_filter = set(domains.split(","))
         cases = [c for c in cases if c.domain in domain_filter]
     if allowed_vocabularies:
         vocab_filter = set(allowed_vocabularies.split(","))

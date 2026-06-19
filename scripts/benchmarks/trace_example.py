@@ -49,8 +49,6 @@ def _main(
 ) -> None:
     OmopGraphConfig.configure_logging(verbosity=verbose)
 
-DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
-
 # Display name for each resolver (inferred from match_kind + synonym flag)
 RESOLVER_DISPLAY_NAMES = {
     (LabelMatchKind.EXACT, False): "Exact",
@@ -83,21 +81,21 @@ RESOLVER_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _build_kg(metric_type=None) -> KnowledgeGraph:
+def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> KnowledgeGraph:
     cdm_engine = make_engine()
     try:
-        from omop_emb.config import MetricType, OmopEmbConfig, parse_metric_type
+        from omop_emb.config import MetricType, OmopEmbConfig
         from omop_emb.embeddings import EmbeddingClient
 
         resolved_metric = metric_type if metric_type is not None else MetricType.COSINE
         emb_cfg = OmopEmbConfig.get_config()
         client = EmbeddingClient(
-            model=emb_cfg.embedding_model,
+            model=embedding_model or emb_cfg.embedding_model,
             api_base=emb_cfg.api_base,
             api_key=emb_cfg.api_key,
             provider_type=emb_cfg.provider_type,
         )
-        canonical_model = client.provider.canonical_model_name(emb_cfg.embedding_model)
+        canonical_model = client.provider.canonical_model_name(embedding_model or emb_cfg.embedding_model)
         emb_config = KnowledgeGraphEmbeddingConfiguration(
             client=client,
             model_name=canonical_model,
@@ -112,6 +110,40 @@ def _build_kg(metric_type=None) -> KnowledgeGraph:
 
 def _resolver_label(resolver) -> str:
     return RESOLVER_DISPLAY_NAMES.get((resolver.match_kind, resolver.synonym), type(resolver).__name__)
+
+
+def _resolve_embedding_model(embedding_model: Optional[str]) -> str:
+    """Resolve the canonical embedding model name (override or config default).
+
+    Mirrors the canonicalisation `_build_kg` does, but without opening a DB
+    connection — usable from `svg`, which never builds a KnowledgeGraph.
+    """
+    from omop_emb.config import OmopEmbConfig
+    from omop_emb.embeddings import EmbeddingClient
+
+    emb_cfg = OmopEmbConfig.get_config()
+    raw_model = embedding_model or emb_cfg.embedding_model
+    client = EmbeddingClient(
+        model=raw_model,
+        api_base=emb_cfg.api_base,
+        api_key=emb_cfg.api_key,
+        provider_type=emb_cfg.provider_type,
+    )
+    return client.provider.canonical_model_name(raw_model)
+
+
+def _model_dir_name(embedding_model: Optional[str]) -> str:
+    """Filesystem-safe directory name for a (canonical) embedding model name.
+
+    `embedding_model` is None when no embedding is configured for this run
+    (not an omop-emb availability issue — that's a hard requirement of this
+    script — but a legitimate "ran without embedding" outcome).
+    """
+    if embedding_model is None:
+        return "no_embedding"
+    from omop_emb.model_registry.model_registry_manager import RegistryManager
+
+    return RegistryManager.safe_model_name(embedding_model)
 
 
 def _concept_info(kg: KnowledgeGraph, concept_id: int) -> Dict:
@@ -391,7 +423,7 @@ def _constraints_dict(
         "parent_ids": list(parent_ids),
         "parent_concept_name": parent_name,
         "domain": sc.domains[0] if sc and sc.domains else None,
-        "vocabularies": list(sc.vocabularies) if sc and sc.vocabularies else list(DEFAULT_VOCABULARIES),
+        "vocabularies": list(sc.vocabularies) if sc and sc.vocabularies else None,
         "max_depth": 6,
     }
 
@@ -633,51 +665,48 @@ def _svg(trace: Dict, title: str) -> str:
 def trace(
     cases_file: Annotated[Optional[str], typer.Option("--cases-file", "-c",
         help="JSON benchmark cases file. Runs all cases unless --case-ids is given.")] = None,
-    case_ids: Annotated[Optional[str], typer.Option("--case-ids", "-i",
-        help="Comma-separated case IDs to run (default: all cases in --cases-file).")] = None,
+    case_ids: Annotated[Optional[List[str]], typer.Option("--case-id", "-i",
+        help="Optional case IDs to run. For multiple IDs, repeat the option (e.g., -i case1 -i case2). Default: None (all cases run)")] = None,
     query: Annotated[Optional[str], typer.Option("--query", "-q",
-        help="Ad-hoc query text (used without --cases-file).")] = None,
-    parent_ids: Annotated[Optional[str], typer.Option("--parent-ids", "-G",
-        help="Comma-separated parent concept IDs for hierarchy anchoring.")] = None,
-    domain: Annotated[Optional[str], typer.Option("--domain", "-D",
-        help="OMOP domain filter (e.g. Condition).")] = None,
-    vocabulary: Annotated[Optional[str], typer.Option("--vocabulary", "-V",
-        help="Comma-separated vocabulary filter (e.g. SNOMED,ICDO3).")] = None,
-    expected_concept_id: Annotated[Optional[int], typer.Option("--expected-concept-id", "-e",
-        help="Gold standard concept ID (ad-hoc mode only).")] = None,
+        help="Query text for on-demand evaluation, circumventing the cases file.")] = None,
+    parent_ids: Annotated[Optional[List[int]], typer.Option("--parent-id", "-G",
+        help="Provide parent concept IDs for hierarchy anchoring. For multiple IDs, repeat the option (e.g., -G 443392 -G 413015).")] = None,
+    domains: Annotated[Optional[List[str]], typer.Option("--domain", "-D",
+        help="OMOP domain filter. For multiple domains, repeat the option (e.g., -D Condition -D Procedure).")] = None,
+    vocabularies: Annotated[Optional[List[str]], typer.Option("--vocabulary", "-V",
+        help="Vocabulary filter. For multiple vocabularies, repeat the option (e.g., -V SNOMED -V ICDO3).")] = None,
+    query_expected_concept_id: Annotated[Optional[int], typer.Option("--expected-concept-id", "-e",
+        help="Expected concept ID for on-demand evaluation.")] = None,
     top_n: Annotated[int, typer.Option("--top-n", "-n",
         help="Number of top results to include per case.")] = 5,
-    out_file: Annotated[Optional[str], typer.Option("--out-file", "-o",
-        help="Output JSON file (default: stdout).")] = None,
+    out_dir: Annotated[Optional[str], typer.Option("--out-dir", "-o",
+        help="Base output directory. Writes one file per case to <out-dir>/<safe_model_name>/trace_<case_id>.json. If omitted, prints combined JSON to stdout.")] = None,
     metric_type: Annotated[str, typer.Option("--metric-type", "-m",
-        help="Distance metric used when embedding was indexed (cosine or l2). Must match the metric used at export time.")] = "cosine",
+        help="Distance metric used when embedding was indexed (cosine or l2). Must match the metric registered for the model.")] = "cosine",
+    embedding_model: Annotated[Optional[str], typer.Option("--embedding-model", "-E",
+        help="Embedding model name to use, overriding the one configured in config.toml (e.g. to compare multiple ingested models).")] = None,
 ):
     """Trace grounding cases through every resolver stage. Outputs {\"cases\": [...]}."""
     # Build the list of cases to run
     cases_to_run: List[Dict] = []
-
+    
     if cases_file:
         payload = json.loads(Path(cases_file).read_text())
         rows = payload if isinstance(payload, list) else [r for bucket in payload.values() for r in bucket]
         if case_ids:
-            filter_ids = {cid.strip() for cid in case_ids.split(",")}
-            rows = [r for r in rows if r.get("id") in filter_ids]
-            missing = filter_ids - {r.get("id") for r in rows}
+            rows = [r for r in rows if r.get("id") in case_ids]
+            missing = set(case_ids) - {r.get("id") for r in rows}
             for mid in sorted(missing):
                 typer.echo(f"Warning: case '{mid}' not found in {cases_file}.", err=True)
         cases_to_run = rows
     elif query:
-        pids_raw = parent_ids
-        if not pids_raw:
+        if not parent_ids:
             typer.echo("--parent-ids required with --query.", err=True)
             raise typer.Exit(1)
         cases_to_run = [{
-            "id": None,
+            "id": "on-demand",
             "text": query,
-            "domain": domain,
-            "vocabularies": vocabulary.split(",") if vocabulary else None,
-            "parent_ids": [int(p.strip()) for p in pids_raw.split(",")],
-            "expected_concept_id": expected_concept_id,
+            "expected_concept_id": query_expected_concept_id,
             "expected_concept_name": None,
         }]
     else:
@@ -690,87 +719,120 @@ def trace(
 
     typer.echo("Building knowledge graph…", err=True)
     from omop_emb.config import parse_metric_type
-    kg = _build_kg(metric_type=parse_metric_type(metric_type))
+    kg = _build_kg(metric_type=parse_metric_type(metric_type), embedding_model=embedding_model)
+    used_embedding_model = (
+        kg.embedding_configuration.model_name if kg.embedding_configuration else None
+    )
 
     results = []
     for case in cases_to_run:
-        case_id_val = case.get("id")
-        case_query = query or case.get("text")
-        case_domain = domain or (case.get("domain") if case.get("domain") != "NA" else None)
-        case_vocab = vocabulary or (
-            ",".join(case["vocabularies"]) if case.get("vocabularies") else None
-        )
-        raw_pids = case.get("parent_ids")
-        case_pids_str = parent_ids or (
-            ",".join(str(p) for p in (raw_pids if isinstance(raw_pids, list) else [raw_pids]))
-            if raw_pids else None
-        )
-        case_expected = expected_concept_id or case.get("expected_concept_id")
+        case_id = case.get("id")
+        case_query = case.get("text")
+        case_domains = domains or ([case.get("domain")] if case.get("domain") else None) 
+        case_vocab = vocabularies or ([case.get("vocabulary")] if case.get("vocabulary") else None)
+        case_parent_ids = parent_ids or case.get("parent_ids")
+        case_expected = query_expected_concept_id or case.get("expected_concept_id")
         case_expected_name = case.get("expected_concept_name")
 
-        if not case_query:
-            typer.echo(f"Case '{case_id_val}': no query text, skipping.", err=True)
+        if case_query is None:
+            typer.echo(f"Case '{case_id}': no query text, skipping.", err=True)
             continue
-        if not case_pids_str:
-            typer.echo(f"Case '{case_id_val}': no parent IDs, skipping.", err=True)
+        if case_id is None:
+            typer.echo(f"Case with query '{case_query}': no case ID, skipping.", err=True)
+            continue
+        if case_parent_ids is None:
+            typer.echo(f"Case '{case_id}': no parent IDs, skipping.", err=True)
             continue
 
-        pids: Tuple[int, ...] = tuple(int(p.strip()) for p in case_pids_str.split(","))
-        vocabs = tuple(v.strip() for v in case_vocab.split(",")) if case_vocab else DEFAULT_VOCABULARIES
         search_constraint = SearchConstraintConcept(
-            domains=(case_domain,) if case_domain else None,
-            vocabularies=vocabs,
+            domains=tuple([str(c) for c in case_domains]) if isinstance(case_domains, list) else None,
+            vocabularies=tuple([str(v) for v in case_vocab]) if isinstance(case_vocab, list) else None,
             require_standard=False,
         )
 
-        typer.echo(f"  [{case_id_val or 'ad-hoc'}] '{case_query}'", err=True)
+        typer.echo(f"  [{case_id}] '{case_query}'", err=True)
         result = _run_trace(
-            case_id=case_id_val or "ad-hoc",
+            case_id=case_id,
             kg=kg,
             query=case_query,
-            parent_ids=pids,
+            parent_ids=tuple(case_parent_ids),
             search_constraint=search_constraint,
             expected_concept_id=case_expected,
             top_n=top_n,
         )
-        result["case_id"] = case_id_val
+        result["case_id"] = case_id
         result["expected_concept_name"] = case_expected_name
         results.append(result)
 
-    output = json.dumps({"cases": results}, indent=2, ensure_ascii=False)
-    if out_file:
-        Path(out_file).write_text(output, encoding="utf-8")
-        typer.echo(f"Trace written to {out_file} ({len(results)} case(s)).", err=True)
-        hits = [r for r in results if r.get("target_rank") == 1]
+    hits = [r for r in results if r.get("target_rank") == 1]
+
+    if out_dir:
+        out_dir_path = Path(out_dir) / _model_dir_name(used_embedding_model)
+        out_dir_path.mkdir(parents=True, exist_ok=True)
+        for result in results:
+            cid = result["case_id"]
+            case_output = json.dumps(
+                {"cases": [result], "embedding_model": used_embedding_model},
+                indent=2,
+                ensure_ascii=False,
+            )
+            (out_dir_path / f"trace_{cid}.json").write_text(case_output, encoding="utf-8")
+
+        typer.echo(f"Trace written to {out_dir_path} ({len(results)} case(s)).", err=True)
         typer.echo(f"Target rank 1: {len(hits)}/{len(results)}", err=True)
     else:
+        output = json.dumps(
+            {"cases": results, "embedding_model": used_embedding_model},
+            indent=2,
+            ensure_ascii=False,
+        )
         print(output)
 
 
 @app.command()
 def svg(
-    trace_file: Annotated[str, typer.Option("--trace-file", "-t",
-        help="JSON trace file produced by the trace command.")],
+    trace_dir: Annotated[str, typer.Option("--trace-dir", "-t",
+        help="Base output directory passed to 'trace --out-dir'. The model-specific "
+             "subdirectory is resolved the same way 'trace' does, via --embedding-model "
+             "or config.toml.")],
+    embedding_model: Annotated[Optional[str], typer.Option("--embedding-model", "-E",
+        help="Embedding model name used to resolve the subdirectory, overriding "
+             "config.toml (same semantics as 'trace --embedding-model').")] = None,
     case_id: Annotated[Optional[str], typer.Option("--case-id", "-i",
-        help="Case ID to render (default: first case in file).")] = None,
-    out_file: Annotated[str, typer.Option("--out-file", "-o",
-        help="Output SVG file.")] = "trace.svg",
+        help="Case ID to render. Omitted, empty, or 'all' renders every case found.")] = None,
     title: Annotated[str, typer.Option("--title",
         help="Figure title shown at the top.")] = "omop-graph Concept Grounding",
 ):
-    """Generate a flowchart SVG from a trace JSON file."""
-    payload = json.loads(Path(trace_file).read_text(encoding="utf-8"))
-    cases = payload.get("cases", [payload])  # support both batch and legacy single-case format
-    if case_id:
-        trace_data = next((c for c in cases if c.get("case_id") == case_id), None)
-        if trace_data is None:
-            typer.echo(f"Case '{case_id}' not found in {trace_file}.", err=True)
+    """Generate flowchart SVG(s) from trace JSON files written by the trace command. Wirtes them to plots/ subdirectory of
+    the same directory as the traces."""
+    resolved_model = _resolve_embedding_model(embedding_model)
+    trace_dir_pl = Path(trace_dir) / _model_dir_name(resolved_model)
+
+    json_files = sorted(trace_dir_pl.glob("*.json"))
+    if not json_files:
+        typer.echo(f"No JSON trace files found in {trace_dir_pl}.", err=True)
+        raise typer.Exit(1)
+    cases: List[Dict] = []
+    for json_file in json_files:
+        payload = json.loads(json_file.read_text(encoding="utf-8"))
+        cases.extend(payload.get("cases", [payload]))
+
+    if case_id and case_id.lower() != "all":
+        selected = [c for c in cases if (c.get("case_id") or "ad-hoc") == case_id]
+        if not selected:
+            typer.echo(f"Case '{case_id}' not found in {trace_dir_pl}.", err=True)
             raise typer.Exit(1)
     else:
-        trace_data = cases[0]
-    svg_content = _svg(trace_data, title)
-    Path(out_file).write_text(svg_content, encoding="utf-8")
-    typer.echo(f"SVG written to {out_file}")
+        selected = cases
+
+    out_dir = trace_dir_pl / "plots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for trace_data in selected:
+        cid = trace_data.get("case_id") or "ad-hoc"
+        svg_content = _svg(trace_data, title)
+        out_file = out_dir / f"trace_{cid}.svg"
+        out_file.write_text(svg_content, encoding="utf-8")
+        typer.echo(f"SVG written to {out_file}")
 
 
 if __name__ == "__main__":

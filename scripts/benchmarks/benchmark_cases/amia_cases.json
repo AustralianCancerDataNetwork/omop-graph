@@ -1,0 +1,356 @@
+{
+  "easy": [
+    {
+      "id": "easy_multiple_myeloma",
+      "text": "Multiple myeloma",
+      "domain": "Condition",
+      "parent_ids": [443392],
+      "expected_concept_id": 437233,
+      "expected_concept_name": "Multiple myeloma"
+    },
+    {
+      "id": "easy_hypertensive_disorder",
+      "text": "Hypertensive disorder",
+      "domain": "Condition",
+      "parent_ids": [134057],
+      "expected_concept_id": 316866,
+      "expected_concept_name": "Hypertensive disorder"
+    },
+    {
+      "id": "easy_t2dm",
+      "text": "Type 2 diabetes mellitus",
+      "domain": "Condition",
+      "parent_ids": [201820],
+      "expected_concept_id": 201826,
+      "expected_concept_name": "Type 2 diabetes mellitus"
+    },
+    {
+      "id": "easy_hyperlipidemia",
+      "text": "Hyperlipidemia",
+      "domain": "Condition",
+      "parent_ids": [4051221],
+      "expected_concept_id": 432867,
+      "expected_concept_name": "Hyperlipidemia"
+    },
+    {
+      "id": "easy_asthma",
+      "text": "Asthma",
+      "domain": "Condition",
+      "parent_ids": [320136],
+      "expected_concept_id": 317009,
+      "expected_concept_name": "Asthma"
+    },
+    {
+      "id": "easy_copd",
+      "text": "Chronic obstructive pulmonary disease",
+      "domain": "Condition",
+      "parent_ids": [4063381],
+      "expected_concept_id": 255573,
+      "expected_concept_name": "Chronic obstructive pulmonary disease"
+    },
+    {
+      "id": "easy_cad",
+      "text": "Coronary arteriosclerosis",
+      "domain": "Condition",
+      "parent_ids": [4187067],
+      "expected_concept_id": 317576,
+      "expected_concept_name": "Coronary arteriosclerosis"
+    },
+    {
+      "id": "easy_ckd",
+      "text": "Chronic kidney disease",
+      "domain": "Condition",
+      "parent_ids": [4030518],
+      "expected_concept_id": 46271022,
+      "expected_concept_name": "Chronic kidney disease"
+    },
+    {
+      "id": "easy_obesity",
+      "text": "Obesity",
+      "domain": "Condition",
+      "parent_ids": [4215968],
+      "expected_concept_id": 433736,
+      "expected_concept_name": "Obesity"
+    },
+    {
+      "id": "easy_mdd",
+      "text": "Major depressive disorder",
+      "domain": "Condition",
+      "parent_ids": [440383],
+      "expected_concept_id": 4152280,
+      "expected_concept_name": "Major depressive disorder"
+    },
+    {
+      "id": "easy_stroke",
+      "text": "Cerebrovascular accident",
+      "domain": "Condition",
+      "parent_ids": [381591],
+      "expected_concept_id": 381316,
+      "expected_concept_name": "Cerebrovascular accident"
+    },
+    {
+      "id": "easy_osteoarthritis",
+      "text": "Osteoarthritis",
+      "domain": "Condition",
+      "parent_ids": [73553],
+      "expected_concept_id": 80180,
+      "expected_concept_name": "Osteoarthritis"
+    },
+    {
+      "id": "easy_gerd",
+      "text": "Gastroesophageal reflux disease",
+      "domain": "Condition",
+      "parent_ids": [31610],
+      "expected_concept_id": 318800,
+      "expected_concept_name": "Gastroesophageal reflux disease"
+    },
+    {
+      "id": "easy_uti",
+      "text": "Urinary tract infectious disease",
+      "domain": "Condition",
+      "parent_ids": [75865],
+      "expected_concept_id": 81902,
+      "expected_concept_name": "Urinary tract infectious disease"
+    },
+    {
+      "id": "easy_migraine",
+      "text": "Migraine",
+      "domain": "Condition",
+      "parent_ids": [4134454],
+      "expected_concept_id": 318736,
+      "expected_concept_name": "Migraine"
+    },
+    {
+      "id": "easy_anxiety",
+      "text": "Anxiety disorder",
+      "domain": "Condition",
+      "parent_ids": [441542],
+      "expected_concept_id": 442077,
+      "expected_concept_name": "Anxiety disorder"
+    },
+    {
+      "id": "easy_hypothyroidism",
+      "text": "Hypothyroidism",
+      "domain": "Condition",
+      "parent_ids": [141253],
+      "expected_concept_id": 140673,
+      "expected_concept_name": "Hypothyroidism"
+    },
+    {
+      "id": "easy_pneumonia",
+      "text": "Pneumonia",
+      "domain": "Condition",
+      "parent_ids": [4028389],
+      "expected_concept_id": 255848,
+      "expected_concept_name": "Pneumonia"
+    },
+    {
+      "id": "easy_osteoporosis",
+      "text": "Osteoporosis",
+      "domain": "Condition",
+      "parent_ids": [4176800],
+      "expected_concept_id": 80502,
+      "expected_concept_name": "Osteoporosis"
+    },
+    {
+      "id": "easy_hypercholesterolemia",
+      "text": "Hypercholesterolemia",
+      "domain": "Condition",
+      "parent_ids": [432867],
+      "expected_concept_id": 4029305,
+      "expected_concept_name": "Hypercholesterolemia"
+    }
+  ],
+  "synonym-heavy": [
+    {
+      "id": "synonym_skin_cancer",
+      "text": "Skin cancer",
+      "domain": "Condition",
+      "parent_ids": [4317258],
+      "expected_concept_id": 4155297,
+      "expected_concept_name": "Malignant neoplasm of skin"
+    },
+    {
+      "id": "synonym_kidney_mass",
+      "text": "Kidney mass",
+      "domain": "Condition",
+      "parent_ids": [4091056],
+      "expected_concept_id": 4204187,
+      "expected_concept_name": "Renal mass"
+    },
+    {
+      "id": "synonym_hypertension",
+      "text": "Hypertension",
+      "domain": "Condition",
+      "parent_ids": [134057],
+      "expected_concept_id": 316866,
+      "expected_concept_name": "Hypertensive disorder"
+    },
+    {
+      "id": "synonym_high_blood_pressure",
+      "text": "High blood pressure",
+      "domain": "Condition",
+      "parent_ids": [134057],
+      "expected_concept_id": 316866,
+      "expected_concept_name": "Hypertensive disorder"
+    },
+    {
+      "id": "synonym_stroke_lay",
+      "text": "Stroke",
+      "domain": "Condition",
+      "parent_ids": [381591],
+      "expected_concept_id": 381316,
+      "expected_concept_name": "Cerebrovascular accident"
+    },
+    {
+      "id": "synonym_chronic_obstructive_lung_disease",
+      "text": "Chronic obstructive lung disease",
+      "domain": "Condition",
+      "parent_ids": [4063381],
+      "expected_concept_id": 255573,
+      "expected_concept_name": "Chronic obstructive pulmonary disease"
+    },
+    {
+      "id": "synonym_coronary_heart_disease",
+      "text": "Coronary heart disease",
+      "domain": "Condition",
+      "parent_ids": [4187067],
+      "expected_concept_id": 317576,
+      "expected_concept_name": "Coronary arteriosclerosis"
+    },
+    {
+      "id": "synonym_coronary_artery_disease",
+      "text": "Coronary artery disease",
+      "domain": "Condition",
+      "parent_ids": [4187067],
+      "expected_concept_id": 317576,
+      "expected_concept_name": "Coronary arteriosclerosis"
+    },
+    {
+      "id": "synonym_chronic_renal_disease",
+      "text": "Chronic renal disease",
+      "domain": "Condition",
+      "parent_ids": [4030518],
+      "expected_concept_id": 46271022,
+      "expected_concept_name": "Chronic kidney disease"
+    },
+    {
+      "id": "synonym_diabetes_mellitus_type_2",
+      "text": "Diabetes mellitus type 2",
+      "domain": "Condition",
+      "parent_ids": [201820],
+      "expected_concept_id": 201826,
+      "expected_concept_name": "Type 2 diabetes mellitus"
+    },
+    {
+      "id": "synonym_gastro_esophageal_reflux",
+      "text": "Gastro-esophageal reflux",
+      "domain": "Condition",
+      "parent_ids": [31610],
+      "expected_concept_id": 318800,
+      "expected_concept_name": "Gastroesophageal reflux disease"
+    },
+    {
+      "id": "synonym_major_depression",
+      "text": "Major depression",
+      "domain": "Condition",
+      "parent_ids": [440383],
+      "expected_concept_id": 4152280,
+      "expected_concept_name": "Major depressive disorder"
+    },
+    {
+      "id": "synonym_degenerative_joint_disease",
+      "text": "Degenerative joint disease",
+      "domain": "Condition",
+      "parent_ids": [73553],
+      "expected_concept_id": 80180,
+      "expected_concept_name": "Osteoarthritis"
+    },
+    {
+      "id": "synonym_hypothyroid",
+      "text": "Hypothyroid",
+      "domain": "Condition",
+      "parent_ids": [141253],
+      "expected_concept_id": 140673,
+      "expected_concept_name": "Hypothyroidism"
+    },
+    {
+      "id": "synonym_bronchial_asthma",
+      "text": "Bronchial asthma",
+      "domain": "Condition",
+      "parent_ids": [320136],
+      "expected_concept_id": 317009,
+      "expected_concept_name": "Asthma"
+    },
+    {
+      "id": "synonym_urinary_tract_infection",
+      "text": "Urinary tract infection",
+      "domain": "Condition",
+      "parent_ids": [75865],
+      "expected_concept_id": 81902,
+      "expected_concept_name": "Urinary tract infectious disease"
+    },
+    {
+      "id": "synonym_high_cholesterol",
+      "text": "High cholesterol",
+      "domain": "Condition",
+      "parent_ids": [432867],
+      "expected_concept_id": 4029305,
+      "expected_concept_name": "Hypercholesterolemia"
+    }
+  ],
+  "ambiguous": [
+    {
+      "id": "ambiguous_mass",
+      "text": "mass",
+      "domain": "Condition",
+      "parent_ids": [4091056],
+      "expected_concept_id": 4204187,
+      "expected_concept_name": "Renal mass"
+    },
+    {
+      "id": "ambiguous_pain_joint",
+      "text": "pain",
+      "domain": "Condition",
+      "parent_ids": [4179167],
+      "expected_concept_id": 77074,
+      "expected_concept_name": "Joint pain"
+    },
+    {
+      "id": "ambiguous_infection_uti",
+      "text": "infection",
+      "domain": "Condition",
+      "parent_ids": [75865],
+      "expected_concept_id": 81902,
+      "expected_concept_name": "Urinary tract infectious disease"
+    }
+  ],
+  "noisy": [
+    {
+      "id": "noisy_truncated_renal_mass",
+      "text": "renal mas",
+      "domain": "Condition",
+      "parent_ids": [4091056],
+      "expected_concept_id": 4204187,
+      "expected_concept_name": "Renal mass"
+    },
+    {
+      "id": "noisy_lay_growth_kidney",
+      "text": "growth on the kidney",
+      "domain": "Condition",
+      "parent_ids": [4091056],
+      "expected_concept_id": 4131748,
+      "expected_concept_name": "Neoplasm of kidney"
+    }
+  ],
+  "out-of-scope": [
+    {
+      "id": "out_of_scope_gibberish",
+      "text": "purple elephant sandwich",
+      "domain": "Condition",
+      "parent_ids": [441840],
+      "expected_concept_id": null,
+      "expected_concept_name": null
+    }
+  ]
+}

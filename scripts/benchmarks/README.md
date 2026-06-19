@@ -124,8 +124,8 @@ python scripts/benchmarks/benchmark.py -vv run-benchmark \
 
 ## Trace Tool
 
-`trace_example.py` runs a single query through every resolver stage and produces a detailed
-JSON trace and optional SVG flowchart — useful for debugging individual cases and ablation
+`trace_example.py` runs cases through every resolver stage and produces a detailed JSON
+trace and optional SVG flowchart(s) — useful for debugging individual cases and ablation
 analysis (per-resolver ranking, target rank per resolver).
 
 ```bash
@@ -137,12 +137,38 @@ python scripts/benchmarks/trace_example.py -vv trace \
     --out-file=results/trace_example.json
 ```
 
-Generate SVG flowchart from a trace:
+Generate an SVG flowchart from a trace:
 
 ```bash
 python scripts/benchmarks/trace_example.py svg \
     --trace-file=results/trace_example.json \
-    --out-file=results/trace_example.svg
+    --out-path=results
+```
+
+`--out-file`/`--out-path` is mutually exclusive: `--out-file` writes one combined JSON for
+all cases (legacy behavior); `--out-path` writes one file per case, named
+`trace_<case_id>.json`, into the given directory — handy when comparing multiple embedding
+models, since each model's cases land in their own folder (see below).
+
+`--embedding-model` overrides the model configured in `config.toml` for a single run, useful
+for comparing multiple ingested embedding models without editing config between runs:
+
+```bash
+python scripts/benchmarks/trace_example.py -vv trace \
+    --cases-file=scripts/benchmarks/benchmark_cases/amia_cases.json \
+    --top-n=5 --embedding-model=snowflake-arctic-embed2:568m \
+    --out-path=results/amia/snowflake-arctic-embed2:568m
+```
+
+`svg --trace-file` accepts either a single JSON file or a directory of `trace_*.json` files
+(it merges cases from all of them), and `--case-id` defaults to rendering **every** case
+found (pass a specific id to render just one). Output defaults to a `plots/` subdirectory
+next to `--trace-file`, overridable with `--out-path`:
+
+```bash
+python scripts/benchmarks/trace_example.py svg \
+    --trace-file=results/amia/snowflake-arctic-embed2:568m
+# -> results/amia/snowflake-arctic-embed2:568m/plots/trace_<case_id>.svg, one per case
 ```
 
 ## Cases
@@ -151,10 +177,14 @@ Cases are configuration files in `scripts/benchmarks/benchmark_cases/`:
 
 - `resolver_cases.json` for general poster/resolver evaluation
 - `cancer_nsw_cases.json` for cancer-specific benchmarking
+- `amia_cases.json` for the AMIA reviewer-response MWE (`trace_example.py` worked example):
+  cross-domain cases, each with a per-case `parent_ids` anchor, chosen and verified against
+  the live CDM so that each bucket cleanly isolates the resolver layer it's meant to
+  demonstrate (see `Case Format` below for `parent_ids`)
 
 Each file is grouped by bucket/category labels.
 
-`resolver_cases.json` currently uses:
+`resolver_cases.json` and `amia_cases.json` use:
 
 - easy
 - synonym-heavy
@@ -176,9 +206,14 @@ Each bucket contains a list of case objects. The loader also accepts the older f
 - `id`: stable case identifier used in reports
 - `text`: the input string given to the resolver pipeline
 - `domain` and `vocabulary`: search constraints applied to the resolver pipeline when they are not `NA`
+- `parent_ids`: optional per-case hierarchy anchor(s) for `ground_term`'s mandatory parent constraint. Falls back to `--parent-ids` on the CLI when omitted; needed whenever a cases file mixes domains (e.g. cancer and cardiology cases can't share one global anchor)
 - `expected_concept_id`: the expected best concept for ranking metrics, or `null` when the case should stay ungrounded
 - `expected_concept_name`: a human-readable label for the expected concept, or `null` if there is no expected concept
 
 There is no synthetic hit map anymore. The benchmark resolves the input text against your live OMOP CDM and compares the returned concept IDs to `expected_concept_id`.
 
 The difficulty buckets are only for grouping and summary. They do not change the resolver behavior.
+
+`trace_example.py`'s output JSON also records the resolved `embedding_model` name (or `null`
+if embeddings weren't available) at the top level, alongside `cases`, so a trace file is
+self-describing even outside any folder-naming convention.

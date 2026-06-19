@@ -27,14 +27,20 @@ from omop_graph.graph.paths import (
     StandardConcept,
     find_standard_paths,
 )
-from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
+from omop_graph.graph.scoring import (
+    StandardConceptWithScore, 
+    score_standard_concepts
+)
 from omop_graph.reasoning.resolvers import (
     CandidateHit,
     ResolverPipeline,
+    EmbeddingResolver,
 )
+from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.extensions.emb import (
     get_embedding_writer_interface,
     semantic_similarity,
+    HAS_OMOP_EMB,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,9 +114,14 @@ def ground_term(
     if search_constraints is not None:
         kg.check_search_constraints(search_constraints)
 
-    # If no embedding was passed, try to compute one on demand via the writer interface.
-    # Falls back to None, which disables embedding-based features for this call.
-    if query_embedding is None:
+    # Only do on demand calculation if needed (for embedding resolver) and available.
+    # Falls back to None to disable embedding-based features if not available or not required.
+    if HAS_OMOP_EMB and any(isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers):
+        require_embedding = True
+    else:
+        require_embedding = False
+
+    if query_embedding is None and require_embedding:
         embedding_writer = get_embedding_writer_interface(kg)
         if embedding_writer is not None:
             from omop_emb.embeddings import EmbeddingRole
@@ -125,10 +136,11 @@ def ground_term(
             "query_embedding must have shape (1, D) — one vector per call to ground_term."
         )
     else:
-        logger.info(
-            f"No text embedding provided for '{query}' and no embedding_writer available. "
-            "Embedding-based features will be disabled for this grounding operation."
-        )
+        if require_embedding:
+            logger.info(
+                f"No text embedding provided for '{query}' and no embedding_writer available. "
+                "Embedding-based features will be disabled for this grounding operation."
+            )
 
     resolved = list(
         resolver_pipeline.resolve(
@@ -172,21 +184,41 @@ def ground_term(
             f"No standard concepts found for '{query}' after hierarchy validation."
         )
         return []
-
-    nearest_concept_matches = (
-        semantic_similarity(
-            kg=kg, standard_concepts=standard_concepts, query_embedding=query_embedding
+    
+    # Only calculate nearest concept matches for the embedding resolver matches
+    # split is done that semantic similarity has less concepts to search for
+    matched_standard_concepts_for_embedding = [
+        hit for hit in standard_concepts if hit.match_kind == LabelMatchKind.EMBEDDING
+    ]
+    if matched_standard_concepts_for_embedding:
+        if query_embedding is None:
+            raise RuntimeError("Query embedding cannot be None if the EmbeddingResolver is used and returned matches.")
+        nearest_concept_matches_for_standard_embedding_concepts = (
+            semantic_similarity(
+                kg=kg, 
+                standard_concepts=matched_standard_concepts_for_embedding, 
+                query_embedding=query_embedding
+            )
         )
-        if query_embedding is not None
-        else None
+        embedding_standard_concepts_with_score = score_standard_concepts(
+            text=query,
+            standard_concepts=tuple(matched_standard_concepts_for_embedding),
+            kg=kg,
+            nearest_concept_matches=nearest_concept_matches_for_standard_embedding_concepts,
+        )
+    else:
+        embedding_standard_concepts_with_score = []
+
+    # Score the other standard concepts that were not matched via embedding resolver 
+    non_embedding_standard_concepts_with_score = score_standard_concepts(
+        text=query,
+        standard_concepts=tuple(sc for sc in standard_concepts if sc.match_kind != LabelMatchKind.EMBEDDING),
+        kg=kg,
+        nearest_concept_matches=None,  # No embedding-based scoring for non-embedding matches
     )
 
-    standard_concepts_with_score = score_standard_concepts(
-        text=query,
-        standard_concepts=tuple(standard_concepts),
-        kg=kg,
-        nearest_concept_matches=nearest_concept_matches,
-    )
+    # combine the two different ones
+    standard_concepts_with_score = embedding_standard_concepts_with_score + non_embedding_standard_concepts_with_score
 
     best_by_concept_id: dict[int, StandardConceptWithScore] = {}
     for concept in standard_concepts_with_score:

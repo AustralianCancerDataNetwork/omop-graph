@@ -4,6 +4,7 @@ from .resolvers import (
     ExactSynonymResolver,
     PartialLabelResolver,
     CandidateResolver,
+    EmbeddingResolver,
 )
 from .resolver_pipeline import ResolverPipeline
 
@@ -14,4 +15,5 @@ __all__ = [
     "PartialLabelResolver",
     "CandidateResolver",
     "ResolverPipeline",
+    "EmbeddingResolver",
 ]

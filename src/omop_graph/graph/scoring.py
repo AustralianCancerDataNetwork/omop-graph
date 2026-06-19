@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import numpy as np
 
 # Local Application Imports
+from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
 if TYPE_CHECKING:
@@ -115,6 +116,12 @@ def score_standard_concepts(
         nearest matches for that query vector.  Currently only a single query
         vector is supported.
 
+    Notes
+    -----
+    Standard concept scoring is ONLY performed for concepts that were matched via the embedding resolver, 
+    and only if nearest_concept_matches are provided. Concepts matched via non-embedding resolvers will still 
+    receive parsimony and broadness scoring, but their relevance will be based solely on textual similarity.
+
     Returns
     -------
     list[StandardConceptWithScore]
@@ -144,8 +151,10 @@ def score_standard_concepts(
             kg=kg,
             standard_concept=sc,
             num_ancestors=num_ancestors.get(sc.concept_id, 0),
-            similarity_score=nearest_concept_matches_dict_for_single_query.get(
-                sc.concept_id, None
+            similarity_score=(
+                nearest_concept_matches_dict_for_single_query.get(sc.concept_id, None)
+                if sc.match_kind == LabelMatchKind.EMBEDDING
+                else None
             ),
         )
         for sc in standard_concepts

@@ -217,10 +217,16 @@ class EmbeddingResolver(CandidateResolver):
     Strategy: Retrieve nearest concepts from stored concept embeddings.
     Currently only for synonym=False as seamntic similarity should be preserved
     in the primary name. Could be extended to synonym=True if needed.
+
+    Notes
+    -----
+    Only available if the omop_emb extension is installed and configured.
     """
 
     def __init__(self) -> None:
         super().__init__(match_kind=LabelMatchKind.EMBEDDING, synonym=False)
+        if not HAS_OMOP_EMB:
+            raise MissingExtensionError("EmbeddingResolver")
 
     def get_matches(
         self,
