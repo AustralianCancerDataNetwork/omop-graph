@@ -270,18 +270,12 @@ def find_standard_concepts(
     list[StandardConcept]
         Standard concepts associated with the candidate that hit the targets.
     """
-    paths = []
-
-    for parent in parent_ids:
-        found = find_standard_paths(
-            kg=kg,
-            candidate=candidate,
-            target=parent,
-            predicate_kinds=predicate_kinds,
-            max_depth=max_depth,
-            max_concepts=max_paths,
-            lowest_cost=lowest_cost,
-        )
-        paths.extend(found)
-
-    return paths
+    return find_standard_paths(
+        kg=kg,
+        candidate=candidate,
+        targets=parent_ids,
+        predicate_kinds=predicate_kinds,
+        max_depth=max_depth,
+        max_concepts=max_paths,
+        lowest_cost=lowest_cost,
+    )

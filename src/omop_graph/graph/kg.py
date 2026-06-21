@@ -62,6 +62,7 @@ from .queries import (
     q_concept_name_match,
     q_concept_num_ancestors,
     q_concept_potential_ancestor,
+    q_concept_potential_ancestors_batch,
     q_concept_synonym_filtered,
     q_concept_view,
     q_concept_views,
@@ -711,6 +712,33 @@ class KnowledgeGraph(GraphBackend):
             descendant_concept_id=row.descendant_concept_id,
             min_levels_of_separation=row.min_levels_of_separation,
         )
+
+    def get_potential_ancestors_batch(
+        self, child_id: int, parent_ids: Tuple[int, ...]
+    ) -> Dict[int, AncestorMatch]:
+        """
+        Check which of several candidate parents are ancestors of a child, in one query.
+
+        Returns a mapping of ancestor_concept_id -> AncestorMatch for every
+        parent_id in ``parent_ids`` that is a genuine ancestor of ``child_id``.
+        Parents with no ancestry relationship are simply absent from the result.
+        """
+        if not parent_ids:
+            return {}
+
+        with self.session_factory() as session:
+            rows = session.execute(
+                q_concept_potential_ancestors_batch(child_id, parent_ids)
+            ).all()
+
+        return {
+            row.ancestor_concept_id: AncestorMatch(
+                ancestor_concept_id=row.ancestor_concept_id,
+                descendant_concept_id=row.descendant_concept_id,
+                min_levels_of_separation=row.min_levels_of_separation,
+            )
+            for row in rows
+        }
 
     def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> Dict[int, int]:
         """

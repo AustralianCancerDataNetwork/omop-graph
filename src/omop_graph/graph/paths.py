@@ -652,7 +652,7 @@ def get_unique_standard_concepts(
 
 def find_standard_paths(
     kg: "KnowledgeGraph",
-    target: int,
+    targets: Tuple[int, ...],
     candidate: CandidateHit,
     predicate_kinds: Optional[frozenset[Any]] = None,
     max_depth: Optional[int] = None,
@@ -662,12 +662,13 @@ def find_standard_paths(
     **kwargs,
 ) -> List[StandardConcept]:
     """
-    Search for Standard Concepts reachable from a candidate, verified against a target ancestor.
+    Search for Standard Concepts reachable from a candidate, verified against target ancestors.
 
     Starting from the candidate, outgoing edges are walked and only Standard Concept
     neighbors are enqueued (non-standard neighbors are skipped to prevent graph explosion).
-    When a Standard Concept is reached its ancestry is verified against ``target`` via
-    ``concept_ancestor``.
+    When a Standard Concept is reached its ancestry is verified against every concept ID in
+    ``targets`` in a single batched ``concept_ancestor`` lookup (rather than one query per
+    target), and a result is produced for each target it is a genuine descendant of.
     It is never expanded further to standard_concepts related to this standard_concept,
     as we want to find the closest standard_concept to the candidate that satisfies the
     ancestor constraint, and expanding further would only find more distant standard_concepts,
@@ -677,8 +678,8 @@ def find_standard_paths(
     ----------
     kg : KnowledgeGraph
         The graph instance.
-    target : int
-        The ancestor concept ID to verify candidates against.
+    targets : tuple[int, ...]
+        The ancestor concept IDs to verify candidates against.
     candidate : CandidateHit
         The search hit to start traversal from.
     predicate_kinds : frozenset, optional
@@ -686,7 +687,9 @@ def find_standard_paths(
     max_depth : int
         Maximum ``min_levels_of_separation`` allowed in the ``concept_ancestor`` check.
     max_concepts : int, optional
-        Stop after finding this many unique standard concepts.
+        Stop finding more matches for a given target once it has this many unique
+        standard concepts (mirrors the cap that applied per-target when each target
+        was searched via a separate call).
     within_domain : bool
         If True (default), only traverse edges where both concepts share the
         same domain_id.  Set to False to allow cross-domain edges such as
@@ -695,7 +698,8 @@ def find_standard_paths(
     Returns
     -------
     list[StandardConcept]
-        The resolved standard concepts that satisfy the ancestor constraint.
+        The resolved standard concepts that satisfy the ancestor constraint, with one
+        entry per (standard concept, matching target) pair.
     """
     if max_depth is None:
         max_depth = OmopGraphConfig.get_config().max_depth
@@ -716,8 +720,10 @@ def find_standard_paths(
     # unbounded duplicate growth in high-degree neighborhoods.
     visited_min_iteration: Dict[int, int] = {candidate.concept_id: 0}
 
-    # Track found concepts to respect max_concepts
+    # Track found concepts to respect max_concepts, per target (mirrors the
+    # cap that used to apply naturally when each target had its own call).
     found_standard_concepts: List[StandardConcept] = []
+    found_count_per_target: Dict[int, int] = defaultdict(int)
 
     while queue:
         item = heapq.heappop(queue)
@@ -726,34 +732,43 @@ def find_standard_paths(
         mk = item.mk
         iterations = item.iterations
 
-        if max_concepts and len(found_standard_concepts) >= max_concepts:
+        if max_concepts and all(
+            found_count_per_target.get(t, 0) >= max_concepts for t in targets
+        ):
             break
 
         if subject_node.is_standard:
-            # We found a standard concept -> Check ancestry with target
-            potential_ancestor = kg.get_potential_ancestor(
-                child_id=subject_node.concept_id, parent_id=target
+            # We found a standard concept -> check ancestry against all targets at once
+            ancestor_matches = kg.get_potential_ancestors_batch(
+                child_id=subject_node.concept_id, parent_ids=targets
             )
 
-            if potential_ancestor is not None:
-                if potential_ancestor.min_levels_of_separation > max_depth:
-                    continue
+            if ancestor_matches:
+                for target_id, potential_ancestor in ancestor_matches.items():
+                    if potential_ancestor.min_levels_of_separation > max_depth:
+                        continue
+                    if (
+                        max_concepts
+                        and found_count_per_target.get(target_id, 0) >= max_concepts
+                    ):
+                        continue
 
-                found_standard_concepts.append(
-                    StandardConcept(
-                        hierarchy_cost=cost,
-                        concept_id=subject_node.concept_id,
-                        concept_name=kg.concept_view(
-                            subject_node.concept_id
-                        ).concept_name,
-                        separation=potential_ancestor.min_levels_of_separation,
-                        original_id=candidate.concept_id,
-                        original_name=source_view.concept_name,
-                        matched_concept_label=candidate.matched_concept_label,
-                        match_kind=mk,
-                        synonym=candidate.synonym,
+                    found_count_per_target[target_id] += 1
+                    found_standard_concepts.append(
+                        StandardConcept(
+                            hierarchy_cost=cost,
+                            concept_id=subject_node.concept_id,
+                            concept_name=kg.concept_view(
+                                subject_node.concept_id
+                            ).concept_name,
+                            separation=potential_ancestor.min_levels_of_separation,
+                            original_id=candidate.concept_id,
+                            original_name=source_view.concept_name,
+                            matched_concept_label=candidate.matched_concept_label,
+                            match_kind=mk,
+                            synonym=candidate.synonym,
+                        )
                     )
-                )
                 continue
 
         # Expand: Go to next best concept_id

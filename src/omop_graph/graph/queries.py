@@ -703,6 +703,25 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
     )
 
 
+def q_concept_potential_ancestors_batch(
+    child_id: int, parent_ids: Tuple[int, ...]
+) -> Select:
+    """
+    Check which of several candidate parents are ancestors of a child, in one query.
+    """
+    return select(
+        Concept_Ancestor.ancestor_concept_id,
+        Concept_Ancestor.descendant_concept_id,
+        Concept_Ancestor.min_levels_of_separation,
+    ).where(
+        and_(
+            Concept_Ancestor.ancestor_concept_id.in_(parent_ids),
+            Concept_Ancestor.descendant_concept_id == child_id,
+            Concept_Ancestor.min_levels_of_separation > 0,
+        )
+    )
+
+
 def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     """
     Count the number of ancestors for each concept in the batch.
