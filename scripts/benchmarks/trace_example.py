@@ -16,6 +16,15 @@ from pathlib import Path
 from typing import Annotated, Dict, List, Optional, Tuple
 
 import typer
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import make_engine
@@ -37,6 +46,9 @@ from omop_graph.reasoning.resolvers.resolvers import (
 
 logger = logging.getLogger("omop_graph.trace_example")
 
+# Shared console for logging and progress bar
+console = Console(stderr=True)
+
 app = typer.Typer(help="Trace a single OMOP grounding example and generate an SVG figure.")
 
 
@@ -47,7 +59,7 @@ def _main(
         typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG). Must come before the subcommand name."),
     ] = 0,
 ) -> None:
-    OmopGraphConfig.configure_logging(verbosity=verbose)
+    OmopGraphConfig.configure_logging(verbosity=verbose, console=console)
 
 # Display name for each resolver (inferred from match_kind + synonym flag)
 RESOLVER_DISPLAY_NAMES = {
@@ -202,7 +214,7 @@ def _run_trace(
                     seen.add(hit.concept_id)
                 concept_to_resolvers.setdefault(hit.concept_id, []).append(label)
         except Exception as exc:
-            typer.echo(f"  {label}: skipped ({exc})", err=True)
+            console.print(f"  {label}: skipped ({exc})")
         resolver_stages.append({"resolver": label, "hits": hit_count, "previously_unseen_hits": previously_unseen_hits})
 
     # Stage 2: full grounding pipeline (hierarchy validation + scoring + embedding ranking)
@@ -685,6 +697,10 @@ def trace(
         help="Distance metric used when embedding was indexed (cosine or l2). Must match the metric registered for the model.")] = "cosine",
     embedding_model: Annotated[Optional[str], typer.Option("--embedding-model", "-E",
         help="Embedding model name to use, overriding the one configured in config.toml (e.g. to compare multiple ingested models).")] = None,
+    parent_id_level: Annotated[Optional[int], typer.Option("--parent-id-level", "-L",
+        help="Use case['parent_ids_by_level'][N] as the anchor instead of case['parent_ids'] "
+             "(see enrich_gold_standard.py). Falls back to case['parent_ids'] for cases/files "
+             "without per-level data. Also nests output under parent_id_level_<N>/.")] = None,
 ):
     """Trace grounding cases through every resolver stage. Outputs {\"cases\": [...]}."""
     # Build the list of cases to run
@@ -697,11 +713,11 @@ def trace(
             rows = [r for r in rows if r.get("id") in case_ids]
             missing = set(case_ids) - {r.get("id") for r in rows}
             for mid in sorted(missing):
-                typer.echo(f"Warning: case '{mid}' not found in {cases_file}.", err=True)
+                console.print(f"Warning: case '{mid}' not found in {cases_file}.")
         cases_to_run = rows
     elif query:
         if not parent_ids:
-            typer.echo("--parent-ids required with --query.", err=True)
+            console.print("--parent-ids required with --query.")
             raise typer.Exit(1)
         cases_to_run = [{
             "id": "on-demand",
@@ -710,14 +726,14 @@ def trace(
             "expected_concept_name": None,
         }]
     else:
-        typer.echo("Provide --cases-file or --query.", err=True)
+        console.print("Provide --cases-file or --query.")
         raise typer.Exit(1)
 
     if not cases_to_run:
-        typer.echo("No cases to run.", err=True)
+        console.print("No cases to run.")
         raise typer.Exit(1)
 
-    typer.echo("Building knowledge graph…", err=True)
+    console.print("Building knowledge graph…")
     from omop_emb.config import parse_metric_type
     kg = _build_kg(metric_type=parse_metric_type(metric_type), embedding_model=embedding_model)
     used_embedding_model = (
@@ -725,61 +741,90 @@ def trace(
     )
 
     results = []
-    for case in cases_to_run:
-        case_id = case.get("id")
-        case_query = case.get("text")
-        case_domains = domains or ([case.get("domain")] if case.get("domain") else None) 
-        case_vocab = vocabularies or ([case.get("vocabulary")] if case.get("vocabulary") else None)
-        case_parent_ids = parent_ids or case.get("parent_ids")
-        case_expected = query_expected_concept_id or case.get("expected_concept_id")
-        case_expected_name = case.get("expected_concept_name")
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task_id = progress.add_task("Tracing cases…", total=len(cases_to_run))
+        for case in cases_to_run:
+            case_id = case.get("id")
+            case_query = case.get("text")
+            case_domains = domains or ([case.get("domain")] if case.get("domain") else None)
+            case_vocab = vocabularies or ([case.get("vocabulary")] if case.get("vocabulary") else None)
+            if parent_ids:
+                case_parent_ids = parent_ids
+            elif parent_id_level is not None:
+                by_level = case.get("parent_ids_by_level")
+                if by_level is None:
+                    console.print(f"Case '{case_id}': no parent_ids_by_level, falling back to parent_ids.")
+                    case_parent_ids = case.get("parent_ids")
+                else:
+                    case_parent_ids = by_level.get(str(parent_id_level))
+            else:
+                case_parent_ids = case.get("parent_ids")
+            case_expected = query_expected_concept_id or case.get("expected_concept_id")
+            case_expected_name = case.get("expected_concept_name")
 
-        if case_query is None:
-            typer.echo(f"Case '{case_id}': no query text, skipping.", err=True)
-            continue
-        if case_id is None:
-            typer.echo(f"Case with query '{case_query}': no case ID, skipping.", err=True)
-            continue
-        if case_parent_ids is None:
-            typer.echo(f"Case '{case_id}': no parent IDs, skipping.", err=True)
-            continue
+            if case_query is None:
+                console.print(f"Case '{case_id}': no query text, skipping.")
+                progress.advance(task_id)
+                continue
+            if case_id is None:
+                console.print(f"Case with query '{case_query}': no case ID, skipping.")
+                progress.advance(task_id)
+                continue
+            if case_parent_ids is None:
+                console.print(f"Case '{case_id}': no parent IDs, skipping.")
+                progress.advance(task_id)
+                continue
 
-        search_constraint = SearchConstraintConcept(
-            domains=tuple([str(c) for c in case_domains]) if isinstance(case_domains, list) else None,
-            vocabularies=tuple([str(v) for v in case_vocab]) if isinstance(case_vocab, list) else None,
-            require_standard=False,
-        )
+            search_constraint = SearchConstraintConcept(
+                domains=tuple([str(c) for c in case_domains]) if isinstance(case_domains, list) else None,
+                vocabularies=tuple([str(v) for v in case_vocab]) if isinstance(case_vocab, list) else None,
+                require_standard=False,
+            )
 
-        typer.echo(f"  [{case_id}] '{case_query}'", err=True)
-        result = _run_trace(
-            case_id=case_id,
-            kg=kg,
-            query=case_query,
-            parent_ids=tuple(case_parent_ids),
-            search_constraint=search_constraint,
-            expected_concept_id=case_expected,
-            top_n=top_n,
-        )
-        result["case_id"] = case_id
-        result["expected_concept_name"] = case_expected_name
-        results.append(result)
+            progress.update(task_id, description=f"[{case_id}] '{case_query[:40]}'")
+            result = _run_trace(
+                case_id=case_id,
+                kg=kg,
+                query=case_query,
+                parent_ids=tuple(case_parent_ids),
+                search_constraint=search_constraint,
+                expected_concept_id=case_expected,
+                top_n=top_n,
+            )
+            result["case_id"] = case_id
+            result["expected_concept_name"] = case_expected_name
+            results.append(result)
+            progress.advance(task_id)
 
     hits = [r for r in results if r.get("target_rank") == 1]
 
     if out_dir:
         out_dir_path = Path(out_dir) / _model_dir_name(used_embedding_model)
+        if parent_id_level is not None:
+            out_dir_path = out_dir_path / f"parent_id_level_{parent_id_level}"
         out_dir_path.mkdir(parents=True, exist_ok=True)
         for result in results:
             cid = result["case_id"]
             case_output = json.dumps(
-                {"cases": [result], "embedding_model": used_embedding_model},
+                {
+                    "cases": [result],
+                    "embedding_model": used_embedding_model,
+                    "parent_id_level": parent_id_level,
+                },
                 indent=2,
                 ensure_ascii=False,
             )
             (out_dir_path / f"trace_{cid}.json").write_text(case_output, encoding="utf-8")
 
-        typer.echo(f"Trace written to {out_dir_path} ({len(results)} case(s)).", err=True)
-        typer.echo(f"Target rank 1: {len(hits)}/{len(results)}", err=True)
+        console.print(f"Trace written to {out_dir_path} ({len(results)} case(s)).")
+        console.print(f"Target rank 1: {len(hits)}/{len(results)}")
     else:
         output = json.dumps(
             {"cases": results, "embedding_model": used_embedding_model},
@@ -802,11 +847,16 @@ def svg(
         help="Case ID to render. Omitted, empty, or 'all' renders every case found.")] = None,
     title: Annotated[str, typer.Option("--title",
         help="Figure title shown at the top.")] = "omop-graph Concept Grounding",
+    parent_id_level: Annotated[Optional[int], typer.Option("--parent-id-level", "-L",
+        help="Same --parent-id-level passed to 'trace' -- resolves the matching "
+             "parent_id_level_<N>/ subdirectory.")] = None,
 ):
     """Generate flowchart SVG(s) from trace JSON files written by the trace command. Wirtes them to plots/ subdirectory of
     the same directory as the traces."""
     resolved_model = _resolve_embedding_model(embedding_model)
     trace_dir_pl = Path(trace_dir) / _model_dir_name(resolved_model)
+    if parent_id_level is not None:
+        trace_dir_pl = trace_dir_pl / f"parent_id_level_{parent_id_level}"
 
     json_files = sorted(trace_dir_pl.glob("*.json"))
     if not json_files:
