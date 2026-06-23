@@ -140,7 +140,7 @@ python scripts/benchmarks/trace_example.py -vv trace \
 Generate an SVG flowchart from a trace:
 
 ```bash
-python scripts/benchmarks/trace_example.py svg \
+python scripts/benchmarks/trace_example.py pipeline-svg \
     --trace-file=results/trace_example.json \
     --out-path=results
 ```
@@ -160,16 +160,99 @@ python scripts/benchmarks/trace_example.py -vv trace \
     --out-path=results/amia/snowflake-arctic-embed2:568m
 ```
 
-`svg --trace-file` accepts either a single JSON file or a directory of `trace_*.json` files
-(it merges cases from all of them), and `--case-id` defaults to rendering **every** case
-found (pass a specific id to render just one). Output defaults to a `plots/` subdirectory
-next to `--trace-file`, overridable with `--out-path`:
+`pipeline-svg --trace-file` accepts either a single JSON file or a directory of `trace_*.json`
+files (it merges cases from all of them), and `--case-id` defaults to rendering **every** case
+found (pass a specific id to render just one). Output goes to a `plots/pipeline/` subdirectory
+next to `--trace-file`:
 
 ```bash
-python scripts/benchmarks/trace_example.py svg \
+python scripts/benchmarks/trace_example.py pipeline-svg \
     --trace-file=results/amia/snowflake-arctic-embed2:568m
-# -> results/amia/snowflake-arctic-embed2:568m/plots/trace_<case_id>.svg, one per case
+# -> results/amia/snowflake-arctic-embed2:568m/plots/pipeline/trace_<case_id>.svg, one per case
 ```
+
+`pipeline-svg` visualizes the *resolver pipeline's results* (which resolver found what, and
+what won). It does not show the graph itself — for that, use `panel-svg` or `graph-svg`.
+
+### Relationship-classification / hierarchy-culling dashboard (`panel-svg`)
+
+`panel-svg` renders two summary dashboards per case, reusing the same
+`--trace-dir`/`--embedding-model`/`--case-id`/`--parent-id-level` options as `pipeline-svg`:
+
+- **Panel A — relationship classification (edge filtering)**: the case's winning concept (or
+  any concept via `--concept-id`), with its outgoing edges grouped by `predicate_kind`.
+  Identity-classified edges are highlighted as "walkable for grounding"; Hierarchy/
+  Composition/Association/Attribute edges are grayed out as "excluded by default" — this is
+  the relationship-classification layer the paper argues for.
+- **Panel B — hierarchy-constrained culling**: the case's anchor concept, with real candidates
+  from the trace's `hierarchy_validation` data that passed (green) or genuinely failed (red)
+  the hierarchy anchor, each labeled with which resolver found it.
+
+```bash
+python scripts/benchmarks/trace_example.py panel-svg \
+    --trace-dir=results/ohdsi_gs/ \
+    --embedding-model=snowflake-arctic-embed2:568m \
+    --parent-id-level=1
+# -> results/ohdsi_gs/snowflake_arctic_embed2_568m/parent_id_level_1/plots/panel/panel_<case_id>.svg
+```
+
+These are summary statistics, not a traversal — for an actual node-and-edge graph showing
+candidates getting eliminated stage by stage, use `graph-svg` below.
+
+### Graph traversal funnel diagram (`graph-svg`)
+
+`graph-svg` renders the *actual graph being traversed*, as a 4-stage left-to-right funnel, one
+diagram per case, reusing the same CLI options as `pipeline-svg`/`panel-svg`:
+
+A boxed banner at the very top ("**Search term:** \"<query>\"") shows the raw input text, so the
+candidate column reads as "what the resolvers did with this query" rather than a bare list of
+concept names. A second boxed banner at the bottom, above the resolver-attribution legend
+("**Hierarchy anchor:** <name> [<id>], ..."), lists every configured parent ID with its resolved
+label — both banners bold only their label, not the value, and use distinct colors (neutral gray
+for the search term, amber for the anchor) so they read as metadata rather than as part of the
+graph itself. The anchor banner grows to extra rows (rather than spilling past the diagram's
+edge) when a case has enough parent IDs that the list doesn't fit on one line.
+
+1. **Candidates** — a small, representative set of real candidates the resolvers found, trimmed
+   to keep the diagram compact: the rank-1 winner, up to 2 other candidates that passed hierarchy
+   validation and scored (sorted by score), at most 1 candidate with no Identity mapping at all,
+   and at most 1 candidate that failed hierarchy validation. Each box shows `<name> [<concept_id>]`
+   plus its `Vocabulary: <vocabulary_id>`, and has a segmented colored stripe showing every
+   resolver group that found it (a node found by both Exact and Embedding shows both colors, not
+   just one). When more than one real "no Identity mapping" candidate exists, the diagram prefers
+   a currently-active concept over a deprecated one for that slot — a deprecated concept's missing
+   Identity edge is often just a side-effect of the vocabulary refresh dropping mappings for
+   invalid concepts, not a genuine "this never maps anywhere" dead end. A long concept name is
+   truncated with an ellipsis, but `[<concept_id>]` is always rendered (on its own line if it
+   doesn't fit after the truncated name) so the concept stays identifiable/lookup-able even when
+   its label doesn't fit.
+2. **Standard concept** — the real, live-looked-up Identity edge (e.g. "Maps to", "Concept
+   replaced by") each candidate uses to reach a standard concept, shown as a "via: ..." row inside
+   the box, or a dead end right at the arrow ("✗ no Identity mapping found") if the candidate has
+   no Identity-classified edge at all. Candidates that converge on the same standard concept merge
+   into one box. Boxes show `<name> [<concept_id>]` here too.
+3. **Hierarchy-validated** — "✓ Passed hierarchy constraint" plus "Distance to Hierarchy Anchor:
+   N" if the standard concept has a path to the anchor within `max_depth`; culled ("✗ outside
+   anchor") otherwise.
+4. **Scored / winner** — survivors are shown as `<name> [<concept_id>]` plus "Score: 0.984"; the
+   case's actual rank-1 result is highlighted green and marked "★ WINNER (rank 1), Score: 0.984".
+
+```bash
+python scripts/benchmarks/trace_example.py graph-svg \
+    --trace-dir=results/ohdsi_gs/ \
+    --embedding-model=snowflake-arctic-embed2:568m \
+    --parent-id-level=1
+# -> results/ohdsi_gs/snowflake_arctic_embed2_568m/parent_id_level_1/plots/graph/graph_<case_id>.svg
+```
+
+Like `pipeline-svg`/`panel-svg`, omitting `--case-id` (or passing `all`) renders every case
+found in the trace directory. **Case `42489347` ("Acute periodontitis") is the recommended figure**:
+it shows multi-resolver convergence on the winner, three different real Identity relationship
+types, a genuine "no mapping at all" dead end (a currently-active, zero-relationship concept, not
+a deprecated artifact), and the anchor concept itself being culled for being too broad — all in
+one diagram. Four runner-up cases were curated and verified to render cleanly across every design
+iteration and remain good alternates if a second figure is needed: `37688988` ("Aortic Sclerosis"),
+`44826331`, `35207645`, and `1102680`.
 
 ## Cases
 
