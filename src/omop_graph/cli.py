@@ -1,7 +1,7 @@
 import logging
 import tempfile
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import pandas as pd
 import sqlalchemy as sa
@@ -80,11 +80,11 @@ def relationship_classification(
     check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[
         ["description", "semantics", "inference"]
     ].nunique(dropna=True)
-    violations = check[(check > 1).any(axis=1)]
-    if not violations.empty:  # type: ignore[union-attr]
-        conflicting_data = df_rel_cls[
-            df_rel_cls["predicate_subkind"].isin(violations.index)
-        ].sort_values("predicate_subkind")  # type: ignore[union-attr, arg-type, call-overload]
+    violations = cast(pd.DataFrame, check[(check > 1).any(axis=1)])
+    if not violations.empty:
+        conflicting_data = cast(pd.DataFrame, df_rel_cls[
+            df_rel_cls["predicate_subkind"].isin(violations.index.tolist())
+        ]).sort_values("predicate_subkind")
         logger.error(
             f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}"
         )
@@ -127,14 +127,14 @@ def relationship_classification(
     with engine.begin() as conn:
         conn.execute(
             sa.text(
-                f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"
+                f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"  # type: ignore[attr-defined]
             )
-        )  # type: ignore
+        )
         conn.execute(
             sa.text(
-                f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"
+                f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"  # type: ignore[attr-defined]
             )
-        )  # type: ignore
+        )
         conn.execute(sa.text("DROP TYPE IF EXISTS predicatekindenum CASCADE;"))
 
     tables_to_drop = [

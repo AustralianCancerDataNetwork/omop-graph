@@ -77,8 +77,8 @@ def _normalise_properties(config: SearchConfiguration) -> list[str]:
         A list of property strings.
     """
     return [
-        p.text if hasattr(p, "text") else str(p)
-        for p in (config.properties or [])  # type: ignore
+        getattr(p, "text", None) or str(p)
+        for p in (config.properties or [])  # type: ignore[union-attr]
     ]
 
 
