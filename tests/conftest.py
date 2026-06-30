@@ -1,15 +1,8 @@
 import logging
-import os
-from pathlib import Path
 
 import pytest
-from dotenv import load_dotenv
 
 pytest_plugins = ("fixtures.mock_cdm",)
-
-
-TEST_ENV_FILE_ENV_VAR = "OMOP_GRAPH_TEST_ENV_FILE"
-DEFAULT_TEST_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
 
 class WhitelistFilter(logging.Filter):
@@ -17,18 +10,9 @@ class WhitelistFilter(logging.Filter):
         self.whitelist = whitelist
 
     def filter(self, record):
-        # 1. Allow high severity logs
         if record.levelno >= logging.WARNING:
             return True
-        # 2. Allow logs from your specific modules
         return any(record.name.startswith(prefix) for prefix in self.whitelist)
-
-
-@pytest.fixture(autouse=True, scope="session")
-def load_test_environment():
-    """Load environment variables from the repo .env file before tests run."""
-    env_file = Path(os.getenv(TEST_ENV_FILE_ENV_VAR, DEFAULT_TEST_ENV_FILE))
-    load_dotenv(dotenv_path=env_file, override=False)
 
 
 @pytest.fixture(autouse=True, scope="session")

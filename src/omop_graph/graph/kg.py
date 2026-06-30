@@ -190,9 +190,9 @@ class KnowledgeGraph(GraphBackend):
                     "Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features."
                 )
 
-            backend_type = (
-                self._emb_config.backend_type or OmopEmbConfig.get_config().backend
-            )
+            cfg = OmopEmbConfig.get_config()
+            backend_type = self._emb_config.backend_type or cfg.backend
+            faiss_cache_dir = cfg.faiss_cache_dir
 
             backend = resolve_backend(backend_type)
 
@@ -220,6 +220,7 @@ class KnowledgeGraph(GraphBackend):
                     metric_type=self._emb_config.metric_type,
                     omop_cdm_engine=self.cdm_engine,
                     provider_name_or_type=self._emb_config.provider_type,
+                    faiss_cache_dir=faiss_cache_dir,
                 )
             return self._emb
 

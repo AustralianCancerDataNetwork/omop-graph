@@ -773,7 +773,6 @@ def _panel_svg(rel_class: Dict, trace: Dict, title: str) -> str:
     HIT_BORDER = "#28a745"
     MISS_BG = "#f0f0f0"
     MISS_BORDER = "#ced4da"
-    FAIL_BG = "#f8d7da"
     FAIL_BORDER = "#b02a37"
     ARROW_COL = "#495057"
     COL_HDR_BG_WALK = "#1a6b2e"     # green: walkable for grounding (Identity)
@@ -1140,7 +1139,6 @@ def _funnel_svg(nodes: List[Dict], trace: Dict, anchor_concepts: List[Dict]) -> 
     NAME_MAX_CHARS = 28
     FONT = "system-ui, -apple-system, Arial, sans-serif"
 
-    HEADER_FG = "#ffffff"
     BODY_BG = "#f8f9fa"
     WIN_BG, WIN_BORDER = "#d4edda", "#28a745"
     PASS_BG, PASS_BORDER = "#eaf2ff", "#5b8def"
@@ -1183,7 +1181,7 @@ def _funnel_svg(nodes: List[Dict], trace: Dict, anchor_concepts: List[Dict]) -> 
     else:
         anchor_value = "—"
     anchor_chars_per_line = max(20, int((W - 2 * MARGIN - 24) / 7.3))
-    anchor_lines = [l for l in wrap_words(ANCHOR_LABEL + anchor_value, anchor_chars_per_line, max_lines=4) if l] or ["—"]
+    anchor_lines = [line for line in wrap_words(ANCHOR_LABEL + anchor_value, anchor_chars_per_line, max_lines=4) if line] or ["—"]
     ANCHOR_BOX_H = 16 + len(anchor_lines) * ANCHOR_LINE_H
 
     # Anchor banner sits directly under the search-term banner with no gap; headers/grid start
