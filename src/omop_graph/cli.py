@@ -13,7 +13,7 @@ from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import get_engine
+from omop_graph.db.session import make_engine
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from omop_graph.cli_utils import populate_test_data
 
@@ -39,7 +39,7 @@ def _main(
 @app.command()
 def populate_with_test_data():
     """Populate the database with synthetic test data."""
-    engine = get_engine()
+    engine = make_engine()
     Session = sessionmaker(bind=engine, future=True)
     populate_test_data(Session())
 
@@ -120,7 +120,7 @@ def relationship_classification(
         subset=["relationship_id", "predicate_kind", "predicate_subkind"]
     )
 
-    engine = get_engine()
+    engine = make_engine()
     Session = sessionmaker(bind=engine, future=True)
     session = Session()
 

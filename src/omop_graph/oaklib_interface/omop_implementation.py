@@ -41,8 +41,9 @@ from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.omop_factory import omop_resource
 
 
-from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
+
+from omop_graph.db.session import make_engine
 
 logger = logging.getLogger(__name__)
 
@@ -886,7 +887,7 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
             "No database URL provided for OMOPAlchemyImplementation"
         )
 
-        engine = create_engine(self.engine_string, future=True, echo=False)
+        engine = make_engine(self.engine_string, engine_kwargs={"echo": False, "future": True})
 
         self._connection = None
 

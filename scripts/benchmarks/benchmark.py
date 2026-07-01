@@ -61,8 +61,6 @@ def _main(
 ) -> None:
     OmopGraphConfig.configure_logging(verbosity=verbose)
 
-DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
-
 
 def _normalize_parent_ids(raw_parent_ids: object) -> Optional[Tuple[int, ...]]:
     """Normalize parent_ids from JSON into an optional tuple of ints."""
@@ -212,7 +210,7 @@ def case_constraints(case: BenchmarkCase) -> Optional[SearchConstraintConcept]:
     """Translate case metadata into OMOP search constraints when available."""
 
     domains = (case.domain,) if case.domain else None
-    vocabularies = case.vocabularies if case.vocabularies else DEFAULT_VOCABULARIES
+    vocabularies = case.vocabularies or None
 
     return SearchConstraintConcept(
         domains=domains,
@@ -545,18 +543,20 @@ def run_benchmark(
 
     
     if domains:
-        domain_filter = set(domains.split(","))
+        domain_filter = set(domains)
         cases = [c for c in cases if c.domain in domain_filter]
     if allowed_vocabularies:
-        vocab_filter = set(allowed_vocabularies.split(","))
+        vocab_filter = set(allowed_vocabularies)
         cases = [
             c
             for c in cases
             if c.vocabularies and any(vocabulary in vocab_filter for vocabulary in c.vocabularies)
         ]
     cases = _order_cases_for_report(cases)
-
-    grounding_parent_ids = tuple(map(int, parent_ids.split(","))) if parent_ids else None
+    if parent_ids is not None:
+        grounding_parent_ids = tuple(map(int, parent_ids))
+    else:
+        grounding_parent_ids = None
     if grounding_parent_ids is None and all(c.parent_ids is None for c in cases):
         raise RuntimeError(
             "No grounding parent IDs provided."

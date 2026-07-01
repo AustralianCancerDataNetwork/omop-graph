@@ -18,6 +18,7 @@ import functools
 import logging
 import re
 from datetime import date
+from collections import defaultdict
 from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass
 
@@ -715,31 +716,40 @@ class KnowledgeGraph(GraphBackend):
         )
 
     def get_potential_ancestors_batch(
-        self, child_id: int, parent_ids: Tuple[int, ...]
-    ) -> Dict[int, AncestorMatch]:
-        """
-        Check which of several candidate parents are ancestors of a child, in one query.
+        self,
+        child_ids: Tuple[int, ...],
+        parent_ids: Tuple[int, ...],
+    ) -> Dict[int, Dict[int, AncestorMatch]]:
+        """Check which candidate parents are ancestors of one or more children.
 
-        Returns a mapping of ancestor_concept_id -> AncestorMatch for every
-        parent_id in ``parent_ids`` that is a genuine ancestor of ``child_id``.
-        Parents with no ancestry relationship are simply absent from the result.
+        Parameters
+        ----------
+        child_ids : tuple of int
+            A tuple of descendant concept IDs for batch mode.
+        parent_ids : tuple of int
+            Candidate ancestor concept IDs to check.
+
+        Returns
+        -------
+        Dict[int, Dict[int, AncestorMatch]]
+            When child_id is tuple: maps child_id -> {ancestor_concept_id -> AncestorMatch}.
         """
         if not parent_ids:
             return {}
 
         with self.session_factory() as session:
             rows = session.execute(
-                q_concept_potential_ancestors_batch(child_id, parent_ids)
+                q_concept_potential_ancestors_batch(child_ids, parent_ids)
             ).all()
 
-        return {
-            row.ancestor_concept_id: AncestorMatch(
+        result: Dict[int, Dict[int, AncestorMatch]] = defaultdict(dict)
+        for row in rows:
+            result[row.descendant_concept_id][row.ancestor_concept_id] = AncestorMatch(
                 ancestor_concept_id=row.ancestor_concept_id,
                 descendant_concept_id=row.descendant_concept_id,
                 min_levels_of_separation=row.min_levels_of_separation,
             )
-            for row in rows
-        }
+        return result
 
     def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> Dict[int, int]:
         """

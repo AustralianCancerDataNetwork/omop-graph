@@ -4,43 +4,58 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-from sqlalchemy import create_engine, URL
+from sqlalchemy import create_engine, URL, Engine
 from sqlalchemy.orm import sessionmaker, Session
 
 from oa_configurator import Resolver
 from omop_alchemy.config import OmopAlchemyConfig
 
 
-def get_engine():
-    """Return a SQLAlchemy engine for the CDM database via oa-configurator."""
-    return (
-        Resolver.from_active_config()
-        .resolve_resource(OmopAlchemyConfig.CDM_DB.semantic_name)
-        .create_engine()
-    )
-
-
 def make_engine(
     url: Optional[Union[URL, str]] = None,
     *,
-    echo: bool = False,
-    connect_timeout: int = 10,
-):
+    engine_kwargs: Optional[dict] = None,
+    execution_options: Optional[dict] = None,
+) -> Engine:
     """Return a SQLAlchemy engine.
 
     When url is omitted, reads connection details from the active oa-configurator
-    stack config. Pass url explicitly to override.
+    stack config (schema translate map applied automatically). Pass url explicitly
+    to override.
+
+    Parameters
+    ----------
+    url : URL or str, optional
+        SQLAlchemy database URL. If None, resolved from the active oa-configurator config.
+    engine_kwargs : dict, optional
+        Keyword arguments forwarded to ``sqlalchemy.create_engine`` in both paths.
+        Common keys: ``echo``, ``connect_args``, ``pool_size``.
+    execution_options : dict, optional
+        Options forwarded to ``engine.execution_options()``. In the resolver path these
+        are merged with the auto-generated ``schema_translate_map`` (resolver wins on
+        that key via ``setdefault``).
+
+    Returns
+    -------
+    Engine
+        A SQLAlchemy engine instance.
     """
+    engine_kwargs = engine_kwargs or {}
     if url is None:
-        return get_engine()
+        resource = (
+            Resolver.from_active_config()
+            .resolve_resource(OmopAlchemyConfig.CDM_DB.semantic_name)
+        )
+        return resource.create_engine(execution_options=execution_options, **engine_kwargs)
+
     from sqlalchemy import make_url as _make_url
 
     if isinstance(url, str):
         url = _make_url(url)
-    kwargs = {}
-    if not url.drivername.startswith("sqlite"):
-        kwargs["connect_args"] = {"connect_timeout": connect_timeout}
-    return create_engine(url, echo=echo, **kwargs)
+    engine = create_engine(url, **engine_kwargs)
+    if execution_options:
+        engine = engine.execution_options(**execution_options)
+    return engine
 
 
 def make_session(
@@ -48,6 +63,6 @@ def make_session(
     *,
     echo: bool = False,
 ) -> Session:
-    engine = make_engine(url, echo=echo)
+    engine = make_engine(url, engine_kwargs={"echo": echo})
     SessionLocal = sessionmaker(bind=engine)
     return SessionLocal()
