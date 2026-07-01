@@ -597,7 +597,20 @@ def find_shortest_paths_batch(
 
 @dataclass(order=True)
 class QueueItem:
-    """Priority Queue Item for Dijkstra/A* search."""
+    """Frontier item for the cost-prioritised BFS in find_standard_paths.
+
+    Attributes
+    ----------
+    cost : float
+        Accumulated traversal cost. Currently always 0.0 (uniform BFS). Reserved as
+        live infrastructure for future weighted traversal; see Notes in find_standard_paths.
+    node : Node
+        The graph node at this position in the frontier.
+    mk : LabelMatchKind
+        Match kind inherited from the originating candidate hit.
+    iterations : int
+        BFS depth (number of hops from the candidate).
+    """
 
     cost: float
     node: Node = field(compare=False)
@@ -658,8 +671,6 @@ def find_standard_paths(
     max_depth: Optional[int] = None,
     max_concepts: Optional[int] = None,
     within_domain: bool = True,
-    *args,
-    **kwargs,
 ) -> List[StandardConcept]:
     """
     Search for standard concepts reachable from a candidate that satisfy ancestor constraints.
@@ -829,7 +840,11 @@ def find_standard_paths(
                 visited_min_iteration[object_id] = next_iterations
 
                 new_cost = cost
-                # new_cost = cost + COST_PREDICATES[converted_predicate_kind]  # Not punishing on the mapping to standard concept
+                # Cost differentiation is reserved for future use. When COST_PREDICATES is
+                # defined (e.g. IDENTITY=0, HIERARCHY=1, ASSOCIATION=2), replace with:
+                #   new_cost = cost + COST_PREDICATES[predicate_kind_for_this_edge]
+                # If costs become non-uniform the wave-drain must change to a per-cost-tier
+                # drain (one heappop at a time) to preserve lowest-cost-first ordering.
 
                 heapq.heappush(
                     queue,

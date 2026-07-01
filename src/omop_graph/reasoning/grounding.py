@@ -60,7 +60,10 @@ class GroundingConstraints:
     max_depth : int, optional
         Maximum allowed distance in the hierarchy between a candidate and a parent.
     predicate_kinds : frozenset[PredicateKind], optional
-        The types of relationships allowed during pathfinding.
+        Edge types allowed during BFS traversal. Defaults to IDENTITY only, which
+        covers the OMOP "Maps to" and "Non-standard to Standard" relationships. Allowing
+        HIERARCHY or ASSOCIATION edges would traverse parent-of and cross-domain links,
+        expanding candidates to unrelated concepts and diluting grounding results.
     """
 
     parent_ids: Optional[Tuple[int, ...]]
@@ -69,6 +72,13 @@ class GroundingConstraints:
         default_factory=lambda: OmopGraphConfig.get_config().max_depth
     )
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
+
+    def __post_init__(self) -> None:
+        if self.predicate_kinds != frozenset({PredicateKind.IDENTITY}):
+            raise ValueError(
+                "predicate_kinds must be a frozenset containing only PredicateKind.IDENTITY. "
+                "Other predicate kinds are not supported for grounding as scoring is not yet implemented for them."
+            )
 
 
 def ground_term(
@@ -243,7 +253,6 @@ def find_standard_concepts(
     max_depth: int,
     max_paths: Optional[int] = 3,
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
-    lowest_cost: Optional[float] = None,
 ) -> List[StandardConcept]:
     """
     Identify standard concepts related to a candidate that satisfy parent constraints.
@@ -254,21 +263,22 @@ def find_standard_concepts(
         The Knowledge Graph instance.
     candidate : CandidateHit
         The initial match found by a resolver.
-    parent_ids : tuple[int, ...]
-        Acceptable ancestor IDs.
+    parent_ids : tuple of int
+        Acceptable ancestor concept IDs.
     max_depth : int
-        Maximum separation allowed.
+        Maximum min_levels_of_separation allowed in the ancestry check.
     max_paths : int, optional
-        Limit on unique standard concepts per parent lookup.
-    predicate_kinds : frozenset, optional
-        Edge types to traverse.
-    lowest_cost : float, optional
-        Minimum cost threshold for pathfinding.
+        Per-target cap on unique standard concepts collected.
+    predicate_kinds : frozenset of PredicateKind, optional
+        Edge types to traverse. Defaults to IDENTITY only, which covers the OMOP
+        "Maps to" relationships between non-standard and standard concepts. See
+        GroundingConstraints.predicate_kinds for the rationale.
 
     Returns
     -------
-    list[StandardConcept]
-        Standard concepts associated with the candidate that hit the targets.
+    list of StandardConcept
+        Standard concepts associated with the candidate that satisfy the ancestor
+        constraint.
     """
     return find_standard_paths(
         kg=kg,
@@ -277,5 +287,4 @@ def find_standard_concepts(
         predicate_kinds=predicate_kinds,
         max_depth=max_depth,
         max_concepts=max_paths,
-        lowest_cost=lowest_cost,
     )
