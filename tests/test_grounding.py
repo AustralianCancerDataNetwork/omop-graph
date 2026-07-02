@@ -98,3 +98,58 @@ def test_grounding_rejects_concepts_outside_anchored_hierarchy(
     )
 
     assert ranked == []
+
+
+def test_grounding_maps_non_standard_candidate_without_parent_ids(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    pipeline = ResolverPipeline(resolvers=(ExactLabelResolver(),))
+
+    ranked = ground_term(
+        resolver_pipeline=pipeline,
+        kg=mock_cdm_kg,
+        query="Kidney carcinoma term",
+        query_embedding=None,
+        constraints=GroundingConstraints(
+            parent_ids=None,
+            search_constraint=SearchConstraintConcept(
+                domains=("Condition",),
+                vocabularies=("SNOMED",),
+                require_standard=False,
+            ),
+            predicate_kinds=frozenset({PredicateKind.IDENTITY}),
+        ),
+        max_candidates=1,
+    )
+
+    assert ranked, "Expected non-standard candidate to standardize without a parent anchor"
+    assert ranked[0].concept_id == 196653
+    assert ranked[0].identity_hops == 1
+
+
+def test_grounding_standard_candidate_without_parent_ids_is_zero_hop(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    pipeline = ResolverPipeline(resolvers=(ExactLabelResolver(),))
+
+    ranked = ground_term(
+        resolver_pipeline=pipeline,
+        kg=mock_cdm_kg,
+        query="Malignant tumor of kidney",
+        query_embedding=None,
+        constraints=GroundingConstraints(
+            parent_ids=None,
+            search_constraint=SearchConstraintConcept(
+                domains=("Condition",),
+                vocabularies=("SNOMED",),
+                require_standard=False,
+            ),
+            predicate_kinds=frozenset({PredicateKind.IDENTITY}),
+        ),
+        max_candidates=1,
+    )
+
+    assert ranked, "Expected already-standard candidate to ground without a parent anchor"
+    assert ranked[0].concept_id == 196653
+    assert ranked[0].identity_hops == 0
+    assert ranked[0].separation == 0
