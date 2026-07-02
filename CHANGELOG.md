@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.1.0...v1.2.0) (2026-07-02)
+
+
+### Features
+
+* Centralised configuration utility ([049cd6e](https://github.com/AustralianCancerDataNetwork/omop-graph/commit/049cd6e034205fc575afde555149cff4aa580e13))
+
 # [1.1.0](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.0.4...v1.1.0) (2026-05-25)
 
 
