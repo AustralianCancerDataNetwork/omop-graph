@@ -29,6 +29,21 @@ def _constraints() -> GroundingConstraints:
     )
 
 
+def _unconstrained_constraints() -> GroundingConstraints:
+    # max_depth is passed explicitly (like _constraints() above) so these tests don't
+    # depend on OmopGraphConfig's package config being set up in the environment.
+    return GroundingConstraints(
+        parent_ids=None,
+        search_constraint=SearchConstraintConcept(
+            domains=("Condition",),
+            vocabularies=("SNOMED",),
+            require_standard=False,
+        ),
+        max_depth=6,
+        predicate_kinds=frozenset({PredicateKind.IDENTITY}),
+    )
+
+
 @pytest.mark.parametrize(
     "query,expected_concept_id",
     [
@@ -110,15 +125,7 @@ def test_grounding_maps_non_standard_candidate_without_parent_ids(
         kg=mock_cdm_kg,
         query="Kidney carcinoma term",
         query_embedding=None,
-        constraints=GroundingConstraints(
-            parent_ids=None,
-            search_constraint=SearchConstraintConcept(
-                domains=("Condition",),
-                vocabularies=("SNOMED",),
-                require_standard=False,
-            ),
-            predicate_kinds=frozenset({PredicateKind.IDENTITY}),
-        ),
+        constraints=_unconstrained_constraints(),
         max_candidates=1,
     )
 
@@ -137,15 +144,7 @@ def test_grounding_standard_candidate_without_parent_ids_is_zero_hop(
         kg=mock_cdm_kg,
         query="Malignant tumor of kidney",
         query_embedding=None,
-        constraints=GroundingConstraints(
-            parent_ids=None,
-            search_constraint=SearchConstraintConcept(
-                domains=("Condition",),
-                vocabularies=("SNOMED",),
-                require_standard=False,
-            ),
-            predicate_kinds=frozenset({PredicateKind.IDENTITY}),
-        ),
+        constraints=_unconstrained_constraints(),
         max_candidates=1,
     )
 
