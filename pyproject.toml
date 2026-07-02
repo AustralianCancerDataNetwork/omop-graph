@@ -43,13 +43,13 @@ dependencies = [
 
 [project.optional-dependencies]
 emb = [
-  "omop-emb==1.1.0",
+  "omop-emb==1.1.1",
 ]
 faiss-cpu = [
-  "omop-emb[faiss-cpu]==1.1.0",
+  "omop-emb[faiss-cpu]==1.1.1",
 ]
 pgvector = [
-  "omop-emb[pgvector]==1.1.0",
+  "omop-emb[pgvector]==1.1.1",
 ]
 postgres = [
   "omop-alchemy[postgres]",
