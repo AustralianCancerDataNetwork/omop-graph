@@ -88,13 +88,14 @@ class EdgeView:
         pred = kg.predicate(self.predicate_id)
 
         return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
-    
+
     @classmethod
     def from_query(cls, entry: Row) -> "EdgeView":
         data = dict(entry._mapping)
         if "predicate_kind" in data:
             data["predicate_kind"] = PredicateKind(data["predicate_kind"])
         return cls(**data)
+
 
 @dataclass(frozen=True)
 class Predicate:

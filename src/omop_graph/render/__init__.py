@@ -15,7 +15,7 @@ from .auto import (
     render_trace,
     render_path,
     render_explained_path,
-    bind_default_renderers
+    bind_default_renderers,
 )
 
 __all__ = [

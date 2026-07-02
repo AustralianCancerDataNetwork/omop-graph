@@ -31,6 +31,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: usage/installation.md
+      - Configuration: getting-started/configuration.md
       - "CLI Reference": usage/cli.md
       - Testing: usage/testing.md
   - Core Components:

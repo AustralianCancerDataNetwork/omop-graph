@@ -1,18 +1,20 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from collections import defaultdict
 from typing import Dict, Set, List
 from omop_graph.graph.kg import KnowledgeGraph
 from ..concept_handlers import standardise_ids
 
-@dataclass 
-class ParentStatistics: 
+
+@dataclass
+class ParentStatistics:
     descendants: set[int] = field(default_factory=set)
     found: set[int] = field(default_factory=set)
-    coverage: int = 0 
-    pollution: int = 0 
-    completeness: float = 0.0 
-    purity: float = 0.0 
+    coverage: int = 0
+    pollution: int = 0
+    completeness: float = 0.0
+    purity: float = 0.0
     max_depth: int = 0
+
 
 def descendants_exhaustive_subsumes(
     kg: KnowledgeGraph,
@@ -22,14 +24,16 @@ def descendants_exhaustive_subsumes(
     """
     Exhaustive descendant closure using ONLY 'Subsumes'
     """
-    
+
     if exclude_roots is None:
         exclude_roots = set()
-        
+
     descendants: set[int] = set()
     frontier: list[int] = [root_id]
 
-    raise NotImplementedError("predicate search has changed. Needs to change here too. Subsumes no longer valid.")
+    raise NotImplementedError(
+        "predicate search has changed. Needs to change here too. Subsumes no longer valid."
+    )
 
     with kg.session_factory() as session:
         while frontier:
@@ -50,6 +54,7 @@ def descendants_exhaustive_subsumes(
 
     return descendants
 
+
 def find_common_parents(
     seeds: list[int],
     kg: KnowledgeGraph,
@@ -64,7 +69,7 @@ def find_common_parents(
     # frontier items: (current_concept, originating_seed, depth)
     frontier: list[tuple[int, int, int]] = [(s, s, 0) for s in seeds]
     visited: set[tuple[int, int]] = set()
-    
+
     while frontier:
         current, origin, depth = frontier.pop(0)
 
@@ -79,9 +84,7 @@ def find_common_parents(
             # record evidence
             candidates[parent].found.add(origin)
             candidates[parent].descendants.add(origin)
-            candidates[parent].max_depth = max(
-                candidates[parent].max_depth, depth + 1
-            )
+            candidates[parent].max_depth = max(candidates[parent].max_depth, depth + 1)
 
             frontier.append((parent, origin, depth + 1))
 
@@ -93,9 +96,7 @@ def find_common_parents(
         final[std_parent].descendants |= stats.descendants
         final[std_parent].found |= stats.found
 
-        final[std_parent].max_depth = max(
-            final[std_parent].max_depth, stats.max_depth
-        )
+        final[std_parent].max_depth = max(final[std_parent].max_depth, stats.max_depth)
 
     for stats in final.values():
         stats.coverage = len(stats.descendants)
@@ -114,6 +115,7 @@ def find_common_parents(
         if stats.coverage >= min_coverage
     }
 
+
 def greedy_parent_cover(
     seeds: Set[int],
     candidates: Dict[int, ParentStatistics],
@@ -131,7 +133,11 @@ def greedy_parent_cover(
     def score(c: ParentStatistics, gain: int) -> float:
         if gain <= 0:
             return -1.0
-        return (gain ** alpha) * (c.purity ** beta) / ((1 + c.pollution) ** gamma * (1 + c.max_depth) ** delta)
+        return (
+            (gain**alpha)
+            * (c.purity**beta)
+            / ((1 + c.pollution) ** gamma * (1 + c.max_depth) ** delta)
+        )
 
     while remaining:
         covered = len(seeds) - len(remaining)
@@ -163,20 +169,23 @@ def greedy_parent_cover(
 
     return selected
 
+
 def relate_groups(groups: dict[int, ParentStatistics]) -> list[dict]:
     relations = []
 
     for c1, g1 in groups.items():
         for c2, g2 in groups.items():
-            if c1==c2:
+            if c1 == c2:
                 continue
 
             if g1.found <= g2.found:
-                relations.append({
-                    "type": "subsumed_by",
-                    "from": c1,
-                    "to": c2,
-                    "overlap": len(g1.found),
-                })
+                relations.append(
+                    {
+                        "type": "subsumed_by",
+                        "from": c1,
+                        "to": c2,
+                        "overlap": len(g1.found),
+                    }
+                )
 
     return relations

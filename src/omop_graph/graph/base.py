@@ -17,27 +17,23 @@ class GraphBackend(ABC):
     """
 
     @abstractmethod
-    def concept_view(self, concept_id: int) -> ConceptView:
-        ...
+    def concept_view(self, concept_id: int) -> ConceptView: ...
 
     @abstractmethod
-    def predicate_kind(self, relationship_id: str) -> PredicateKind:
-        ...
+    def predicate_kind(self, relationship_id: str) -> PredicateKind: ...
 
     @abstractmethod
-    def predicate_name(self, relationship_id: str) -> str:
-        ...
+    def predicate_name(self, relationship_id: str) -> str: ...
 
     @abstractmethod
-    def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
-        ...
+    def reverse_predicate_id(self, relationship_id: str) -> Optional[str]: ...
 
     @abstractmethod
     def iter_edges(
-        self, 
+        self,
         session: Session,
-        concept_ids: int | tuple[int, ...], 
-        direction: Literal["in", "out"], 
+        concept_ids: int | tuple[int, ...],
+        direction: Literal["in", "out"],
         predicate_ids: frozenset[str] | None,
         predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
@@ -74,4 +70,3 @@ class GraphBackend(ABC):
             Edges matching criteria.
         """
         ...
-

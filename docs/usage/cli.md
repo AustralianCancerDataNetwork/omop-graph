@@ -2,6 +2,17 @@
 
 The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local OHDSI Common Data Model (CDM) database using Athena vocabulary files and synthetic test data.
 
+!!! note "Verbosity flag placement"
+    The `--verbose` / `-v` flag is a **global option** and must appear **before** the
+    subcommand name, not after it:
+
+    ```
+    omop-graph -v relationship-classification ...   # ✓ correct
+    omop-graph relationship-classification -v ...   # ✗ flag is ignored
+    ```
+
+    Use `-v` for INFO level and `-vv` for DEBUG level.
+
 ---
 
 ## `omop-cdm`

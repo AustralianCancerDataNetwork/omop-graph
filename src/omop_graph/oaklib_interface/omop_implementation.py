@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
-from dotenv import load_dotenv
+
 from linkml_runtime.linkml_model.annotations import Annotation
 from oaklib.datamodels.search import (
     SearchConfiguration,
@@ -29,10 +29,7 @@ from oaklib.interfaces.basic_ontology_interface import (
 from oaklib.interfaces.text_annotator_interface import nen_annotation
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.graph import (
-    KnowledgeGraph, 
-    KnowledgeGraphEmbeddingConfiguration
-)
+from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.nodes import LabelMatchKind
@@ -44,8 +41,9 @@ from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.omop_factory import omop_resource
 
 
-from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
+
+from omop_graph.db.session import make_engine
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +78,8 @@ def _normalise_properties(config: SearchConfiguration) -> list[str]:
         A list of property strings.
     """
     return [
-        p.text if hasattr(p, "text") else str(p) for p in (config.properties or [])  # type: ignore
+        getattr(p, "text", None) or str(p)
+        for p in (config.properties or [])  # type: ignore[union-attr]
     ]
 
 
@@ -202,7 +201,6 @@ class OMOPBaseInterface:
         return local
 
 
-
 class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     """
     Mixin providing text annotation capabilities via a configurable tokenizer.
@@ -215,9 +213,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         The tokenizer strategy ('simple' or 'cava'). Default is 'simple'.
     """
 
-    def __init__(
-        self, kg: KnowledgeGraph, tokenizer: str = "simple", **kwargs
-    ):
+    def __init__(self, kg: KnowledgeGraph, tokenizer: str = "simple", **kwargs):
         super().__init__(kg=kg, **kwargs)
         if tokenizer == "cava":
             self.tokenizer = cava_tokenizer()
@@ -227,7 +223,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     def _simple_tokenizer(self, text: str):
         for m in re.finditer(r"\b[\w\- ]{3,}\b", text):
             yield m.start(), m.end(), m.group()
-    
+
     def annotate_text(
         self,
         text: str,
@@ -289,7 +285,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
             def split_annotations(ann):
                 if ann is not None and isinstance(ann.value, str):
-                    return tuple(val.strip() for val in ann.value.split(ANNOTATIONS_SPLIT_CHAR))
+                    return tuple(
+                        val.strip() for val in ann.value.split(ANNOTATIONS_SPLIT_CHAR)
+                    )
                 return None
 
             try:
@@ -324,7 +322,6 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 vocabularies=vocabs,
                 require_standard=parent_ids is None,
             ),
-            max_depth=6,
             predicate_kinds=frozenset([PredicateKind.IDENTITY]),
         )
 
@@ -396,7 +393,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
 
         if config.syntax == SearchTermSyntax.REGULAR_EXPRESSION:
             raise ValueError("REGULAR_EXPRESSION search is not supported for OMOP")
-        
+
         if config.is_partial or config.syntax == SearchTermSyntax.STARTS_WITH:
             match_kind = LabelMatchKind.PARTIAL
         else:
@@ -548,16 +545,17 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
 
         with self.kg.session_factory() as session:
-            cids = tuple(self.kg.entities(
-                session=session,
-                domain=domain,
-                standard_only=standard_only,
-                filter_obsoletes=filter_obsoletes
-            ))
-        
+            cids = tuple(
+                self.kg.entities(
+                    session=session,
+                    domain=domain,
+                    standard_only=standard_only,
+                    filter_obsoletes=filter_obsoletes,
+                )
+            )
+
         for cid in cids:
             yield self._concept_curie(cid)
-
 
     def roots(
         self,
@@ -609,7 +607,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         cids = self.kg.concept_ids_by_label(label.strip())
         return [self._concept_curie(cid) for cid in cids]
 
-    def relationships( # type: ignore[override]
+    def relationships(  # type: ignore[override]
         self,
         subjects: Iterable[CURIE] | None = None,
         predicates: Iterable[str] | None = None,
@@ -636,30 +634,38 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Tuple[CURIE, PRED_CURIE, CURIE]
             Triples (subject, predicate, object).
         """
-        
-        subject_ids = tuple([self._parse_concept(s) for s in subjects]) if subjects is not None else None
-        predicate_ids = tuple(predicates) if predicates is not None else None
-        object_ids = tuple([self._parse_concept(o) for o in objects]) if objects is not None else None
-        
-        with self.kg.session_factory() as session:
-            relationships = tuple(self.kg.relationships(
-                session=session,
-                subjects=subject_ids,
-                predicates=predicate_ids,
-                objects=object_ids,
-                invert=invert
-            ))
 
-        for s,p,o in relationships:
+        subject_ids = (
+            tuple([self._parse_concept(s) for s in subjects])
+            if subjects is not None
+            else None
+        )
+        predicate_ids = tuple(predicates) if predicates is not None else None
+        object_ids = (
+            tuple([self._parse_concept(o) for o in objects])
+            if objects is not None
+            else None
+        )
+
+        with self.kg.session_factory() as session:
+            relationships = tuple(
+                self.kg.relationships(
+                    session=session,
+                    subjects=subject_ids,
+                    predicates=predicate_ids,
+                    objects=object_ids,
+                    invert=invert,
+                )
+            )
+
+        for s, p, o in relationships:
             yield (
                 self._concept_curie(s),
                 p,
                 self._concept_curie(o),
             )
 
-    def hierarchical_parents(
-        self, curie: CURIE, isa_only: bool = False
-    ) -> List[CURIE]:
+    def hierarchical_parents(self, curie: CURIE, isa_only: bool = False) -> List[CURIE]:
         """
         Get hierarchical parents.
         """
@@ -733,9 +739,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Retrieve outgoing relationships, including those implied by the hierarchy.
         """
-        raise NotImplementedError(
-            "Changes to the CDM currently prevents this function"
-        )
+        raise NotImplementedError("Changes to the CDM currently prevents this function")
         concept_id = self._parse_concept(curie)
 
         pred_filter = (
@@ -810,7 +814,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Find relationships connecting a subject and object, including hierarchical ones.
         """
-        raise NotImplementedError("Change in OMOP CDM made this function not work anymore")
+        raise NotImplementedError(
+            "Change in OMOP CDM made this function not work anymore"
+        )
 
         subj_id = self._parse_concept(subject)
         obj_id = self._parse_concept(object)
@@ -825,7 +831,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             yield self._predicate_curie("is_a")
 
 
-class OMOPAlchemyImplementation( # type: ignore[override]
+class OMOPAlchemyImplementation(  # type: ignore[override]
     OMOPRelationGraphInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,
@@ -874,25 +880,22 @@ class OMOPAlchemyImplementation( # type: ignore[override]
             self.engine_string = engine_string
             self.resource = resource or omop_resource(url=self.engine_string)
         else:
-            load_dotenv()
             self.resource = resource or omop_resource()
             self.engine_string = self.resource.url
 
-        assert self.engine_string is not None, "No database URL provided for OMOPAlchemyImplementation"
-        
-        engine = create_engine(self.engine_string, future=True, echo=False)
+        assert self.engine_string is not None, (
+            "No database URL provided for OMOPAlchemyImplementation"
+        )
+
+        engine = make_engine(self.engine_string, engine_kwargs={"echo": False, "future": True})
 
         self._connection = None
 
         if kg is None:
-            kg = KnowledgeGraph(
-                emb_config=kg_emb_config,
-                cdm_engine=engine
-            )
+            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine)
             bind_default_renderers(kg)
-        
-        super().__init__(kg=kg, **kwargs)
 
+        super().__init__(kg=kg, **kwargs)
 
     # TODO: Implement if necessary!
     def _all_relationships(self):
@@ -956,9 +959,7 @@ class OMOPAlchemyImplementation( # type: ignore[override]
     ) -> CURIE:
         raise NotImplementedError("OMOP adapter is read-only")
 
-    def delete_entity(
-        self, curie: CURIE, label: str | None = None, **kwargs
-    ) -> CURIE:
+    def delete_entity(self, curie: CURIE, label: str | None = None, **kwargs) -> CURIE:
         raise NotImplementedError("OMOP adapter is read-only")
 
     def save(self):

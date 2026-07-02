@@ -5,7 +5,8 @@ description = "Explainable, OMOP-native knowledge graph traversal and pathfindin
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-  { name = "Georgie Kennedy", email = "georgie.kennedy@unsw.edu.au" }
+  { name = "Georgie Kennedy", email = "georgie.kennedy@unsw.edu.au" },
+  { name = "Nico Loesch", email = "n.loesch@unsw.edu.au" }
 ]
 license = "Apache-2.0"
 
@@ -32,22 +33,23 @@ classifiers = [
 ]
 
 dependencies = [
-  "omop-alchemy>=0.6.3",
-  "sqlalchemy>=2.0.45",
+  "omop-alchemy==0.8.0",
   "typing-extensions>=4.15.0",
-  "typer",
+  "typer>=0.12",
+  "rich>=13.0",
   "oaklib",
+  "oa-configurator==0.1.2"
 ]
 
 [project.optional-dependencies]
 emb = [
-  "omop-emb>=1.0.0",
+  "omop-emb==1.1.1",
 ]
 faiss-cpu = [
-  "omop-emb[faiss-cpu]>=1.0.0",
+  "omop-emb[faiss-cpu]==1.1.1",
 ]
 pgvector = [
-  "omop-emb[pgvector]>=1.0.0",
+  "omop-emb[pgvector]==1.1.1",
 ]
 postgres = [
   "omop-alchemy[postgres]",
@@ -68,11 +70,15 @@ dev = [
     "mkdocstrings[python]",
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
-    "mkdocs-macros-plugin", 
+    "mkdocs-macros-plugin",
+    "oa-configurator[postgres]>=0.1.1"
 ]
 
 [project.scripts]
 omop-graph = "omop_graph.cli:app"
+
+[project.entry-points."omop.config"]
+omop_graph = "omop_graph.config:OmopGraphConfig"
 
 [build-system]
 requires = ["hatchling"]

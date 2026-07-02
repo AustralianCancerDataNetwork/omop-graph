@@ -42,15 +42,16 @@ class ResolverPipeline:
     Notes
     -----
     TODO: Have it stop after a confidence score on a match. That requries some sort of callback into the resolve step to
-    stop getting hits from the resolver and to get the confidence score of the match. 
+    stop getting hits from the resolver and to get the confidence score of the match.
     """
+
     def __init__(
         self,
         resolvers: Tuple[CandidateResolver, ...],
-        stop_after_resolver: Optional[str | Type[CandidateResolver]] = None
-    ):  
+        stop_after_resolver: Optional[str | Type[CandidateResolver]] = None,
+    ):
         self._resolver_map = {type(r): r for r in resolvers}
-    
+
         if len(self._resolver_map) != len(resolvers):
             raise ValueError("Duplicate resolver types detected in pipeline.")
 
@@ -59,7 +60,14 @@ class ResolverPipeline:
         if stop_after_resolver:
             # If they passed a string name, find the matching type
             if isinstance(stop_after_resolver, str):
-                match = next((t for t in self._resolver_map if t.__name__ == stop_after_resolver), None)
+                match = next(
+                    (
+                        t
+                        for t in self._resolver_map
+                        if t.__name__ == stop_after_resolver
+                    ),
+                    None,
+                )
                 if not match:
                     raise ValueError(f"{stop_after_resolver} not in pipeline.")
                 self._stop_at = match
@@ -72,12 +80,11 @@ class ResolverPipeline:
     def __repr__(self) -> str:
         resolver_names = [type(r).__name__ for r in self.resolvers]
         return f"ResolverPipeline(resolvers={resolver_names}, stop_after_resolver={self.stop_at.__name__ if self.stop_at else None})"
-    
 
     @property
     def resolvers(self) -> Tuple[CandidateResolver, ...]:
         return self._resolvers
-    
+
     @property
     def stop_at(self) -> Optional[Type[CandidateResolver]]:
         """
@@ -86,7 +93,6 @@ class ResolverPipeline:
         """
         return self._stop_at
 
-        
     @classmethod
     def with_all_resolvers(cls) -> "ResolverPipeline":
         """
@@ -105,7 +111,7 @@ class ResolverPipeline:
         kg: KnowledgeGraph,
         query: str,
         constraints: Optional[SearchConstraintConcept] = None,
-        **kwargs
+        **kwargs,
     ) -> Generator[CandidateHit, None, None]:
         """
         Execute the pipeline to find candidate concepts for the input query.
@@ -129,10 +135,7 @@ class ResolverPipeline:
 
         for resolver in self.resolvers:
             hits = resolver.resolve(
-                kg=kg,
-                query=query,
-                constraints=constraints,
-                **kwargs
+                kg=kg, query=query, constraints=constraints, **kwargs
             )
 
             for hit in hits:
@@ -142,5 +145,7 @@ class ResolverPipeline:
 
             # Early stopping
             if type(resolver) is self._stop_at:
-                logger.info(f"Stopping pipeline after resolver {type(resolver).__name__} as configured.")
+                logger.info(
+                    f"Stopping pipeline after resolver {type(resolver).__name__} as configured."
+                )
                 break

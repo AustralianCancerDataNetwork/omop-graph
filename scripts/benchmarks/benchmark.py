@@ -8,14 +8,12 @@ consistent behavior and report semantics.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
 import typer
 
 import sqlalchemy as sa
-from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 
 import numpy as np
@@ -32,7 +30,7 @@ from omop_emb.embeddings import (
     EmbeddingRole
 )
 from omop_emb.backends.index_config import index_config_from_index_type
-from omop_graph.cli import configure_logging_level
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
@@ -53,7 +51,15 @@ from omop_graph.reasoning.resolvers.resolvers import (
 from omop_graph.db.session import make_engine
 app = typer.Typer()
 
-DEFAULT_VOCABULARIES: Tuple[str, ...] = ("SNOMED", "ICDO3", "HemOnc")
+
+@app.callback()
+def _main(
+    verbose: Annotated[
+        int,
+        typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG). Must come before the subcommand name."),
+    ] = 0,
+) -> None:
+    OmopGraphConfig.configure_logging(verbosity=verbose)
 
 
 def _normalize_parent_ids(raw_parent_ids: object) -> Optional[Tuple[int, ...]]:
@@ -160,40 +166,22 @@ def load_cases(path: Path) -> List[BenchmarkCase]:
     raise TypeError(f"Unsupported benchmark case file shape: {type(payload).__name__}")
 
 
-def build_session_factory(database_url: Optional[str]) -> sessionmaker:
-    """Build a SQLAlchemy session factory for the configured OMOP database."""
-
-    load_dotenv()
-    resolved_url = database_url or os.getenv("OMOP_CDM_DB_URL")
-    if not resolved_url:
-        raise RuntimeError(
-            "No database URL provided. Pass --database-url or set OMOP_CDM_DB_URL."
-        )
-
-    engine = sa.create_engine(resolved_url, future=True, echo=False)
-    return sessionmaker(bind=engine, future=True)
+def build_session_factory() -> sessionmaker:
+    """Build a SQLAlchemy session factory via oa-configurator."""
+    return sessionmaker(bind=make_engine(), future=True)
 
 
-def build_engine(database_url: Optional[str]) -> sa.Engine:
-    """Build a SQLAlchemy engine for the configured OMOP database."""
-
-    load_dotenv()
-    resolved_url = database_url or os.getenv("OMOP_CDM_DB_URL")
-    if not resolved_url:
-        raise RuntimeError(
-            "No database URL provided. Pass --database-url or set OMOP_CDM_DB_URL."
-        )
-
-    return sa.create_engine(resolved_url, future=True, echo=False)
+def build_engine() -> sa.Engine:
+    """Build a SQLAlchemy engine via oa-configurator."""
+    return make_engine()
 
 
-def build_knowledge_graph(database_url: Optional[str]) -> KnowledgeGraph:
+def build_knowledge_graph() -> KnowledgeGraph:
     """Create a KnowledgeGraph backed by the live OMOP CDM database."""
-    return KnowledgeGraph(cdm_engine=make_engine(database_url))
+    return KnowledgeGraph(cdm_engine=make_engine())
 
 
 def build_embedding_knowledge_graph(
-    database_url: Optional[str],
     embedding_metric: MetricType,
     embedding_model: Optional[str],
     embedding_backend: Optional[str | BackendType],
@@ -201,7 +189,7 @@ def build_embedding_knowledge_graph(
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
-    cdm_engine = make_engine(database_url)
+    cdm_engine = make_engine()
     resolved_embedding_backend = parse_backend_type(embedding_backend) if embedding_backend is not None else None
     resolved_metric_type = parse_metric_type(embedding_metric)
 
@@ -222,7 +210,7 @@ def case_constraints(case: BenchmarkCase) -> Optional[SearchConstraintConcept]:
     """Translate case metadata into OMOP search constraints when available."""
 
     domains = (case.domain,) if case.domain else None
-    vocabularies = case.vocabularies if case.vocabularies else DEFAULT_VOCABULARIES
+    vocabularies = case.vocabularies or None
 
     return SearchConstraintConcept(
         domains=domains,
@@ -499,32 +487,32 @@ def _evaluate_grounded_case(
     }
 
 
-@app.command("Generalised benchmark interface.")
+@app.command()
 def run_benchmark(
     cases_file: Annotated[str, typer.Option(
         "--cases-file", "-c", 
         help="Path to the JSON file containing benchmark cases.")
     ],
-    embedding_model: Annotated[str, typer.Option(
+    embedding_model: Annotated[Optional[str], typer.Option(
         "--embedding-model", "-m",
-        help="Name of the embedding model to use (e.g., 'text-embedding-3-small').")
-    ],
-    embedding_api_base_url: Annotated[str, typer.Option(
+        help="Name of the embedding model to use (e.g., 'text-embedding-3-small'). Falls back to config.toml")
+    ] = None,
+    embedding_api_base_url: Annotated[Optional[str], typer.Option(
         "--embedding-api-base-url", "-u",
-        help="Base URL for the embedding API (e.g., 'http://localhost:8000').")
-    ],
-    embedding_api_key: Annotated[str, typer.Option(
+        help="Base URL for the embedding API (e.g., 'http://localhost:8000'). Falls back to config.toml.")
+    ] = None,
+    embedding_api_key: Annotated[Optional[str], typer.Option(
         "--embedding-api-key", "-k",
-        help="API key for the embedding service, if required.")
-    ],
-    embedding_metric_type: Annotated[str, typer.Option(
+        help="API key for the embedding service, if required. Falls back to config.toml.")
+    ] = None,
+    embedding_metric_type: Annotated[MetricType, typer.Option(
         "--embedding-metric-type", "-M",
-        help="Distance metric type for embedding similarity (e.g., 'cosine').")
-    ],
-    embedding_index_type: Annotated[str, typer.Option(
+        help="Distance metric type for embedding similarity.")
+    ] = MetricType.COSINE,
+    embedding_index_type: Annotated[IndexType, typer.Option(
         "--embedding-index-type", "-I",
-        help="Index type for embedding retrieval (e.g., 'flat').")
-    ],
+        help="Index type for embedding retrieval (e.g., 'flat'). Has to match the registered model.")
+    ] = IndexType.FLAT,
     out_file: Annotated[Optional[str], typer.Option(
         "--out-file", "-o",
         help="Path to the output JSON file where results will be saved. If not provided, results will be printed to stdout.")
@@ -533,44 +521,42 @@ def run_benchmark(
         "--k", "-K",
         help="Number of nearest neighbors to retrieve for each case.")
     ] = 5,
-    allowed_domains: Annotated[Optional[str], typer.Option(
+    domains: Annotated[Optional[List[str]], typer.Option(
         "--allowed-domains", "-D",
-        help="Comma-separated list of allowed OMOP domains to filter concepts (e.g., 'Condition,Drug'). If not provided, no domain filtering will be applied.")
+        help="Used to filter cases within the case file. For multiple domains, repeat the option (e.g., -D Condition -D Procedure).")
     ] = None,
-    allowed_vocabularies: Annotated[Optional[str], typer.Option(
+    allowed_vocabularies: Annotated[Optional[List[str]], typer.Option(
         "--allowed-vocabularies", "-V",
-        help="Comma-separated list of allowed vocabularies to filter concepts (e.g., 'SNOMED,LOINC'). If not provided, no vocabulary filtering will be applied.")
+        help="Used to filter cases within the case file. For multiple vocabularies, repeat the option (e.g., -V SNOMED -V ICDO3).")
     ] = None,
-    parent_ids: Annotated[Optional[str], typer.Option(
+    parent_ids: Annotated[Optional[List[str]], typer.Option(
         "--grounding-parent-ids", "-G",
-        help="Comma-separated list of OMOP concept IDs to use as parent nodes for grounding. If not provided, no parent ID filtering will be applied.")
-    ] = None,
-    database_url: Annotated[Optional[str], typer.Option(
-        "--database-url", "-d",
-        help="Database URL for the OMOP CDM database. If not provided, will use the environment variable specified by the library (e.g., OMOP_CDM_DATABASE_URL).")
+        help="Overwrites the parent_ids specified in individual cases. For multiple IDs, repeat the option (e.g., -G 443392 -G 413015).")
     ] = None,
     embedding_backend: Annotated[Optional[str], typer.Option(
         "--embedding-backend", "-e",
-        help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). If not provided, will use the environment variable specified by the library (e.g., OMOP_EMB_BACKEND).")
+        help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). Defaults to config.toml or OMOP_EMB_BACKEND environment variable.")
     ] = None,
-    verbosity: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity (up to two levels)")] = 0,
 ):
-    configure_logging_level(verbosity)
-
+    """Generalised benchmark interface."""
     cases = load_cases(Path(cases_file))
-    if allowed_domains:
-        domain_filter = set(allowed_domains.split(","))
+
+    
+    if domains:
+        domain_filter = set(domains)
         cases = [c for c in cases if c.domain in domain_filter]
     if allowed_vocabularies:
-        vocab_filter = set(allowed_vocabularies.split(","))
+        vocab_filter = set(allowed_vocabularies)
         cases = [
             c
             for c in cases
             if c.vocabularies and any(vocabulary in vocab_filter for vocabulary in c.vocabularies)
         ]
     cases = _order_cases_for_report(cases)
-
-    grounding_parent_ids = tuple(map(int, parent_ids.split(","))) if parent_ids else None
+    if parent_ids is not None:
+        grounding_parent_ids = tuple(map(int, parent_ids))
+    else:
+        grounding_parent_ids = None
     if grounding_parent_ids is None and all(c.parent_ids is None for c in cases):
         raise RuntimeError(
             "No grounding parent IDs provided."
@@ -594,7 +580,6 @@ def run_benchmark(
         canonical_model = embedding_client.provider.canonical_model_name(embedding_model)
 
         embedding_kg = build_embedding_knowledge_graph(
-            database_url=database_url,
             embedding_model=canonical_model,
             embedding_metric=resolved_embedding_metric_type,
             embedding_backend=embedding_backend,
@@ -618,7 +603,7 @@ def run_benchmark(
             for case in cases
         }
 
-    kg = build_knowledge_graph(database_url)
+    kg = build_knowledge_graph()
     configs = build_grounded_configs()
 
     errors: Dict[str, str] = {}
@@ -728,7 +713,6 @@ def run_benchmark(
         "bucket_summaries": bucket_summaries,
         "significance": significance,
         "errors": errors,
-        "database_url": database_url or os.getenv("OMOP_CDM_DB_URL"),
         "embedding_model": embedding_model,
         "embedding_backend": embedding_backend,
         "embedding_metric_type": embedding_metric_type,

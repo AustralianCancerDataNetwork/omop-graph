@@ -87,11 +87,12 @@ are derived automatically from the client:
 
 ```python
 from omop_emb import EmbeddingClient
-from omop_emb.config import BackendType, MetricType
+from omop_emb.config import BackendType, MetricType, ProviderType
 
 client = EmbeddingClient(
     model="nomic-embed-text:v1.5",
     api_base="http://ollama:11434/v1",
+    provider_type=ProviderType.OLLAMA,
 )
 
 emb_config = KnowledgeGraphEmbeddingConfiguration(

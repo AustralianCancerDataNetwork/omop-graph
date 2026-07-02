@@ -19,6 +19,7 @@ def concept_card(c: ConceptView) -> str:
     </div>
     """
 
+
 def concept_card_compact(c: ConceptView) -> str:
     status = "✅" if c.invalid_reason is None else "❌"
     return f"""
@@ -107,9 +108,10 @@ def trace_html_with_cards(kg, trace: GraphTrace) -> str:
 
     return f"""
     <div style="font-family: system-ui, sans-serif; line-height:1.4;">
-        {''.join(blocks)}
+        {"".join(blocks)}
     </div>
     """
+
 
 def path_html(kg, path: GraphPath) -> str:
     lines = []
@@ -161,7 +163,7 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
                 <th>Depth</th>
                 <th>Reason</th>
             </tr>
-            {''.join(rows)}
+            {"".join(rows)}
         </table>
     </div>
     """

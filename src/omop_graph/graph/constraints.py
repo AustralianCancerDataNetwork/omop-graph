@@ -6,7 +6,6 @@ from sqlalchemy.sql import Select
 from omop_alchemy.cdm.model.vocabulary import Concept
 
 
-
 @dataclass(frozen=True)
 class SearchConstraintConcept:
     """
@@ -32,6 +31,7 @@ class SearchConstraintConcept:
     limit: int, optional
         If set, limits the number of results returned by the query.
     """
+
     concept_ids: Optional[Tuple[int, ...]] = field(default=None)
     domains: Optional[Tuple[str, ...]] = field(default=None)
     vocabularies: Optional[Tuple[str, ...]] = field(default=None)
@@ -57,12 +57,12 @@ class SearchConstraintConcept:
 
         if self.domains is not None:
             query = query.where(Concept.domain_id.in_(self.domains))
-        
+
         if self.vocabularies is not None:
             query = query.where(Concept.vocabulary_id.in_(self.vocabularies))
-            
+
         if self.require_standard:
             # Filters for 'S' (Standard) or 'C' (Classification)
             query = query.where(Concept.standard_concept.in_(["S", "C"]))
-            
+
         return query.limit(self.limit)

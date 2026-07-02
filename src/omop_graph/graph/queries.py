@@ -17,14 +17,24 @@ from __future__ import annotations
 from typing import Optional, Tuple, Literal, Union
 from datetime import date
 
-from sqlalchemy import and_, case, exists, func, literal, select, Engine, inspect, column
+from sqlalchemy import (
+    and_,
+    case,
+    exists,
+    func,
+    literal,
+    select,
+    Engine,
+    inspect,
+    column,
+)
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from omop_alchemy.cdm.handlers.fulltext import (
+from omop_alchemy.backends import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
     CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN,
-    FullTextError
+    FullTextError,
 )
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
@@ -151,12 +161,9 @@ def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:
     Select
         A statement selecting just the concept_id.
     """
-    return (
-        select(Concept.concept_id)
-        .where(
-            Concept.vocabulary_id == vocabulary_id,
-            Concept.concept_code == concept_code,
-        )
+    return select(Concept.concept_id).where(
+        Concept.vocabulary_id == vocabulary_id,
+        Concept.concept_code == concept_code,
     )
 
 
@@ -182,6 +189,7 @@ def q_concept_name() -> Select:
         ).label("is_active"),
     )
 
+
 def q_concept_synonym() -> Select:
     """
     Base query for concept synonyms joined with concept status.
@@ -191,21 +199,18 @@ def q_concept_synonym() -> Select:
     Select
         A statement selecting ID, synonym name, and concept status flags.
     """
-    return (
-        select(
-            Concept.concept_id,
-            Concept_Synonym.concept_synonym_name.label("name"),
-            case(
-                (Concept.standard_concept.in_(["S", "C"]), literal(True)),
-                else_=literal(False),
-            ).label("is_standard"),
-            case(
-                (Concept.invalid_reason.in_(["D", "U"]), literal(False)),
-                else_=literal(True),
-            ).label("is_active"),
-        )
-        .join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
-    )
+    return select(
+        Concept.concept_id,
+        Concept_Synonym.concept_synonym_name.label("name"),
+        case(
+            (Concept.standard_concept.in_(["S", "C"]), literal(True)),
+            else_=literal(False),
+        ).label("is_standard"),
+        case(
+            (Concept.invalid_reason.in_(["D", "U"]), literal(False)),
+            else_=literal(True),
+        ).label("is_active"),
+    ).join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
 
 
 def q_concept_name_match(
@@ -231,7 +236,9 @@ def q_concept_name_match(
     Select
         The query statement.
     """
-    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+    name_expr = (
+        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+    )
 
     if synonym:
         base_stmt = q_concept_synonym().where(
@@ -275,7 +282,9 @@ def q_concept_name_ilike(
     Select
         The query statement.
     """
-    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+    name_expr = (
+        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+    )
 
     if "%" in query_concept_name:
         raise ValueError("query_concept_name should not contain wildcards like '%'.")
@@ -285,9 +294,7 @@ def q_concept_name_ilike(
             name_expr.ilike(f"%{query_concept_name}%")
         )
     else:
-        base_stmt = q_concept_name().where(
-            name_expr.ilike(f"%{query_concept_name}%")
-        )
+        base_stmt = q_concept_name().where(name_expr.ilike(f"%{query_concept_name}%"))
     if search_constraint:
         if not isinstance(search_constraint, SearchConstraintConcept):
             raise TypeError(
@@ -300,10 +307,10 @@ def q_concept_name_ilike(
 
 
 def q_concept_name_fulltext(
-    query_concept_name: str, 
+    query_concept_name: str,
     *,
     engine: Engine,
-    search_constraint: Optional['SearchConstraintConcept'] = None,
+    search_constraint: Optional["SearchConstraintConcept"] = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -327,25 +334,37 @@ def q_concept_name_fulltext(
         Whether to search in synonyms instead of concept names.
 
     """
-    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+    name_expr = (
+        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
+    )
 
     inspector = inspect(engine)
     target_table = Concept_Synonym if synonym else Concept
-    target_col = CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN if synonym else CONCEPT_NAME_TSVECTOR_COLUMN
+    target_col = (
+        CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN
+        if synonym
+        else CONCEPT_NAME_TSVECTOR_COLUMN
+    )
     stmt = q_concept_synonym() if synonym else q_concept_name()
 
-    tsvector_col = next((c["name"] for c in inspector.get_columns(target_table.__tablename__) 
-                      if c["name"] == target_col), None)
+    tsvector_col = next(
+        (
+            c["name"]
+            for c in inspector.get_columns(target_table.__tablename__)
+            if c["name"] == target_col
+        ),
+        None,
+    )
 
     if tsvector_col is None:
         raise FullTextError(
             f"Full-text search column '{target_col}' not found in table '{target_table.__tablename__}'. "
             "Make sure to run 'omop-maint fulltext install' and 'omop-maint fulltext populate' to set up full-text search."
         )
-    
+
     vector = column(tsvector_col)
     query = func.plainto_tsquery("english", query_concept_name)
-    
+
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
     if search_constraint:
@@ -353,7 +372,9 @@ def q_concept_name_fulltext(
 
     if sort:
         stmt = stmt.order_by(
-            *_concept_match_order_terms(name_expr, rank_expr=func.ts_rank(vector, query))
+            *_concept_match_order_terms(
+                name_expr, rank_expr=func.ts_rank(vector, query)
+            )
         )
 
     return stmt
@@ -405,7 +426,6 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
     Rev = aliased(Relationship)
     Rm = aliased(RelationshipMapping)
 
-
     return (
         select(
             Rel.relationship_id,
@@ -415,13 +435,13 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
             Rel.defines_ancestry.label("anc_down"),
             Rev.defines_ancestry.label("anc_up"),
             Rm.predicate_kind,
-            Rm.predicate_subkind
+            Rm.predicate_subkind,
         )
         .join(
-            Rev, Rel.reverse_relationship_id == Rev.relationship_id,
-        ).join(
-             Rm, Rel.relationship_id == Rm.relationship_id
-        )  # Match string IDs
+            Rev,
+            Rel.reverse_relationship_id == Rev.relationship_id,
+        )
+        .join(Rm, Rel.relationship_id == Rm.relationship_id)  # Match string IDs
         .where(Rel.relationship_id == relationship_id)
     )
 
@@ -448,17 +468,17 @@ def q_all_predicates_with_ancestry() -> Select:
 
 
 def q_edges(
-    concept_ids: Union[Tuple[int, ...], int], 
+    concept_ids: Union[Tuple[int, ...], int],
     direction: Literal["in", "out"],
     predicate_ids: Optional[frozenset[str]] = None,
     predicate_kinds: Optional[frozenset[PredicateKind]] = None,
     active_only: bool = False,
     on: Optional[date] = None,
-    within_domain: bool = False
+    within_domain: bool = False,
 ) -> Select:
     """Query outgoing edges for a batch of concept IDs."""
     if isinstance(concept_ids, int):
-        concept_ids = (concept_ids, )
+        concept_ids = (concept_ids,)
 
     Subj = aliased(Concept)
     Obj = aliased(Concept)
@@ -473,8 +493,8 @@ def q_edges(
         RelationshipMapping.predicate_kind,
         RelationshipMapping.predicate_subkind,
     ).join(
-        RelationshipMapping, 
-        Concept_Relationship.relationship_id == RelationshipMapping.relationship_id
+        RelationshipMapping,
+        Concept_Relationship.relationship_id == RelationshipMapping.relationship_id,
     )
 
     if active_only:
@@ -483,7 +503,7 @@ def q_edges(
             stmt = stmt.where(
                 and_(
                     Concept_Relationship.valid_start_date <= on,
-                    Concept_Relationship.valid_end_date >= on
+                    Concept_Relationship.valid_end_date >= on,
                 )
             )
 
@@ -496,10 +516,10 @@ def q_edges(
         stmt = stmt.where(Concept_Relationship.concept_id_2.in_(concept_ids))
     elif direction == "out":
         stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
-    
+
     if predicate_ids:  # Exact ID's
         stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
-    if predicate_kinds: # Global categories
+    if predicate_kinds:  # Global categories
         stmt = stmt.where(RelationshipMapping.predicate_kind.in_(predicate_kinds))
 
     return stmt
@@ -527,10 +547,11 @@ def q_ancestors(concept_id: int) -> Select:
         Concept_Ancestor.descendant_concept_id == concept_id
     )
 
+
 def q_relationships(
     subjects: Optional[tuple[int, ...]],
     predicates: Optional[tuple[str, ...]],
-    objects: Optional[tuple[int, ...]]  
+    objects: Optional[tuple[int, ...]],
 ) -> Select:
 
     stmt = select(
@@ -550,12 +571,11 @@ def q_relationships(
 
     return stmt
 
+
 def q_entities(
-    domain: str | None,
-    standard_only: bool = True,
-    filter_obsoletes: bool = True
+    domain: str | None, standard_only: bool = True, filter_obsoletes: bool = True
 ) -> Select:
-    
+
     stmt = select(Concept.concept_id)
 
     if domain:
@@ -568,6 +588,7 @@ def q_entities(
         stmt = stmt.where(Concept.invalid_reason.is_(None))
 
     return stmt
+
 
 def q_concept_filtered(
     vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
@@ -596,23 +617,21 @@ def q_singletons(
     """
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
 
-    return (
-        stmt.where(
-            ~exists(
-                select(1).where(
-                    and_(
-                        Concept_Ancestor.descendant_concept_id == Concept.concept_id,
-                        Concept_Ancestor.min_levels_of_separation == 1,
-                    )
+    return stmt.where(
+        ~exists(
+            select(1).where(
+                and_(
+                    Concept_Ancestor.descendant_concept_id == Concept.concept_id,
+                    Concept_Ancestor.min_levels_of_separation == 1,
                 )
             )
-        ).where(
-            ~exists(
-                select(1).where(
-                    and_(
-                        Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
-                        Concept_Ancestor.min_levels_of_separation == 1,
-                    )
+        )
+    ).where(
+        ~exists(
+            select(1).where(
+                and_(
+                    Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
+                    Concept_Ancestor.min_levels_of_separation == 1,
                 )
             )
         )
@@ -683,6 +702,33 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
         )
     )
 
+
+def q_concept_potential_ancestors_batch(
+    child_ids: Tuple[int, ...], parent_ids: Tuple[int, ...]
+) -> Select:
+    """
+    Check which of several candidate parents are ancestors of one or more children.
+
+    Parameters
+    ----------
+    child_ids : tuple of int
+        A tuple of descendant concept IDs for batch mode.
+    parent_ids : tuple of int
+        Candidate ancestor concept IDs to check.
+    """
+    return select(
+        Concept_Ancestor.ancestor_concept_id,
+        Concept_Ancestor.descendant_concept_id,
+        Concept_Ancestor.min_levels_of_separation,
+    ).where(
+        and_(
+            Concept_Ancestor.ancestor_concept_id.in_(parent_ids),
+            Concept_Ancestor.descendant_concept_id.in_(child_ids),
+            Concept_Ancestor.min_levels_of_separation > 0,
+        )
+    )
+
+
 def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     """
     Count the number of ancestors for each concept in the batch.
@@ -694,7 +740,7 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
         )
         .join(
             Concept_Ancestor,
-            Concept.concept_id == Concept_Ancestor.descendant_concept_id
+            Concept.concept_id == Concept_Ancestor.descendant_concept_id,
         )
         .where(Concept.concept_id.in_(concept_ids))
         .where(Concept_Ancestor.min_levels_of_separation > 0)
@@ -719,10 +765,8 @@ def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
         .group_by(Concept.concept_id)
     )
 
+
 def q_relationship_class(relationship_id: str) -> Select:
-    return (
-        select(
-            RelationshipMapping.predicate_kind
-        )
-        .where(RelationshipMapping.relationship_id == relationship_id)
+    return select(RelationshipMapping.predicate_kind).where(
+        RelationshipMapping.relationship_id == relationship_id
     )

@@ -3,6 +3,7 @@ from __future__ import annotations
 from omop_graph.graph.traverse import Subgraph
 from omop_graph.graph.paths import GraphPath
 
+
 def subgraph_mermaid(kg, sg: Subgraph) -> str:
     lines = ["graph TD"]
 

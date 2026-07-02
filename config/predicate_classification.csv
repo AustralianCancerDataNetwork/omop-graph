@@ -16,6 +16,7 @@ Association,Interaction,Biological or chemical interference between agents,Safet
 Association,Mechanistic,Mechanism of Action or functional pathways,Pathway analysis,Mechanistic inference
 Association,Diagnostic,Evidence linking tests/procedures to findings,Diagnostic path,Evidence tracing
 Association,Administrative,"Operational, billing, or system tracking links",ETL/Reporting,System mapping
+Association,Mapping,Cross-vocabulary or historical mapping without a guaranteed 1:1 correspondence,Weak mapping,Low-confidence linking
 Attribute,Clinical,"Qualifiers like severity, status, or course",Phenotyping,Attribute enrichment
 Attribute,Anatomical,Spatial location or morphology,Spatial localization,Anatomical qualification
 Attribute,Measurement,"Quantitative units, scales, and properties",Quantitative analysis,Scale interpretation

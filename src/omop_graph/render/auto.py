@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import Subgraph, GraphTrace
@@ -28,7 +28,8 @@ Format = Literal["auto", "html", "text", "mmd"]
 
 def _in_notebook() -> bool:
     try:
-        from IPython.core.getipython import get_ipython
+        from IPython.core.getipython import get_ipython  # type: ignore[import-unresolved]
+
         ip = get_ipython()
         return ip is not None and "IPKernelApp" in ip.config
     except Exception:
@@ -96,6 +97,6 @@ def render_explained_path(
 def bind_default_renderers(kg):
     from omop_graph.render import render_subgraph, render_trace, render_path
 
-    Subgraph._repr_html_ = lambda self: render_subgraph(kg, self, format="html") # type: ignore
-    GraphTrace._repr_html_ = lambda self: render_trace(kg, self, format="html") # type: ignore
-    GraphPath._repr_html_ = lambda self: render_path(kg, self, format="html") # type: ignore
+    Subgraph._repr_html_ = lambda self: render_subgraph(kg, self, format="html")  # type: ignore
+    GraphTrace._repr_html_ = lambda self: render_trace(kg, self, format="html")  # type: ignore
+    GraphPath._repr_html_ = lambda self: render_path(kg, self, format="html")  # type: ignore

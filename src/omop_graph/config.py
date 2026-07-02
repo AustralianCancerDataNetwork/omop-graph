@@ -1,13 +1,39 @@
-"""General configuration for the omop graph, including envrionment variables."""
+"""Configuration for omop-graph via oa-configurator."""
 
-# DB connection for OMOP CDM database
-ENV_OMOP_CDM_DB_URL = "OMOP_CDM_DB_URL"
-ENV_OMOP_CDM_DB_USER = "OMOP_CDM_DB_USER"
-ENV_OMOP_CDM_DB_PASSWORD = "OMOP_CDM_DB_PASSWORD"
-ENV_OMOP_CDM_DB_HOST = "OMOP_CDM_DB_HOST"
-ENV_OMOP_CDM_DB_PORT = "OMOP_CDM_DB_PORT"
-ENV_OMOP_CDM_DB_NAME = "OMOP_CDM_DB_NAME"
-ENV_OMOP_CDM_DB_DRIVER = "OMOP_CDM_DB_DRIVER"
+from __future__ import annotations
 
-# Ingestion
-ENV_OMOP_VOCABULARY_DIR = "OMOP_VOCABULARY_DIR"
+from typing import ClassVar, Final
+
+from pydantic import Field
+from oa_configurator import PackageConfigBase, ResourceSpec
+from omop_alchemy.config import OmopAlchemyConfig
+
+TOOL_NAME: Final[str] = "omop_graph"
+
+
+class OmopGraphConfig(PackageConfigBase):
+    """oa-configurator config class for omop-graph.
+
+    omop-graph does not own any database resources. It requires the CDM
+    database configured by omop-alchemy.
+    """
+
+    tool_name: ClassVar[str] = TOOL_NAME
+    extra_logging_namespaces: ClassVar[tuple[str, ...]] = (
+        "orm_loader",
+        "omop_alchemy",
+        "omop_emb",
+    )
+    required_resources: ClassVar[tuple[str, ...]] = (
+        OmopAlchemyConfig.CDM_DB.semantic_name,
+    )
+    owned_resources: ClassVar[tuple[ResourceSpec, ...]] = ()
+
+    max_depth: int = Field(
+        default=6,
+        description="Maximum graph traversal depth for pathfinding and grounding.",
+    )
+    max_paths: int = Field(
+        default=20,
+        description="Maximum number of shortest paths returned per query.",
+    )
