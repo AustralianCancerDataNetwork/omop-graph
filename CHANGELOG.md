@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.2.0...v1.3.0) (2026-07-03)
+
+
+### Features
+
+* Support grounding without `parent_ids` ([#27](https://github.com/AustralianCancerDataNetwork/omop-graph/issues/27)) ([a46844d](https://github.com/AustralianCancerDataNetwork/omop-graph/commit/a46844d4cbc6081237234f2f7cacb7589e6ce791))
+
 # [1.2.0](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.1.0...v1.2.0) (2026-07-02)
 
 
