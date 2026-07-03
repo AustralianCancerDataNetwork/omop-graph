@@ -179,7 +179,7 @@ def ground_term(
         )
         if not candidate_standard_concepts:
             concept_name = kg.concept_view(hit.concept_id).concept_name
-            if constraints.parent_ids is not None:
+            if constraints.parent_ids:
                 logger.debug(
                     f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
                     f"has no path to parents {constraints.parent_ids} "

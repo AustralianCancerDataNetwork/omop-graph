@@ -320,7 +320,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             search_constraint=SearchConstraintConcept(
                 domains=domains,
                 vocabularies=vocabs,
-                require_standard=parent_ids is None,
+                require_standard=False,
             ),
             predicate_kinds=frozenset([PredicateKind.IDENTITY]),
         )
