@@ -87,3 +87,52 @@ def test_find_standard_paths_max_concepts_caps_per_target(
     )
 
     assert len(found) == 1
+
+
+def test_find_standard_paths_without_targets_walks_identity_hop_to_standard(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    # 900001 ("Kidney carcinoma term") is non-standard and maps to 196653 via a
+    # single "Maps to" edge. With no targets, this is accepted directly without
+    # any concept_ancestor query.
+    candidate = CandidateHit(
+        concept_id=900001,
+        match_kind=LabelMatchKind.EXACT,
+        matched_concept_label="Kidney carcinoma term",
+        synonym=False,
+    )
+
+    found = find_standard_paths(
+        kg=mock_cdm_kg,
+        targets=None,
+        candidate=candidate,
+        max_depth=6,
+    )
+
+    assert len(found) == 1
+    assert found[0].concept_id == 196653
+    assert found[0].separation == 1
+    assert found[0].identity_hops == 1
+
+
+def test_find_standard_paths_without_targets_accepts_standard_candidate_at_zero_hops(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    candidate = CandidateHit(
+        concept_id=196653,
+        match_kind=LabelMatchKind.EXACT,
+        matched_concept_label="Malignant tumor of kidney",
+        synonym=False,
+    )
+
+    found = find_standard_paths(
+        kg=mock_cdm_kg,
+        targets=None,
+        candidate=candidate,
+        max_depth=6,
+    )
+
+    assert len(found) == 1
+    assert found[0].concept_id == 196653
+    assert found[0].separation == 0
+    assert found[0].identity_hops == 0

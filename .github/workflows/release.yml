@@ -26,6 +26,16 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
+      - name: Configure omop-alchemy CDM resource
+        # Currently, no real db is required, just a registered resource
+        # so that OmopGraphConfig.get_config() can succeed
+        run: |
+          uv run omop-config configure omop_alchemy \
+            --dialect sqlite --database-name ":memory:" --cdm-schema main
+
+      - name: Configure omop-graph
+        run: uv run omop-config configure omop_graph --max-depth 6 --max-paths 20
+
       - name: Run tests
         run: uv run pytest
 

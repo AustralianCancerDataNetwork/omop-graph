@@ -5,7 +5,9 @@ This module provides the high-level `ground_term` function, which orchestrates
 the full grounding pipeline:
 1.  **Candidate Resolution**: Finding raw concepts that match the input text.
 2.  **Hierarchy Validation**: Ensuring candidates have a valid relationship path
-    to required parent concepts.
+    to required parent concepts, when parent concepts are given. Grounding can
+    also run unconstrained (no parent concepts), trading disambiguation power
+    for coverage.
 3.  **Standardization**: Mapping non-standard candidates to standard OMOP concepts.
 4.  **Semantic Ranking**: Using embeddings and graph-based scoring to select the
     best mapping.
@@ -54,7 +56,11 @@ class GroundingConstraints:
     Parameters
     ----------
     parent_ids : tuple[int, ...], optional
-        OMOP Concept IDs that act as required ancestors for any valid result.
+        OMOP Concept IDs that act as required ancestors for any valid result. When
+        None, grounding is unconstrained: candidates are still resolved and
+        standardized via identity hops, but without ancestor verification. This
+        trades disambiguation power for coverage. Results are ranked by relevance
+        and identity-hop distance only, not by proximity to a known hierarchy branch.
     search_constraint : SearchConstraintConcept, optional
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
@@ -112,11 +118,6 @@ def ground_term(
     -------
     list[StandardConceptWithScore]
         A list of standard concepts sorted by their total score (descending).
-
-    Raises
-    ------
-    NotImplementedError
-        If no `parent_ids` are provided in constraints.
     """
     standard_concepts: List[StandardConcept] = []
 
@@ -166,28 +167,31 @@ def ground_term(
         )
         return []
 
-    # Hierarchy anchoring
+    # Hierarchy anchoring (or unconstrained standardization when parent_ids is None)
     for hit in resolved:
-        if constraints.parent_ids is not None:
-            candidate_standard_concepts = find_standard_concepts(
-                kg=kg,
-                candidate=hit,
-                parent_ids=constraints.parent_ids,
-                max_depth=constraints.max_depth,
-                max_paths=None,
-                predicate_kinds=constraints.predicate_kinds,
-            )
-            if not candidate_standard_concepts:
-                concept_name = kg.concept_view(hit.concept_id).concept_name
+        candidate_standard_concepts = find_standard_concepts(
+            kg=kg,
+            candidate=hit,
+            parent_ids=constraints.parent_ids,
+            max_depth=constraints.max_depth,
+            max_paths=None,
+            predicate_kinds=constraints.predicate_kinds,
+        )
+        if not candidate_standard_concepts:
+            concept_name = kg.concept_view(hit.concept_id).concept_name
+            if constraints.parent_ids:
                 logger.debug(
                     f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
                     f"has no path to parents {constraints.parent_ids} "
                     f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
                 )
-                continue
-            standard_concepts.extend(candidate_standard_concepts)
-        else:
-            raise NotImplementedError("Grounding without parent_ids is not supported.")
+            else:
+                logger.debug(
+                    f"No standard concept reachable from {hit.concept_id} ({concept_name}) "
+                    f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
+                )
+            continue
+        standard_concepts.extend(candidate_standard_concepts)
 
     if not standard_concepts:
         logger.info(
@@ -249,13 +253,14 @@ def ground_term(
 def find_standard_concepts(
     kg: KnowledgeGraph,
     candidate: CandidateHit,
-    parent_ids: Tuple[int, ...],
+    parent_ids: Optional[Tuple[int, ...]],
     max_depth: int,
     max_paths: Optional[int] = 3,
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
 ) -> List[StandardConcept]:
     """
-    Identify standard concepts related to a candidate that satisfy parent constraints.
+    Identify standard concepts related to a candidate, optionally satisfying parent
+    constraints.
 
     Parameters
     ----------
@@ -263,12 +268,16 @@ def find_standard_concepts(
         The Knowledge Graph instance.
     candidate : CandidateHit
         The initial match found by a resolver.
-    parent_ids : tuple of int
-        Acceptable ancestor concept IDs.
+    parent_ids : tuple of int, optional
+        Acceptable ancestor concept IDs. When None, no ancestor verification is
+        performed. Instead, the candidate is standardized via identity hops only.
     max_depth : int
-        Maximum min_levels_of_separation allowed in the ancestry check.
+        Maximum min_levels_of_separation allowed in the ancestry check when
+        parent_ids is given, or maximum identity-hop count allowed when parent_ids
+        is None.
     max_paths : int, optional
-        Per-target cap on unique standard concepts collected.
+        Per-target cap on unique standard concepts collected (or an overall cap when
+        parent_ids is None).
     predicate_kinds : frozenset of PredicateKind, optional
         Edge types to traverse. Defaults to IDENTITY only, which covers the OMOP
         "Maps to" relationships between non-standard and standard concepts. See
@@ -278,7 +287,7 @@ def find_standard_concepts(
     -------
     list of StandardConcept
         Standard concepts associated with the candidate that satisfy the ancestor
-        constraint.
+        constraint, or, when parent_ids is None, every standard concept reached.
     """
     return find_standard_paths(
         kg=kg,
