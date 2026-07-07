@@ -1,8 +1,8 @@
 name: docs 
 on:
   push:
-    tags:
-      - 'v*' # Triggers only when a version tag is pushed
+    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write

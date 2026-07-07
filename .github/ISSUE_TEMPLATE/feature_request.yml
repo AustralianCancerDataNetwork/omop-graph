@@ -1,28 +1,32 @@
 name: "🚀 Feature Request"
-description: Submit a proposal for a new feature
-labels: ["enhancement"]
+description: Propose a new feature or enhancement.
+type: "Feature"
 body:
-  - type: textarea
-    id: motivation
+  - type: checkboxes
     attributes:
-      label: Motivation
-      description: Is your feature request related to a problem? (e.g., I'm always frustrated when [...])
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this has not been requested before.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do that you currently cannot?
     validations:
       required: true
+
   - type: textarea
-    id: pitch
+    id: proposal
     attributes:
-      label: Pitch
-      description: A clear and concise description of what you want to happen.
+      label: Proposed solution
+      description: How would you like this to work?
     validations:
       required: true
+
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives
-      description: Any alternative solutions or features you've considered.
-  - type: textarea
-    id: context
-    attributes:
-      label: Additional context
-      description: Add any other context or screenshots here.
+      label: Alternatives considered
+      description: Other approaches you considered and why you ruled them out.
