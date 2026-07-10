@@ -87,6 +87,13 @@ class GroundingConstraints:
             )
 
 
+def _query_text_with_context(query: str, context: Optional[str]) -> str:
+    """Combine query with optional disambiguating context for embedding."""
+    if not context:
+        return query
+    return f"{query}\n\n{context}"
+
+
 def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
@@ -94,6 +101,7 @@ def ground_term(
     query_embedding: Optional[np.ndarray],
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
+    context: Optional[str] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
@@ -113,6 +121,13 @@ def ground_term(
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
         Limit for the number of candidates returned. If None, returns all candidates.
+    context : str, optional
+        Auxiliary disambiguating context (e.g. surrounding text, expected
+        domain, Q&A context) folded into the text used for the on-demand
+        query embedding. 
+        Has no effect when *query_embedding* is already supplied by the
+        caller, since no embedding is computed in that case. Does not affect
+        candidate resolution or structural filtering (``constraints``).
 
     Returns
     -------
@@ -138,7 +153,7 @@ def ground_term(
             from omop_emb.embeddings import EmbeddingRole
 
             query_embedding = embedding_writer.embed_texts(
-                texts=(query,),
+                texts=(_query_text_with_context(query, context),),
                 embedding_role=EmbeddingRole.QUERY,
             )
 
