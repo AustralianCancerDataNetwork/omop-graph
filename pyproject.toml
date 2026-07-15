@@ -56,7 +56,6 @@ postgres = [
 ]
 
 
-[dependency-groups]
 dev = [
     "ipython>=9.8.0",
     "mypy>=1.19.1",
@@ -71,7 +70,7 @@ dev = [
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
     "mkdocs-macros-plugin",
-    "oa-configurator[postgres]>=0.1.1"
+    "oa-configurator[postgres]>=0.1.1",
 ]
 
 [project.scripts]
