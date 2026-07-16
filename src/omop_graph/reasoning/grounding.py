@@ -88,7 +88,12 @@ class GroundingConstraints:
 
 
 def _query_text_with_context(query: str, context: Optional[str]) -> str:
-    """Combine query with optional disambiguating context for embedding."""
+    """Combine query with optional disambiguating context for embedding.
+
+    No length guard here by design. omop-emb's EmbeddingClient.embeddings()
+    wraps provider API errors (including oversized-input failures) in a clear
+    EmbeddingClientError instead of letting a raw provider error propagate.
+    """
     if not context:
         return query
     return f"{query}\n\n{context}"
