@@ -2,11 +2,11 @@ from __future__ import annotations
 from typing import Protocol, Iterable, Tuple
 
 try:
-    from cava_nlp import CaVaLang  # type: ignore
+    from cava_nlp import CaVaLang
 
     _HAS_CAVA = True
 except ImportError:
-    CaVaLang = None
+    CaVaLang = None  # ty: ignore[invalid-assignment]
     _HAS_CAVA = False
 
 
@@ -20,4 +20,4 @@ def cava_tokenizer():
             "CaVa NLP support not installed. "
             "Install with `pip install omop-spires[nlp]`"
         )
-    return CaVaLang()  # type: ignore
+    return CaVaLang()

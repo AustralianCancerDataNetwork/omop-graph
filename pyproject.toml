@@ -58,7 +58,7 @@ postgres = [
 
 dev = [
     "ipython>=9.8.0",
-    "mypy>=1.19.1",
+    "ty>=0.0.59",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",

@@ -124,7 +124,7 @@ def get_embedding_writer_interface(
         raise TypeError(
             f"Expected embedding interface to be a writer, but got {type(interface)}. Instantiate the KG with an embedding client to get a writer interface."
         )
-    return interface  # type: ignore[return-value]
+    return interface  # ty: ignore[invalid-return-type]
 
 
 def semantic_similarity(

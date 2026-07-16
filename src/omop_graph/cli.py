@@ -156,7 +156,7 @@ def relationship_classification(
             )
 
             with bulk_load_context(session):
-                model.load_csv(  # type: ignore
+                model.load_csv(
                     session,
                     csv_path,
                     dedupe=True,

@@ -515,7 +515,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def multilingual(self, value: bool) -> None:
         pass  # OMOP is always monolingual; setter required by base interface contract
 
-    def entities(  # type: ignore[override]
+    # Base: entities(self, filter_obsoletes=True, owl_type=None) -> Iterable[CURIE]
+    # Override narrows to OMOP domain/standard_only filtering; LSP intentionally broken.
+    def entities(  # ty: ignore[invalid-method-override]
         self,
         domain: str | None = None,
         standard_only: bool = True,
@@ -607,7 +609,10 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         cids = self.kg.concept_ids_by_label(label.strip())
         return [self._concept_curie(cid) for cid in cids]
 
-    def relationships(  # type: ignore[override]
+    # Base: relationships(self, subjects, predicates, objects, include_tbox, include_abox,
+    #       include_entailed, exclude_blank, invert) -> Iterator[RELATIONSHIP]
+    # Override drops include_* params; OMOP graph has no TBox/ABox distinction.
+    def relationships(  # ty: ignore[invalid-method-override]
         self,
         subjects: Iterable[CURIE] | None = None,
         predicates: Iterable[str] | None = None,
