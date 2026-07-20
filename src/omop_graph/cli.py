@@ -127,12 +127,12 @@ def relationship_classification(
     with engine.begin() as conn:
         conn.execute(
             sa.text(
-                f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"  # type: ignore[attr-defined]
+                f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"  # ty: ignore[invalid-argument-type]
             )
         )
         conn.execute(
             sa.text(
-                f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"  # type: ignore[attr-defined]
+                f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"  # ty: ignore[invalid-argument-type]
             )
         )
         conn.execute(sa.text("DROP TYPE IF EXISTS predicatekindenum CASCADE;"))
@@ -156,7 +156,7 @@ def relationship_classification(
             )
 
             with bulk_load_context(session):
-                model.load_csv(
+                model.load_csv(  # ty: ignore[invalid-argument-type]
                     session,
                     csv_path,
                     dedupe=True,
