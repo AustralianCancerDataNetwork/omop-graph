@@ -1,3 +1,6 @@
+> [!NOTE]
+> This file is no longer maintained. Release history from this point forward is in [GitHub Releases](https://github.com/AustralianCancerDataNetwork/omop-graph/releases).
+
 # [1.3.0](https://github.com/AustralianCancerDataNetwork/omop-graph/compare/v1.2.0...v1.3.0) (2026-07-03)
 
 

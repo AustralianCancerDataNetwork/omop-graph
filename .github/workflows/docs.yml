@@ -1,37 +1,10 @@
-name: docs 
+name: Deploy Docs
 on:
   push:
-    tags:
-      - 'v*' # Triggers only when a version tag is pushed
-
+    tags: ['v*']
+  workflow_dispatch:
 permissions:
   contents: write
-
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure Git Credentials
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
-      - uses: actions/cache@v4
-        with:
-          key: mkdocs-material-${{ env.cache_id }}
-          path: ~/.cache 
-          restore-keys: |
-            mkdocs-material-
-
-      - name: Install MkDocs and plugins
-        run: pip install "mkdocs<2.0" mkdocs-material mkdocstrings-python mkdocs-mermaid2-plugin mkdocs-table-reader-plugin mkdocs-macros-plugin
-
-      - name: Install omop-graph
-        run: pip install .
-
-      - name: Deploy docs
-        run: mkdocs gh-deploy --force
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/deploy-docs.yml@main
