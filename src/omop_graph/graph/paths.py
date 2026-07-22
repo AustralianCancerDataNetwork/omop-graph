@@ -29,7 +29,6 @@ from typing import (
 )
 
 # Local Application Imports
-from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
@@ -219,9 +218,9 @@ def find_shortest_paths(
     source: int,
     target: int,
     predicate_kinds: Optional[frozenset[PredicateKind]] = None,
-    max_depth: Optional[int] = None,
+    max_depth: int = 6,
     on: Optional[Any] = None,
-    max_paths: Optional[int] = None,
+    max_paths: int = 20,
     traced: bool = False,
     within_domain: bool = True,
 ) -> Tuple[List[GraphPath], Optional[GraphTrace]]:
@@ -256,12 +255,6 @@ def find_shortest_paths(
     tuple[list[GraphPath], GraphTrace | None]
         A list of paths and optionally the trace object.
     """
-    cfg = OmopGraphConfig.get_config()
-    if max_depth is None:
-        max_depth = cfg.max_depth
-    if max_paths is None:
-        max_paths = cfg.max_paths
-
     if source == target:
         path = GraphPath(steps=())
         trace = (
@@ -429,9 +422,9 @@ def find_shortest_paths_batch(
     source: int,
     target: int,
     predicate_kinds: Union[Set[PredicateKind], frozenset[PredicateKind], None] = None,
-    max_depth: Optional[int] = None,
+    max_depth: int = 6,
     on: Optional[Any] = None,
-    max_paths: Optional[int] = None,
+    max_paths: int = 20,
     within_domain: bool = True,
 ) -> List[GraphPath]:
     """
@@ -468,12 +461,6 @@ def find_shortest_paths_batch(
     """
     if source == target:
         return [GraphPath(steps=())]
-
-    cfg = OmopGraphConfig.get_config()
-    if max_depth is None:
-        max_depth = cfg.max_depth
-    if max_paths is None:
-        max_paths = cfg.max_paths
 
     # Frontiers: The set of nodes we are currently expanding
     fwd_frontier = {source}
@@ -702,7 +689,7 @@ def find_standard_paths(
     targets: Optional[Tuple[int, ...]],
     candidate: CandidateHit,
     predicate_kinds: Optional[frozenset[Any]] = None,
-    max_depth: Optional[int] = None,
+    max_depth: int = 6,
     max_concepts: Optional[int] = None,
     within_domain: bool = True,
 ) -> List[StandardConcept]:
@@ -746,10 +733,10 @@ def find_standard_paths(
         Allowed edge types for traversal. Defaults to all kinds when None. Callers
         in the grounding pipeline pass PredicateKind.IDENTITY exclusively, limiting
         traversal to Maps-to relationships between non-standard and standard concepts.
-    max_depth : int, optional
+    max_depth : int
         Maximum min_levels_of_separation permitted in the concept_ancestor check when
         ``targets`` is given, or maximum identity-hop count permitted when ``targets``
-        is None. Defaults to OmopGraphConfig.max_depth when None.
+        is None. Defaults to ``6``.
     max_concepts : int, optional
         Per-target cap on unique standard concepts collected (or an overall cap when
         ``targets`` is None). Once every bucket has reached this count the search
@@ -778,10 +765,7 @@ def find_standard_paths(
     admissible heuristic added to the priority.
     """
     # Placeholder for the non-parent-ID grounding so the target accumulation works
-    unconstrained_placeholder: int = 0  
-
-    if max_depth is None:
-        max_depth = OmopGraphConfig.get_config().max_depth
+    unconstrained_placeholder: int = 0
 
     source_view = kg.concept_view(candidate.concept_id)
     source_is_std = source_view.standard_concept if source_view else False

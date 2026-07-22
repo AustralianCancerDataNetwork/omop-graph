@@ -195,7 +195,7 @@ class KnowledgeGraph(GraphBackend):
             backend_type = self._emb_config.backend_type or cfg.backend
             faiss_cache_dir = cfg.faiss_cache_dir
 
-            backend = resolve_backend(backend_type)
+            backend = resolve_backend(backend_type, sqlite_path=cfg.sqlite_path)
 
             if self._emb_config.client is not None:
                 # Write-capable interface

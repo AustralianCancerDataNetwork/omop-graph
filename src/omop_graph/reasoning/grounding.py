@@ -16,12 +16,11 @@ the full grounding pipeline:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import numpy as np
 
-from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
@@ -74,9 +73,7 @@ class GroundingConstraints:
 
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
-    max_depth: int = field(
-        default_factory=lambda: OmopGraphConfig.get_config().max_depth
-    )
+    max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
     def __post_init__(self) -> None:
