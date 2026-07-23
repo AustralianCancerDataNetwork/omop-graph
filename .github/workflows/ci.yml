@@ -17,3 +17,15 @@ jobs:
         uv run omop-config configure omop_graph \
           --max-depth 6 \
           --max-paths 20
+  build-test-lowest-direct:
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test.yml@main
+    with:
+      resolution: lowest-direct
+      setup-commands: |
+        uv run omop-config configure omop_alchemy \
+          --dialect sqlite \
+          --database-name test.db \
+          --cdm-schema main
+        uv run omop-config configure omop_graph \
+          --max-depth 6 \
+          --max-paths 20
