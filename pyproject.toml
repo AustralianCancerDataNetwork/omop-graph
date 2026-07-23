@@ -52,7 +52,7 @@ pgvector = [
   "omop-emb[pgvector]>=1.1.1,<2.0.0",
 ]
 postgres = [
-  "omop-alchemy[postgres]",
+  "omop-alchemy[postgres]>=0.8.0,<1.0.0",
 ]
 
 
