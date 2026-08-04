@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Final
+from typing import Annotated, ClassVar, Final
 
 from pydantic import Field
-from oa_configurator import PackageConfigBase, ResourceSpec
-from omop_alchemy.config import OmopAlchemyConfig
+from oa_configurator import DatabaseConfig, PackageConfigBase, RefTo
 
 TOOL_NAME: Final[str] = "omop_graph"
 
@@ -15,7 +14,9 @@ class OmopGraphConfig(PackageConfigBase):
     """oa-configurator config class for omop-graph.
 
     omop-graph does not own any database resources. It requires the CDM
-    database configured by omop-alchemy.
+    database configured by omop-alchemy, shared purely by naming convention:
+    this field defaults to the same name as
+    ``omop_alchemy.config.OmopAlchemyConfig.cdm_db``.
     """
 
     tool_name: ClassVar[str] = TOOL_NAME
@@ -24,10 +25,8 @@ class OmopGraphConfig(PackageConfigBase):
         "omop_alchemy",
         "omop_emb",
     )
-    required_resources: ClassVar[tuple[str, ...]] = (
-        OmopAlchemyConfig.CDM_DB.semantic_name,
-    )
-    owned_resources: ClassVar[tuple[ResourceSpec, ...]] = ()
+
+    cdm_db: Annotated[str, RefTo(DatabaseConfig)] = "cdm_db"
 
     max_depth: int = Field(
         default=6,

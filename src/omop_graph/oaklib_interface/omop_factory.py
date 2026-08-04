@@ -8,7 +8,7 @@ from sqlalchemy.engine import URL
 
 from .omop_resource import OMOPOntologyResource
 from oa_configurator import Resolver
-from omop_alchemy.config import OmopAlchemyConfig
+from omop_graph.config import OmopGraphConfig
 
 
 def omop_resource(
@@ -34,10 +34,10 @@ def omop_resource(
     OMOPOntologyResource
     """
     if url is None:
-        resource = Resolver.from_active_config().resolve_resource(
-            OmopAlchemyConfig.CDM_DB.semantic_name
-        )
-        url = resource.database.url
+        resolver = Resolver.from_active_config()
+        db_name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
+        database = resolver.resolve_database(db_name)
+        url = database.connection.url
 
     return OMOPOntologyResource(
         slug=slug,

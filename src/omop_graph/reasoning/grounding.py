@@ -40,7 +40,7 @@ from omop_graph.reasoning.resolvers import (
 )
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.extensions.emb import (
-    get_embedding_writer_interface,
+    try_get_embedding_writer_interface,
     semantic_similarity,
     HAS_OMOP_EMB,
 )
@@ -125,33 +125,30 @@ def ground_term(
     if search_constraints is not None:
         kg.check_search_constraints(search_constraints)
 
-    # Only do on demand calculation if needed (for embedding resolver) and available.
+    # Only do on demand embedding calculation if available and needed (having a EmbeddingResolver).
     # Falls back to None to disable embedding-based features if not available or not required.
-    if HAS_OMOP_EMB and any(isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers):
-        require_embedding = True
-    else:
-        require_embedding = False
+    require_embedding = HAS_OMOP_EMB and any(isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers)
 
     if query_embedding is None and require_embedding:
-        embedding_writer = get_embedding_writer_interface(kg)
+        embedding_writer = try_get_embedding_writer_interface(kg)
         if embedding_writer is not None:
-            from omop_emb.embeddings import EmbeddingRole
+            from omop_emb import EmbeddingRole
 
             query_embedding = embedding_writer.embed_texts(
                 texts=(query,),
-                embedding_role=EmbeddingRole.QUERY,
+                role=EmbeddingRole.QUERY,
+            )
+        else:
+            logger.info(
+                f"No embedding_writer available to embed query '{query}' on demand "
+                "(the KG's embedding configuration is read-only, or none was provided at all). "
+                "Embedding-based features will be disabled for this grounding operation."
             )
 
     if query_embedding is not None:
         assert query_embedding.shape[0] == 1, (
             "query_embedding must have shape (1, D) — one vector per call to ground_term."
         )
-    else:
-        if require_embedding:
-            logger.info(
-                f"No text embedding provided for '{query}' and no embedding_writer available. "
-                "Embedding-based features will be disabled for this grounding operation."
-            )
 
     resolved = list(
         resolver_pipeline.resolve(

@@ -1,5 +1,4 @@
 import logging
-import re
 from collections import defaultdict
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
@@ -36,7 +35,6 @@ from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
-from omop_graph.utils.text_utils import cava_tokenizer
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.omop_factory import omop_resource
 
@@ -203,26 +201,16 @@ class OMOPBaseInterface:
 
 class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     """
-    Mixin providing text annotation capabilities via a configurable tokenizer.
+    Mixin providing text annotation capabilities.
 
     Parameters
     ----------
     kg : KnowledgeGraph
         The underlying OMOP knowledge graph.
-    tokenizer : str, optional
-        The tokenizer strategy ('simple' or 'cava'). Default is 'simple'.
     """
 
-    def __init__(self, kg: KnowledgeGraph, tokenizer: str = "simple", **kwargs):
+    def __init__(self, kg: KnowledgeGraph, **kwargs):
         super().__init__(kg=kg, **kwargs)
-        if tokenizer == "cava":
-            self.tokenizer = cava_tokenizer()
-        else:
-            self.tokenizer = self._simple_tokenizer
-
-    def _simple_tokenizer(self, text: str):
-        for m in re.finditer(r"\b[\w\- ]{3,}\b", text):
-            yield m.start(), m.end(), m.group()
 
     def annotate_text(
         self,
