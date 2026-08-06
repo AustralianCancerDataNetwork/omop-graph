@@ -29,6 +29,7 @@ from oa_configurator import ResolvedModel
 
 if TYPE_CHECKING:
     from omop_emb import (
+        EmbeddingBackend,
         EmbeddingWriterInterface,
         EmbeddingReaderInterface,
     )
@@ -36,8 +37,6 @@ if TYPE_CHECKING:
 # Local Application Imports
 from ..extensions.emb import (
     MissingExtensionError,
-    EmbeddingBackendType,
-    EmbeddingProviderType,
     EmbeddingMetricType,
 )
 from ..extensions.omop_alchemy import (
@@ -88,24 +87,11 @@ class KnowledgeGraphEmbeddingConfiguration:
     """
     Configuration for embedding-based operations in the knowledge graph.
 
-    Two independent things are being configured here, and they have different costs:
-
-    1. Knowing *which* model (``model_name`` + ``provider_type``, plain strings) 
-    is needed for any embedding use at all, read or write, with no exceptions
-        * The embedding registry is keyed by ``(model_name, provider_type)``, 
-            so even a purely read-only lookup against already-computed embeddings needs both 
-            to canonicalize the name and find the right row.
-
-    2. Knowing *how to call* that model (a fully resolved ``oa_configurator.ResolvedModel``, 
-    carrying a real provider *connection* [`base_url``/``api_key``], resolved from an actual 
-    ``[providers.*]`` config entry):
-        - only needed when the KG must build a live model backend, i.e. when ``write=True``. 
-        
-    A read-only consumer (e.g. one that only ever searches against a pre-computed
-    ``query_embedding`` passed in externally) still needs to know the
-    provider's plain string key, but that key never has to correspond to a
-    resolved, connectable ``[providers.*]`` entry: a bare string is enough,
-    since the connection details are never used.
+    A complete configuration: whenever embedding support is used at all
+    (read or write), a real backend and a real resolved model are both
+    required. The caller resolves the vector store and the model, 
+    builds the backend, and passes both in here. Used to enhance the
+    knowledge graph with embedding-based grounding and similarity scoring.
 
     Parameters
     ----------
@@ -113,76 +99,50 @@ class KnowledgeGraphEmbeddingConfiguration:
         The similarity/distance metric to use for embedding comparisons (e.g., cosine, euclidean).
         This is required to ensure that the correct type of index is used in the backend and that
         similarity computations are consistent.
-    backend_type : EmbeddingBackendType
-        The embedding backend name (e.g., 'faiss', 'pinecone') or type to use.
-    model_name : str, optional
-        The model name to use for the embedding interface (e.g., 'text-embedding-3-small:0.6b').
-        Ignored when ``resolved_model`` is set (derived from it instead via
-        ``effective_model_name``); required otherwise.
-    provider_type : EmbeddingProviderType, optional
-        The omop-llm provider key (e.g. 'ollama'). Ignored when ``resolved_model`` is set
-        (derived from it instead via ``effective_provider_type``); required otherwise.
-    resolved_model : oa_configurator.ResolvedModel, optional
-        A model resolved via ``oa_configurator.Resolver.from_active_config().resolve_model(name)``
-        (or an explicit ``Resolver(stack)`` for a non-default stack), carrying real provider
-        connection details. Required when ``write=True``: the KG builds its own embedding
-        model backend from it (``omop_llm.build_model_backend_from_resolved``) to generate
-        and persist embeddings. Optional otherwise. Note this is oa-configurator's own
-        resolution step, not something ``omop_llm`` wraps: ``omop_llm`` only takes an
-        already-resolved model and builds a live backend from it
-        (``build_model_backend_from_resolved``), which wouldn't help the read-only case here
-        anyway -- a read-only KG needs the bare ``ResolvedModel``, never a constructed backend.
+    backend : omop_emb.EmbeddingBackend
+        An already-constructed embedding backend, e.g. via
+        ``omop_emb.backends.resolve_backend_from_resolved``.
+    resolved_model : oa_configurator.ResolvedModel
+        A model resolved via ``oa_configurator.Resolver.resolve_model()``, carrying real
+        provider connection details. ``model_name``/``provider_type`` (see below) are
+        read directly off it; used to build the embedding model backend via
+        ``omop_llm.build_model_backend_from_resolved`` when ``write=True``.
     write : bool
-        If True, the KG holds a write-capable interface (``resolved_model`` required) that can
-        generate and persist embeddings. If False (default), the KG only holds a read-only
-        interface over already-computed embeddings.
+        If True, the KG holds a write-capable interface that can generate and persist
+        embeddings. If False (default), the KG only holds a read-only interface over
+        already-computed embeddings.
     compute_missing_embeddings : bool
         If True, the system will compute embeddings on-the-fly for any concept that is not yet present
-        in the embedding store, and persist those embeddings back to the DB before running similarity scoring.
-        **Requires ``write=True``** (validated at construction, see ``__post_init__``): on-the-fly
-        computation needs a write-capable interface. Defaults to ``False`` so that unexpected
-        writes do not occur when only a read-only configuration is given.
+        in the embedding store. Requires ``write=True`` as it needs a write-capable interface.
+        Default: False
+    faiss_cache_dir : str, optional
+        Directory to cache FAISS index files, for the read-only path only. Passed
+        straight through to ``EmbeddingReaderInterface``.
     """
 
     metric_type: EmbeddingMetricType
-    backend_type: Optional[EmbeddingBackendType] = None
-    model_name: Optional[str] = None
-    provider_type: Optional[EmbeddingProviderType] = None
-    resolved_model: Optional[ResolvedModel] = None
+    backend: "EmbeddingBackend"
+    resolved_model: ResolvedModel
     write: bool = False
     compute_missing_embeddings: bool = False
+    faiss_cache_dir: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if self.write and self.resolved_model is None:
-            raise ValueError(
-                "write=True requires resolved_model "
-                "(a write-capable interface needs real provider credentials to build a model backend)."
-            )
         if self.compute_missing_embeddings and not self.write:
             raise ValueError(
                 "compute_missing_embeddings=True requires write=True "
                 "(on-the-fly embedding computation needs a write-capable interface)."
             )
-        if self.resolved_model is None and (self.model_name is None or self.provider_type is None):
-            raise ValueError(
-                "Provide either resolved_model, or both model_name and provider_type."
-            )
 
     @property
-    def effective_model_name(self) -> str:
-        """The model name to use, from ``resolved_model`` if set, else ``model_name``."""
-        if self.resolved_model is not None:
-            return self.resolved_model.model
-        assert self.model_name is not None  # guaranteed by __post_init__
-        return self.model_name
+    def model_name(self) -> str:
+        """The model name to use, read directly off ``resolved_model``."""
+        return self.resolved_model.model
 
     @property
-    def effective_provider_type(self) -> str:
-        """The provider key to use, from ``resolved_model`` if set, else ``provider_type``."""
-        if self.resolved_model is not None:
-            return self.resolved_model.provider.provider
-        assert self.provider_type is not None  # guaranteed by __post_init__
-        return self.provider_type
+    def provider_type(self) -> str:
+        """The provider key to use, read directly off ``resolved_model``."""
+        return self.resolved_model.provider.provider
 
 
 class KnowledgeGraph(GraphBackend):
@@ -235,8 +195,10 @@ class KnowledgeGraph(GraphBackend):
         Returns an ``EmbeddingWriterInterface`` when ``self._emb_config.write`` is True,
         otherwise an ``EmbeddingReaderInterface`` (read-only).
 
-        The interface/reader is created lazily on first access. Backend resolution follows
-        ``omop_emb`` rules: explicit ``backend_type`` first, then ``OMOP_EMB_BACKEND``.
+        The interface/reader is created lazily on first access, from the
+        already-constructed backend supplied via
+        ``KnowledgeGraphEmbeddingConfiguration.backend``; omop-graph itself
+        never resolves omop-emb's config.
         """
         if self._emb is not None:
             return self._emb
@@ -246,43 +208,34 @@ class KnowledgeGraph(GraphBackend):
                 EmbeddingWriterInterface,
                 EmbeddingReaderInterface,
             )
-            from omop_emb.config import OmopEmbConfig
-            from omop_emb.backends.base_backend import resolve_backend
 
             if self._emb_config is None:
                 raise ValueError(
                     "Embedding configuration is not set. Please provide an EmbeddingConfiguration when initializing the KnowledgeGraph to use embedding features."
                 )
 
-            cfg = OmopEmbConfig.get_config()
-            backend_type = self._emb_config.backend_type or cfg.backend
-            faiss_cache_dir = cfg.faiss_cache_dir
-
-            backend = resolve_backend(backend_type)
-
             if self._emb_config.write:
                 # Write-capable interface: the KG builds its own embedding model backend.
-                # __post_init__ already guarantees resolved_model is set when write=True.
                 self._emb = EmbeddingWriterInterface(
-                    backend=backend,
+                    backend=self._emb_config.backend,
                     metric_type=self._emb_config.metric_type,
-                    resolved_model=self._emb_config.resolved_model,  # ty: ignore[invalid-argument-type]
+                    resolved_model=self._emb_config.resolved_model,
                     omop_cdm_engine=self.cdm_engine,
                 )
             else:
                 # Read-only interface: only ever needs model identity, never live credentials.
                 self._emb = EmbeddingReaderInterface(
-                    model=self._emb_config.effective_model_name,
-                    backend=backend,
+                    model=self._emb_config.model_name,
+                    backend=self._emb_config.backend,
                     metric_type=self._emb_config.metric_type,
                     omop_cdm_engine=self.cdm_engine,
-                    provider_type=self._emb_config.effective_provider_type,
-                    faiss_cache_dir=faiss_cache_dir,
+                    provider_type=self._emb_config.provider_type,
+                    faiss_cache_dir=self._emb_config.faiss_cache_dir,
                 )
             logger.debug(
                 "Constructed %s embedding interface for model %r (write=%s).",
                 "write-capable" if self._emb_config.write else "read-only",
-                self._emb_config.effective_model_name,
+                self._emb_config.model_name,
                 self._emb_config.write,
             )
             return self._emb

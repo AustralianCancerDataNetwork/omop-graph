@@ -218,6 +218,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         configuration: Optional[TextAnnotationConfiguration] = None,
         query_embedding: Optional[np.ndarray] = None,
         annotations: Optional[Dict[str, Annotation]] = None,
+        max_depth: int = 6,
     ) -> Iterator[TextAnnotation]:
         """
         Annotate text by grounding terms to the OMOP vocabulary.
@@ -234,6 +235,8 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         annotations : Dict[str, Annotation], optional
             LinkML annotations that provide context constraints (parent IDs,
             vocabularies, domains).
+        max_depth : int
+            Maximum grounding hierarchy depth. Default: 6
 
         Yields
         -------
@@ -311,6 +314,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 require_standard=False,
             ),
             predicate_kinds=frozenset([PredicateKind.IDENTITY]),
+            max_depth=max_depth,
         )
 
         resolver_pipeline = ResolverPipeline.with_all_resolvers()
@@ -847,11 +851,11 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     Parameters
     ----------
     engine_string : str | URL | None, optional
-        The database connection string. If omitted, ``OMOP_CDM_DB_URL`` (or the
-        individual ``OMOP_CDM_DB_*`` variables) are read from the environment.
+        The database connection string. Required unless ``resource`` is given.
     resource : OMOPOntologyResource | None, optional
         An existing resource object. Takes precedence over ``engine_string`` when
-        both are supplied.
+        both are supplied. To use the oa-configurator-configured default, 
+        resolve it explicitly via ``omop_resource()`` and pass it here.
     kg : KnowledgeGraph | None, optional
         An existing Knowledge Graph instance. If None, one is created from
         ``engine_string`` / ``resource``.
@@ -859,6 +863,11 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
         Required to enable embedding-based similarity. See
         :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
+
+    Raises
+    ------
+    ValueError
+        If neither ``engine_string`` nor ``resource`` is given.
     """
 
     def __init__(
@@ -872,9 +881,16 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         if engine_string is not None:
             self.engine_string = engine_string
             self.resource = resource or omop_resource(url=self.engine_string)
-        else:
-            self.resource = resource or omop_resource()
+        elif resource is not None:
+            self.resource = resource
             self.engine_string = self.resource.url
+        else:
+            raise ValueError(
+                "OMOPAlchemyImplementation requires either 'engine_string' or "
+                "'resource'. To use the oa-configurator-configured default, "
+                "resolve it explicitly first, e.g. "
+                "OMOPAlchemyImplementation(resource=omop_resource())."
+            )
 
         assert self.engine_string is not None, (
             "No database URL provided for OMOPAlchemyImplementation"

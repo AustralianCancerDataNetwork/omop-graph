@@ -16,12 +16,11 @@ the full grounding pipeline:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import numpy as np
 
-from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
@@ -65,6 +64,7 @@ class GroundingConstraints:
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
         Maximum allowed distance in the hierarchy between a candidate and a parent.
+        Defaults to ``6``.
     predicate_kinds : frozenset[PredicateKind], optional
         Edge types allowed during BFS traversal. Defaults to IDENTITY only, which
         covers the OMOP "Maps to" and "Non-standard to Standard" relationships. Allowing
@@ -74,9 +74,7 @@ class GroundingConstraints:
 
     parent_ids: Optional[Tuple[int, ...]]
     search_constraint: Optional[SearchConstraintConcept]
-    max_depth: int = field(
-        default_factory=lambda: OmopGraphConfig.get_config().max_depth
-    )
+    max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
     def __post_init__(self) -> None:
@@ -87,6 +85,31 @@ class GroundingConstraints:
             )
 
 
+def _query_text_with_context(query: str, context: Optional[str]) -> str:
+    """Fold optional free-form context into the text used for on-demand query embedding.
+
+    Notes
+    -----
+    No guard on the context. The caller is responsible to what is passed in here.
+
+    Parameters
+    ----------
+    query : str
+        The base query text.
+    context : str, optional
+        Additional free-form context to append. When None or empty, ``query``
+        is returned unchanged.
+
+    Returns
+    -------
+    str
+        ``query`` alone, or ``query`` followed by a blank line and ``context``.
+    """
+    if not context:
+        return query
+    return f"{query}\n\n{context}"
+
+
 def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
@@ -94,6 +117,7 @@ def ground_term(
     query_embedding: Optional[np.ndarray],
     constraints: GroundingConstraints,
     max_candidates: Optional[int] = None,
+    context: Optional[str] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
@@ -113,6 +137,9 @@ def ground_term(
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
         Limit for the number of candidates returned. If None, returns all candidates.
+    context : str, optional
+        Additional free-form context folded into the on-demand query-embedding
+        text. Has no effect when ``query_embedding`` is supplied directly.
 
     Returns
     -------
@@ -135,7 +162,7 @@ def ground_term(
             from omop_emb import EmbeddingRole
 
             query_embedding = embedding_writer.embed_texts(
-                texts=(query,),
+                texts=(_query_text_with_context(query, context),),
                 role=EmbeddingRole.QUERY,
             )
         else:

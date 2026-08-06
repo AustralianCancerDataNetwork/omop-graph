@@ -95,6 +95,7 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
     mock_cdm_kg._emb_config = KnowledgeGraphEmbeddingConfiguration(
         compute_missing_embeddings=True,
         write=True,
+        backend=Mock(),
         resolved_model=_make_resolved_model(),
         metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
     )
@@ -139,8 +140,8 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
     """
     mock_cdm_kg._emb_config = KnowledgeGraphEmbeddingConfiguration(
         compute_missing_embeddings=False,
-        model_name="nomic-embed-text:v1.5",
-        provider_type="ollama",
+        backend=Mock(),
+        resolved_model=_make_resolved_model(),
         metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
     )
 
@@ -172,57 +173,25 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
 
 
 class TestEmbeddingConfigurationValidation:
-    def test_write_true_requires_resolved_model(self):
-        with pytest.raises(ValueError, match="write=True requires resolved_model"):
-            KnowledgeGraphEmbeddingConfiguration(
-                metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
-                write=True,
-            )
-
     def test_compute_missing_embeddings_requires_write(self):
         with pytest.raises(ValueError, match="compute_missing_embeddings=True requires write=True"):
             KnowledgeGraphEmbeddingConfiguration(
                 metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+                backend=Mock(),
+                resolved_model=_make_resolved_model(),
                 compute_missing_embeddings=True,
-                model_name="nomic-embed-text:v1.5",
-                provider_type="ollama",
             )
 
-    def test_requires_resolved_model_or_identity_pair(self):
-        with pytest.raises(ValueError, match="Provide either resolved_model"):
-            KnowledgeGraphEmbeddingConfiguration(
-                metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
-            )
-
-    def test_read_only_with_identity_pair_is_valid(self):
-        cfg = KnowledgeGraphEmbeddingConfiguration(
-            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
-            model_name="nomic-embed-text:v1.5",
-            provider_type="ollama",
-        )
-        assert cfg.effective_model_name == "nomic-embed-text:v1.5"
-        assert cfg.effective_provider_type == "ollama"
-
-    def test_write_with_resolved_model_is_valid(self):
+    def test_model_name_and_provider_type_derive_from_resolved_model(self):
         resolved = _make_resolved_model()
         cfg = KnowledgeGraphEmbeddingConfiguration(
             metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+            backend=Mock(),
+            resolved_model=resolved,
             write=True,
-            resolved_model=resolved,
         )
-        assert cfg.effective_model_name == resolved.model
-        assert cfg.effective_provider_type == resolved.provider.provider
-
-    def test_effective_properties_prefer_resolved_model_when_both_given(self):
-        resolved = _make_resolved_model()
-        cfg = KnowledgeGraphEmbeddingConfiguration(
-            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
-            model_name="stale-name",
-            provider_type="stale-provider",
-            resolved_model=resolved,
-        )
-        assert cfg.effective_model_name == resolved.model
-        assert cfg.effective_provider_type == resolved.provider.provider
+        assert cfg.model_name == resolved.model
+        assert cfg.provider_type == resolved.provider.provider
 
 
 # ── try_get_embedding_writer_interface: the actual bug-fix regression test ──

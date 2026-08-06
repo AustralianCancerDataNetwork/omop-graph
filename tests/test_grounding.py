@@ -5,7 +5,11 @@ import pytest
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
+from omop_graph.reasoning.grounding import (
+    GroundingConstraints,
+    _query_text_with_context,
+    ground_term,
+)
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (
     ExactLabelResolver,
@@ -14,6 +18,18 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialSynonymResolver,
 )
 from fixtures.mock_cdm import PARENT_CANCER_ID  # type: ignore
+
+
+class TestQueryTextWithContext:
+    def test_no_context_returns_query_unchanged(self) -> None:
+        assert _query_text_with_context("acute MI", None) == "acute MI"
+
+    def test_empty_context_returns_query_unchanged(self) -> None:
+        assert _query_text_with_context("acute MI", "") == "acute MI"
+
+    def test_context_appended_with_blank_line_separator(self) -> None:
+        result = _query_text_with_context("acute MI", "patient has a history of smoking")
+        assert result == "acute MI\n\npatient has a history of smoking"
 
 
 def _constraints() -> GroundingConstraints:
