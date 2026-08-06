@@ -17,9 +17,17 @@ omop-config configure omop_graph
 
 ## What gets configured
 
-omop-graph does not own any database resources. It reads from the `cdm_db` resource
-configured by omop-alchemy and stores any package-specific settings (traversal depth,
-path limits) under `[tools.omop_graph]` in `config.toml`.
+`OmopGraphConfig` (`[tools.omop_graph]`) has:
+
+| Field | References | Description |
+|---|---|---|
+| `cdm_db` | a `[databases.*]` entry, `kind = "cdm"` | Shared by naming convention with omop-alchemy's own `cdm_db` field |
+| `embedding_model_name` | a `[models.*]` entry, optional | Not read by omop-graph itself; a caller resolving embedding-based grounding on omop-graph's behalf (e.g. omop-spires) can use it the same way it uses `cdm_db` |
+| `vector_store_name` | a `[vector_stores.*]` entry, optional | Same reasoning as `embedding_model_name` |
+| `max_depth` | plain int, default `6` | Maximum graph traversal depth for pathfinding and grounding |
+| `max_paths` | plain int, default `20` | Maximum number of shortest paths returned per query |
+
+omop-graph itself never resolves `embedding_model_name`/`vector_store_name`, or reads its own `max_depth`/`max_paths` internally: embedding support is entirely caller-supplied via `KnowledgeGraphEmbeddingConfiguration`, and traversal functions take `max_depth`/`max_paths` as plain parameters, resolved by the caller at its own CLI/entry-point boundary. See [KnowledgeGraph — Embedding Configuration](../graph/kg.md#embedding-configuration).
 
 ## Verify
 
@@ -27,56 +35,22 @@ path limits) under `[tools.omop_graph]` in `config.toml`.
 omop-config verify
 ```
 
-## Docker Compose
-
-The included `docker-compose.yaml` spins up a PostgreSQL CDM database and a
-`python-graph` container. Default credentials work out of the box:
-
-```bash
-docker compose up
-```
-
-The `python-graph` container runs `omop-config configure` for both `omop_alchemy` and
-`omop_graph` at startup. Your `~/.config/omop/config.toml` on the host is written on
-safe to re-run on subsequent starts: connection flags always apply, and any values already stored in `config.toml` are preserved for fields not explicitly provided.
-
-### Overriding default values
-
-The compose file uses built-in defaults for all database credentials. To use different
-values, create a `.env` file in this directory with any of the following variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `OMOP_CDM_DB_USER` | `omop` | CDM database username |
-| `OMOP_CDM_DB_PASSWORD` | `omop` | CDM database password |
-| `OMOP_CDM_DB_NAME` | `omop_cdm` | CDM database name |
-
-Copy the example and edit as needed:
-
-```bash
-cp .env.example .env
-# edit .env
-docker compose up
-```
-
-The `.env` file is only read by Docker Compose for variable substitution — it is not
-loaded by omop-graph at runtime.
-
 ## Multiple instances
 
-omop-graph reads from the `cdm_db` resource owned by omop-alchemy. To point
-it at a second CDM database (e.g. for production), configure omop-alchemy with
-a second resource:
+omop-graph reads from the `cdm_db` database owned by omop-alchemy. To point
+it at a second CDM database (e.g. for production), create it under its own name
+and point the field's own flag at it:
 
 ```bash
-omop-config configure omop_alchemy --resource-name cdm_db_prod
+omop-config databases add cdm_db_prod --kind cdm --connection cdm_prod
+omop-config configure omop_alchemy --cdm-db cdm_db_prod
+omop-config configure omop_graph --cdm-db cdm_db_prod
 ```
 
-Configure automatically prompts you to choose the default at the end of the same
-run — no second invocation needed.
+There is no "default" toggle to flip afterward; each deployment's `configure` call names the entry it wants directly.
 
 See the [oa-configurator integration guide](https://AustralianCancerDataNetwork.github.io/oa-configurator/integration/#multiple-environments) for the full multi-environment guide.
 
 ## Further reading
 
-- [oa-configurator integration guide](https://AustralianCancerDataNetwork.github.io/oa-configurator/integration/) — full config reference, profiles, multi-package setups
+- [oa-configurator integration guide](https://AustralianCancerDataNetwork.github.io/oa-configurator/integration/): full config reference, multi-package setups

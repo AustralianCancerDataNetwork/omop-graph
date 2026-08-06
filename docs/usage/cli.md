@@ -34,13 +34,13 @@ This command ingests pre-defined relationship classifications and mappings into 
 The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific `PredicateKind` (like `HIERARCHY`, `IDENTITY`, or `ASSOCIATION`) and provides detailed inference descriptions used by the `KnowledgeGraph` facade.
 
 ### Prerequisites
-Before running the command, ensure your environment is configured with a `.env` file or exported variables:
 1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
-2. **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
-3. **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
-4. Set following environment variables:
-    - **`OMOP_CDM_DB_URL`**: SQLAlchemy connection string (e.g., `postgresql+psycopg://user:pass@localhost:5432/omop`). See [`omop-maint load-vocab-source` options](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) for connection configuration details.
-    - **`OMOP_VOCABULARY_DIR`**: Local directory path where the generated classification tables will be written as CSV files.
+2. `omop-graph` configured via oa-configurator (`omop-config configure omop_graph`, see [Getting Started: Configuration](../getting-started/configuration.md)); the CDM connection is resolved from `OmopGraphConfig.cdm_db`, no environment variables involved.
+3. A directory containing:
+    - **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
+    - **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
+    
+    Pass this directory via `--pred-class-dir` below.
 
 ### Usage
 

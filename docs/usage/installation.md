@@ -19,7 +19,7 @@ pip install "omop-graph[emb]"
 uv pip install "omop-graph[emb]"
 ```
 
-This pulls in [`omop-emb`](https://australiancancerdatanetwork.github.io/omop-emb/) with its default **sqlite-vec** backend — a file-based vector store that requires no external database server and works out of the box.
+This pulls in [`omop-emb`](https://australiancancerdatanetwork.github.io/omop-emb/) with its default **sqlite-vec** backend, a file-based vector store that requires no external database server. It still needs a configured vector store, model, and provider (via oa-configurator) before use; see [KnowledgeGraph: Embedding Configuration](../graph/kg.md#embedding-configuration).
 
 It enables:
 
@@ -33,7 +33,7 @@ For larger deployments or approximate-nearest-neighbour acceleration, install th
 
 | Extra | What it adds |
 |---|---|
-| `omop-graph[emb]` | sqlite-vec backend (default, zero config) |
+| `omop-graph[emb]` | sqlite-vec backend (default, no external server needed) |
 | `omop-graph[pgvector]` | PostgreSQL/pgvector backend |
 | `omop-graph[faiss-cpu]` | FAISS sidecar for fast approximate search |
 

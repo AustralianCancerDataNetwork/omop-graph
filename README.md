@@ -22,14 +22,13 @@ The library is designed for:
 pip install omop-graph
 ```
 
-With embedding support (sqlite-vec backend, zero config):
+With embedding support:
 
 ```bash
 pip install "omop-graph[emb]"
 ```
 
-For larger deployments use `[pgvector]` or `[faiss-cpu]` instead (or in addition).
-Full setup is covered in the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/).
+For larger deployments use `[pgvector]` or `[faiss-cpu]` instead (or in addition). Embedding support still needs a configured vector store, model, and provider (via oa-configurator); it isn't zero-config on its own. Full setup is covered in the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/).
 
 ---
 
@@ -42,17 +41,18 @@ Full setup is covered in the [omop-emb documentation](https://australiancancerda
 ```python
 from sqlalchemy import create_engine
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatchKind
 
 engine = create_engine("postgresql://user:pass@localhost/omop")
-kg = KnowledgeGraph(engine)
+kg = KnowledgeGraph(cdm_engine=engine)
 
 # Lookup a concept by label
-match_group = kg.label_lookup("Atrial Fibrillation", fuzzy=False)
-concept = match_group.best_match
-print(f"ID: {concept.concept_id}, Name: {concept.matched_label}")
+matches = kg.concept_lookup("Atrial Fibrillation", match_kind=LabelMatchKind.EXACT)
+concept = matches[0]
+print(f"ID: {concept.matched_concept_id}, Name: {concept.matched_concept_label}")
 
 # Traverse the hierarchy
-parents = kg.parents(concept.concept_id)
+parents = kg.parents(concept.matched_concept_id)
 ```
 
 ### Nodes and Edges
@@ -132,23 +132,3 @@ omop-config configure omop_graph
 ```
 
 See [Configuration](docs/getting-started/configuration.md) for full details.
-
----
-
-## Docker Compose
-
-The included `docker-compose.yaml` provides a PostgreSQL CDM database and a Python
-container with all optional backends pre-installed (`[postgres,emb,pgvector,faiss-cpu]`).
-Default credentials work out of the box:
-
-```bash
-docker compose up
-```
-
-The `python-graph` service runs `omop-config configure` at startup. To override
-credentials:
-
-```bash
-cp .env.example .env
-docker compose up
-```
