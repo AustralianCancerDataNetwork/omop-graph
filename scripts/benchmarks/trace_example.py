@@ -100,26 +100,33 @@ RESOLVER_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> KnowledgeGraph:
+    """Build a KG with embedding support, resolved from OmopGraphConfig."""
     cdm_engine = make_engine()
     try:
-        from omop_emb.config import MetricType, OmopEmbConfig
-        from omop_emb.embeddings import EmbeddingClient
+        from oa_configurator import Resolver
+        from omop_emb.backends import resolve_backend_from_resolved_vector_store
+        from omop_emb.config import MetricType
 
         resolved_metric = metric_type if metric_type is not None else MetricType.COSINE
-        emb_cfg = OmopEmbConfig.get_config()
-        client = EmbeddingClient(
-            model=embedding_model or emb_cfg.embedding_model,
-            api_base=emb_cfg.api_base,
-            api_key=emb_cfg.api_key,
-            provider_type=emb_cfg.provider_type,
-        )
-        canonical_model = client.provider.canonical_model_name(embedding_model or emb_cfg.embedding_model)
+        cfg = OmopGraphConfig.get_config()
+        resolved_model_name = embedding_model or cfg.embedding_model_name
+        if resolved_model_name is None or cfg.vector_store_name is None:
+            raise RuntimeError(
+                "No embedding model/vector store configured. Set embedding_model_name and "
+                "vector_store_name via `omop-config configure omop_graph`, or pass --embedding-model."
+            )
+        resolver = Resolver.from_active_config()
+        resolved_model = resolver.resolve_model(resolved_model_name)
+        resolved_vector_store = resolver.resolve_vector_store(cfg.vector_store_name)
+        backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+
         emb_config = KnowledgeGraphEmbeddingConfiguration(
-            client=client,
-            model_name=canonical_model,
             metric_type=resolved_metric,
+            backend=backend,
+            resolved_model=resolved_model,
+            write=True,
         )
-        logger.info("Embedding config loaded (model=%s, metric=%s).", canonical_model, resolved_metric.value)
+        logger.info("Embedding config loaded (model=%s, metric=%s).", resolved_model.model, resolved_metric.value)
         return KnowledgeGraph(cdm_engine=cdm_engine, emb_config=emb_config)
     except Exception as exc:
         logger.warning("Error occurred while loading embedding config:\n%s.\nRunning without embedding.", exc)
@@ -134,20 +141,21 @@ def _resolve_embedding_model(embedding_model: Optional[str]) -> str:
     """Resolve the canonical embedding model name (override or config default).
 
     Mirrors the canonicalisation `_build_kg` does, but without opening a DB
-    connection — usable from `svg`, which never builds a KnowledgeGraph.
+    connection or resolving a vector store; usable from `svg`, which never
+    builds a KnowledgeGraph.
     """
-    from omop_emb.config import OmopEmbConfig
-    from omop_emb.embeddings import EmbeddingClient
+    from oa_configurator import Resolver
+    from omop_llm import build_model_backend_from_resolved
 
-    emb_cfg = OmopEmbConfig.get_config()
-    raw_model = embedding_model or emb_cfg.embedding_model
-    client = EmbeddingClient(
-        model=raw_model,
-        api_base=emb_cfg.api_base,
-        api_key=emb_cfg.api_key,
-        provider_type=emb_cfg.provider_type,
-    )
-    return client.provider.canonical_model_name(raw_model)
+    cfg = OmopGraphConfig.get_config()
+    resolved_name = embedding_model or cfg.embedding_model_name
+    if resolved_name is None:
+        raise RuntimeError(
+            "No embedding model configured. Set embedding_model_name via "
+            "`omop-config configure omop_graph`, or pass --embedding-model."
+        )
+    resolved_model = Resolver.from_active_config().resolve_model(resolved_name)
+    return build_model_backend_from_resolved(resolved_model).model
 
 
 def _model_dir_name(embedding_model: Optional[str]) -> str:
@@ -192,10 +200,10 @@ def _run_trace(
     # Stage 0: compute query embedding once (shared by individual resolvers + ground_term)
     query_embedding = None
     try:
-        from omop_emb.embeddings import EmbeddingRole
+        from omop_emb.interface import EmbeddingRole
         writer = get_embedding_writer_interface(kg)
         if writer is not None:
-            query_embedding = writer.embed_texts(texts=(query,), embedding_role=EmbeddingRole.QUERY)
+            query_embedding = writer.embed_texts(texts=(query,), role=EmbeddingRole.QUERY)
             logger.info("Query embedding computed (shape=%s).", query_embedding.shape)
         else:
             logger.info("No embedding writer available; EmbeddingResolver will be skipped.")
