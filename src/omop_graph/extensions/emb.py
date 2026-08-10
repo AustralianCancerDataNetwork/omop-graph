@@ -5,6 +5,8 @@ import importlib.util
 from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias, Tuple
 import numpy as np
 
+from omop_alchemy.cdm.query import ConceptFilter as CDMConceptFilter
+
 HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
 
 if TYPE_CHECKING:
@@ -202,13 +204,12 @@ def semantic_similarity(
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
     concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
-    concept_filter = EmbeddingConceptFilter(
-        concept_ids=concept_ids, limit=len(concept_ids)
-    )
+    cdm_filter = CDMConceptFilter(concept_ids=concept_ids, limit=len(concept_ids))
+    knn_filter = EmbeddingConceptFilter(concept_ids=concept_ids)
 
     missing_sc_embeddings = embedding_reader.get_concepts_without_embedding(
         omop_cdm_engine=kg.cdm_engine,
-        concept_filter=concept_filter,
+        concept_filter=cdm_filter,
     )
 
     if missing_sc_embeddings:
@@ -224,11 +225,8 @@ def semantic_similarity(
                 )
 
                 from omop_emb.utils.cdm import fetch_cdm_concepts_for_filter
-                from omop_emb.utils.embedding_utils import (
-                    EmbeddingConceptFilter as _ECF,
-                )
 
-                missing_filter = _ECF(
+                missing_filter = CDMConceptFilter(
                     concept_ids=missing_concept_ids, limit=len(missing_concept_ids)
                 )
                 concept_meta = fetch_cdm_concepts_for_filter(
@@ -259,7 +257,8 @@ def semantic_similarity(
     nearest_concept_matches = get_neareast_concepts(
         kg=kg,
         query_embedding=query_embedding,
-        concept_filter=concept_filter,
+        concept_filter=knn_filter,
+        k=len(concept_ids),
     )
 
     return nearest_concept_matches
@@ -269,6 +268,7 @@ def get_neareast_concepts(
     kg: KnowledgeGraph,
     query_embedding: np.ndarray,
     concept_filter: Optional[EmbeddingConceptFilter],
+    k: Optional[int] = None,
 ) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
     """
     RAG retrieval for concept similarity scores. The query_embedding is compared against
@@ -283,7 +283,9 @@ def get_neareast_concepts(
         The query vector to search with. Expected shape is (q, D).
     concept_filter : Optional[EmbeddingConceptFilter]
         Pre-filter applied during KNN (concept IDs, domain, vocabulary, standard).
-        Also caps k to ``concept_filter.limit`` when set.
+    k : int, optional
+        Number of nearest neighbours to return (defaults to the embedding
+        reader's own interface-level default when omitted).
 
     Returns
     -------
@@ -306,6 +308,7 @@ def get_neareast_concepts(
     nearest_concepts = embedding_reader.get_nearest_concepts(
         query_embedding=query_embedding,
         concept_filter=concept_filter,
+        k=k,
     )
     if not nearest_concepts:
         logger.info(

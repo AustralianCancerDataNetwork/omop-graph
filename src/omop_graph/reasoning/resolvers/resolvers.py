@@ -248,7 +248,6 @@ class EmbeddingResolver(CandidateResolver):
                 domains=constraints.domains,
                 vocabularies=constraints.vocabularies,
                 require_standard=constraints.require_standard,
-                limit=constraints.limit,
             )
             if isinstance(constraints, SearchConstraintConcept)
             else None
@@ -264,6 +263,9 @@ class EmbeddingResolver(CandidateResolver):
             kg=kg,
             query_embedding=query_embedding,
             concept_filter=concept_filter,
+            k=constraints.limit
+            if isinstance(constraints, SearchConstraintConcept)
+            else None,
         )
         if matches is None:
             return ()

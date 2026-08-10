@@ -14,9 +14,11 @@ from oa_configurator.resolver import ResolvedModel, ResolvedProvider
 
 from omop_graph.extensions import emb as emb_ext
 from omop_graph.extensions.emb import MissingExtensionError
+from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
+from omop_graph.reasoning.resolvers import resolvers as resolvers_ext
 
 
 def _make_resolved_model() -> ResolvedModel:
@@ -29,6 +31,10 @@ def _make_resolved_model() -> ResolvedModel:
         embedding_dim=None,
         document_prefix=None,
         query_prefix=None,
+        embeddings=True,
+        tool_use=False,
+        structured_output=False,
+        extended_thinking=False,
         configuration={},
     )
 
@@ -240,3 +246,84 @@ class TestTryGetEmbeddingWriterInterface:
                 raise MissingExtensionError()
 
         assert emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, MissingExtensionKG())) is None
+
+
+# ── omop-emb#48 split: k threaded explicitly instead of via filter.limit ──
+
+
+def test_semantic_similarity_splits_cdm_and_knn_filters(
+    mock_cdm_kg: KnowledgeGraph,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CDM-side lookups get a CDMConceptFilter capped by len(concept_ids);
+    the KNN call gets a plain EmbeddingConceptFilter (no limit) with k passed
+    explicitly instead.
+    """
+    from omop_emb.utils.embedding_utils import CDMConceptFilter, EmbeddingConceptFilter
+
+    mock_cdm_kg._emb_config = KnowledgeGraphEmbeddingConfiguration(
+        compute_missing_embeddings=False,
+        backend=Mock(),
+        resolved_model=_make_resolved_model(),
+        metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+    )
+
+    fake_reader = Mock()
+    fake_reader.get_concepts_without_embedding.return_value = {}
+    fake_reader.is_model_registered.return_value = True
+    fake_reader.canonical_model_name = "test-model:v1.5"
+    fake_reader.get_nearest_concepts.return_value = ()
+
+    monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
+    monkeypatch.setattr(
+        emb_ext, "get_embedding_reader_interface", lambda _: fake_reader
+    )
+
+    emb_ext.semantic_similarity(
+        kg=mock_cdm_kg,
+        standard_concepts=[
+            _make_standard_concept(196653, "Malignant tumor of kidney"),
+            _make_standard_concept(4038835, "Hodgkin's disease (clinical)"),
+        ],
+        query_embedding=np.zeros((1, 3), dtype=np.float32),
+    )
+
+    cdm_filter = fake_reader.get_concepts_without_embedding.call_args.kwargs[
+        "concept_filter"
+    ]
+    assert isinstance(cdm_filter, CDMConceptFilter)
+    assert cdm_filter.limit == 2
+
+    knn_kwargs = fake_reader.get_nearest_concepts.call_args.kwargs
+    assert knn_kwargs["k"] == 2
+    assert isinstance(knn_kwargs["concept_filter"], EmbeddingConceptFilter)
+    assert not hasattr(knn_kwargs["concept_filter"], "limit")
+
+
+def test_embedding_resolver_threads_constraints_limit_as_k(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EmbeddingResolver.get_matches no longer sets EmbeddingConceptFilter.limit;
+    constraints.limit is threaded through to get_neareast_concepts as k= instead.
+    """
+    monkeypatch.setattr(resolvers_ext, "HAS_OMOP_EMB", True)
+    fake_get_neareast = Mock(return_value=((),))
+    monkeypatch.setattr(resolvers_ext, "get_neareast_concepts", fake_get_neareast)
+
+    kg = Mock()
+    kg.concept_views.return_value = ()
+
+    resolver = resolvers_ext.EmbeddingResolver()
+    constraints = SearchConstraintConcept(domains=("Condition",), limit=5)
+
+    resolver.get_matches(
+        kg=kg,
+        query="kidney cancer",
+        constraints=constraints,
+        query_embedding=np.zeros((1, 3), dtype=np.float32),
+    )
+
+    call_kwargs = fake_get_neareast.call_args.kwargs
+    assert call_kwargs["k"] == 5
+    assert call_kwargs["concept_filter"].domains == ("Condition",)
+    assert not hasattr(call_kwargs["concept_filter"], "limit")
