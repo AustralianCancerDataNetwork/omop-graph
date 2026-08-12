@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
+from omop_alchemy.cdm.query import ConceptFilter
 
 from linkml_runtime.linkml_model.annotations import Annotation
 from oaklib.datamodels.search import (
@@ -30,7 +31,6 @@ from oaklib.types import CURIE, PRED_CURIE
 
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
@@ -308,7 +308,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 if parent_ids
                 else None
             ),
-            search_constraint=SearchConstraintConcept(
+            search_constraint=ConceptFilter(
                 domains=domains,
                 vocabularies=vocabs,
                 require_standard=False,

@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import numpy as np
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.paths import (
     StandardConcept,
@@ -60,7 +60,7 @@ class GroundingConstraints:
         standardized via identity hops, but without ancestor verification. This
         trades disambiguation power for coverage. Results are ranked by relevance
         and identity-hop distance only, not by proximity to a known hierarchy branch.
-    search_constraint : SearchConstraintConcept, optional
+    search_constraint : ConceptFilter, optional
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
         Maximum allowed distance in the hierarchy between a candidate and a parent.
@@ -73,7 +73,7 @@ class GroundingConstraints:
     """
 
     parent_ids: Optional[Tuple[int, ...]]
-    search_constraint: Optional[SearchConstraintConcept]
+    search_constraint: Optional[ConceptFilter]
     max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 

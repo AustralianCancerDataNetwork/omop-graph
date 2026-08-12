@@ -35,7 +35,7 @@ from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import make_engine
 from omop_graph.extensions.emb import get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -193,7 +193,7 @@ def _run_trace(
     query: str,
     case_id: str,
     parent_ids: Tuple[int, ...],
-    search_constraint: Optional[SearchConstraintConcept],
+    search_constraint: Optional[ConceptFilter],
     expected_concept_id: Optional[int],
     top_n: int,
 ) -> Dict:
@@ -442,7 +442,7 @@ def _run_trace(
 
 
 def _constraints_dict(
-    sc: Optional[SearchConstraintConcept],
+    sc: Optional[ConceptFilter],
     parent_ids: Tuple[int, ...],
     kg: KnowledgeGraph,
 ) -> Dict:
@@ -1569,7 +1569,7 @@ def trace(
                 progress.advance(task_id)
                 continue
 
-            search_constraint = SearchConstraintConcept(
+            search_constraint = ConceptFilter(
                 domains=tuple([str(c) for c in case_domains]) if isinstance(case_domains, list) else None,
                 vocabularies=tuple([str(v) for v in case_vocab]) if isinstance(case_vocab, list) else None,
                 require_standard=False,

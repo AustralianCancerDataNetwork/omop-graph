@@ -69,6 +69,12 @@ class ConceptView:
     valid_end_date: date
     invalid_reason: Optional[str]
 
+    @property
+    def is_active(self) -> bool:
+        """Whether the concept is active under OMOP Alchemy's flag semantics."""
+        value = self.invalid_reason.strip() if self.invalid_reason is not None else ""
+        return not value
+
     def __repr__(self) -> str:
         return (
             f"ConceptView("
@@ -122,8 +128,8 @@ class ConceptView:
         """
         Create a ConceptView from a SQLAlchemy Row.
 
-        This method handles the conversion of the 'standard_concept' field
-        from the DB string ("S") to a boolean.
+        The query layer projects OMOP Alchemy's canonical standardness expression
+        into the ``standard_concept`` field as a boolean.
 
         Parameters
         ----------
@@ -136,9 +142,7 @@ class ConceptView:
             The instantiated view.
         """
         data = dict(row._mapping)
-        # Convert "S" (Standard) to True, anything else (None, "C") to False
-        # Note: "C" (Classification) is treated as non-standard for this boolean logic
-        data["standard_concept"] = data.pop("standard_concept") == "S"
+        data["standard_concept"] = bool(data["standard_concept"])
         return cls(**data)
 
 

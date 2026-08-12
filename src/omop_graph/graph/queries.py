@@ -43,9 +43,12 @@ from omop_alchemy.cdm.model.vocabulary import (
     Concept_Synonym,
     Relationship,
 )
+from omop_alchemy.cdm.query import ConceptFilter
 
 from ..extensions.omop_alchemy import RelationshipMapping, PredicateKind
-from .constraints import SearchConstraintConcept
+def _concept_is_standard_expr():
+    """Return the canonical standard/classification flag as a non-null boolean."""
+    return func.coalesce(Concept.is_standard_expr(), False)
 
 
 def _concept_match_order_terms(name_expr, rank_expr=None):
@@ -69,12 +72,12 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
     terms.extend(
         (
             case(
-                (Concept.standard_concept.in_(["S", "C"]), literal(0)),
+                (_concept_is_standard_expr(), literal(0)),
                 else_=literal(1),
             ),
             case(
-                (Concept.invalid_reason.in_(["D", "U"]), literal(1)),
-                else_=literal(0),
+                (Concept.is_valid_expr(), literal(0)),
+                else_=literal(1),
             ),
             func.length(name_expr),
             Concept.concept_id,
@@ -104,7 +107,7 @@ def q_concept_view(concept_id: int) -> Select:
         Concept.vocabulary_id,
         Concept.domain_id,
         Concept.concept_class_id,
-        Concept.standard_concept,
+        _concept_is_standard_expr().label("standard_concept"),
         Concept.valid_start_date,
         Concept.valid_end_date,
         Concept.invalid_reason,
@@ -135,7 +138,7 @@ def q_concept_views(concept_ids: Tuple[int, ...], sort: bool = True) -> Select:
         Concept.vocabulary_id,
         Concept.domain_id,
         Concept.concept_class_id,
-        Concept.standard_concept,
+        _concept_is_standard_expr().label("standard_concept"),
         Concept.valid_start_date,
         Concept.valid_end_date,
         Concept.invalid_reason,
@@ -179,14 +182,8 @@ def q_concept_name() -> Select:
     return select(
         Concept.concept_id,
         Concept.concept_name.label("name"),
-        case(
-            (Concept.standard_concept.in_(["S", "C"]), literal(True)),
-            else_=literal(False),
-        ).label("is_standard"),
-        case(
-            (Concept.invalid_reason.in_(["D", "U"]), literal(False)),
-            else_=literal(True),
-        ).label("is_active"),
+        _concept_is_standard_expr().label("is_standard"),
+        Concept.is_valid_expr().label("is_active"),
     )
 
 
@@ -202,20 +199,14 @@ def q_concept_synonym() -> Select:
     return select(
         Concept.concept_id,
         Concept_Synonym.concept_synonym_name.label("name"),
-        case(
-            (Concept.standard_concept.in_(["S", "C"]), literal(True)),
-            else_=literal(False),
-        ).label("is_standard"),
-        case(
-            (Concept.invalid_reason.in_(["D", "U"]), literal(False)),
-            else_=literal(True),
-        ).label("is_active"),
+        _concept_is_standard_expr().label("is_standard"),
+        Concept.is_valid_expr().label("is_active"),
     ).join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
 
 
 def q_concept_name_match(
     query_concept_name: str,
-    search_constraint: Optional[SearchConstraintConcept] = None,
+    search_constraint: Optional[ConceptFilter] = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -226,7 +217,7 @@ def q_concept_name_match(
     ----------
     query_concept_name : str
         The concept name to match.
-    search_constraint : SearchConstraintConcept, optional
+    search_constraint : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -249,9 +240,9 @@ def q_concept_name_match(
             func.lower(name_expr) == func.lower(query_concept_name)
         )
     if search_constraint:
-        if not isinstance(search_constraint, SearchConstraintConcept):
+        if not isinstance(search_constraint, ConceptFilter):
             raise TypeError(
-                "search_constraint must be an instance of SearchConstraintConcept"
+                "search_constraint must be an instance of ConceptFilter"
             )
         base_stmt = search_constraint.apply(base_stmt)
     if sort:
@@ -261,7 +252,7 @@ def q_concept_name_match(
 
 def q_concept_name_ilike(
     query_concept_name: str,
-    search_constraint: Optional[SearchConstraintConcept] = None,
+    search_constraint: Optional[ConceptFilter] = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -272,7 +263,7 @@ def q_concept_name_ilike(
     ----------
     query_concept_name : str
         The concept name to search for.
-    search_constraint : SearchConstraintConcept, optional
+    search_constraint : ConceptFilter, optional
         Additional filters.
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -296,9 +287,9 @@ def q_concept_name_ilike(
     else:
         base_stmt = q_concept_name().where(name_expr.ilike(f"%{query_concept_name}%"))
     if search_constraint:
-        if not isinstance(search_constraint, SearchConstraintConcept):
+        if not isinstance(search_constraint, ConceptFilter):
             raise TypeError(
-                "search_constraint must be an instance of SearchConstraintConcept"
+                "search_constraint must be an instance of ConceptFilter"
             )
         base_stmt = search_constraint.apply(base_stmt)
     if sort:
@@ -310,7 +301,7 @@ def q_concept_name_fulltext(
     query_concept_name: str,
     *,
     engine: Engine,
-    search_constraint: Optional["SearchConstraintConcept"] = None,
+    search_constraint: Optional[ConceptFilter] = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -328,7 +319,7 @@ def q_concept_name_fulltext(
     ----------
     query_concept_name : str
         The concept name to search for.
-    search_constraint : SearchConstraintConcept, optional
+    search_constraint : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -575,31 +566,23 @@ def q_relationships(
 def q_entities(
     domain: str | None, standard_only: bool = True, filter_obsoletes: bool = True
 ) -> Select:
-
-    stmt = select(Concept.concept_id)
-
-    if domain:
-        stmt = stmt.where(Concept.domain_id == domain)
-
-    if standard_only:
-        stmt = stmt.where(Concept.standard_concept.is_not(None))
-
-    if filter_obsoletes:
-        stmt = stmt.where(Concept.invalid_reason.is_(None))
-
-    return stmt
+    """Query concept IDs using OMOP Alchemy's canonical concept semantics."""
+    return ConceptFilter(
+        domains=(domain,) if domain else None,
+        require_standard=standard_only,
+        require_active=filter_obsoletes,
+    ).apply(select(Concept.concept_id))
 
 
 def q_concept_filtered(
     vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
 ) -> Select:
     """Helper query for selecting standard concepts filtered by vocab/domain."""
-    stmt = select(Concept.concept_id).where(Concept.standard_concept.is_not(None))
-    if domain_id:
-        stmt = stmt.where(Concept.domain_id == domain_id)
-    if vocabulary_id:
-        stmt = stmt.where(Concept.vocabulary_id == vocabulary_id)
-    return stmt
+    return ConceptFilter(
+        domains=(domain_id,) if domain_id else None,
+        vocabularies=(vocabulary_id,) if vocabulary_id else None,
+        require_standard=True,
+    ).apply(select(Concept.concept_id))
 
 
 def q_concept_synonym_filtered(concept_id: int) -> Select:
