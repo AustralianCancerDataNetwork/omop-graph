@@ -33,26 +33,27 @@ classifiers = [
 ]
 
 dependencies = [
-  "omop-alchemy==0.8.0",
+  "omop-alchemy>=1.0.0,<2.0.0",
+  "orm-loader>=1.0.0,<2.0.0",
   "typing-extensions>=4.15.0",
   "typer>=0.12",
   "rich>=13.0",
   "oaklib",
-  "oa-configurator==0.1.2"
+  "oa-configurator>=1.0.0,<2.0.0"
 ]
 
 [project.optional-dependencies]
 emb = [
-  "omop-emb==1.1.1",
+  "omop-emb>=2.0.0,<3.0.0",
 ]
 faiss-cpu = [
-  "omop-emb[faiss-cpu]==1.1.1",
+  "omop-emb[faiss-cpu]>=2.0.0,<3.0.0",
 ]
 pgvector = [
-  "omop-emb[pgvector]==1.1.1",
+  "omop-emb[pgvector]>=2.0.0,<3.0.0",
 ]
 postgres = [
-  "omop-alchemy[postgres]",
+  "omop-alchemy[postgres]>=1.0.0,<2.0.0",
 ]
 
 
@@ -70,7 +71,7 @@ dev = [
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
     "mkdocs-macros-plugin",
-    "oa-configurator[postgres]>=0.1.1",
+    "oa-configurator[postgres]>=1.0.0,<2.0.0",
 ]
 
 [project.scripts]
@@ -92,4 +93,3 @@ packages = ["src/omop_graph"]
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
-

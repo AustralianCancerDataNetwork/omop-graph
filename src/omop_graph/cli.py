@@ -8,6 +8,7 @@ import sqlalchemy as sa
 import typer
 from sqlalchemy.orm import sessionmaker
 
+from orm_loader.backends import resolve_backend
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
@@ -123,16 +124,19 @@ def relationship_classification(
     engine = make_engine()
     Session = sessionmaker(bind=engine, future=True)
     session = Session()
+    loader_backend = resolve_backend(engine)
 
     with engine.begin() as conn:
         conn.execute(
             sa.text(
-                f"DROP TABLE IF EXISTS {RelationshipMapping.staging_tablename()} CASCADE"  # ty: ignore[invalid-argument-type]
+                "DROP TABLE IF EXISTS "
+                f"{loader_backend.qualified_staging_name(RelationshipMapping.__tablename__)} CASCADE"
             )
         )
         conn.execute(
             sa.text(
-                f"DROP TABLE IF EXISTS {RelationshipClass.staging_tablename()} CASCADE"  # ty: ignore[invalid-argument-type]
+                "DROP TABLE IF EXISTS "
+                f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
             )
         )
         conn.execute(sa.text("DROP TYPE IF EXISTS predicatekindenum CASCADE;"))

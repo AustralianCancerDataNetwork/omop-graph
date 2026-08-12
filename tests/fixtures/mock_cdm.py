@@ -64,7 +64,7 @@ def mock_cdm_kg(
 ) -> KnowledgeGraph:
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr(
-        "omop_graph.reasoning.grounding.get_embedding_writer_interface",
+        "omop_graph.reasoning.grounding.try_get_embedding_writer_interface",
         lambda _kg: None,
     )
 

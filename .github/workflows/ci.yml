@@ -8,12 +8,3 @@ jobs:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/label-gate.yml@main
   build-test:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test.yml@main
-    with:
-      setup-commands: |
-        uv run omop-config configure omop_alchemy \
-          --dialect sqlite \
-          --database-name test.db \
-          --cdm-schema main
-        uv run omop-config configure omop_graph \
-          --max-depth 6 \
-          --max-paths 20

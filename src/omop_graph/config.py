@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Final
+from typing import Annotated, ClassVar, Final
 
 from pydantic import Field
-from oa_configurator import PackageConfigBase, ResourceSpec
-from omop_alchemy.config import OmopAlchemyConfig
+from oa_configurator import CDMDatabaseConfig, ModelConfig, PackageConfigBase, RefTo, VectorStoreConfig
 
 TOOL_NAME: Final[str] = "omop_graph"
 
@@ -15,7 +14,19 @@ class OmopGraphConfig(PackageConfigBase):
     """oa-configurator config class for omop-graph.
 
     omop-graph does not own any database resources. It requires the CDM
-    database configured by omop-alchemy.
+    database configured by omop-alchemy, shared purely by naming convention:
+    this field defaults to the same name as
+    ``omop_alchemy.config.OmopAlchemyConfig.cdm_db``.
+
+    Notes
+    -----
+    By design, this config is for internal use only and must not be
+    imported or resolved by any other package. Embedding support itself is
+    entirely caller-supplied: at runtime, omop-graph knows nothing of "its"
+    embedding configuration, only the already-built
+    ``omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`` a caller
+    passes in. ``embedding_model_name``/``vector_store_name`` below exist
+    for internal use in a CLI boundary of this module. Not consumed as of today.
     """
 
     tool_name: ClassVar[str] = TOOL_NAME
@@ -24,10 +35,24 @@ class OmopGraphConfig(PackageConfigBase):
         "omop_alchemy",
         "omop_emb",
     )
-    required_resources: ClassVar[tuple[str, ...]] = (
-        OmopAlchemyConfig.CDM_DB.semantic_name,
+
+    cdm_db: Annotated[str, RefTo(CDMDatabaseConfig)] = "cdm_db"
+    embedding_model_name: Annotated[str | None, RefTo(ModelConfig)] = Field(
+        default=None,
+        description=(
+            "Name of a [models.*] entry for embedding-based grounding. Optional: "
+            "embedding support is itself optional (gated behind the omop-emb "
+            "extension), so this has no default name the way cdm_db does. Unset "
+            "means no embedding-based grounding by default."
+        ),
     )
-    owned_resources: ClassVar[tuple[ResourceSpec, ...]] = ()
+    vector_store_name: Annotated[str | None, RefTo(VectorStoreConfig)] = Field(
+        default=None,
+        description=(
+            "Name of a [vector_stores.*] entry for embedding-based grounding. "
+            "Optional, same reasoning as embedding_model_name."
+        ),
+    )
 
     max_depth: int = Field(
         default=6,

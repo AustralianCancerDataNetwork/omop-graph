@@ -75,8 +75,16 @@ constraints = GroundingConstraints(
     predicate_kinds=frozenset({PredicateKind.IDENTITY}),
 )
 
-results = ground_term(pipeline, kg, "chest pain", text_embedding=None, text_embedding_model=None, constraints=constraints)
+results = ground_term(
+    resolver_pipeline=pipeline,
+    kg=kg,
+    query="chest pain",
+    query_embedding=None,   # pass a precomputed vector, or None to skip embedding-based scoring
+    constraints=constraints,
+)
 ```
+
+`ground_term` also accepts an optional `context: str | None` folded into the on-demand query-embedding text (used only when `query_embedding` is omitted and the KG has a write-capable embedding config); see [`ground_term`'s own docstring](../reference/ref_grounding.md) for details.
 
 ## Scoring
 It usually happens that multiple viable candidates are extracted for each search term, especially if multiple resolvers are used. To rank these exctracted concepts, we devised a scoring algorithm, which is detailed in the following:

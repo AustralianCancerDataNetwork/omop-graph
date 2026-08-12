@@ -35,7 +35,7 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 
 engine = create_engine("postgresql://user:pass@localhost/omop")
-kg = KnowledgeGraph(engine)
+kg = KnowledgeGraph(cdm_engine=engine)
 
 # Lookup a concept by its label
 matches = kg.concept_lookup("Atrial Fibrillation", match_kind=LabelMatchKind.EXACT)
@@ -55,53 +55,52 @@ To enable semantic similarity and RAG-based retrieval, pass a `KnowledgeGraphEmb
 This requires the optional `omop-emb` package — see the [installation guide](../usage/installation.md#embedding-rag).
 
 !!! info "omop-emb documentation"
-    `omop-emb` manages all embedding storage, backends, and retrieval. Full documentation — including backend setup, CLI reference, FAISS sidecar, and configuration — is available at [australiancancerdatanetwork.github.io/omop-emb](https://australiancancerdatanetwork.github.io/omop-emb/).
+    `omop-emb` manages all embedding storage, backends, and retrieval. Full documentation, including backend setup, CLI reference, FAISS sidecar, and configuration, is available at [australiancancerdatanetwork.github.io/omop-emb](https://australiancancerdatanetwork.github.io/omop-emb/).
 
-#### Read-only (pre-computed embeddings already in the DB)
-
-Use this when embeddings have already been indexed and you only need retrieval:
+`KnowledgeGraphEmbeddingConfiguration` is a complete configuration: `backend` (an already-constructed `omop_emb.EmbeddingBackend`) and `resolved_model` (an `oa_configurator.ResolvedModel`) are both required fields, not Optional. omop-graph never resolves either itself: the caller (the actual CLI/entry-point boundary, e.g. omop-spires) resolves the vector store and the model, builds the backend, and passes both in here. `model_name`/`provider_type` are plain properties reading straight off `resolved_model` (`.model`/`.provider.provider`); there's nothing to pass for them separately.
 
 ```python
 from sqlalchemy import create_engine
+from oa_configurator import Resolver
+from omop_emb.backends import resolve_backend_from_resolved_vector_store
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
-from omop_emb.config import BackendType, MetricType, ProviderType
+from omop_emb.config import MetricType
 
 engine = create_engine("postgresql://user:pass@localhost/omop")
 
+resolver = Resolver.from_active_config()
+resolved_vector_store = resolver.resolve_vector_store("vector_store")   # a [vector_stores.*] entry name
+resolved_model = resolver.resolve_model("embedding-model")              # a [models.*] entry name
+backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+
 emb_config = KnowledgeGraphEmbeddingConfiguration(
-    backend_type=BackendType.PGVECTOR,      # or BackendType.SQLITEVEC
-    provider_type=ProviderType.OLLAMA,
-    model_name="nomic-embed-text:v1.5",     # must match the name used at ingestion time
     metric_type=MetricType.COSINE,
+    backend=backend,
+    resolved_model=resolved_model,
+    # write defaults to False
 )
-kg = KnowledgeGraph(engine, emb_config=emb_config)
+kg = KnowledgeGraph(cdm_engine=engine, emb_config=emb_config)
 ```
 
-The backend is resolved from `backend_type` or, as a fallback, from the `OMOP_EMB_BACKEND` environment variable.
-See the [omop-emb configuration reference](https://australiancancerdatanetwork.github.io/omop-emb/usage/configuration/) for all connection variables.
+See [omop-llm: Asymmetric Embeddings](https://AustralianCancerDataNetwork.github.io/omop-llm/usage/asymmetric-embeddings/) and
+[oa-configurator: `[models.<name>]`](https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#modelsname)
+for how a model (provider, connection details, embedding dimension, and asymmetric-prefix configuration) gets registered under a name in the first place, and [oa-configurator: `[vector_stores.<name>]`](https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#vector_storesname) for the storage backend side.
 
-#### Write-capable (generate and store embeddings at runtime)
+#### Read-only vs write-capable
 
-Provide an `EmbeddingClient` to enable both reading and writing embeddings. The `provider_type` and `model_name`
-are derived automatically from the client:
+`write=False` (the default) gives a read-only interface over already-computed embeddings, including the case where the caller supplies an already-computed `query_embedding` directly (see `annotate_text(query_embedding=...)`), so the KG never needs to call a model at all. Set `write=True` to enable generating and persisting embeddings on demand, using the same required `resolved_model`.
 
 ```python
-from omop_emb import EmbeddingClient
-from omop_emb.config import BackendType, MetricType, ProviderType
-
-client = EmbeddingClient(
-    model="nomic-embed-text:v1.5",
-    api_base="http://ollama:11434/v1",
-    provider_type=ProviderType.OLLAMA,
-)
-
 emb_config = KnowledgeGraphEmbeddingConfiguration(
-    backend_type=BackendType.PGVECTOR,
     metric_type=MetricType.COSINE,
-    client=client,
+    backend=backend,
+    resolved_model=resolved_model,
+    write=True,
 )
-kg = KnowledgeGraph(engine, emb_config=emb_config)
+kg = KnowledgeGraph(cdm_engine=engine, emb_config=emb_config)
 ```
+
+`faiss_cache_dir` (optional `str`) is read-only-path-only: a directory to cache FAISS index files, passed straight through to `EmbeddingReaderInterface`.
 
 #### Fallback embedding calculation
 
@@ -110,21 +109,21 @@ Setting `compute_missing_embeddings=True` instructs the graph to compute and per
 for any missing concepts on-the-fly during a similarity call.
 
 !!! warning
-    This flag has no effect unless a write-capable interface is configured (i.e. a `client` is provided).
-    Without a `client`, the graph holds a read-only interface and cannot write back to the embedding store.
+    `compute_missing_embeddings=True` requires `write=True`. This is validated at construction and raises `ValueError` immediately if `write` is `False`.
 
 ```python
 emb_config = KnowledgeGraphEmbeddingConfiguration(
-    backend_type=BackendType.PGVECTOR,
     metric_type=MetricType.COSINE,
-    client=client,
+    backend=backend,
+    resolved_model=resolved_model,
+    write=True,
     compute_missing_embeddings=True,
 )
-kg = KnowledgeGraph(engine, emb_config=emb_config)
+kg = KnowledgeGraph(cdm_engine=engine, emb_config=emb_config)
 ```
 
-| `compute_missing_embeddings` | `client` present | Behaviour when concepts are missing |
+| `compute_missing_embeddings` | `write` | Behaviour |
 |---|---|---|
-| `False` (default) | any | Log at INFO and skip missing concepts in scoring |
-| `True` | no | Log warning that computation is not possible; skip missing concepts |
-| `True` | yes | Compute embeddings, persist to DB, then score |
+| `True` | `False` | `ValueError` at construction as it is invalid combination |
+| `False` | any | Log at INFO and skip missing concepts in scoring |
+| `True` | `True` | Compute embeddings, persist to DB, then score |

@@ -32,7 +32,7 @@ The primary adapter class that inherits from multiple OAK interfaces:
 To initialize a connection, `omop-graph` uses a specialized resource factory:
 
 * **`OMOPOntologyResource`**: A dataclass that wraps the SQLAlchemy connection URL, treating the database as a live ontology source.
-* **`omop_resource()`**: A factory function that resolves database credentials from an explicit URL or the `OMOP_CDM_DB_URL` environment variable.
+* **`omop_resource()`**: A factory function that resolves database credentials from an explicit URL, or from the active oa-configurator stack config (`OmopGraphConfig.cdm_db`) when no URL is given.
 
 ---
 

@@ -17,18 +17,15 @@ import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 
 import numpy as np
+from oa_configurator import Resolver, ResolvedModel, ResolvedProvider
 from omop_emb.config import (
-    BackendType,
     IndexType,
     MetricType,
-    parse_backend_type,
     parse_index_type,
     parse_metric_type,
 )
-from omop_emb.embeddings import (
-    EmbeddingClient, 
-    EmbeddingRole
-)
+from omop_emb.interface import EmbeddingRole
+from omop_emb.backends import EmbeddingBackend, resolve_backend_from_resolved_vector_store
 from omop_emb.backends.index_config import index_config_from_index_type
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
@@ -183,22 +180,18 @@ def build_knowledge_graph() -> KnowledgeGraph:
 
 def build_embedding_knowledge_graph(
     embedding_metric: MetricType,
-    embedding_model: Optional[str],
-    embedding_backend: Optional[str | BackendType],
-    embedding_client: Optional[EmbeddingClient],
+    resolved_model: ResolvedModel,
+    backend: EmbeddingBackend,
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
     cdm_engine = make_engine()
-    resolved_embedding_backend = parse_backend_type(embedding_backend) if embedding_backend is not None else None
-    resolved_metric_type = parse_metric_type(embedding_metric)
-
     config = KnowledgeGraphEmbeddingConfiguration(
-        metric_type=resolved_metric_type,
-        backend_type=resolved_embedding_backend,
-        client=embedding_client,
+        metric_type=embedding_metric,
+        backend=backend,
+        resolved_model=resolved_model,
+        write=True,
         compute_missing_embeddings=True,
-        model_name=embedding_model,
     )
     return KnowledgeGraph(
         cdm_engine=cdm_engine,
@@ -533,9 +526,9 @@ def run_benchmark(
         "--grounding-parent-ids", "-G",
         help="Overwrites the parent_ids specified in individual cases. For multiple IDs, repeat the option (e.g., -G 443392 -G 413015).")
     ] = None,
-    embedding_backend: Annotated[Optional[str], typer.Option(
-        "--embedding-backend", "-e",
-        help="Embedding backend to use (e.g., 'sqlite_vec' or 'pgvector'). Defaults to config.toml or OMOP_EMB_BACKEND environment variable.")
+    vector_store_name: Annotated[Optional[str], typer.Option(
+        "--vector-store", "-e",
+        help="Name of a [vector_stores.*] entry to use for embedding storage. Defaults to the value configured via omop-config.")
     ] = None,
 ):
     """Generalised benchmark interface."""
@@ -562,35 +555,55 @@ def run_benchmark(
             "No grounding parent IDs provided."
         )
 
-    embedding_client = None
     embedding_kg = None
     query_embeddings: Dict[str, np.ndarray] = {}
     resolved_embedding_index_type: Optional[IndexType] = None
     resolved_embedding_metric_type: Optional[MetricType] = None
+    canonical_model: Optional[str] = None
 
     if embedding_model is not None and embedding_api_base_url is not None:
         resolved_embedding_index_type = parse_index_type(embedding_index_type)
         resolved_embedding_metric_type = parse_metric_type(embedding_metric_type)
 
-        embedding_client = EmbeddingClient(
+        # Raw flags (no oa-configurator model lookup needed): a ResolvedModel
+        # is built directly, mirroring compare_to_ontogpt.py's own approach.
+        resolved_model = ResolvedModel(
+            name="benchmark-embedding-model",
+            provider=ResolvedProvider(
+                name="benchmark-embedding-provider", provider="ollama",
+                base_url=embedding_api_base_url, api_key=embedding_api_key,
+            ),
             model=embedding_model,
-            api_base=embedding_api_base_url,
-            api_key=embedding_api_key or "ollama",
+            embedding_dim=None,
+            document_prefix=None,
+            query_prefix=None,
+            embeddings=True,
+            tool_use=False,
+            structured_output=False,
+            extended_thinking=False,
+            configuration={},
         )
-        canonical_model = embedding_client.provider.canonical_model_name(embedding_model)
+
+        cfg = OmopGraphConfig.get_config()
+        resolved_name = vector_store_name or cfg.vector_store_name
+        if resolved_name is None:
+            raise RuntimeError(
+                "No vector store configured. Provide --vector-store, or set vector_store_name "
+                "via `omop-config configure omop_graph`."
+            )
+        resolved_vector_store = Resolver.from_active_config().resolve_vector_store(resolved_name)
+        embedding_backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
 
         embedding_kg = build_embedding_knowledge_graph(
-            embedding_model=canonical_model,
             embedding_metric=resolved_embedding_metric_type,
-            embedding_backend=embedding_backend,
-            embedding_client=embedding_client,
+            resolved_model=resolved_model,
+            backend=embedding_backend,
         )
-        embedding_dim = embedding_client.embedding_dim
-        if embedding_dim is None:
-            raise RuntimeError("Embedding client did not expose an embedding dimension.")
-        
+
         embedding_writer = get_embedding_writer_interface(embedding_kg)
         assert embedding_writer is not None, "Embedding backend does not support writing embeddings, which is required for this benchmark configuration."
+
+        canonical_model = embedding_writer.model_backend.model
 
         embedding_writer.register_model(
             index_config=index_config_from_index_type(
@@ -599,7 +612,7 @@ def run_benchmark(
         )
 
         query_embeddings = {
-            case.id: embedding_writer.embed_texts(case.text, embedding_role=EmbeddingRole.QUERY)
+            case.id: embedding_writer.embed_texts(case.text, role=EmbeddingRole.QUERY)
             for case in cases
         }
 
@@ -620,13 +633,9 @@ def run_benchmark(
                 )
 
             grounding_kwargs: Optional[Dict[str, object]] = None
-            if embedding_kg is not None and embedding_model is not None:
+            if embedding_kg is not None and canonical_model is not None:
                 grounding_kwargs = {
                     "text_embedding": query_embeddings.get(case.id),
-                    "text_embedding_model": embedding_model,
-                    "embedding_client": embedding_client,
-                    "metric_type": resolved_embedding_metric_type,
-                    "index_type": resolved_embedding_index_type,
                 }
 
             row = _evaluate_grounded_case(
