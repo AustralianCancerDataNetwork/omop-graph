@@ -90,7 +90,7 @@ def _query_text_with_context(query: str, context: Optional[str]) -> str:
 
     Notes
     -----
-    No guard on the context. The caller is responsible to what is passed in here.
+    No guard on the context. The caller is responsible for what is passed in here.
 
     Parameters
     ----------

@@ -205,7 +205,7 @@ class TestEmbeddingConfigurationValidation:
 
 class TestTryGetEmbeddingWriterInterface:
     def test_returns_none_for_read_only_configured_kg_instead_of_raising(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ):
         """A deliberately read-only-configured KG (write=False) is a normal, valid
         state, not a bug -- try_get_embedding_writer_interface must degrade
@@ -223,8 +223,13 @@ class TestTryGetEmbeddingWriterInterface:
 
         monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
 
-        result = emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, ReadOnlyKG()))
+        with caplog.at_level(logging.DEBUG, logger="omop_graph.extensions.emb"):
+            result = emb_ext.try_get_embedding_writer_interface(
+                cast(KnowledgeGraph, ReadOnlyKG())
+            )
         assert result is None
+        assert "unittest.mock.Mock" in caplog.text
+        assert "write=False" not in caplog.text
 
         # The raising sibling function must still raise for the exact same input --
         # confirms the two helpers genuinely differ in behavior, not just in name.

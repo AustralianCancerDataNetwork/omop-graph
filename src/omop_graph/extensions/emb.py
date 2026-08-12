@@ -139,11 +139,12 @@ def try_get_embedding_writer_interface(
     Utility to opportunistically retrieve the embedding writer interface from the KG.
 
     Never raises. Returns None whenever write-capability isn't available for any
-    reason: 
-      - no embedding configuration, 
-      - the 'omop-emb' extension not installed, or the
-      - KG deliberately configured read-only (``write=False``)
-      
+    reason:
+      - no embedding configuration,
+      - the 'omop-emb' extension not installed,
+      - the KG deliberately configured read-only (``write=False``), or
+      - the KG returned another unexpected interface type.
+
     Logs the specific reason at DEBUG in every case, so callers don't need to re-derive or
     restate *why* there's no writer.
 
@@ -159,8 +160,8 @@ def try_get_embedding_writer_interface(
         return None
     if not HAS_OMOP_EMB or not isinstance(interface, EmbeddingWriterInterface):
         logger.debug(
-            "No embedding writer available: the KG's embedding configuration is "
-            "read-only (write=False)."
+            "No embedding writer available: the KG returned interface type %r.",
+            type(interface),
         )
         return None
     return interface
