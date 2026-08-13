@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.backends import FullTextError
+from omop_alchemy.cdm.query import ConceptFilter
 from oa_configurator import ResolvedModel
 
 if TYPE_CHECKING:
@@ -45,7 +46,6 @@ from ..extensions.omop_alchemy import (
     load_relationship_mapping,
 )
 from .base import GraphBackend
-from .constraints import SearchConstraintConcept
 from .edges import EdgeView, Predicate
 from .nodes import (
     AncestorMatch,
@@ -335,7 +335,7 @@ class KnowledgeGraph(GraphBackend):
         query_term: str,
         match_kind: LabelMatchKind,
         synonym: bool = False,
-        search_constraint: Optional[SearchConstraintConcept] = None,
+        search_constraint: Optional[ConceptFilter] = None,
         sort: bool = True,
     ) -> tuple[LabelMatch, ...]:
         """
@@ -349,7 +349,7 @@ class KnowledgeGraph(GraphBackend):
             The kind of match to perform (exact, fulltext, partial).
         synonym : bool
             If True, searches in Concept_Synonym instead of Concept.
-        search_constraint : SearchConstraintConcept, optional
+        search_constraint : ConceptFilter, optional
             Additional filters for domain/vocabulary.
 
         """
@@ -774,7 +774,7 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_num_ancestors(concept_ids)).all()
         return {row.concept_id: row.num_ancestors for row in rows}
 
-    def check_search_constraints(self, constraints: SearchConstraintConcept) -> None:
+    def check_search_constraints(self, constraints: ConceptFilter) -> None:
         if constraints.domains is not None:
             invalid = [d for d in constraints.domains if d not in self._valid_domains]
             if invalid:

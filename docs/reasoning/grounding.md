@@ -22,7 +22,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 
 1. **Configuration**: Determine graph restrictions using [`GroundingConstraints`](#grounding-constraints)
     - `parent_ids`: OMOP Concept IDs that act as required ancestors — any valid result must be a descendant of at least one of these.
-    - `search_constraint`: A [`SearchConstraintConcept`](#searchconstraintconcept) that filters the initial resolver query by domain, vocabulary, and/or standard status.
+    - `search_constraint`: A [`ConceptFilter`](#conceptfilter) that filters the initial resolver query by domain, vocabulary, active status, and/or standard status.
     - `max_depth` / `predicate_kinds`: Control how far and along which relationship kinds the anchor walk is allowed to travel.
 
 2.  **Resolve**: Use the [`ResolverPipeline`](resolvers.md) to find any concepts (Standard or Non-Standard) matching the text.
@@ -41,13 +41,13 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `parent_ids` | `tuple[int, ...]` | `None` | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). |
-| `search_constraint` | `SearchConstraintConcept` | `None` | Filters applied to the initial resolver query (domain, vocabulary, standard flag). |
+| `search_constraint` | `ConceptFilter` | `None` | Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit). |
 | `max_depth` | `int` | `6` | Maximum hop distance allowed between a candidate and its standard anchor. |
 | `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. |
 
-### SearchConstraintConcept
+### ConceptFilter
 
-`SearchConstraintConcept` controls which concepts are even considered as candidates during the resolve step. All fields are optional and composable:
+`ConceptFilter`, provided by OMOP Alchemy, controls which concepts are even considered as candidates during the resolve step. All fields are optional and composable:
 
 | Field | Type | Default | Purpose |
 |---|---|---|---|
@@ -55,18 +55,19 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | `domains` | `tuple[str, ...]` | `None` | Restrict by OMOP Domain ID (e.g. `"Condition"`, `"Drug"`). |
 | `vocabularies` | `tuple[str, ...]` | `None` | Restrict by Vocabulary ID (e.g. `"SNOMED"`, `"RxNorm"`). |
 | `require_standard` | `bool` | `False` | When `True`, only concepts with `standard_concept` in `('S', 'C')` are returned. |
+| `require_active` | `bool` | `False` | When `True`, only concepts with an unset `invalid_reason` are returned. |
 | `limit` | `int` | `None` | Cap the number of candidates returned from the resolver query. |
 
 ### Example
 
 ```python
 from omop_graph.reasoning.grounding import ground_term, GroundingConstraints
-from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.extensions.omop_alchemy import PredicateKind
 
 constraints = GroundingConstraints(
     parent_ids=(441484,),   # 'Clinical Finding' — only accept descendants of this ancestor
-    search_constraint=SearchConstraintConcept(
+    search_constraint=ConceptFilter(
         domains=("Condition",),
         vocabularies=("SNOMED",),
         require_standard=True,

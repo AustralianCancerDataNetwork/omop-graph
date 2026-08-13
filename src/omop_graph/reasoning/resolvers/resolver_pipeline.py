@@ -11,8 +11,9 @@ from __future__ import annotations
 import logging
 from typing import Generator, Optional, Tuple, Type
 
+from omop_alchemy.cdm.query import ConceptFilter
+
 # Local Application Imports
-from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.resolvers.resolvers import (
     ALL_RESOLVERS,
@@ -110,7 +111,7 @@ class ResolverPipeline:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[SearchConstraintConcept] = None,
+        constraints: Optional[ConceptFilter] = None,
         **kwargs,
     ) -> Generator[CandidateHit, None, None]:
         """
@@ -122,7 +123,7 @@ class ResolverPipeline:
             The graph instance used for lookups.
         query : str
             The input query to resolve.
-        constraints : SearchConstraintConcept, optional
+        constraints : ConceptFilter, optional
             Domain or vocabulary restrictions to apply to the search.
             Determines also the number of candidates returned for each resolver using the `limit` field. If None, no additional filtering is applied.
 

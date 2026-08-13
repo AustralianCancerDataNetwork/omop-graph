@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.grounding import (
     GroundingConstraints,
@@ -35,7 +35,7 @@ class TestQueryTextWithContext:
 def _constraints() -> GroundingConstraints:
     return GroundingConstraints(
         parent_ids=(PARENT_CANCER_ID,),
-        search_constraint=SearchConstraintConcept(
+        search_constraint=ConceptFilter(
             domains=("Condition",),
             vocabularies=("SNOMED",),
             require_standard=False,
@@ -50,7 +50,7 @@ def _unconstrained_constraints() -> GroundingConstraints:
     # depend on OmopGraphConfig's package config being set up in the environment.
     return GroundingConstraints(
         parent_ids=None,
-        search_constraint=SearchConstraintConcept(
+        search_constraint=ConceptFilter(
             domains=("Condition",),
             vocabularies=("SNOMED",),
             require_standard=False,

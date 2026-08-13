@@ -16,15 +16,17 @@ The backbone of the `ResolverPipeline` are specific **resolvers**. `omop-graph` 
     Traversing each of the resolvers one by one can be an exhaustive search. The `ResolverPipeline` therefore offers a `stop_after_resolver` option. If set, retrieval from the DB stops after that resolver has concluded. The resolvers are ordered based on their confidence as above (i.e. **`ExactLabelResolver`** >> **`ExactSynonymResolver`** >> etc.)
 
 ```python
+from omop_alchemy.cdm.query import ConceptFilter
+
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints
 
 # Simplified Logic View
 constraints = GroundingConstraints(
     parent_ids=parsed_parent_ids,
-    search_constraint=SearchConstraintConcept(
+    search_constraint=ConceptFilter(
         domains=parsed_domains,
-        vocabs=parsed_vocabs,
+        vocabularies=parsed_vocabs,
         require_standard=True  # We prioritize Standard Concepts
     ),
     max_depth=6  # How deep to traverse the hierarchy

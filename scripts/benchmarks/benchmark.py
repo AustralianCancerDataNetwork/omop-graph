@@ -30,7 +30,7 @@ from omop_emb.backends.index_config import index_config_from_index_type
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -199,13 +199,13 @@ def build_embedding_knowledge_graph(
     )
 
 
-def case_constraints(case: BenchmarkCase) -> Optional[SearchConstraintConcept]:
+def case_constraints(case: BenchmarkCase) -> Optional[ConceptFilter]:
     """Translate case metadata into OMOP search constraints when available."""
 
     domains = (case.domain,) if case.domain else None
     vocabularies = case.vocabularies or None
 
-    return SearchConstraintConcept(
+    return ConceptFilter(
         domains=domains,
         vocabularies=vocabularies,
         require_standard=False,

@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 
 from oa_configurator.resolver import ResolvedModel, ResolvedProvider
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions import emb as emb_ext
 from omop_graph.extensions.emb import MissingExtensionError
-from omop_graph.graph.constraints import SearchConstraintConcept
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
@@ -319,7 +319,7 @@ def test_embedding_resolver_threads_constraints_limit_as_k(
     kg.concept_views.return_value = ()
 
     resolver = resolvers_ext.EmbeddingResolver()
-    constraints = SearchConstraintConcept(domains=("Condition",), limit=5)
+    constraints = ConceptFilter(domains=("Condition",), limit=5)
 
     resolver.get_matches(
         kg=kg,

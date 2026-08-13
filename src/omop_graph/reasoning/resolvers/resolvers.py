@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 import logging
 import numpy as np
 
-from omop_graph.graph.constraints import SearchConstraintConcept
+from omop_alchemy.cdm.query import ConceptFilter
+
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 from omop_graph.extensions.emb import (
@@ -84,7 +85,7 @@ class CandidateResolver:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[SearchConstraintConcept] = None,
+        constraints: Optional[ConceptFilter] = None,
         sort: bool = False,
         **kwargs,
     ) -> Tuple[LabelMatch, ...]:
@@ -97,7 +98,7 @@ class CandidateResolver:
             The graph instance.
         query : str
             The input query to search for.
-        constraints : SearchConstraintConcept, optional
+        constraints : ConceptFilter, optional
             Filters for domain/vocabulary.
         sort : bool, default False
             Whether to sort LabelMatch results by their internal relevance ranking.
@@ -121,7 +122,7 @@ class CandidateResolver:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[SearchConstraintConcept] = None,
+        constraints: Optional[ConceptFilter] = None,
         **kwargs,
     ) -> Iterable[CandidateHit]:
         """
@@ -133,7 +134,7 @@ class CandidateResolver:
             The graph instance.
         query : str
             The input query.
-        constraints : SearchConstraintConcept, optional
+        constraints : ConceptFilter, optional
             Filters for concepts to consider in the search. Also limits the number of candidates returned
             using the `limit` field.
 
@@ -232,7 +233,7 @@ class EmbeddingResolver(CandidateResolver):
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[SearchConstraintConcept] = None,
+        constraints: Optional[ConceptFilter] = None,
         sort: bool = False,
         query_embedding: Optional[np.ndarray] = None,
         **kwargs,
@@ -249,7 +250,7 @@ class EmbeddingResolver(CandidateResolver):
                 vocabularies=constraints.vocabularies,
                 require_standard=constraints.require_standard,
             )
-            if isinstance(constraints, SearchConstraintConcept)
+            if isinstance(constraints, ConceptFilter)
             else None
         )
 
@@ -264,7 +265,7 @@ class EmbeddingResolver(CandidateResolver):
             query_embedding=query_embedding,
             concept_filter=concept_filter,
             k=constraints.limit
-            if isinstance(constraints, SearchConstraintConcept)
+            if isinstance(constraints, ConceptFilter)
             else None,
         )
         if matches is None:
@@ -286,8 +287,8 @@ class EmbeddingResolver(CandidateResolver):
                 matched_concept_label=cv.concept_name,
                 matched_concept_id=int(cv.concept_id),
                 match_kind=LabelMatchKind.EMBEDDING,
-                is_standard=bool(cv.standard_concept),
-                is_active=cv.invalid_reason is None,
+                is_standard=cv.standard_concept,
+                is_active=cv.is_active,
                 synonym=False,  # Embedding matches are based on the primary name, not synonyms
             )
             for cv in concept_views
