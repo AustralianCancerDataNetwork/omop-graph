@@ -46,6 +46,8 @@ from omop_alchemy.cdm.model.vocabulary import (
 from omop_alchemy.cdm.query import ConceptFilter
 
 from ..extensions.omop_alchemy import RelationshipMapping, PredicateKind
+
+
 def _concept_is_standard_expr():
     """Return the canonical standard/classification flag as a non-null boolean."""
     return func.coalesce(Concept.is_standard_expr(), False)
@@ -57,8 +59,12 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
 
     Ordering logic:
     - Basic ordering
-        1. Standard concepts first (standard_concept in ["S", "C"])
-        2. Active concepts first (invalid_reason not in ["D", "U"])
+        1. Standard concepts first (``Concept.is_standard_expr()``: standard_concept
+           in ["S", "C"], tolerating blank/whitespace-only values as unset)
+        2. Active concepts first (``Concept.is_valid_expr()``: invalid_reason unset,
+           i.e. NULL or blank/whitespace-only). CDM v5.4 permits only "D"/"U"/NULL,
+           for which this matches the previous ``invalid_reason in ("D", "U")``
+           test; out-of-spec values now rank as inactive rather than active.
         3. Shorter label length first (LENGTH(name))
         4. Lower concept_id as final tie-breaker
     - If rank_expr is provided (e.g. FTS rank):
