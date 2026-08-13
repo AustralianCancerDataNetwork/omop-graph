@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://AustralianCancerDataNetwork.github.io/omop-graph/usage/cli/">
       
       
-        <link rel="prev" href="../installation/">
+        <link rel="prev" href="../../getting-started/configuration/">
       
       
         <link rel="next" href="../testing/">
@@ -370,6 +370,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -441,44 +469,16 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="omop-cdm">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#populate_with_test_data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        populate_with_test_data
       
     </span>
   </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Usage
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#command-arguments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Command Arguments
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -506,7 +506,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#prerequisites_1" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
         Prerequisites
@@ -517,18 +517,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#prerequisites_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#usage_1" class="md-nav__link">
+  <a href="#usage" class="md-nav__link">
     <span class="md-ellipsis">
       
         Usage
@@ -1152,44 +1141,16 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="omop-cdm">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#populate_with_test_data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        populate_with_test_data
       
     </span>
   </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Usage
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#command-arguments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Command Arguments
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1217,7 +1178,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#prerequisites_1" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
         Prerequisites
@@ -1228,18 +1189,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#prerequisites_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#usage_1" class="md-nav__link">
+  <a href="#usage" class="md-nav__link">
     <span class="md-ellipsis">
       
         Usage
@@ -1335,86 +1285,42 @@
 
 <h1 id="database-management-cli">Database Management CLI</h1>
 <p>The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local OHDSI Common Data Model (CDM) database using Athena vocabulary files and synthetic test data.</p>
+<div class="admonition note">
+<p class="admonition-title">Verbosity flag placement</p>
+<p>The <code>--verbose</code> / <code>-v</code> flag is a <strong>global option</strong> and must appear <strong>before</strong> the
+subcommand name, not after it:</p>
+<div class="highlight"><pre><span></span><code>omop-graph -v relationship-classification ...   # ✓ correct
+omop-graph relationship-classification -v ...   # ✗ flag is ignored
+</code></pre></div>
+<p>Use <code>-v</code> for INFO level and <code>-vv</code> for DEBUG level.</p>
+</div>
 <hr />
 <h2 id="omop-cdm"><code>omop-cdm</code></h2>
-<p>Bootstrap the OMOP CDM and load reference data from Athena into a local database.</p>
-<p>If you want PostgreSQL full-text sidecars for <code>concept</code> and <code>concept_synonym</code>, pass
-<code>--fulltext</code>. The command will install and populate the sidecars after the vocabulary
-load finishes.</p>
-<div class="admonition danger">
-<p class="admonition-title">Warning</p>
-<p>This command will wipe the existing database in the target container before loading new data.</p>
+<div class="admonition info">
+<p class="admonition-title">Moved to <code>omop-maint</code></p>
+<p>Vocabulary loading was previously exposed as <code>omop-graph omop-cdm</code>. It is now provided by the <a href="https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy"><code>OMOP_Alchemy</code></a> package under the <a href="https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/"><code>omop-maint</code> CLI</a>.</p>
 </div>
-<h3 id="prerequisites">Prerequisites</h3>
-<p>Before running the command, ensure your environment is configured with a <code>.env</code> file or exported variables:</p>
-<ul>
-<li><strong><code>OMOP_DATABASE_URL</code></strong>: SQLAlchemy connection string (e.g., <code>postgresql://user:pass@localhost:5432/omop</code>).</li>
-<li><strong><code>SOURCE_PATH</code></strong>: Local directory path containing the Athena CSV files (e.g., <code>CONCEPT.csv</code>, <code>VOCABULARY.csv</code>).</li>
-</ul>
-<h3 id="usage">Usage</h3>
-<p>If installed as a package:
-<div class="highlight"><pre><span></span><code>omop-graph<span class="w"> </span>omop-cdm<span class="w"> </span><span class="o">[</span>--add-test-data<span class="o">]</span><span class="w"> </span><span class="o">[</span>--fulltext<span class="o">]</span><span class="w"> </span>--chunk-size<span class="o">=</span>&lt;chunk_size&gt;
-</code></pre></div></p>
-<p><strong>Example Usage:</strong>
-<div class="highlight"><pre><span></span><code><span class="c1"># Instantiate with test data and a custom chunk size of 10,000</span>
-omop-graph<span class="w"> </span>omop-cdm<span class="w"> </span>--add-test-data<span class="w"> </span>--chunk-size<span class="o">=</span><span class="m">10000</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><span class="c1"># Display the help</span>
-omop-graph<span class="w"> </span>omop-cdm<span class="w"> </span>--help
-</code></pre></div></p>
-<h3 id="command-arguments">Command Arguments</h3>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Argument</th>
-<th style="text-align: left;">Type</th>
-<th style="text-align: center;">Default</th>
-<th style="text-align: left;">Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><strong><code>--add-test-data</code></strong></td>
-<td style="text-align: left;"><code>Boolean</code></td>
-<td style="text-align: center;">False</td>
-<td style="text-align: left;">Whether to add synthetic test data after loading Athena data.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong><code>--chunk-size</code></strong>, <strong><code>-c</code></strong></td>
-<td style="text-align: left;"><code>Integer</code></td>
-<td style="text-align: center;"><code>5000</code></td>
-<td style="text-align: left;">Number of rows to process in each chunk. Adjust based on your system's memory capacity to avoid OOM errors.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong><code>--fulltext</code></strong></td>
-<td style="text-align: left;"><code>Boolean</code></td>
-<td style="text-align: center;">False</td>
-<td style="text-align: left;">Install and populate PostgreSQL full-text sidecars for <code>concept</code> and <code>concept_synonym</code> after the vocabulary load.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong><code>--fulltext-regconfig</code></strong></td>
-<td style="text-align: left;"><code>String</code></td>
-<td style="text-align: center;"><code>english</code></td>
-<td style="text-align: left;">PostgreSQL text search configuration used when populating the full-text sidecars.</td>
-</tr>
-</tbody>
-</table>
-<hr />
+<p>Load Athena vocabulary CSV files from a configured source path into the OMOP CDM database using the ORM staged CSV loader.</p>
+<h2 id="populate_with_test_data"><code>populate_with_test_data</code></h2>
+<p>This command adds synthetic patient data into the OMOP CDM after populating the vocabularies using <a href="https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/"><code>omop-maint load-vocab-source</code></a></p>
 <h2 id="relationship-classification"><code>relationship-classification</code></h2>
 <p>This command ingests pre-defined relationship classifications and mappings into the database. It categorizes standard OMOP relationships into semantic groups (e.g., Hierarchical, Lateral, Mapping) to enable more intelligent graph reasoning.</p>
 <h3 id="rationale">Rationale</h3>
-<p>The standard OMOP <code>relationship</code> table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific <code>ClassIDEnum</code> (like <code>EQUIVALENT</code>, <code>HIERARCHICAL</code>, or <code>IDENTITY</code>) and provides detailed inference descriptions used by the <code>KnowledgeGraph</code> facade.</p>
-<h3 id="prerequisites_1">Prerequisites</h3>
-<p>The command expects two CSV files to be present in the target directory:</p>
-<h3 id="prerequisites_2">Prerequisites</h3>
-<p>Before running the command, ensure your environment is configured with a <code>.env</code> file or exported variables:
-1. Prepopulated OMOP CDM (e.g. using command <a href="#omop-cdm"><code>omop-cdm</code></a>)
-2. <strong><code>predicate_classification.csv</code></strong>: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
-3. <strong><code>predicate_mapping.csv</code></strong>: Maps specific OMOP <code>relationship_id</code>s to the classes defined in the classification file.
-4. Set following environment variables:
-    - <strong><code>OMOP_DATABASE_URL</code></strong>: SQLAlchemy connection string (e.g., <code>postgresql://user:pass@localhost:5432/omop</code>).
-    - <strong><code>SOURCE_PATH</code></strong>: Local directory path containing the Athena CSV files (e.g., <code>CONCEPT.csv</code>, <code>VOCABULARY.csv</code>). This is required as the new connections/tables are stored there after creation.</p>
-<h3 id="usage_1">Usage</h3>
+<p>The standard OMOP <code>relationship</code> table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific <code>PredicateKind</code> (like <code>HIERARCHY</code>, <code>IDENTITY</code>, or <code>ASSOCIATION</code>) and provides detailed inference descriptions used by the <code>KnowledgeGraph</code> facade.</p>
+<h3 id="prerequisites">Prerequisites</h3>
+<ol>
+<li>Prepopulated OMOP CDM (e.g. using <a href="https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/"><code>omop-maint load-vocab-source</code></a>)</li>
+<li><code>omop-graph</code> configured via oa-configurator (<code>omop-config configure omop_graph</code>, see <a href="../../getting-started/configuration/">Getting Started: Configuration</a>); the CDM connection is resolved from <code>OmopGraphConfig.cdm_db</code>, no environment variables involved.</li>
+<li>
+<p>A directory containing:</p>
+<ul>
+<li><strong><code>predicate_classification.csv</code></strong>: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).</li>
+<li><strong><code>predicate_mapping.csv</code></strong>: Maps specific OMOP <code>relationship_id</code>s to the classes defined in the classification file.</li>
+</ul>
+<p>Pass this directory via <code>--pred-class-dir</code> below.</p>
+</li>
+</ol>
+<h3 id="usage">Usage</h3>
 <div class="highlight"><pre><span></span><code>omop-graph<span class="w"> </span>relationship-classification<span class="w"> </span>--pred-class-dir<span class="w"> </span>&lt;PATH_TO_CSV_DIR&gt;
 </code></pre></div>
 <h3 id="command-options">Command Options</h3>
@@ -1433,7 +1339,7 @@ omop-graph<span class="w"> </span>omop-cdm<span class="w"> </span>--help
 <td style="text-align: left;"><strong><code>--pred-class-dir</code></strong></td>
 <td style="text-align: left;"></td>
 <td style="text-align: left;"><code>String</code></td>
-<td style="text-align: left;"><code>./docs</code></td>
+<td style="text-align: left;"><strong>Required</strong></td>
 <td style="text-align: left;">Path to the directory containing the classification CSVs.</td>
 </tr>
 <tr>
@@ -1442,13 +1348,6 @@ omop-graph<span class="w"> </span>omop-cdm<span class="w"> </span>--help
 <td style="text-align: left;"><code>Count</code></td>
 <td style="text-align: left;"><code>0</code></td>
 <td style="text-align: left;">Increase logging verbosity (use <code>-v</code> or <code>-vv</code>).</td>
-</tr>
-<tr>
-<td style="text-align: left;">---</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
 </tr>
 </tbody>
 </table>

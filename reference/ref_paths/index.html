@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -2249,7 +2277,7 @@ but does not inherently score or explain them (that is handled by the <code>reas
 
 
 <h4 id="omop_graph.graph.paths.PathProfile.from_path" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">from_path</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">match_kind</span><span class="p">,</span> <span class="n">embedding_sims</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">from_path</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">match_kind</span><span class="p">,</span> <span class="n">source_concept_id</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -2261,8 +2289,45 @@ but does not inherently score or explain them (that is handled by the <code>reas
     <div class="doc doc-contents ">
 
         <p>Analyze a path to determine the 'Standard Anchor'.</p>
-<p>It traverses the path from the candidate term. The first Standard Concept
-encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
+<p>The first Standard Concept encountered via an IDENTITY edge is promoted as
+the anchor.</p>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>For zero-hop paths (source == target), <code>source_concept_id</code>
+must be provided; a <code>ValueError</code> is raised otherwise.</p>
+</details>
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>source_concept_id</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Required when <code>path</code> has no steps (i.e. source == target).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
@@ -2419,7 +2484,71 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
 
 
 
-        <p>Priority Queue Item for Dijkstra/A* search.</p>
+        <p>Frontier item for the cost-prioritised BFS in find_standard_paths.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.QueueItem.cost">cost</span></code></td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Accumulated traversal cost. Currently always 0.0 (uniform BFS). Reserved as
+live infrastructure for future weighted traversal; see Notes in find_standard_paths.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.QueueItem.node">node</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="Node
+
+
+  
+      dataclass
+   (omop_graph.graph.paths.Node)" href="#omop_graph.graph.paths.Node">Node</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The graph node at this position in the frontier.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.QueueItem.mk">mk</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="LabelMatchKind (omop_graph.graph.nodes.LabelMatchKind)" href="../ref_nodes/#omop_graph.graph.nodes.LabelMatchKind">LabelMatchKind</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Match kind inherited from the originating candidate hit.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.QueueItem.iterations">iterations</span></code></td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>BFS depth (number of hops from the candidate).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
 
@@ -2472,6 +2601,140 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
         <p>A resolved Standard Concept resulting from a search.</p>
 
 
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.concept_id">concept_id</span></code></td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The OMOP Concept ID of the resolved standard concept.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.concept_name">concept_name</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The name of the resolved standard concept.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.separation">separation</span></code></td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How far this standard concept is from where it needs to be, with a meaning that
+depends on whether ancestor targets were given to <code>find_standard_paths</code>:
+    - Targets given (ancestor-constrained grounding): this is the ancestor-
+    hierarchy distance (via <code>concept_ancestor.min_levels_of_separation</code>) 
+    from this concept to the required parent.
+    - No targets given (unconstrained grounding): this is the hop count
+    from the original found concept to the standard concept.
+This is the only distance field consumed by scoring (<code>scoring.py</code>'s parsimony penalty).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.original_id">original_id</span></code></td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The OMOP Concept ID of the original candidate that search started from.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.original_name">original_name</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The name of the original candidate concept.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.matched_concept_label">matched_concept_label</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The text (name or synonym) that the original candidate matched on.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.match_kind">match_kind</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="LabelMatchKind (omop_graph.graph.nodes.LabelMatchKind)" href="../ref_nodes/#omop_graph.graph.nodes.LabelMatchKind">LabelMatchKind</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How the original candidate was matched (exact, partial, full-text, embedding).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.synonym">synonym</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the original candidate matched via a synonym rather than the
+primary concept name.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.hierarchy_cost">hierarchy_cost</span></code></td>
+            <td>
+                  <code>float, default 0.0</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Reserved for future weighted traversal; see <code>QueueItem.cost</code> and the
+Notes on <code>find_standard_paths</code>. Currently always 0.0.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="omop_graph.graph.paths.StandardConcept.identity_hops">identity_hops</span></code></td>
+            <td>
+                  <code>int, default 0</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The number of edges walked from the original candidate to reach this concept.
+Not used in scoring as of now.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 
 
 
@@ -2505,7 +2768,7 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
 
 
 <h3 id="omop_graph.graph.paths.find_shortest_paths" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">find_shortest_paths</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_paths</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">traced</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">find_shortest_paths</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_paths</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">traced</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 </h3>
 
@@ -2579,7 +2842,7 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
                 <code>predicate_kinds</code>
             </td>
             <td>
-                  <code><span title="set">set</span>[<span title="omop_graph.extensions.omop_alchemy.ClassIDEnum">ClassIDEnum</span>]</code>
+                  <code><span title="set">set</span>[<span title="omop_graph.extensions.omop_alchemy.PredicateKind">PredicateKind</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2599,7 +2862,7 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum path length.</p>
+                <p>Maximum path length. Defaults to <code>6</code>.</p>
               </div>
             </td>
             <td>
@@ -2631,7 +2894,7 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum number of paths to return.</p>
+                <p>Maximum number of paths to return. Defaults to <code>20</code>.</p>
               </div>
             </td>
             <td>
@@ -2652,6 +2915,24 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
             </td>
             <td>
                   <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>within_domain</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True (default), only traverse edges where both concepts share the
+same domain_id.  Set to False to allow cross-domain edges such as
+SNOMED attribute relationships (Has asso morph, Has finding site, etc.).</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
             </td>
           </tr>
       </tbody>
@@ -2694,7 +2975,7 @@ encountered via a MAPPING or VERSIONING edge is promoted as the Anchor.</p>
 
 
 <h3 id="omop_graph.graph.paths.find_shortest_paths_batch" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">find_shortest_paths_batch</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_paths</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">find_shortest_paths_batch</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_paths</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 </h3>
 
@@ -2770,7 +3051,7 @@ frontiers at once.</p>
                 <code>predicate_kinds</code>
             </td>
             <td>
-                  <code>set[ClassIDEnum], frozenset[ClassIDEnum] optional</code>
+                  <code>set[PredicateKind], frozenset[PredicateKind] optional</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2790,7 +3071,7 @@ frontiers at once.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum path length.</p>
+                <p>Maximum path length. Defaults to <code>6</code>.</p>
               </div>
             </td>
             <td>
@@ -2822,11 +3103,29 @@ frontiers at once.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum number of paths to return.</p>
+                <p>Maximum number of paths to return. Defaults to <code>20</code>.</p>
               </div>
             </td>
             <td>
                   <code>20</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>within_domain</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True (default), only traverse edges where both concepts share the
+same domain_id.  Set to False to allow cross-domain edges such as
+SNOMED attribute relationships (Has asso morph, Has finding site, etc.).</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
             </td>
           </tr>
       </tbody>
@@ -2869,18 +3168,42 @@ frontiers at once.</p>
 
 
 <h3 id="omop_graph.graph.paths.find_standard_paths" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">find_standard_paths</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">candidate</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">max_concepts</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">num_hops</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">find_standard_paths</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">candidate</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">max_concepts</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Search for Standard Concepts related to a target ID, starting from a candidate.</p>
-<p>This method traverses from the candidate (Non-Standard) concept to find
-Standard Concepts, then verifies if those Standard Concepts are ancestors
-of the target concept in the hierarchy.</p>
+        <p>Search for standard concepts reachable from a candidate, optionally verified against
+ancestor targets.</p>
+<p>Performs a breadth-first search (BFS) starting from the candidate. Each BFS wave drains
+the entire frontier at once. Non-standard concepts are expanded by fetching their
+outgoing edges and enqueueing standard neighbours.</p>
 
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>This function has two modes:</p>
+<ol>
+<li>
+<p>When <code>targets</code> is provided, each wave issues a single batched concept_ancestor
+query for all standard concepts in that wave to reduce DB round trips (O(N) to O(W),
+where W is the number of waves. Standard concepts that satisfy at least one target
+ancestor constraint are recorded and not expanded further, preventing dilution by
+more distant concepts. Standard concepts with no ancestry match are expanded
+further (e.g. deprecated-standard -&gt; replacement-standard chains).</p>
+</li>
+<li>
+<p>When <code>targets</code> is None or empty, there is no ancestor to verify against: the
+first standard concept reached on each branch is accepted directly and not expanded
+further. This is a looser, unconstrained form of grounding. It "grounds" a 
+candidate to its standard form without being able to disambiguate against a known 
+hierarchy branch. See <code>StandardConcept.separation</code> for how distance is measured in 
+this mode.</p>
+</li>
+</ol>
+</details>
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <table>
@@ -2911,14 +3234,16 @@ of the target concept in the hierarchy.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>target</code>
+                <code>targets</code>
             </td>
             <td>
-                  <code><span title="int">int</span></code>
+                  <code>tuple of int</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The ancestor concept ID to check against.</p>
+                <p>Ancestor concept IDs to verify candidates against. A result is produced for
+each target that a reached standard concept is a genuine descendant of. When
+None or empty, no ancestor verification is performed (see above).</p>
               </div>
             </td>
             <td>
@@ -2939,7 +3264,7 @@ of the target concept in the hierarchy.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The search hit to start traversal from.</p>
+                <p>The initial search hit to start traversal from.</p>
               </div>
             </td>
             <td>
@@ -2955,7 +3280,9 @@ of the target concept in the hierarchy.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Allowed edge types for traversal.</p>
+                <p>Allowed edge types for traversal. Defaults to all kinds when None. Callers
+in the grounding pipeline pass PredicateKind.IDENTITY exclusively, limiting
+traversal to Maps-to relationships between non-standard and standard concepts.</p>
               </div>
             </td>
             <td>
@@ -2971,7 +3298,9 @@ of the target concept in the hierarchy.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Max separation levels allowed in the ancestor check.</p>
+                <p>Maximum min_levels_of_separation permitted in the concept_ancestor check when
+<code>targets</code> is given, or maximum identity-hop count permitted when <code>targets</code>
+is None. Defaults to <code>6</code>.</p>
               </div>
             </td>
             <td>
@@ -2987,7 +3316,9 @@ of the target concept in the hierarchy.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Stop after finding this many unique standard concepts.</p>
+                <p>Per-target cap on unique standard concepts collected (or an overall cap when
+<code>targets</code> is None). Once every bucket has reached this count the search
+stops early.</p>
               </div>
             </td>
             <td>
@@ -2996,18 +3327,20 @@ of the target concept in the hierarchy.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>num_hops</code>
+                <code>within_domain</code>
             </td>
             <td>
-                  <code><span title="int">int</span></code>
+                  <code><span title="bool">bool</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Max hops allowed from the candidate to reach a standard concept.</p>
+                <p>When True (default), only traverse edges where both concepts share the same
+domain_id. Set to False to allow cross-domain edges such as SNOMED attribute
+relationships.</p>
               </div>
             </td>
             <td>
-                  <code>1</code>
+                  <code>True</code>
             </td>
           </tr>
       </tbody>
@@ -3025,22 +3358,31 @@ of the target concept in the hierarchy.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="StandardConcept
-
-
-  
-      dataclass
-   (omop_graph.graph.paths.StandardConcept)" href="#omop_graph.graph.paths.StandardConcept">StandardConcept</a>]</code>
+                  <code>list of StandardConcept</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The resolved concepts.</p>
+                <p>Flat deduplicated list of standard concepts that satisfy at least one target
+ancestor constraint, or, when <code>targets</code> is None, every standard concept
+reached.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
 
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>The search is currently plain BFS because all edge costs are uniform (0.0). The
+QueueItem.cost field and the heapq structure are preserved as infrastructure for
+future weighted traversal. To upgrade to Dijkstra, define a COST_PREDICATES mapping
+from PredicateKind to a numeric cost (e.g. IDENTITY=0, HIERARCHY=1, ASSOCIATION=2),
+set new_cost accordingly in the expansion loop, and change the wave drain from a
+full-queue drain to a single-cost-level drain so that lower-cost nodes are always
+processed before higher-cost ones. A* would additionally require a domain-specific
+admissible heuristic added to the priority.</p>
+</details>
 
     </div>
 
@@ -3072,14 +3414,47 @@ of the target concept in the hierarchy.</p>
 
 
 <h3 id="omop_graph.graph.paths.reconstruct_paths" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">reconstruct_paths</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">meet</span><span class="p">,</span> <span class="n">parents_fwd</span><span class="p">,</span> <span class="n">parents_bwd</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">reconstruct_paths</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">meet</span><span class="p">,</span> <span class="n">parents_fwd</span><span class="p">,</span> <span class="n">parents_bwd</span><span class="p">,</span> <span class="n">concept_standard_map</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Helper function to reconstruct full paths from bidirectional BFS parent pointers.</p>
+        <p>Reconstruct full paths from bidirectional BFS parent pointers.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>concept_standard_map</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="int">int</span>, <span title="bool">bool</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Mapping of concept_id → is_standard for all nodes discovered during BFS.
+Built with a single batched <code>kg.concept_views</code> call after the BFS completes
+so that every <code>Node</code> carries the correct flag with zero extra DB round-trips.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>

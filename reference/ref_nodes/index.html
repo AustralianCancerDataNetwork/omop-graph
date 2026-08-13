@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -927,6 +955,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#omop_graph.graph.nodes.ConceptView.is_active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#omop_graph.graph.nodes.ConceptView.from_row" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1166,6 +1205,17 @@
   
     <nav class="md-nav" aria-label="ConceptView">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#omop_graph.graph.nodes.ConceptView.is_active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_active
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#omop_graph.graph.nodes.ConceptView.from_row" class="md-nav__link">
@@ -1687,6 +1737,28 @@ read-only access and visualization.</p>
 
 
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="omop_graph.graph.nodes.ConceptView.is_active" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">is_active</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether the concept is active under OMOP Alchemy's flag semantics.</p>
+
+    </div>
+
+</div>
+
 
 
 
@@ -1706,8 +1778,8 @@ read-only access and visualization.</p>
     <div class="doc doc-contents ">
 
         <p>Create a ConceptView from a SQLAlchemy Row.</p>
-<p>This method handles the conversion of the 'standard_concept' field
-from the DB string ("S") to a boolean.</p>
+<p>The query layer projects OMOP Alchemy's canonical standardness expression
+into the <code>standard_concept</code> field as a boolean.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1816,7 +1888,7 @@ from the DB string ("S") to a boolean.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>input_label</code>
+                <code>input_query</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
@@ -1832,7 +1904,7 @@ from the DB string ("S") to a boolean.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>matched_label</code>
+                <code>matched_concept_label</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
@@ -1848,14 +1920,14 @@ from the DB string ("S") to a boolean.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>concept_id</code>
+                <code>matched_concept_id</code>
             </td>
             <td>
                   <code><span title="int">int</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The ID of the matched concept.</p>
+                <p>The OMOP Concept ID of the matched concept.</p>
               </div>
             </td>
             <td>
@@ -1871,7 +1943,7 @@ from the DB string ("S") to a boolean.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>How the match was found (Exact, Synonym, etc.).</p>
+                <p>How the match was found (Exact, FTS, Partial, Embedding).</p>
               </div>
             </td>
             <td>
@@ -1904,6 +1976,24 @@ from the DB string ("S") to a boolean.</p>
             <td>
               <div class="doc-md-description">
                 <p>Whether the matched concept is currently valid.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>synonym</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True if the match came from the <code>concept_synonym</code> table rather than
+the primary <code>concept_name</code> field.  This is informational only and does
+not affect priority ordering. See <code>LabelMatchKind</code> for ranking.</p>
               </div>
             </td>
             <td>
@@ -2168,8 +2258,9 @@ Value order defines priority (lower is better):</p>
 - FTS: Full-text search match (fuzzy).
 - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
 - EMBEDDING: Match based on vector similarity.</p>
-<p>It currently does not distinguish between synonym vs. concept_name matches as they are recognised as identical.
-Could be extended in the future if needed.</p>
+<p>It does not use synonym vs. concept_name as a ranking signal,
+as these are treated as identical quality.
+The <code>LabelMatch.synonym</code> field carries that distinction for callers that need it.</p>
 </details>
 
 

@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -1350,7 +1378,7 @@
 <p>To initialize a connection, <code>omop-graph</code> uses a specialized resource factory:</p>
 <ul>
 <li><strong><code>OMOPOntologyResource</code></strong>: A dataclass that wraps the SQLAlchemy connection URL, treating the database as a live ontology source.</li>
-<li><strong><code>omop_resource()</code></strong>: A factory function that resolves database credentials from an explicit URL or the <code>OMOP_DATABASE_URL</code> environment variable.</li>
+<li><strong><code>omop_resource()</code></strong>: A factory function that resolves database credentials from an explicit URL, or from the active oa-configurator stack config (<code>OmopGraphConfig.cdm_db</code>) when no URL is given.</li>
 </ul>
 <hr />
 <h2 id="usage-examples">Usage Examples</h2>

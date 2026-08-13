@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -1198,13 +1226,15 @@
     <div class="doc doc-contents first">
 
         <p>Semantic Grounding Orchestration.</p>
-<p>This module provides the high-level <code>ground_term</code> function, which orchestrates 
+<p>This module provides the high-level <code>ground_term</code> function, which orchestrates
 the full grounding pipeline:
 1.  <strong>Candidate Resolution</strong>: Finding raw concepts that match the input text.
-2.  <strong>Hierarchy Validation</strong>: Ensuring candidates have a valid relationship path 
-    to required parent concepts.
+2.  <strong>Hierarchy Validation</strong>: Ensuring candidates have a valid relationship path
+    to required parent concepts, when parent concepts are given. Grounding can
+    also run unconstrained (no parent concepts), trading disambiguation power
+    for coverage.
 3.  <strong>Standardization</strong>: Mapping non-standard candidates to standard OMOP concepts.
-4.  <strong>Semantic Ranking</strong>: Using embeddings and graph-based scoring to select the 
+4.  <strong>Semantic Ranking</strong>: Using embeddings and graph-based scoring to select the
     best mapping.</p>
 
 
@@ -1268,7 +1298,11 @@ the full grounding pipeline:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>OMOP Concept IDs that act as required ancestors for any valid result.</p>
+                <p>OMOP Concept IDs that act as required ancestors for any valid result. When
+None, grounding is unconstrained: candidates are still resolved and
+standardized via identity hops, but without ancestor verification. This
+trades disambiguation power for coverage. Results are ranked by relevance
+and identity-hop distance only, not by proximity to a known hierarchy branch.</p>
               </div>
             </td>
             <td>
@@ -1280,7 +1314,7 @@ the full grounding pipeline:
                 <code>search_constraint</code>
             </td>
             <td>
-                  <code><span title="omop_graph.graph.constraints.SearchConstraintConcept">SearchConstraintConcept</span></code>
+                  <code><span title="omop_alchemy.cdm.query.ConceptFilter">ConceptFilter</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1300,7 +1334,8 @@ the full grounding pipeline:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum allowed distance in the hierarchy between a candidate and a parent.</p>
+                <p>Maximum allowed distance in the hierarchy between a candidate and a parent.
+Defaults to <code>6</code>.</p>
               </div>
             </td>
             <td>
@@ -1312,15 +1347,18 @@ the full grounding pipeline:
                 <code>predicate_kinds</code>
             </td>
             <td>
-                  <code><span title="frozenset">frozenset</span>[<span title="omop_graph.extensions.omop_alchemy.ClassIDEnum">ClassIDEnum</span>]</code>
+                  <code><span title="frozenset">frozenset</span>[<span title="omop_graph.extensions.omop_alchemy.PredicateKind">PredicateKind</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The types of relationships allowed during pathfinding.</p>
+                <p>Edge types allowed during BFS traversal. Defaults to IDENTITY only, which
+covers the OMOP "Maps to" and "Non-standard to Standard" relationships. Allowing
+HIERARCHY or ASSOCIATION edges would traverse parent-of and cross-domain links,
+expanding candidates to unrelated concepts and diluting grounding results.</p>
               </div>
             </td>
             <td>
-                  <code><span title="frozenset">frozenset</span>({<span title="omop_graph.extensions.omop_alchemy.ClassIDEnum.IDENTITY">IDENTITY</span>})</code>
+                  <code><span title="frozenset">frozenset</span>({<span title="omop_graph.extensions.omop_alchemy.PredicateKind.IDENTITY">IDENTITY</span>})</code>
             </td>
           </tr>
       </tbody>
@@ -1360,14 +1398,15 @@ the full grounding pipeline:
 
 
 <h3 id="omop_graph.reasoning.grounding.find_standard_concepts" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">find_standard_concepts</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">candidate</span><span class="p">,</span> <span class="n">parent_ids</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">,</span> <span class="n">max_paths</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">ClassIDEnum</span><span class="o">.</span><span class="n">IDENTITY</span><span class="p">}),</span> <span class="n">lowest_cost</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">find_standard_concepts</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">candidate</span><span class="p">,</span> <span class="n">parent_ids</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">,</span> <span class="n">max_paths</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">PredicateKind</span><span class="o">.</span><span class="n">IDENTITY</span><span class="p">}))</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Identify standard concepts related to a candidate that satisfy parent constraints.</p>
+        <p>Identify standard concepts related to a candidate, optionally satisfying parent
+constraints.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1423,11 +1462,12 @@ the full grounding pipeline:
                 <code>parent_ids</code>
             </td>
             <td>
-                  <code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>
+                  <code>tuple of int</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Acceptable ancestor IDs.</p>
+                <p>Acceptable ancestor concept IDs. When None, no ancestor verification is
+performed. Instead, the candidate is standardized via identity hops only.</p>
               </div>
             </td>
             <td>
@@ -1443,7 +1483,9 @@ the full grounding pipeline:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum separation allowed.</p>
+                <p>Maximum min_levels_of_separation allowed in the ancestry check when
+parent_ids is given, or maximum identity-hop count allowed when parent_ids
+is None.</p>
               </div>
             </td>
             <td>
@@ -1459,7 +1501,8 @@ the full grounding pipeline:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Limit on unique standard concepts per parent lookup.</p>
+                <p>Per-target cap on unique standard concepts collected (or an overall cap when
+parent_ids is None).</p>
               </div>
             </td>
             <td>
@@ -1471,31 +1514,17 @@ the full grounding pipeline:
                 <code>predicate_kinds</code>
             </td>
             <td>
-                  <code><span title="frozenset">frozenset</span></code>
+                  <code>frozenset of PredicateKind</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Edge types to traverse.</p>
+                <p>Edge types to traverse. Defaults to IDENTITY only, which covers the OMOP
+"Maps to" relationships between non-standard and standard concepts. See
+GroundingConstraints.predicate_kinds for the rationale.</p>
               </div>
             </td>
             <td>
-                  <code><span title="frozenset">frozenset</span>({<span title="omop_graph.extensions.omop_alchemy.ClassIDEnum.IDENTITY">IDENTITY</span>})</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>lowest_cost</code>
-            </td>
-            <td>
-                  <code><span title="float">float</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Minimum cost threshold for pathfinding.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
+                  <code><span title="frozenset">frozenset</span>({<span title="omop_graph.extensions.omop_alchemy.PredicateKind.IDENTITY">IDENTITY</span>})</code>
             </td>
           </tr>
       </tbody>
@@ -1513,16 +1542,12 @@ the full grounding pipeline:
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="StandardConcept
-
-
-  
-      dataclass
-   (omop_graph.graph.paths.StandardConcept)" href="../ref_paths/#omop_graph.graph.paths.StandardConcept">StandardConcept</a>]</code>
+                  <code>list of StandardConcept</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Standard concepts associated with the candidate that hit the targets.</p>
+                <p>Standard concepts associated with the candidate that satisfy the ancestor
+constraint, or, when parent_ids is None, every standard concept reached.</p>
               </div>
             </td>
           </tr>
@@ -1538,7 +1563,7 @@ the full grounding pipeline:
 
 
 <h3 id="omop_graph.reasoning.grounding.ground_term" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">ground_term</span><span class="p">(</span><span class="n">resolver_pipeline</span><span class="p">,</span> <span class="n">kg</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">text_embedding</span><span class="p">,</span> <span class="n">text_embedding_model</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">max_candidates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">metric_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">index_type</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">ground_term</span><span class="p">(</span><span class="n">resolver_pipeline</span><span class="p">,</span> <span class="n">kg</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">query_embedding</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">max_candidates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -1593,14 +1618,14 @@ the full grounding pipeline:
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>text</code>
+                <code>query</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The input text to ground.</p>
+                <p>The input query to ground.</p>
               </div>
             </td>
             <td>
@@ -1609,30 +1634,15 @@ the full grounding pipeline:
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>text_embedding</code>
+                <code>query_embedding</code>
             </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The embedding vector for the input text.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>text_embedding_model</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The name of the embedding model used to generate <code>text_embedding</code>. Used for RAG retrieval from the database.</p>
+                <p>The embedding vector for the input query. When None and a writer interface is
+available, the embedding is computed on demand from <code>query</code>.</p>
               </div>
             </td>
             <td>
@@ -1678,14 +1688,15 @@ the full grounding pipeline:
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>metric_type</code>
+                <code>context</code>
             </td>
             <td>
-                  <code><span title="omop_graph.extensions.emb.EmbeddingMetricType">EmbeddingMetricType</span></code>
+                  <code><span title="str">str</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The similarity or distance metric to use for optional embedding-based scoring.</p>
+                <p>Additional free-form context folded into the on-demand query-embedding
+text. Has no effect when <code>query_embedding</code> is supplied directly.</p>
               </div>
             </td>
             <td>
@@ -1717,29 +1728,6 @@ the full grounding pipeline:
             <td>
               <div class="doc-md-description">
                 <p>A list of standard concepts sorted by their total score (descending).</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="NotImplementedError">NotImplementedError</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If no <code>parent_ids</code> are provided in constraints.</p>
               </div>
             </td>
           </tr>

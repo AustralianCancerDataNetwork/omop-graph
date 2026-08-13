@@ -16,7 +16,7 @@
         <link rel="prev" href="../..">
       
       
-        <link rel="next" href="../cli/">
+        <link rel="next" href="../../getting-started/configuration/">
       
       
         
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#installation-core" class="md-skip">
+        <a href="#installation" class="md-skip">
           Skip to content
         </a>
       
@@ -408,10 +408,27 @@
   <a href="#embedding-rag" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Installation: Embedding and RAG support (optional, recommended)
+        Embedding and RAG support (optional, recommended)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Embedding and RAG support (optional, recommended)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scaling-up-pgvector-or-faiss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaling up: pgvector or FAISS
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -419,6 +436,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1036,10 +1081,27 @@
   <a href="#embedding-rag" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Installation: Embedding and RAG support (optional, recommended)
+        Embedding and RAG support (optional, recommended)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Embedding and RAG support (optional, recommended)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scaling-up-pgvector-or-faiss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaling up: pgvector or FAISS
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1111,30 +1173,62 @@
   
 
 
-<h1 id="installation-core">Installation: Core</h1>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The dependency on uv is not strictly enforced and can be replaced using <code>pip install omop-graph</code>.
-```</p>
-</div>
-<p>The package can be regularly installed using <code>pip</code> and <code>uv</code>:</p>
-<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>omop-graph
+<h1 id="installation">Installation</h1>
+<p>The package can be installed with <code>pip</code> or <code>uv</code>:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>omop-graph
+<span class="c1"># or</span>
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>omop-graph
 </code></pre></div>
-<h2 id="embedding-rag">Installation: Embedding and RAG support (optional, recommended)</h2>
+<h2 id="embedding-rag">Embedding and RAG support (optional, recommended)</h2>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>This is a recommended setting and improves the functionality of the library detrimental.</p>
+<p>Installing with <code>[emb]</code> is recommended. Without it the <code>KnowledgeGraph</code> operates in text-only mode and all embedding-based similarity scoring is disabled.</p>
 </div>
-<p>The optional <a href="https://australiancancerdatanetwork.github.io/omop-emb/"><code>omop-emb</code> module</a> can be installed using the option <code>[emb]</code>:
-<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>omop-graph<span class="o">[</span>emb<span class="o">]</span>
-</code></pre></div></p>
-<p>This allows:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;omop-graph[emb]&quot;</span>
+<span class="c1"># or</span>
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;omop-graph[emb]&quot;</span>
+</code></pre></div>
+<p>This pulls in <a href="https://australiancancerdatanetwork.github.io/omop-emb/"><code>omop-emb</code></a> with its default <strong>sqlite-vec</strong> backend, a file-based vector store that requires no external database server. It still needs a configured vector store, model, and provider (via oa-configurator) before use; see <a href="../../graph/kg/#embedding-configuration">KnowledgeGraph: Embedding Configuration</a>.</p>
+<p>It enables:</p>
 <ul>
-<li>RAG-based retrieval</li>
-<li>semantic similarity searches</li>
-<li>graph reasoning</li>
-<li>(Future): Agentic LLM interfaces</li>
+<li>vector similarity search over OMOP concepts</li>
+<li>embedding-weighted grounding scores</li>
+<li>on-the-fly embedding computation for un-indexed concepts</li>
 </ul>
+<h3 id="scaling-up-pgvector-or-faiss">Scaling up: pgvector or FAISS</h3>
+<p>For larger deployments or approximate-nearest-neighbour acceleration, install the corresponding extra instead of (or alongside) <code>[emb]</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Extra</th>
+<th>What it adds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>omop-graph[emb]</code></td>
+<td>sqlite-vec backend (default, no external server needed)</td>
+</tr>
+<tr>
+<td><code>omop-graph[pgvector]</code></td>
+<td>PostgreSQL/pgvector backend</td>
+</tr>
+<tr>
+<td><code>omop-graph[faiss-cpu]</code></td>
+<td>FAISS sidecar for fast approximate search</td>
+</tr>
+</tbody>
+</table>
+<p>These can be combined:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;omop-graph[pgvector,faiss-cpu]&quot;</span>
+</code></pre></div>
+<div class="admonition info">
+<p class="admonition-title">omop-emb documentation</p>
+<p>Backend configuration, CLI reference, and index management are covered in the
+<a href="https://australiancancerdatanetwork.github.io/omop-emb/usage/installation/">omop-emb documentation</a>.
+The <code>[emb]</code> extra mirrors the base <code>omop-emb</code> install; <code>[pgvector]</code> and <code>[faiss-cpu]</code> mirror
+<code>omop-emb[pgvector]</code> and <code>omop-emb[faiss-cpu]</code> respectively.</p>
+</div>
 
 
 

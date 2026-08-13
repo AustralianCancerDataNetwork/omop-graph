@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -1429,6 +1457,38 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
                 <em>required</em>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>predicate_kind</code>
+            </td>
+            <td>
+                  <code><span title="omop_graph.extensions.omop_alchemy.PredicateKind">PredicateKind</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>predicate_subkind</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -1656,6 +1716,38 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
             <td>
               <div class="doc-md-description">
                 <p>Whether this relationship defines 'defines_ancestry' downwards (deprecated logic).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>predicate_kind</code>
+            </td>
+            <td>
+                  <code><span title="omop_graph.extensions.omop_alchemy.PredicateKind">PredicateKind</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>predicate_subkind</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)</p>
               </div>
             </td>
             <td>

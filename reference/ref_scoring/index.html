@@ -371,6 +371,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -1211,7 +1239,7 @@
 <p>This module implements the logic for scoring candidate OMOP concepts based on:
 1.  <strong>Relevance:</strong> How well the text matches the query (embeddings + string similarity).
 2.  <strong>Parsimony:</strong> Penalizing deep graph traversals (finding a concept far away).
-3.  <strong>Broadness:</strong> Rewarding concepts that are more general (higher ancestor count), 
+3.  <strong>Broadness:</strong> Rewarding concepts that are more general (higher ancestor count),
     often useful for finding category headers.</p>
 
 
@@ -1302,7 +1330,8 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The composite relevance score (embedding * textual similarity).</p>
+                <p>The relevance score used for ranking: embedding similarity when available,
+textual similarity otherwise.</p>
               </div>
             </td>
           </tr>
@@ -1387,15 +1416,21 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
 
 
 <h3 id="omop_graph.graph.scoring.score_standard_concepts" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">score_standard_concepts</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">standard_concepts</span><span class="p">,</span> <span class="n">kg</span><span class="p">,</span> <span class="n">similarity_scores_with_concept_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">score_standard_concepts</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">standard_concepts</span><span class="p">,</span> <span class="n">kg</span><span class="p">,</span> <span class="n">nearest_concept_matches</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Rank a list of standard concepts against a query text.</p>
+        <p>Attach scoring metrics to each standard concept.</p>
 
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Scores are computed but the returned list preserves the input order.
+Callers are responsible for sorting if ranking is required.</p>
+</details>
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <table>
@@ -1438,7 +1473,7 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The tuple of candidate concepts to score.</p>
+                <p>The candidate concepts to score.</p>
               </div>
             </td>
             <td>
@@ -1454,7 +1489,7 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The graph instance used for retrieving metadata (like ancestor counts).</p>
+                <p>The graph instance used for retrieving metadata (ancestor counts).</p>
               </div>
             </td>
             <td>
@@ -1463,14 +1498,17 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>similarity_scores_with_concept_ids</code>
+                <code>nearest_concept_matches</code>
             </td>
             <td>
-                  <code><span title="typing.Tuple">Tuple</span>[<span title="typing.Mapping">Mapping</span>[<span title="int">int</span>, <span title="float">float</span>], ...]</code>
+                  <code><span title="typing.Tuple">Tuple</span>[<span title="typing.Tuple">Tuple</span>[<span title="omop_emb.utils.embedding_utils.NearestConceptMatch">NearestConceptMatch</span>, ...], ...]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pre-computed embedding similarity scores. The outer tuple corresponds to the query vectors in order, and each inner dictionary maps concept IDs to their similarity scores with the query embedding.</p>
+                <p>Pre-computed nearest-concept matches from the embedding index.  The outer
+tuple corresponds to query vectors in order; each inner tuple holds the
+nearest matches for that query vector.  Currently only a single query
+vector is supported.</p>
               </div>
             </td>
             <td>
@@ -1480,6 +1518,13 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
       </tbody>
     </table>
 
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Standard concept scoring is ONLY performed for concepts that were matched via the embedding resolver, 
+and only if nearest_concept_matches are provided. Concepts matched via non-embedding resolvers will still 
+receive parsimony and broadness scoring, but their relevance will be based solely on textual similarity.</p>
+</details>
 
     <p><span class="doc-section-title">Returns:</span></p>
     <table>
@@ -1501,7 +1546,7 @@ Formula: <code>relevance - parsimony_penalty + broadness_bonus</code></p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The list of concepts with scores attached.</p>
+                <p>Scored concepts in the same order as <code>standard_concepts</code>.</p>
               </div>
             </td>
           </tr>

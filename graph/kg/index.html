@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -596,21 +624,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#read-only-pre-computed-embeddings-already-in-the-db" class="md-nav__link">
+  <a href="#read-only-vs-write-capable" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Read-only (pre-computed embeddings already in the DB)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#write-capable-generate-and-store-embeddings-at-runtime" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Write-capable (generate and store embeddings at runtime)
+        Read-only vs write-capable
       
     </span>
   </a>
@@ -1157,21 +1174,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#read-only-pre-computed-embeddings-already-in-the-db" class="md-nav__link">
+  <a href="#read-only-vs-write-capable" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Read-only (pre-computed embeddings already in the DB)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#write-capable-generate-and-store-embeddings-at-runtime" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Write-capable (generate and store embeddings at runtime)
+        Read-only vs write-capable
       
     </span>
   </a>
@@ -1289,99 +1295,106 @@
 </ul>
 <hr />
 <h3 id="basic-usage">Basic Usage</h3>
-<p>The <code>KnowledgeGraph</code> can be used standalone after connecting to the OMOP CDM database on disk.</p>
+<p>The <code>KnowledgeGraph</code> can be used standalone after connecting to the OMOP CDM database.</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_engine</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">sessionmaker</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.kg</span><span class="w"> </span><span class="kn">import</span> <span class="n">KnowledgeGraph</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.nodes</span><span class="w"> </span><span class="kn">import</span> <span class="n">LabelMatchKind</span>
 
-<span class="c1"># Setup your SQLAlchemy session</span>
 <span class="n">engine</span> <span class="o">=</span> <span class="n">create_engine</span><span class="p">(</span><span class="s2">&quot;postgresql://user:pass@localhost/omop&quot;</span><span class="p">)</span>
-<span class="n">SessionLocal</span> <span class="o">=</span> <span class="n">sessionmaker</span><span class="p">(</span><span class="n">bind</span><span class="o">=</span><span class="n">engine</span><span class="p">)</span>
-
-<span class="c1"># Initialize the Virtual Knowledge Graph</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">SessionLocal</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">)</span>
 
 <span class="c1"># Lookup a concept by its label</span>
-<span class="n">match_group</span> <span class="o">=</span> <span class="n">kg</span><span class="o">.</span><span class="n">label_lookup</span><span class="p">(</span><span class="s2">&quot;Atrial Fibrillation&quot;</span><span class="p">,</span> <span class="n">fuzzy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="n">concept</span> <span class="o">=</span> <span class="n">match_group</span><span class="o">.</span><span class="n">best_match</span>
+<span class="n">matches</span> <span class="o">=</span> <span class="n">kg</span><span class="o">.</span><span class="n">concept_lookup</span><span class="p">(</span><span class="s2">&quot;Atrial Fibrillation&quot;</span><span class="p">,</span> <span class="n">match_kind</span><span class="o">=</span><span class="n">LabelMatchKind</span><span class="o">.</span><span class="n">EXACT</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">matches</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ID: </span><span class="si">{</span><span class="n">matches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">matched_concept_id</span><span class="si">}</span><span class="s2">, Name: </span><span class="si">{</span><span class="n">matches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">matched_concept_label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ID: </span><span class="si">{</span><span class="n">concept</span><span class="o">.</span><span class="n">concept_id</span><span class="si">}</span><span class="s2">, Name: </span><span class="si">{</span><span class="n">concept</span><span class="o">.</span><span class="n">matched_label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
-<span class="c1"># Traverse the hierarchy</span>
-<span class="n">parents</span> <span class="o">=</span> <span class="n">kg</span><span class="o">.</span><span class="n">parents</span><span class="p">(</span><span class="n">concept</span><span class="o">.</span><span class="n">concept_id</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parent IDs: </span><span class="si">{</span><span class="n">parents</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="c1"># Traverse the hierarchy</span>
+    <span class="n">parents</span> <span class="o">=</span> <span class="n">kg</span><span class="o">.</span><span class="n">parents</span><span class="p">(</span><span class="n">matches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">matched_concept_id</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parent IDs: </span><span class="si">{</span><span class="n">parents</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h3 id="embedding-configuration">Embedding Configuration</h3>
 <p>To enable semantic similarity and RAG-based retrieval, pass a <code>KnowledgeGraphEmbeddingConfiguration</code> when initialising the graph.
 This requires the optional <code>omop-emb</code> package — see the <a href="../../usage/installation/#embedding-rag">installation guide</a>.</p>
-<h4 id="read-only-pre-computed-embeddings-already-in-the-db">Read-only (pre-computed embeddings already in the DB)</h4>
-<p>Use this when embeddings have already been indexed and you only need retrieval:</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.kg</span><span class="w"> </span><span class="kn">import</span> <span class="n">KnowledgeGraph</span><span class="p">,</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb</span><span class="w"> </span><span class="kn">import</span> <span class="n">BackendType</span><span class="p">,</span> <span class="n">ProviderType</span>
+<div class="admonition info">
+<p class="admonition-title">omop-emb documentation</p>
+<p><code>omop-emb</code> manages all embedding storage, backends, and retrieval. Full documentation, including backend setup, CLI reference, FAISS sidecar, and configuration, is available at <a href="https://australiancancerdatanetwork.github.io/omop-emb/">australiancancerdatanetwork.github.io/omop-emb</a>.</p>
+</div>
+<p><code>KnowledgeGraphEmbeddingConfiguration</code> is a complete configuration: <code>backend</code> (an already-constructed <code>omop_emb.EmbeddingBackend</code>) and <code>resolved_model</code> (an <code>oa_configurator.ResolvedModel</code>) are both required fields, not Optional. omop-graph never resolves either itself: the caller (the actual CLI/entry-point boundary, e.g. omop-spires) resolves the vector store and the model, builds the backend, and passes both in here. <code>model_name</code>/<code>provider_type</code> are plain properties reading straight off <code>resolved_model</code> (<code>.model</code>/<code>.provider.provider</code>); there's nothing to pass for them separately.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_engine</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">oa_configurator</span><span class="w"> </span><span class="kn">import</span> <span class="n">Resolver</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb.backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_backend_from_resolved_vector_store</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.kg</span><span class="w"> </span><span class="kn">import</span> <span class="n">KnowledgeGraph</span><span class="p">,</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">MetricType</span>
+
+<span class="n">engine</span> <span class="o">=</span> <span class="n">create_engine</span><span class="p">(</span><span class="s2">&quot;postgresql://user:pass@localhost/omop&quot;</span><span class="p">)</span>
+
+<span class="n">resolver</span> <span class="o">=</span> <span class="n">Resolver</span><span class="o">.</span><span class="n">from_active_config</span><span class="p">()</span>
+<span class="n">resolved_vector_store</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">resolve_vector_store</span><span class="p">(</span><span class="s2">&quot;vector_store&quot;</span><span class="p">)</span>   <span class="c1"># a [vector_stores.*] entry name</span>
+<span class="n">resolved_model</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">resolve_model</span><span class="p">(</span><span class="s2">&quot;embedding-model&quot;</span><span class="p">)</span>              <span class="c1"># a [models.*] entry name</span>
+<span class="n">backend</span> <span class="o">=</span> <span class="n">resolve_backend_from_resolved_vector_store</span><span class="p">(</span><span class="n">resolved_vector_store</span><span class="p">)</span>
 
 <span class="n">emb_config</span> <span class="o">=</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span><span class="p">(</span>
-    <span class="n">backend_type</span><span class="o">=</span><span class="n">BackendType</span><span class="o">.</span><span class="n">FAISS</span><span class="p">,</span>
-    <span class="n">provider_type</span><span class="o">=</span><span class="n">ProviderType</span><span class="o">.</span><span class="n">OLLAMA</span><span class="p">,</span>
-    <span class="n">canonical_model_name</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small:0.6b&quot;</span><span class="p">,</span>
-    <span class="n">base_storage_dir</span><span class="o">=</span><span class="s2">&quot;/data/embeddings&quot;</span><span class="p">,</span>
+    <span class="n">metric_type</span><span class="o">=</span><span class="n">MetricType</span><span class="o">.</span><span class="n">COSINE</span><span class="p">,</span>
+    <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+    <span class="n">resolved_model</span><span class="o">=</span><span class="n">resolved_model</span><span class="p">,</span>
+    <span class="c1"># write defaults to False</span>
 <span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">SessionLocal</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
 </code></pre></div>
-<h4 id="write-capable-generate-and-store-embeddings-at-runtime">Write-capable (generate and store embeddings at runtime)</h4>
-<p>Provide an <code>EmbeddingClient</code> to enable both reading and writing embeddings:</p>
-<p><div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb</span><span class="w"> </span><span class="kn">import</span> <span class="n">EmbeddingClient</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb</span><span class="w"> </span><span class="kn">import</span> <span class="n">BackendType</span><span class="p">,</span> <span class="n">ProviderType</span>
-
-<span class="n">client</span> <span class="o">=</span> <span class="n">EmbeddingClient</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>  <span class="c1"># configured for your provider</span>
-
-<span class="n">emb_config</span> <span class="o">=</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span><span class="p">(</span>
-    <span class="n">backend_type</span><span class="o">=</span><span class="n">BackendType</span><span class="o">.</span><span class="n">FAISS</span><span class="p">,</span>
-    <span class="n">base_storage_dir</span><span class="o">=</span><span class="s2">&quot;/data/embeddings&quot;</span><span class="p">,</span>
-    <span class="n">client</span><span class="o">=</span><span class="n">client</span><span class="p">,</span>
+<p>See <a href="https://AustralianCancerDataNetwork.github.io/omop-llm/usage/asymmetric-embeddings/">omop-llm: Asymmetric Embeddings</a> and
+<a href="https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#modelsname">oa-configurator: <code>[models.&lt;name&gt;]</code></a>
+for how a model (provider, connection details, embedding dimension, and asymmetric-prefix configuration) gets registered under a name in the first place, and <a href="https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#vector_storesname">oa-configurator: <code>[vector_stores.&lt;name&gt;]</code></a> for the storage backend side.</p>
+<h4 id="read-only-vs-write-capable">Read-only vs write-capable</h4>
+<p><code>write=False</code> (the default) gives a read-only interface over already-computed embeddings, including the case where the caller supplies an already-computed <code>query_embedding</code> directly (see <code>annotate_text(query_embedding=...)</code>), so the KG never needs to call a model at all. Set <code>write=True</code> to enable generating and persisting embeddings on demand, using the same required <code>resolved_model</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="n">emb_config</span> <span class="o">=</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span><span class="p">(</span>
+    <span class="n">metric_type</span><span class="o">=</span><span class="n">MetricType</span><span class="o">.</span><span class="n">COSINE</span><span class="p">,</span>
+    <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+    <span class="n">resolved_model</span><span class="o">=</span><span class="n">resolved_model</span><span class="p">,</span>
+    <span class="n">write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">SessionLocal</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
 </code></pre></div>
-The <code>provider_type</code> will be automatically determined from the <code>client</code>.</p>
+<p><code>faiss_cache_dir</code> (optional <code>str</code>) is read-only-path-only: a directory to cache FAISS index files, passed straight through to <code>EmbeddingReaderInterface</code>.</p>
 <h4 id="fallback-embedding-calculation">Fallback embedding calculation</h4>
 <p>When some concepts in the OMOP DB have not been pre-indexed, similarity scoring will silently skip them.
 Setting <code>compute_missing_embeddings=True</code> instructs the graph to compute and persist embeddings
 for any missing concepts on-the-fly during a similarity call.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p>This flag has no effect unless a write-capable interface is configured (i.e. a <code>client</code> is provided).
-Without a <code>client</code>, the graph holds a read-only interface and cannot write back to the embedding store.</p>
+<p><code>compute_missing_embeddings=True</code> requires <code>write=True</code>. This is validated at construction and raises <code>ValueError</code> immediately if <code>write</code> is <code>False</code>.</p>
 </div>
 <div class="highlight"><pre><span></span><code><span class="n">emb_config</span> <span class="o">=</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span><span class="p">(</span>
-    <span class="n">backend_type</span><span class="o">=</span><span class="s2">&quot;faiss&quot;</span><span class="p">,</span>
-    <span class="n">base_storage_dir</span><span class="o">=</span><span class="s2">&quot;/data/embeddings&quot;</span><span class="p">,</span>
-    <span class="n">client</span><span class="o">=</span><span class="n">client</span><span class="p">,</span>
-    <span class="n">compute_missing_embeddings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># compute embeddings for concepts not yet in the store</span>
+    <span class="n">metric_type</span><span class="o">=</span><span class="n">MetricType</span><span class="o">.</span><span class="n">COSINE</span><span class="p">,</span>
+    <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+    <span class="n">resolved_model</span><span class="o">=</span><span class="n">resolved_model</span><span class="p">,</span>
+    <span class="n">write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">compute_missing_embeddings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">SessionLocal</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
 <tr>
 <th><code>compute_missing_embeddings</code></th>
-<th><code>client</code> present</th>
-<th>Behaviour when concepts are missing</th>
+<th><code>write</code></th>
+<th>Behaviour</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>False</code> (default)</td>
+<td><code>True</code></td>
+<td><code>False</code></td>
+<td><code>ValueError</code> at construction as it is invalid combination</td>
+</tr>
+<tr>
+<td><code>False</code></td>
 <td>any</td>
 <td>Log at INFO and skip missing concepts in scoring</td>
 </tr>
 <tr>
 <td><code>True</code></td>
-<td>no</td>
-<td>Log warning that computation is not possible; skip missing concepts</td>
-</tr>
-<tr>
 <td><code>True</code></td>
-<td>yes</td>
 <td>Compute embeddings, persist to DB, then score</td>
 </tr>
 </tbody>

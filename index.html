@@ -367,6 +367,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#embedding-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#interactive-exploration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -470,6 +481,34 @@
     
   
     Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
   
 
     
@@ -1137,6 +1176,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#embedding-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#interactive-exploration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1192,34 +1242,41 @@
 
 
 <h1 id="omop-graph">omop-graph</h1>
-<p><strong>omop-graph</strong> is a lightweight virtual knowledge Graph (VKG) built on-top of the OMOP CDM.
-It transforms the static OMOP vocabulary tables into a dynamic graph environment suitable for NLP grounding, clinical reasoning and other tasks that benefit from a knowledge graph.</p>
+<p><strong>omop-graph</strong> is a lightweight Virtual Knowledge Graph (VKG) built on top of the OMOP CDM.
+It transforms the static OMOP vocabulary tables into a dynamic graph environment suitable for NLP grounding, clinical reasoning, and other tasks that benefit from a knowledge graph.</p>
 <h2 id="why-omop-graph">Why omop-graph?</h2>
 <p>Unlike generic graph libraries, <code>omop-graph</code> is built specifically for clinical data:</p>
 <ul>
-<li><strong>Semantic Awareness</strong>: Understands the difference between relationships.</li>
-<li><strong>Efficient Grounding</strong>: Instead of traversing every possible path, the library uses a <strong>Standard Anchor</strong> approach: translating non-standard terms to standard concepts and leveraging the OMOP <code>concept_ancestor</code> table for high-speed hierarchy validation.</li>
-<li><strong>Transparent Scoring</strong>: Decisions aren't black boxes. Every path is scored based on textual similarity, graph distance (parsimony), and clinical generality (broadness).</li>
-<li><strong>Pre-classification</strong>: Relationships are already pre-classified into overarching groups, allowing quicker restrictions of connections and more efficient graph traversal.</li>
+<li><strong>Semantic Awareness</strong>: Understands the difference between relationship kinds (hierarchy, identity, composition, association, attribute).</li>
+<li><strong>Efficient Grounding</strong>: Instead of traversing every possible path, the library uses a <strong>Standard Anchor</strong> approach — translating non-standard terms to standard concepts and leveraging the OMOP <code>concept_ancestor</code> table for high-speed hierarchy validation.</li>
+<li><strong>Transparent Scoring</strong>: Decisions aren't black boxes. Every candidate concept is scored based on textual similarity, graph distance (parsimony), and clinical generality (broadness).</li>
+<li><strong>Pre-classification</strong>: Relationships are pre-classified into semantic groups, enabling quicker traversal restrictions and more targeted reasoning.</li>
 </ul>
 <hr />
 <h2 id="documentation-overview">Documentation Overview</h2>
 <h3 id="core-components">Core Components</h3>
 <ul>
-<li><a href="graph/kg/">KnowledgeGraph</a>: The VKG interface and what it attempts to solve.</li>
-<li><a href="graph/edges/">Relationships</a>: Pre-classification of edges/relationships of the OMOP CDM.</li>
-<li><a href="oaklib/interface/">Oaklib Interface</a>: <code>oaklib</code>-compliant interface</li>
+<li><a href="graph/kg/">KnowledgeGraph</a>: The VKG interface — connecting to OMOP and traversing the graph.</li>
+<li><a href="graph/edges/">Relationships</a>: Pre-classification of OMOP edges into semantic kinds.</li>
+<li><a href="oaklib/interface/">Oaklib Interface</a>: OAK-compliant adapter for cross-ontology tooling.</li>
 </ul>
 <h3 id="reasoning">Reasoning</h3>
 <p>Explore the grounding pipeline used by clinical NLP tools.</p>
 <ul>
-<li><a href="reasoning/grounding/">Semantic grounding</a>: How regular search terms can be traced to a standard Ontology</li>
+<li><a href="reasoning/grounding/">Semantic Grounding</a>: Mapping free-text terms to standard OMOP concepts.</li>
+<li><a href="reasoning/resolvers/">Resolver Pipelines</a>: How candidate concepts are retrieved from the database.</li>
 </ul>
+<h3 id="embedding-support">Embedding Support</h3>
+<div class="admonition info">
+<p class="admonition-title">Powered by omop-emb</p>
+<p>Embedding-based similarity (vector search, RAG retrieval, on-the-fly embedding computation) is provided by the companion <a href="https://australiancancerdatanetwork.github.io/omop-emb/"><code>omop-emb</code></a> package.
+Install it with <code>pip install "omop-graph[emb]"</code> and see <a href="graph/kg/#embedding-configuration">Knowledge Graph — Embedding Configuration</a> for integration details.</p>
+</div>
 <h3 id="interactive-exploration">Interactive Exploration</h3>
-<p><code>omop-graph</code> includes built-in HTML renderers for Jupyter Notebooks, allowing you to visualize concepts and relationship summaries instantly.</p>
+<p><code>omop-graph</code> includes built-in HTML and Mermaid renderers for Jupyter Notebooks, allowing you to visualise concepts, traversal traces, and relationship summaries directly in a notebook.</p>
 <h3 id="testing">Testing</h3>
 <ul>
-<li><a href="usage/testing/">Testing</a>: How test configuration works, what is covered, and how to set up environment variables for local test runs.</li>
+<li><a href="usage/testing/">Testing</a>: Test configuration, coverage, and how to set up environment variables for local runs.</li>
 </ul>
 
 

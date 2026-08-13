@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -1478,7 +1506,7 @@ that match a given input string.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>matched_label</code>
+                <code>matched_concept_label</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
@@ -1591,7 +1619,7 @@ that match a given input string.</p>
 
 
 <h4 id="omop_graph.reasoning.resolvers.resolvers.CandidateResolver.get_matches" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">get_matches</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">get_matches</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 </h4>
 
@@ -1630,14 +1658,14 @@ that match a given input string.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>text</code>
+                <code>query</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The input text to search for.</p>
+                <p>The input query to search for.</p>
               </div>
             </td>
             <td>
@@ -1649,7 +1677,7 @@ that match a given input string.</p>
                 <code>constraints</code>
             </td>
             <td>
-                  <code><span title="omop_graph.graph.constraints.SearchConstraintConcept">SearchConstraintConcept</span></code>
+                  <code><span title="omop_alchemy.cdm.query.ConceptFilter">ConceptFilter</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1716,7 +1744,7 @@ that match a given input string.</p>
 
 
 <h4 id="omop_graph.reasoning.resolvers.resolvers.CandidateResolver.resolve" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">resolve</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">resolve</span><span class="p">(</span><span class="n">kg</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 </h4>
 
@@ -1755,14 +1783,14 @@ that match a given input string.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>text</code>
+                <code>query</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The input text.</p>
+                <p>The input query.</p>
               </div>
             </td>
             <td>
@@ -1774,7 +1802,7 @@ that match a given input string.</p>
                 <code>constraints</code>
             </td>
             <td>
-                  <code><span title="omop_graph.graph.constraints.SearchConstraintConcept">SearchConstraintConcept</span></code>
+                  <code><span title="omop_alchemy.cdm.query.ConceptFilter">ConceptFilter</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1851,6 +1879,11 @@ using the <code>limit</code> field.</p>
 Currently only for synonym=False as seamntic similarity should be preserved
 in the primary name. Could be extended to synonym=True if needed.</p>
 
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Only available if the omop_emb extension is installed and configured.</p>
+</details>
 
 
 

@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -713,6 +741,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Grounding Constraints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conceptfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ConceptFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1141,6 +1197,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Grounding Constraints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conceptfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ConceptFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1311,9 +1395,9 @@ Traditional string matching fails on clinical free-text due to synonyms and ambi
 <li>
 <p><strong>Configuration</strong>: Determine graph restrictions using <a href="#grounding-constraints"><code>GroundingConstraints</code></a></p>
 <ul>
-<li><code>parent_id</code>: The <code>concept_id</code> of the parent Ontology. This attribute is <strong>required</strong> and allows testing whether a standard concept is part of the correct branch</li>
-<li><code>domains</code>: The OMOP CDM domains that are allowed to be searched for. Each Ontolgoy has an associated domain as described in the <a href="https://ohdsi.github.io/CommonDataModel/cdm54.html#concept">OMOP CDM</a>. Specifying multiple permits all specified domains.</li>
-<li><code>vocabs</code>: The OMOP CDM vocabularies that are allowed to be searched for. Each Ontology is also part of a vocabulary as described in the <a href="https://ohdsi.github.io/CommonDataModel/cdm54.html#concept">OMOP CDM</a>. Specifying multiple values permits all specified vocabularies.</li>
+<li><code>parent_ids</code>: OMOP Concept IDs that act as required ancestors — any valid result must be a descendant of at least one of these.</li>
+<li><code>search_constraint</code>: A <a href="#conceptfilter"><code>ConceptFilter</code></a> that filters the initial resolver query by domain, vocabulary, active status, and/or standard status.</li>
+<li><code>max_depth</code> / <code>predicate_kinds</code>: Control how far and along which relationship kinds the anchor walk is allowed to travel.</li>
 </ul>
 </li>
 <li>
@@ -1334,21 +1418,118 @@ Traditional string matching fails on clinical free-text due to synonyms and ambi
 </li>
 </ol>
 <h2 id="grounding-constraints">Grounding Constraints</h2>
-<p>You can restrict the search using <code>GroundingConstraints</code>:
-- <strong>parent_ids</strong>: Only return concepts that fall under these ancestors (e.g., only search within "Procedures").
-- <strong>search_constraint</strong>: Limit search to specific vocabularies or domains (e.g., "RxNorm" only).
-- <code>parent_ids</code>: Restricts the search to descendants of specific OMOP concepts (e.g., only search for concepts under <code>Condition</code>).
-- <code>vocabs</code>: Restricts the search to specific vocabularies (e.g., <code>SNOMED</code>, <code>RxNorm</code>).
-- <code>domains</code>: Restricts by OMOP Domain ID (e.g., <code>Condition</code>, <code>Drug</code>).</p>
+<p><code>GroundingConstraints</code> is composed of two layers:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parent_ids</code></td>
+<td><code>tuple[int, ...]</code></td>
+<td><code>None</code></td>
+<td>Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via <code>concept_ancestor</code>).</td>
+</tr>
+<tr>
+<td><code>search_constraint</code></td>
+<td><code>ConceptFilter</code></td>
+<td><code>None</code></td>
+<td>Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit).</td>
+</tr>
+<tr>
+<td><code>max_depth</code></td>
+<td><code>int</code></td>
+<td><code>6</code></td>
+<td>Maximum hop distance allowed between a candidate and its standard anchor.</td>
+</tr>
+<tr>
+<td><code>predicate_kinds</code></td>
+<td><code>frozenset[PredicateKind]</code></td>
+<td><code>{IDENTITY}</code></td>
+<td>Relationship kinds followed when walking from a non-standard candidate to its standard anchor.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="conceptfilter">ConceptFilter</h3>
+<p><code>ConceptFilter</code>, provided by OMOP Alchemy, controls which concepts are even considered as candidates during the resolve step. All fields are optional and composable:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>concept_ids</code></td>
+<td><code>tuple[int, ...]</code></td>
+<td><code>None</code></td>
+<td>Restrict to a specific set of concept IDs.</td>
+</tr>
+<tr>
+<td><code>domains</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>None</code></td>
+<td>Restrict by OMOP Domain ID (e.g. <code>"Condition"</code>, <code>"Drug"</code>).</td>
+</tr>
+<tr>
+<td><code>vocabularies</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td><code>None</code></td>
+<td>Restrict by Vocabulary ID (e.g. <code>"SNOMED"</code>, <code>"RxNorm"</code>).</td>
+</tr>
+<tr>
+<td><code>require_standard</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>When <code>True</code>, only concepts with <code>standard_concept</code> in <code>('S', 'C')</code> are returned.</td>
+</tr>
+<tr>
+<td><code>require_active</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>When <code>True</code>, only concepts with an unset <code>invalid_reason</code> are returned.</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td><code>int</code></td>
+<td><code>None</code></td>
+<td>Cap the number of candidates returned from the resolver query.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example">Example</h3>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.reasoning.grounding</span><span class="w"> </span><span class="kn">import</span> <span class="n">ground_term</span><span class="p">,</span> <span class="n">GroundingConstraints</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_alchemy.cdm.query</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConceptFilter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.extensions.omop_alchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">PredicateKind</span>
 
 <span class="n">constraints</span> <span class="o">=</span> <span class="n">GroundingConstraints</span><span class="p">(</span>
-    <span class="n">parent_ids</span><span class="o">=</span><span class="p">(</span><span class="mi">441484</span><span class="p">,),</span> <span class="c1"># &#39;Clinical Finding&#39;</span>
-    <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span>
+    <span class="n">parent_ids</span><span class="o">=</span><span class="p">(</span><span class="mi">441484</span><span class="p">,),</span>   <span class="c1"># &#39;Clinical Finding&#39; — only accept descendants of this ancestor</span>
+    <span class="n">search_constraint</span><span class="o">=</span><span class="n">ConceptFilter</span><span class="p">(</span>
+        <span class="n">domains</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;Condition&quot;</span><span class="p">,),</span>
+        <span class="n">vocabularies</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;SNOMED&quot;</span><span class="p">,),</span>
+        <span class="n">require_standard</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">predicate_kinds</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="n">PredicateKind</span><span class="o">.</span><span class="n">IDENTITY</span><span class="p">}),</span>
 <span class="p">)</span>
 
-<span class="n">results</span> <span class="o">=</span> <span class="n">ground_term</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">kg</span><span class="p">,</span> <span class="s2">&quot;chest pain&quot;</span><span class="p">,</span> <span class="n">constraints</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">ground_term</span><span class="p">(</span>
+    <span class="n">resolver_pipeline</span><span class="o">=</span><span class="n">pipeline</span><span class="p">,</span>
+    <span class="n">kg</span><span class="o">=</span><span class="n">kg</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span><span class="s2">&quot;chest pain&quot;</span><span class="p">,</span>
+    <span class="n">query_embedding</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>   <span class="c1"># pass a precomputed vector, or None to skip embedding-based scoring</span>
+    <span class="n">constraints</span><span class="o">=</span><span class="n">constraints</span><span class="p">,</span>
+<span class="p">)</span>
 </code></pre></div>
+<p><code>ground_term</code> also accepts an optional <code>context: str | None</code> folded into the on-demand query-embedding text (used only when <code>query_embedding</code> is omitted and the KG has a write-capable embedding config); see <a href="../../reference/ref_grounding/"><code>ground_term</code>'s own docstring</a> for details.</p>
 <h2 id="scoring">Scoring</h2>
 <p>It usually happens that multiple viable candidates are extracted for each search term, especially if multiple resolvers are used. To rank these exctracted concepts, we devised a scoring algorithm, which is detailed in the following:</p>
 <h3 id="the-scoring-formula">The Scoring Formula</h3>
@@ -1357,10 +1538,15 @@ Traditional string matching fails on clinical free-text due to synonyms and ambi
 TotalScore = Relevance - ParsimonyPenalty + BroadnessBonus
 \]</div>
 <h4 id="1-relevance">1. Relevance</h4>
-<p>Relevance represents the initial semantic fit. It is the product of:</p>
+<p>Relevance represents the initial semantic fit and is computed as <strong>either</strong> embedding similarity <strong>or</strong> textual similarity — not both simultaneously:</p>
 <ul>
-<li><strong>Embedding Similarity</strong>: Cosine similarity between the input text and the concept name.</li>
-<li><strong>Textual Similarity</strong>: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name.</li>
+<li><strong>Without embeddings</strong>: textual similarity is used exclusively.</li>
+<li><strong>With embeddings</strong> (default when <code>omop-graph[emb]</code> is installed and configured): embedding cosine similarity <strong>replaces</strong> the textual score entirely.</li>
+</ul>
+<p>The two scoring modes:</p>
+<ul>
+<li><strong>Embedding Similarity</strong>: Cosine similarity between the input text embedding and the concept embedding. Requires <code>omop-graph[emb]</code> and a configured <code>KnowledgeGraphEmbeddingConfiguration</code> — see the <a href="../../graph/kg/#embedding-configuration">Knowledge Graph docs</a> and the <a href="https://australiancancerdatanetwork.github.io/omop-emb/">omop-emb documentation</a> for setup.</li>
+<li><strong>Textual Similarity</strong>: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name. Used as a fallback when no embedding is available.</li>
 </ul>
 <h4 id="2-parsimony-distance-penalty">2. Parsimony: Distance Penalty</h4>
 <p>OMOP is a deep hierarchy. A concept that is 1 hop away from your search term is more likely to be correct than one found 5 hops away.</p>
@@ -1378,12 +1564,13 @@ TotalScore = Relevance - ParsimonyPenalty + BroadnessBonus
 <p>Scoring is performed in a batch operation to minimize database overhead:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.scoring</span><span class="w"> </span><span class="kn">import</span> <span class="n">score_standard_concepts</span>
 
-<span class="n">ranked</span> <span class="o">=</span> <span class="n">score_standard_concepts</span><span class="p">(</span>
+<span class="n">scored</span> <span class="o">=</span> <span class="n">score_standard_concepts</span><span class="p">(</span>
     <span class="n">text</span><span class="o">=</span><span class="s2">&quot;Hodgkin lymphoma&quot;</span><span class="p">,</span>
     <span class="n">standard_concepts</span><span class="o">=</span><span class="n">candidates</span><span class="p">,</span>
     <span class="n">kg</span><span class="o">=</span><span class="n">kg</span><span class="p">,</span>
-    <span class="n">similarity_scores</span><span class="o">=</span><span class="n">embeddings_array</span>
+    <span class="n">nearest_concept_matches</span><span class="o">=</span><span class="n">nearest_matches</span><span class="p">,</span>  <span class="c1"># optional; from omop-emb embedding index</span>
 <span class="p">)</span>
+<span class="n">ranked</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">scored</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">total_score</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 
 

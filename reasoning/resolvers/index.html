@@ -373,6 +373,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../usage/cli/" class="md-nav__link">
         
   
@@ -1060,15 +1088,17 @@ Let us consider the example of finding <code>"Hodgkin lymphoma"</code> as the co
 <p class="admonition-title">Tip</p>
 <p>Traversing each of the resolvers one by one can be an exhaustive search. The <code>ResolverPipeline</code> therefore offers a <code>stop_after_resolver</code> option. If set, retrieval from the DB stops after that resolver has concluded. The resolvers are ordered based on their confidence as above (i.e. <strong><code>ExactLabelResolver</code></strong> &gt;&gt; <strong><code>ExactSynonymResolver</code></strong> &gt;&gt; etc.)</p>
 </div>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.nodes</span><span class="w"> </span><span class="kn">import</span> <span class="n">LabelMatchKind</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_alchemy.cdm.query</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConceptFilter</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.nodes</span><span class="w"> </span><span class="kn">import</span> <span class="n">LabelMatchKind</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.reasoning.grounding</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroundingConstraints</span>
 
 <span class="c1"># Simplified Logic View</span>
 <span class="n">constraints</span> <span class="o">=</span> <span class="n">GroundingConstraints</span><span class="p">(</span>
     <span class="n">parent_ids</span><span class="o">=</span><span class="n">parsed_parent_ids</span><span class="p">,</span>
-    <span class="n">search_constraint</span><span class="o">=</span><span class="n">SearchConstraintConcept</span><span class="p">(</span>
+    <span class="n">search_constraint</span><span class="o">=</span><span class="n">ConceptFilter</span><span class="p">(</span>
         <span class="n">domains</span><span class="o">=</span><span class="n">parsed_domains</span><span class="p">,</span>
-        <span class="n">vocabs</span><span class="o">=</span><span class="n">parsed_vocabs</span><span class="p">,</span>
+        <span class="n">vocabularies</span><span class="o">=</span><span class="n">parsed_vocabs</span><span class="p">,</span>
         <span class="n">require_standard</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># We prioritize Standard Concepts</span>
     <span class="p">),</span>
     <span class="n">max_depth</span><span class="o">=</span><span class="mi">6</span>  <span class="c1"># How deep to traverse the hierarchy</span>
