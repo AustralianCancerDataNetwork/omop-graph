@@ -23,6 +23,8 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import Row
 
+from omop_alchemy.cdm.model import normalised_flag
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +51,13 @@ class ConceptView:
     concept_class_id : str
         The class of the concept (e.g., 'Clinical Finding').
     standard_concept : bool
-        True if this is a Standard Concept ('S'), False otherwise.
+        True only for a Standard Concept (raw flag ``'S'``). Valid as a mapping
+        target.
+    classification_concept : bool
+        True only for a Classification Concept (raw flag ``'C'``). Valid for
+        hierarchy navigation but *not* as a mapping target. Kept distinct from
+        ``standard_concept`` so consumers can tell a classification node from a
+        concept carrying no standardness flag at all.
     valid_start_date : date
         The start date of validity.
     valid_end_date : date
@@ -68,12 +76,19 @@ class ConceptView:
     valid_start_date: date
     valid_end_date: date
     invalid_reason: Optional[str]
+    # Defaulted so rows projected before the classification label was added
+    # still construct; the query layer always supplies it.
+    classification_concept: bool = False
 
     @property
     def is_active(self) -> bool:
-        """Whether the concept is active under OMOP Alchemy's flag semantics."""
-        value = self.invalid_reason.strip() if self.invalid_reason is not None else ""
-        return not value
+        """Whether the concept is active under OMOP Alchemy's flag semantics.
+
+        Delegates to ``normalised_flag`` so a blank or whitespace-only
+        ``invalid_reason`` — which some real-world loads carry instead of NULL —
+        is treated as unset, exactly as the SQL-side predicate does.
+        """
+        return normalised_flag(self.invalid_reason) is None
 
     def __repr__(self) -> str:
         return (
@@ -128,8 +143,9 @@ class ConceptView:
         """
         Create a ConceptView from a SQLAlchemy Row.
 
-        The query layer projects OMOP Alchemy's canonical standardness expression
-        into the ``standard_concept`` field as a boolean.
+        The query layer projects OMOP Alchemy's atomic standardness predicates
+        into the ``standard_concept`` and ``classification_concept`` fields as
+        booleans.
 
         Parameters
         ----------
@@ -143,6 +159,7 @@ class ConceptView:
         """
         data = dict(row._mapping)
         data["standard_concept"] = bool(data["standard_concept"])
+        data["classification_concept"] = bool(data.get("classification_concept", False))
         return cls(**data)
 
 

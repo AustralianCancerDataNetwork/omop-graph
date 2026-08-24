@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.engine import Row
 
+from omop_alchemy.cdm.model import normalised_flag
+
 from ..extensions.omop_alchemy import PredicateKind
 
 if TYPE_CHECKING:
@@ -178,10 +180,13 @@ def is_active(
     bool
         True if the relationship is active, False otherwise.
     """
+    # normalised_flag folds blank/whitespace-only to None, matching the SQL
+    # predicate. A raw ``is None`` test would read '' as a deprecation marker.
+    unset = normalised_flag(invalid_reason) is None
     if on is None:
-        return invalid_reason is None
+        return unset
     if start and on < start:
         return False
     if end and on > end:
         return False
-    return invalid_reason is None
+    return unset

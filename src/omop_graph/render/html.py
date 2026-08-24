@@ -8,7 +8,7 @@ from omop_graph.graph.paths import GraphPath, PathExplanation
 
 
 def concept_card(c: ConceptView) -> str:
-    status = "✅" if c.invalid_reason is None else "❌"
+    status = "✅" if c.is_active else "❌"
     return f"""
     <div style="border:1px solid #ddd; padding:8px; border-radius:6px;">
         <b>{escape(c.concept_name)}</b> {status}<br/>
@@ -21,7 +21,7 @@ def concept_card(c: ConceptView) -> str:
 
 
 def concept_card_compact(c: ConceptView) -> str:
-    status = "✅" if c.invalid_reason is None else "❌"
+    status = "✅" if c.is_active else "❌"
     return f"""
     <div style="
         border:1px solid #ddd;

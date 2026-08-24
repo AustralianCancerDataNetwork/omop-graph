@@ -423,8 +423,8 @@ class KnowledgeGraph(GraphBackend):
             name=row.relationship_name,
             reverse_id=row.reverse_relationship_id,
             is_hierarchical=bool(row.is_hierarchical),
-            anc_up=bool(int(row.anc_up)),
-            anc_down=bool(int(row.anc_down)),
+            anc_up=bool(row.anc_up),
+            anc_down=bool(row.anc_down),
             predicate_kind=PredicateKind(row.predicate_kind),
             predicate_subkind=row.predicate_subkind,
         )
@@ -689,9 +689,9 @@ class KnowledgeGraph(GraphBackend):
                 relationship_id=row.relationship_id,
                 name=row.relationship_name,
                 reverse_id=row.reverse_relationship_id,
-                is_hierarchical=bool(int(row.is_hierarchical)),
-                anc_up=bool(int(row.anc_up)),
-                anc_down=bool(int(row.anc_down)),
+                is_hierarchical=bool(row.is_hierarchical),
+                anc_up=bool(row.anc_up),
+                anc_down=bool(row.anc_down),
                 predicate_kind=PredicateKind(row.predicate_kind),
                 predicate_subkind=row.predicate_subkind,
             )

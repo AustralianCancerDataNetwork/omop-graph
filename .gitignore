@@ -211,3 +211,6 @@ __marimo__/
 
 # omop-graph specific
 results/
+
+.devcontainer/
+*.zip

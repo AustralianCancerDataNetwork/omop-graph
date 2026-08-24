@@ -65,18 +65,30 @@ def concept_engine() -> sa.Engine:
 def test_concept_filter_applies_canonical_graph_constraints(
     concept_engine: sa.Engine,
 ) -> None:
-    constraint = ConceptFilter(
+    strict = ConceptFilter(
         domains=("Condition",),
         require_standard=True,
         require_active=True,
     )
+    with_classification = ConceptFilter(
+        domains=("Condition",),
+        require_standard=True,
+        include_classification=True,
+        require_active=True,
+    )
 
     with Session(concept_engine) as session:
-        concept_ids = tuple(
-            session.scalars(constraint.apply(sa.select(Concept.concept_id)))
+        strict_ids = tuple(session.scalars(strict.apply(sa.select(Concept.concept_id))))
+        widened_ids = tuple(
+            session.scalars(with_classification.apply(sa.select(Concept.concept_id)))
         )
 
-    assert concept_ids == (1, 2)
+    # omop-alchemy >= 1.1: require_standard means raw 'S' only, so the
+    # classification concept (2) is no longer a mapping target. Concept 2 also
+    # pins that a blank invalid_reason still reads as active.
+    assert strict_ids == (1,)
+    # Callers that want the pre-1.1 union opt in explicitly.
+    assert widened_ids == (1, 2)
 
 
 def test_concept_filter_rejects_non_positive_limit() -> None:
@@ -98,10 +110,21 @@ def test_concept_views_use_canonical_standard_and_active_flags(
             )
         }
 
+    # standard_concept is now honest: true only for raw 'S'. Classification
+    # concepts are carried separately so 'C' stays distinguishable from "no
+    # standardness flag at all", which a single boolean could not express.
     assert views[1].standard_concept is True
-    assert views[2].standard_concept is True  # classification concepts are standard
+    assert views[1].classification_concept is False
+
+    assert views[2].standard_concept is False
+    assert views[2].classification_concept is True
+
     assert views[3].standard_concept is False
+    assert views[3].classification_concept is False
+
+    # A blank standard_concept normalises to unset, not to a flag value.
     assert views[5].standard_concept is False
+    assert views[5].classification_concept is False
 
     assert views[1].is_active is True
     assert views[2].is_active is True  # blank/whitespace invalid_reason is treated as unset
