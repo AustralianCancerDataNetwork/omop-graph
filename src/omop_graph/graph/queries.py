@@ -23,6 +23,7 @@ from sqlalchemy import (
     exists,
     func,
     literal,
+    or_,
     select,
     Engine,
     inspect,
@@ -48,9 +49,19 @@ from omop_alchemy.cdm.query import ConceptFilter
 from ..extensions.omop_alchemy import RelationshipMapping, PredicateKind
 
 
-def _concept_is_standard_expr():
-    """Return the canonical standard/classification flag as a non-null boolean."""
-    return func.coalesce(Concept.is_standard_expr(), False)
+def _concept_has_standardness_expr():
+    """True for concepts carrying a standardness flag: ``'S'`` or ``'C'``.
+
+    Composed locally from omop-alchemy's two atomic predicates. The library
+    deliberately publishes only ``is_standard`` (``'S'``) and
+    ``is_classification`` (``'C'``); omop-graph is the one consumer that wants
+    the union, for hierarchy traversal and match ranking where a classification
+    node is a legitimate waypoint even though it is not a valid mapping target.
+
+    Both predicates are two-valued in omop-alchemy >= 1.1, so no ``coalesce``
+    compensation is required and ``NOT`` over this returns the true complement.
+    """
+    return or_(Concept.is_standard_expr(), Concept.is_classification_expr())
 
 
 def _concept_match_order_terms(name_expr, rank_expr=None):
@@ -59,8 +70,12 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
 
     Ordering logic:
     - Basic ordering
-        1. Standard concepts first (``Concept.is_standard_expr()``: standard_concept
-           in ["S", "C"], tolerating blank/whitespace-only values as unset)
+        1. Concepts carrying a standardness flag first
+           (``_concept_has_standardness_expr()``: ``'S'`` or ``'C'``, tolerating
+           blank/whitespace-only values as unset). Classification concepts share
+           tier 0 with standard ones deliberately — this orders *match
+           candidates*, where a classification node is a legitimate result, not
+           mapping targets.
         2. Active concepts first (``Concept.is_valid_expr()``: invalid_reason unset,
            i.e. NULL or blank/whitespace-only). CDM v5.4 permits only "D"/"U"/NULL,
            for which this matches the previous ``invalid_reason in ("D", "U")``
@@ -78,7 +93,7 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
     terms.extend(
         (
             case(
-                (_concept_is_standard_expr(), literal(0)),
+                (_concept_has_standardness_expr(), literal(0)),
                 else_=literal(1),
             ),
             case(
@@ -113,7 +128,8 @@ def q_concept_view(concept_id: int) -> Select:
         Concept.vocabulary_id,
         Concept.domain_id,
         Concept.concept_class_id,
-        _concept_is_standard_expr().label("standard_concept"),
+        Concept.is_standard_expr().label("standard_concept"),
+        Concept.is_classification_expr().label("classification_concept"),
         Concept.valid_start_date,
         Concept.valid_end_date,
         Concept.invalid_reason,
@@ -144,7 +160,8 @@ def q_concept_views(concept_ids: Tuple[int, ...], sort: bool = True) -> Select:
         Concept.vocabulary_id,
         Concept.domain_id,
         Concept.concept_class_id,
-        _concept_is_standard_expr().label("standard_concept"),
+        Concept.is_standard_expr().label("standard_concept"),
+        Concept.is_classification_expr().label("classification_concept"),
         Concept.valid_start_date,
         Concept.valid_end_date,
         Concept.invalid_reason,
@@ -188,7 +205,7 @@ def q_concept_name() -> Select:
     return select(
         Concept.concept_id,
         Concept.concept_name.label("name"),
-        _concept_is_standard_expr().label("is_standard"),
+        _concept_has_standardness_expr().label("is_standard"),
         Concept.is_valid_expr().label("is_active"),
     )
 
@@ -205,7 +222,7 @@ def q_concept_synonym() -> Select:
     return select(
         Concept.concept_id,
         Concept_Synonym.concept_synonym_name.label("name"),
-        _concept_is_standard_expr().label("is_standard"),
+        _concept_has_standardness_expr().label("is_standard"),
         Concept.is_valid_expr().label("is_active"),
     ).join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
 
@@ -390,8 +407,8 @@ def q_all_predicates() -> Select:
         Relationship.relationship_id,
         Relationship.relationship_name,
         Relationship.reverse_relationship_id,
-        Relationship.is_hierarchical,
-        Relationship.defines_ancestry,
+        Relationship.is_hierarchical_relationship_expr().label("is_hierarchical"),
+        Relationship.is_ancestry_defining_expr().label("defines_ancestry"),
     )
 
 
@@ -401,8 +418,8 @@ def q_predicate_row(relationship_id: str) -> Select:
         Relationship.relationship_id,
         Relationship.relationship_name,
         Relationship.reverse_relationship_id,
-        Relationship.is_hierarchical,
-        Relationship.defines_ancestry,
+        Relationship.is_hierarchical_relationship_expr().label("is_hierarchical"),
+        Relationship.is_ancestry_defining_expr().label("defines_ancestry"),
     ).where(Relationship.relationship_id == relationship_id)
 
 
@@ -428,9 +445,9 @@ def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
             Rel.relationship_id,
             Rel.relationship_name,
             Rel.reverse_relationship_id,
-            Rel.is_hierarchical,
-            Rel.defines_ancestry.label("anc_down"),
-            Rev.defines_ancestry.label("anc_up"),
+            Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
+            Rel.is_ancestry_defining_expr().label("anc_down"),
+            Rev.is_ancestry_defining_expr().label("anc_up"),
             Rm.predicate_kind,
             Rm.predicate_subkind,
         )
@@ -453,9 +470,9 @@ def q_all_predicates_with_ancestry() -> Select:
             Rel.relationship_id,
             Rel.relationship_name,
             Rel.reverse_relationship_id,
-            Rel.is_hierarchical,
-            Rel.defines_ancestry.label("anc_down"),
-            Rev.defines_ancestry.label("anc_up"),
+            Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
+            Rel.is_ancestry_defining_expr().label("anc_down"),
+            Rev.is_ancestry_defining_expr().label("anc_up"),
             Rm.predicate_kind,
             Rm.predicate_subkind,
         )
@@ -495,7 +512,7 @@ def q_edges(
     )
 
     if active_only:
-        stmt = stmt.where(Concept_Relationship.invalid_reason.is_(None))
+        stmt = stmt.where(Concept_Relationship.is_valid_expr())
         if on is not None:
             stmt = stmt.where(
                 and_(
@@ -576,6 +593,7 @@ def q_entities(
     return ConceptFilter(
         domains=(domain,) if domain else None,
         require_standard=standard_only,
+        include_classification=True,
         require_active=filter_obsoletes,
     ).apply(select(Concept.concept_id))
 
@@ -588,6 +606,7 @@ def q_concept_filtered(
         domains=(domain_id,) if domain_id else None,
         vocabularies=(vocabulary_id,) if vocabulary_id else None,
         require_standard=True,
+        include_classification=True,
     ).apply(select(Concept.concept_id))
 
 

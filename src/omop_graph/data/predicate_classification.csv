@@ -2,10 +2,10 @@ class,subclass,description,semantics,inference
 Identity,Exact equivalence,Semantically identical concepts across vocabularies,Symmetric merge,Interchangeable
 Identity,Near equivalence,Context-specific similarity (e.g. Brand names),Weak mapping,Proximity search
 Identity,Version lineage,Concept lifecycle and deprecation history,Temporal audit,Succession
-Hierarchy,Taxonomic – up,Generalization to parent concept,Inheritance,Ancestor traversal
-Hierarchy,Taxonomic – down,Specialization to descendant concept,Refinement,Descendant traversal
-Hierarchy,Categorical – up,Membership in a classification group,Grouping,Class membership
-Hierarchy,Categorical – down,Expansion of grouping to members,Member listing,Class expansion
+Hierarchy,Taxonomic - up,Generalization to parent concept,Inheritance,Ancestor traversal
+Hierarchy,Taxonomic - down,Specialization to descendant concept,Refinement,Descendant traversal
+Hierarchy,Categorical - up,Membership in a classification group,Grouping,Class membership
+Hierarchy,Categorical - down,Expansion of grouping to members,Member listing,Class expansion
 Composition,Physical,Material part-whole or assembly,Physical decomposition,Part-of inference
 Composition,Structural,Inherent chemical/structural definition,Potency/Recipe definition,Structural reasoning
 Composition,Containment,Packaging or multi-item kit grouping,Physical enclosure,Container reasoning

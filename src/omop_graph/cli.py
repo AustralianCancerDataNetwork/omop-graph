@@ -1,7 +1,8 @@
 import logging
 import tempfile
+from importlib import resources
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Optional, cast
 
 import pandas as pd
 import sqlalchemy as sa
@@ -45,19 +46,36 @@ def populate_with_test_data():
     populate_test_data(Session())
 
 
+def packaged_predicate_csv_dir() -> Path:
+    """Directory of the predicate CSVs shipped inside the package.
+
+    These live under ``src/omop_graph/data`` rather than a top-level ``config/``
+    so they reach the wheel; a top-level directory is outside
+    ``[tool.hatch.build.targets.wheel] packages`` and never gets packaged,
+    leaving ``relationship-classification`` unrunnable from a normal install.
+    """
+    return Path(str(resources.files("omop_graph") / "data"))
+
+
 @app.command()
 def relationship_classification(
     pred_class_dir: Annotated[
-        str,
+        Optional[str],
         typer.Option(
-            help="Path to the directory containing `predicate_classification.csv` and `predicate_mapping.csv`."
+            help=(
+                "Path to the directory containing `predicate_classification.csv` "
+                "and `predicate_mapping.csv`. Defaults to the copies shipped with "
+                "omop-graph; pass a directory to override them."
+            )
         ),
-    ],
+    ] = None,
 ):
     """Load pre-classified predicates into the database."""
-    pred_class_dir_pl = Path(pred_class_dir)
+    pred_class_dir_pl = (
+        Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
+    )
     if not pred_class_dir_pl.is_dir():
-        raise NotADirectoryError(f"{pred_class_dir} is not a valid directory.")
+        raise NotADirectoryError(f"{pred_class_dir_pl} is not a valid directory.")
 
     pred_mapping_file = pred_class_dir_pl / "predicate_mapping.csv"
     if not pred_mapping_file.is_file():

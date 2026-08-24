@@ -36,15 +36,20 @@ The standard OMOP `relationship` table provides basic metadata, but lacks unifie
 ### Prerequisites
 1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
 2. `omop-graph` configured via oa-configurator (`omop-config configure omop_graph`, see [Getting Started: Configuration](../getting-started/configuration.md)); the CDM connection is resolved from `OmopGraphConfig.cdm_db`, no environment variables involved.
-3. A directory containing:
+3. Nothing further — the classification data ships with the package:
     - **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).
     - **`predicate_mapping.csv`**: Maps specific OMOP `relationship_id`s to the classes defined in the classification file.
-    
-    Pass this directory via `--pred-class-dir` below.
+
+    Both are bundled at `omop_graph/data/` and used by default. Pass
+    `--pred-class-dir` only to override them with your own copies.
 
 ### Usage
 
 ```bash
+# Uses the bundled classification data
+omop-graph relationship-classification
+
+# Override with your own CSVs
 omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 ```
 
