@@ -1661,11 +1661,31 @@ read-only access and visualization.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>True if this is a Standard Concept ('S'), False otherwise.</p>
+                <p>True only for a Standard Concept (raw flag <code>'S'</code>). Valid as a mapping
+target.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>classification_concept</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True only for a Classification Concept (raw flag <code>'C'</code>). Valid for
+hierarchy navigation but <em>not</em> as a mapping target. Kept distinct from
+<code>standard_concept</code> so consumers can tell a classification node from a
+concept carrying no standardness flag at all.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1754,6 +1774,9 @@ read-only access and visualization.</p>
     <div class="doc doc-contents ">
 
         <p>Whether the concept is active under OMOP Alchemy's flag semantics.</p>
+<p>Delegates to <code>normalised_flag</code> so a blank or whitespace-only
+<code>invalid_reason</code> — which some real-world loads carry instead of NULL —
+is treated as unset, exactly as the SQL-side predicate does.</p>
 
     </div>
 
@@ -1778,8 +1801,9 @@ read-only access and visualization.</p>
     <div class="doc doc-contents ">
 
         <p>Create a ConceptView from a SQLAlchemy Row.</p>
-<p>The query layer projects OMOP Alchemy's canonical standardness expression
-into the <code>standard_concept</code> field as a boolean.</p>
+<p>The query layer projects OMOP Alchemy's atomic standardness predicates
+into the <code>standard_concept</code> and <code>classification_concept</code> fields as
+booleans.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>

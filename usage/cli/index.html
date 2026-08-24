@@ -1312,16 +1312,21 @@ omop-graph relationship-classification -v ...   # ✗ flag is ignored
 <li>Prepopulated OMOP CDM (e.g. using <a href="https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/"><code>omop-maint load-vocab-source</code></a>)</li>
 <li><code>omop-graph</code> configured via oa-configurator (<code>omop-config configure omop_graph</code>, see <a href="../../getting-started/configuration/">Getting Started: Configuration</a>); the CDM connection is resolved from <code>OmopGraphConfig.cdm_db</code>, no environment variables involved.</li>
 <li>
-<p>A directory containing:</p>
+<p>Nothing further — the classification data ships with the package:</p>
 <ul>
 <li><strong><code>predicate_classification.csv</code></strong>: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).</li>
 <li><strong><code>predicate_mapping.csv</code></strong>: Maps specific OMOP <code>relationship_id</code>s to the classes defined in the classification file.</li>
 </ul>
-<p>Pass this directory via <code>--pred-class-dir</code> below.</p>
+<p>Both are bundled at <code>omop_graph/data/</code> and used by default. Pass
+<code>--pred-class-dir</code> only to override them with your own copies.</p>
 </li>
 </ol>
 <h3 id="usage">Usage</h3>
-<div class="highlight"><pre><span></span><code>omop-graph<span class="w"> </span>relationship-classification<span class="w"> </span>--pred-class-dir<span class="w"> </span>&lt;PATH_TO_CSV_DIR&gt;
+<div class="highlight"><pre><span></span><code><span class="c1"># Uses the bundled classification data</span>
+omop-graph<span class="w"> </span>relationship-classification
+
+<span class="c1"># Override with your own CSVs</span>
+omop-graph<span class="w"> </span>relationship-classification<span class="w"> </span>--pred-class-dir<span class="w"> </span>&lt;PATH_TO_CSV_DIR&gt;
 </code></pre></div>
 <h3 id="command-options">Command Options</h3>
 <table>
