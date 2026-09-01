@@ -6,5 +6,29 @@ on:
 jobs:
   label-gate:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/label-gate.yml@main
-  build-test:
+  build-test-sqlite:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test.yml@main
+  build-test:
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test-postgres.yml@main
+    with:
+      postgres-db: omop_graph_test
+      setup-commands: |
+        uv run omop-config configure omop_graph \
+          --set cdm_db.kind=cdm \
+          --set cdm_db.connection.dialect=postgresql+psycopg \
+          --set cdm_db.connection.host=localhost \
+          --set cdm_db.connection.port=5432 \
+          --set cdm_db.connection.user=test \
+          --set cdm_db.connection.password=test \
+          --set cdm_db.connection.database_name=omop_graph_ci_placeholder \
+          --set cdm_db.connection.test_only=false \
+          --set cdm_db.schema_name=public \
+          --set test_cdm_db_pg.kind=cdm \
+          --set test_cdm_db_pg.connection.dialect=postgresql+psycopg \
+          --set test_cdm_db_pg.connection.host=localhost \
+          --set test_cdm_db_pg.connection.port=5432 \
+          --set test_cdm_db_pg.connection.user=test \
+          --set test_cdm_db_pg.connection.password=test \
+          --set test_cdm_db_pg.connection.database_name=omop_graph_test \
+          --set test_cdm_db_pg.connection.test_only=true \
+          --set test_cdm_db_pg.schema_name=public
