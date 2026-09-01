@@ -851,23 +851,30 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     Parameters
     ----------
     engine_string : str | URL | None, optional
-        The database connection string. Required unless ``resource`` is given.
+        The database connection string. Ignored when ``kg`` is given
+        directly; required otherwise, unless ``resource`` is given.
     resource : OMOPOntologyResource | None, optional
         An existing resource object. Takes precedence over ``engine_string`` when
-        both are supplied. To use the oa-configurator-configured default, 
-        resolve it explicitly via ``omop_resource()`` and pass it here.
+        both are supplied. Ignored when ``kg`` is given directly. To use the
+        oa-configurator-configured default, resolve it explicitly via
+        ``omop_resource()`` and pass it here.
     kg : KnowledgeGraph | None, optional
-        An existing Knowledge Graph instance. If None, one is created from
-        ``engine_string`` / ``resource``.
+        An existing Knowledge Graph instance. Takes this class's own engine
+        construction out of the picture entirely -- the caller already built
+        (and is responsible for) whatever engine ``kg`` wraps, so
+        ``engine_string``/``resource`` are neither required nor consulted.
+        If None, a ``KnowledgeGraph`` is created from ``engine_string`` /
+        ``resource`` instead.
     kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
         Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
         Required to enable embedding-based similarity. See
         :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
+        Ignored when ``kg`` is given directly.
 
     Raises
     ------
     ValueError
-        If neither ``engine_string`` nor ``resource`` is given.
+        If ``kg`` is not given and neither ``engine_string`` nor ``resource`` is.
     """
 
     def __init__(
@@ -878,33 +885,28 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         kg_emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
         **kwargs,
     ):
-        if engine_string is not None:
-            self.engine_string = engine_string
-            self.resource = resource or omop_resource(url=self.engine_string)
-        elif resource is not None:
-            self.resource = resource
-            self.engine_string = self.resource.url
-        else:
-            raise ValueError(
-                "OMOPAlchemyImplementation requires either 'engine_string' or "
-                "'resource'. To use the oa-configurator-configured default, "
-                "resolve it explicitly first, e.g. "
-                "OMOPAlchemyImplementation(resource=omop_resource())."
-            )
-
-        assert self.engine_string is not None, (
-            "No database URL provided for OMOPAlchemyImplementation"
-        )
-
-        engine = make_engine(
-            self.engine_string,
-            engine_kwargs={"echo": False, "future": True},
-            execution_options=self.resource.execution_options,
-        )
-
         self._connection = None
 
         if kg is None:
+            if engine_string is not None:
+                self.engine_string = engine_string
+                self.resource = resource or omop_resource(url=self.engine_string)
+            elif resource is not None:
+                self.resource = resource
+                self.engine_string = self.resource.url
+            else:
+                raise ValueError(
+                    "OMOPAlchemyImplementation requires 'kg', or one of "
+                    "'engine_string'/'resource'. To use the "
+                    "oa-configurator-configured default, resolve it explicitly "
+                    "first, e.g. OMOPAlchemyImplementation(resource=omop_resource())."
+                )
+
+            engine = make_engine(
+                self.engine_string,
+                engine_kwargs={"echo": False, "future": True},
+                execution_options=self.resource.execution_options,
+            )
             kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine)
             bind_default_renderers(kg)
 
