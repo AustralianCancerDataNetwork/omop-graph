@@ -896,7 +896,11 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
             "No database URL provided for OMOPAlchemyImplementation"
         )
 
-        engine = make_engine(self.engine_string, engine_kwargs={"echo": False, "future": True})
+        engine = make_engine(
+            self.engine_string,
+            engine_kwargs={"echo": False, "future": True},
+            execution_options=self.resource.execution_options,
+        )
 
         self._connection = None
 

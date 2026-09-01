@@ -22,7 +22,7 @@ from collections import defaultdict
 from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, Row
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.backends import FullTextError
 from omop_alchemy.cdm.query import ConceptFilter
@@ -73,6 +73,8 @@ from .queries import (
     q_children,
     q_predicate_name,
     q_predicate_row_with_ancestry,
+    q_relationship_mapping_all,
+    q_relationship_mapping_row,
     q_roots,
     q_singletons,
     q_entities,
@@ -145,6 +147,39 @@ class KnowledgeGraphEmbeddingConfiguration:
         return self.resolved_model.provider.provider
 
 
+def _relationship_mapping_lookup(session: Session) -> dict[str, Row]:
+    """RelationshipMapping rows keyed by relationship_id.
+
+    RelationshipMapping is an omop-graph extension table, not vocab-role, so
+    it never lives on a split ``vocab_engine``. This always runs against
+    the primary connection.
+    """
+    return {
+        row.relationship_id: row
+        for row in session.execute(q_relationship_mapping_all()).all()
+    }
+
+
+def _predicate_from_rows(ancestry_row: Row, mapping_row: Row) -> Predicate:
+    """Build a Predicate from a Relationship-ancestry row and a RelationshipMapping row.
+
+    The two rows come from the same query in a same-connection deployment
+    (pass the row twice), or from two separately-fetched engines in a
+    split-connection one. This is the one place that shape difference
+    collapses back into a single code path.
+    """
+    return Predicate(
+        relationship_id=ancestry_row.relationship_id,
+        name=ancestry_row.relationship_name,
+        reverse_id=ancestry_row.reverse_relationship_id,
+        is_hierarchical=bool(ancestry_row.is_hierarchical),
+        anc_up=bool(ancestry_row.anc_up),
+        anc_down=bool(ancestry_row.anc_down),
+        predicate_kind=PredicateKind(mapping_row.predicate_kind),
+        predicate_subkind=mapping_row.predicate_subkind,
+    )
+
+
 class KnowledgeGraph(GraphBackend):
     """
     The main entry point for interacting with the OMOP Graph.
@@ -156,15 +191,31 @@ class KnowledgeGraph(GraphBackend):
     ----------
     cdm_engine : Engine
         The SQLAlchemy engine for the OMOP CDM database.
+    vocab_engine : Engine, optional
+        A separate engine for the vocabulary connection, for a deployment
+        where ``vocab_connection`` names a physically different server than
+        ``connection``. Omit (the common case) when vocabulary tables sit on
+        the same connection as everything else: same-connection queries
+        stay a single eager join. When given and different from
+        ``cdm_engine``, the three queries that join a vocab-role table
+        (Concept/Concept_Relationship/Relationship) against
+        RelationshipMapping (not vocab-role, since it's an omop-graph
+        extension table) fetch each side from its own engine and merge in
+        Python, since a SQL join cannot span two physical connections.
     """
 
     def __init__(
         self,
         cdm_engine: Engine,
+        vocab_engine: Optional[Engine] = None,
         emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
     ):
         self.cdm_engine = cdm_engine
         self.session_factory = sessionmaker(bind=self.cdm_engine, future=True)
+
+        self.vocab_engine = vocab_engine if vocab_engine is not None else cdm_engine
+        self._vocab_split = self.vocab_engine is not self.cdm_engine
+        self.vocab_session_factory = sessionmaker(bind=self.vocab_engine, future=True)
 
         try:
             with self.session_factory() as session:
@@ -416,18 +467,22 @@ class KnowledgeGraph(GraphBackend):
         Predicate
             The predicate definition.
         """
+        if self._vocab_split:
+            with self.vocab_session_factory() as vsession:
+                ancestry_row = vsession.execute(
+                    q_predicate_row_with_ancestry(
+                        relationship_id, include_classification=False
+                    )
+                ).one()
+            with self.session_factory() as session:
+                mapping_row = session.execute(
+                    q_relationship_mapping_row(relationship_id)
+                ).one()
+            return _predicate_from_rows(ancestry_row, mapping_row)
+
         with self.session_factory() as session:
             row = session.execute(q_predicate_row_with_ancestry(relationship_id)).one()
-        return Predicate(
-            relationship_id=row.relationship_id,
-            name=row.relationship_name,
-            reverse_id=row.reverse_relationship_id,
-            is_hierarchical=bool(row.is_hierarchical),
-            anc_up=bool(row.anc_up),
-            anc_down=bool(row.anc_down),
-            predicate_kind=PredicateKind(row.predicate_kind),
-            predicate_subkind=row.predicate_subkind,
-        )
+        return _predicate_from_rows(row, row)
 
     def predicate_name(self, relationship_id: str) -> str:
         """
@@ -573,6 +628,32 @@ class KnowledgeGraph(GraphBackend):
         within_domain: bool = True,
     ) -> Generator[EdgeView, None, None]:
 
+        if self._vocab_split:
+            with self.vocab_session_factory() as vsession:
+                vocab_rows = vsession.execute(
+                    q_edges(
+                        concept_ids=concept_ids,
+                        predicate_ids=predicate_ids,
+                        direction=direction,
+                        active_only=active_only,
+                        on=on,
+                        within_domain=within_domain,
+                        include_classification=False,
+                    )
+                ).all()
+            mapping_by_id = _relationship_mapping_lookup(session)
+            for vrow in vocab_rows:
+                mapping = mapping_by_id.get(vrow.predicate_id)
+                if mapping is None:
+                    continue
+                if predicate_kinds and PredicateKind(mapping.predicate_kind) not in predicate_kinds:
+                    continue
+                data = dict(vrow._mapping)
+                data["predicate_kind"] = PredicateKind(mapping.predicate_kind)
+                data["predicate_subkind"] = mapping.predicate_subkind
+                yield EdgeView(**data)
+            return
+
         stmt = q_edges(
             concept_ids=concept_ids,
             predicate_ids=predicate_ids,
@@ -682,21 +763,22 @@ class KnowledgeGraph(GraphBackend):
         """
         Return all predicates known to the knowledge graph.
         """
+        if self._vocab_split:
+            with self.vocab_session_factory() as vsession:
+                ancestry_rows = vsession.execute(
+                    q_all_predicates_with_ancestry(include_classification=False)
+                ).all()
+            with self.session_factory() as session:
+                mapping_by_id = _relationship_mapping_lookup(session)
+            return tuple(
+                _predicate_from_rows(row, mapping_by_id[row.relationship_id])
+                for row in ancestry_rows
+                if row.relationship_id in mapping_by_id
+            )
+
         with self.session_factory() as session:
             rows = session.execute(q_all_predicates_with_ancestry()).all()
-        return tuple(
-            Predicate(
-                relationship_id=row.relationship_id,
-                name=row.relationship_name,
-                reverse_id=row.reverse_relationship_id,
-                is_hierarchical=bool(row.is_hierarchical),
-                anc_up=bool(row.anc_up),
-                anc_down=bool(row.anc_down),
-                predicate_kind=PredicateKind(row.predicate_kind),
-                predicate_subkind=row.predicate_subkind,
-            )
-            for row in rows
-        )
+        return tuple(_predicate_from_rows(row, row) for row in rows)
 
     @functools.cached_property
     def _valid_domains(self) -> frozenset[str]:

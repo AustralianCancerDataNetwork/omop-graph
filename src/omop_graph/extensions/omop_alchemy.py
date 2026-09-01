@@ -2,7 +2,8 @@
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from orm_loader.helpers import Base
-from omop_alchemy.cdm.base import ReferenceTable, cdm_table, CDMTableBase
+from omop_alchemy.cdm.base import ReferenceTable, cdm_table, CDMTableBase, role_fk
+from oa_configurator import Role
 
 from enum import Enum
 from dataclasses import dataclass
@@ -51,7 +52,8 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     __tablename__ = "relationship_mapping"
 
     relationship_id: so.Mapped[str] = so.mapped_column(
-        sa.ForeignKey("relationship.relationship_id"), primary_key=True
+        sa.ForeignKey(role_fk(Role.VOCAB, "relationship.relationship_id")),
+        primary_key=True,
     )
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
         sa.Enum(

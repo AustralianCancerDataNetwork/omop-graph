@@ -7,7 +7,7 @@ from typing import Optional, Union
 from sqlalchemy.engine import URL
 
 from .omop_resource import OMOPOntologyResource
-from oa_configurator import Resolver
+from oa_configurator import ResolvedCDMDatabase, Resolver
 from omop_graph.config import OmopGraphConfig
 
 
@@ -33,13 +33,21 @@ def omop_resource(
     -------
     OMOPOntologyResource
     """
+    execution_options = None
     if url is None:
         resolver = Resolver.from_active_config()
         db_name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
         database = resolver.resolve_database(db_name)
+        if not isinstance(database, ResolvedCDMDatabase):
+            raise TypeError(
+                f"OmopGraphConfig.cdm_db must resolve to a CDM database, got "
+                f"{type(database).__name__}"
+            )
         url = database.connection.url
+        execution_options = {"schema_translate_map": database.schema_translate_map()}
 
     return OMOPOntologyResource(
         slug=slug,
         url=url,
+        execution_options=execution_options,
     )

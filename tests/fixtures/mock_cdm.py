@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
+from typing import Iterator, cast
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
+from oa_configurator.testing import isolated_test_database
 from orm_loader.helpers import Base
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
@@ -17,6 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
     RelationshipClass,
@@ -30,8 +32,20 @@ LANGUAGE_CONCEPT_ID = 1
 
 
 @pytest.fixture(scope="module")
-def mock_cdm_engine() -> sa.Engine:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:", future=True)
+def mock_cdm_engine() -> Iterator[sa.Engine]:
+    with isolated_test_database(
+        OmopGraphConfig,
+        "test_cdm_db_sqlite",
+        dialect="sqlite",
+        future=True,
+        execution_options={"schema_translate_map": {None: None, "vocab": None, "results": None}},
+    ) as db:
+        engine = db.connection.engine
+        _create_mock_cdm_tables(engine)
+        yield engine
+
+
+def _create_mock_cdm_tables(engine: sa.Engine) -> None:
     tables = cast(
         list[sa.Table],
         [
@@ -53,8 +67,6 @@ def mock_cdm_engine() -> sa.Engine:
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         seed_mock_cdm(session)
-
-    return engine
 
 
 @pytest.fixture()

@@ -27,6 +27,11 @@ class OMOPOntologyResource(OntologyResource):
         Whether the resource is in-memory. Defaults to False.
     readonly : bool, optional
         Whether the resource is read-only. Defaults to True.
+    execution_options : dict, optional
+        Forwarded to the engine built from ``url`` (e.g. a
+        ``schema_translate_map``). Not carried by ``url`` itself, so a
+        caller resolving through oa-configurator needs this to keep the
+        configured schema past this resource object.
     """
 
     url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
@@ -35,6 +40,7 @@ class OMOPOntologyResource(OntologyResource):
     local: bool = False  # type: ignore[assignment]
     in_memory: bool = False  # type: ignore[assignment]
     readonly: bool = True  # type: ignore[assignment]
+    execution_options: Optional[dict] = None  # type: ignore[assignment]
 
     def _parsed_url(self) -> Optional[URL]:
         """

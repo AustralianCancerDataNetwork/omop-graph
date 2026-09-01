@@ -26,11 +26,12 @@ from sqlalchemy import (
     or_,
     select,
     Engine,
-    inspect,
     column,
 )
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
+
+from oa_configurator import schema_inspect
 
 from omop_alchemy.backends import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
@@ -352,7 +353,7 @@ def q_concept_name_fulltext(
         Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
     )
 
-    inspector = inspect(engine)
+    inspector = schema_inspect(engine)
     target_table = Concept_Synonym if synonym else Concept
     target_col = (
         CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN
@@ -423,61 +424,108 @@ def q_predicate_row(relationship_id: str) -> Select:
     ).where(Relationship.relationship_id == relationship_id)
 
 
-def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
+def q_predicate_row_with_ancestry(
+    relationship_id: str, *, include_classification: bool = True
+) -> Select:
     """
     Query a predicate and its reverse to determine directionality.
 
     This joins the Relationship table with itself to determine if the relationship
     points 'up' (towards ancestors) or 'down' (towards descendants).
 
+    Parameters
+    ----------
+    include_classification : bool, optional
+        Join in RelationshipMapping's predicate_kind/predicate_subkind. Set to
+        False for a split-connection deployment (Relationship is vocab-role,
+        RelationshipMapping is not, so they can live on different physical
+        connections). The caller fetches RelationshipMapping separately via
+        :func:`q_relationship_mapping_row` and merges in Python.
+
     Returns
     -------
     Select
         Columns: relationship_id, relationship_name, reverse_relationship_id,
-        is_hierarchical, anc_down, anc_up.
+        is_hierarchical, anc_down, anc_up, plus predicate_kind/predicate_subkind
+        when include_classification is True.
     """
     Rel = Relationship
     Rev = aliased(Relationship)
-    Rm = aliased(RelationshipMapping)
 
-    return (
-        select(
-            Rel.relationship_id,
-            Rel.relationship_name,
-            Rel.reverse_relationship_id,
-            Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
-            Rel.is_ancestry_defining_expr().label("anc_down"),
-            Rev.is_ancestry_defining_expr().label("anc_up"),
-            Rm.predicate_kind,
-            Rm.predicate_subkind,
-        )
-        .join(
-            Rev,
-            Rel.reverse_relationship_id == Rev.relationship_id,
-        )
-        .join(Rm, Rel.relationship_id == Rm.relationship_id)  # Match string IDs
-        .where(Rel.relationship_id == relationship_id)
+    stmt = select(
+        Rel.relationship_id,
+        Rel.relationship_name,
+        Rel.reverse_relationship_id,
+        Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
+        Rel.is_ancestry_defining_expr().label("anc_down"),
+        Rev.is_ancestry_defining_expr().label("anc_up"),
+    ).join(
+        Rev,
+        Rel.reverse_relationship_id == Rev.relationship_id,
     )
 
+    if include_classification:
+        Rm = aliased(RelationshipMapping)
+        stmt = stmt.add_columns(Rm.predicate_kind, Rm.predicate_subkind).join(
+            Rm, Rel.relationship_id == Rm.relationship_id
+        )
 
-def q_all_predicates_with_ancestry() -> Select:
-    """Query all predicates with derived ancestry direction flags and classification."""
+    return stmt.where(Rel.relationship_id == relationship_id)
+
+
+def q_all_predicates_with_ancestry(*, include_classification: bool = True) -> Select:
+    """Query all predicates with derived ancestry direction flags and classification.
+
+    Parameters
+    ----------
+    include_classification : bool, optional
+        See :func:`q_predicate_row_with_ancestry`.
+    """
     Rel = Relationship
     Rev = aliased(Relationship)
-    Rm = aliased(RelationshipMapping)
-    return (
-        select(
-            Rel.relationship_id,
-            Rel.relationship_name,
-            Rel.reverse_relationship_id,
-            Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
-            Rel.is_ancestry_defining_expr().label("anc_down"),
-            Rev.is_ancestry_defining_expr().label("anc_up"),
-            Rm.predicate_kind,
-            Rm.predicate_subkind,
+
+    stmt = select(
+        Rel.relationship_id,
+        Rel.relationship_name,
+        Rel.reverse_relationship_id,
+        Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
+        Rel.is_ancestry_defining_expr().label("anc_down"),
+        Rev.is_ancestry_defining_expr().label("anc_up"),
+    ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
+
+    if include_classification:
+        Rm = aliased(RelationshipMapping)
+        stmt = stmt.add_columns(Rm.predicate_kind, Rm.predicate_subkind).join(
+            Rm, Rel.relationship_id == Rm.relationship_id
         )
-        .join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
-        .join(Rm, Rel.relationship_id == Rm.relationship_id)
+
+    return stmt
+
+
+def q_relationship_mapping_row(relationship_id: str) -> Select:
+    """Query one RelationshipMapping row by relationship_id.
+
+    The primary-role half of a split-connection predicate lookup, pairing
+    with :func:`q_predicate_row_with_ancestry`'s ``include_classification=False``.
+    """
+    return select(
+        RelationshipMapping.relationship_id,
+        RelationshipMapping.predicate_kind,
+        RelationshipMapping.predicate_subkind,
+    ).where(RelationshipMapping.relationship_id == relationship_id)
+
+
+def q_relationship_mapping_all() -> Select:
+    """Query every RelationshipMapping row, keyed by relationship_id.
+
+    The primary-role half of a split-connection edges/predicates lookup.
+    RelationshipMapping is a small reference table, so callers merge it as a
+    plain dict rather than joining across connections.
+    """
+    return select(
+        RelationshipMapping.relationship_id,
+        RelationshipMapping.predicate_kind,
+        RelationshipMapping.predicate_subkind,
     )
 
 
@@ -489,10 +537,29 @@ def q_edges(
     active_only: bool = False,
     on: Optional[date] = None,
     within_domain: bool = False,
+    include_classification: bool = True,
 ) -> Select:
-    """Query outgoing edges for a batch of concept IDs."""
+    """Query outgoing edges for a batch of concept IDs.
+
+    Parameters
+    ----------
+    include_classification : bool, optional
+        Join in RelationshipMapping's predicate_kind/predicate_subkind.
+        Concept_Relationship is vocab-role, RelationshipMapping is not, so
+        for a split-connection deployment set this to False and merge
+        RelationshipMapping (via :func:`q_relationship_mapping_all`)
+        in Python instead. ``predicate_kinds`` cannot be applied in SQL
+        when this is False (the column isn't joined); the caller must
+        filter after merging.
+    """
     if isinstance(concept_ids, int):
         concept_ids = (concept_ids,)
+
+    if not include_classification and predicate_kinds:
+        raise ValueError(
+            "predicate_kinds requires include_classification=True; filter "
+            "after merging RelationshipMapping in Python instead."
+        )
 
     Subj = aliased(Concept)
     Obj = aliased(Concept)
@@ -504,12 +571,16 @@ def q_edges(
         Concept_Relationship.valid_start_date,
         Concept_Relationship.valid_end_date,
         Concept_Relationship.invalid_reason,
-        RelationshipMapping.predicate_kind,
-        RelationshipMapping.predicate_subkind,
-    ).join(
-        RelationshipMapping,
-        Concept_Relationship.relationship_id == RelationshipMapping.relationship_id,
     )
+
+    if include_classification:
+        stmt = stmt.add_columns(
+            RelationshipMapping.predicate_kind, RelationshipMapping.predicate_subkind
+        ).join(
+            RelationshipMapping,
+            Concept_Relationship.relationship_id
+            == RelationshipMapping.relationship_id,
+        )
 
     if active_only:
         stmt = stmt.where(Concept_Relationship.is_valid_expr())
