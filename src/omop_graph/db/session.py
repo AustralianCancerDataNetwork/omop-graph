@@ -7,8 +7,24 @@ from typing import Optional, Union
 from sqlalchemy import create_engine, URL, Engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from oa_configurator import Resolver
+from oa_configurator import ResolvedCDMDatabase, Resolver
 from omop_graph.config import OmopGraphConfig
+
+
+def resolve_cdm_database() -> ResolvedCDMDatabase:
+    """Resolve the active oa-configurator config's CDM database.
+
+    Split out from make_engine() for callers that need the resolved object
+    itself (e.g. schema-provenance guarding, Phase 9), not just an engine.
+    """
+    resolver = Resolver.from_active_config()
+    db_name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
+    resolved = resolver.resolve_database(db_name)
+    if not isinstance(resolved, ResolvedCDMDatabase):
+        raise TypeError(
+            f"OmopGraphConfig.cdm_db must resolve to a CDM database, got {type(resolved).__name__}"
+        )
+    return resolved
 
 
 def make_engine(
@@ -42,9 +58,7 @@ def make_engine(
     """
     engine_kwargs = engine_kwargs or {}
     if url is None:
-        resolver = Resolver.from_active_config()
-        db_name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
-        database = resolver.resolve_database(db_name)
+        database = resolve_cdm_database()
         return database.create_engine(execution_options=execution_options, **engine_kwargs)
 
     from sqlalchemy import make_url as _make_url

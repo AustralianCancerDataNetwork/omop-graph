@@ -1,5 +1,7 @@
 import logging
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from importlib import resources
 from pathlib import Path
 from typing import Annotated, Optional, cast
@@ -9,7 +11,7 @@ import sqlalchemy as sa
 import typer
 from sqlalchemy.orm import sessionmaker
 
-from oa_configurator import ensure_schema, schema_of
+from oa_configurator import ResolvedCDMDatabase, Role, ensure_schema, guard_schema_provenance, schema_of
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
@@ -17,7 +19,7 @@ from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import make_engine
+from omop_graph.db.session import make_engine, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from omop_graph.cli_utils import populate_test_data
 
@@ -59,10 +61,24 @@ def packaged_predicate_csv_dir() -> Path:
     return Path(str(resources.files("omop_graph") / "data"))
 
 
+@contextmanager
+def _open_connection(bindable: sa.Engine | sa.Connection) -> Iterator[sa.Connection]:
+    """Yield a Connection: opens its own transaction for an Engine, or uses
+    an already-open Connection directly, participating in the caller's own
+    transaction (needed by the rollback-based pg_db test fixture).
+    """
+    if isinstance(bindable, sa.Engine):
+        with bindable.begin() as connection:
+            yield connection
+    else:
+        yield bindable
+
+
 def relationship_classification(
     pred_class_dir: Optional[str] = None,
     *,
     engine: sa.Engine | sa.Connection | None = None,
+    resolved: ResolvedCDMDatabase | None = None,
 ) -> None:
     """Load pre-classified predicates into the database.
 
@@ -74,7 +90,12 @@ def relationship_classification(
         omop-graph.
     engine : sqlalchemy.Engine or sqlalchemy.Connection, optional
         Bindable to run against. Defaults to the active oa-configurator
-        config's resolved CDM engine.
+        config's resolved CDM engine, in which case resolved is also
+        resolved internally and any value passed here is ignored.
+    resolved : ResolvedCDMDatabase, optional
+        Enables the schema-provenance guard. Only meaningful together with
+        an explicitly injected engine/connection, since the engine=None
+        path always resolves its own regardless of what's passed here.
     """
     pred_class_dir_pl = (
         Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
@@ -145,7 +166,8 @@ def relationship_classification(
     )
 
     if engine is None:
-        engine = make_engine()
+        resolved = resolve_cdm_database()
+        engine = resolved.create_engine()
     db_schema = schema_of(engine)
     ensure_schema(engine, db_schema)
     ensure_schema(engine, STAGING_SCHEMA)
@@ -164,27 +186,25 @@ def relationship_classification(
             f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
         ),
     )
-    if isinstance(engine, sa.Engine):
-        with engine.begin() as conn:
-            for stmt in drop_staging_sql:
-                conn.execute(stmt)
-    else:
+    with _open_connection(engine) as connection:
         for stmt in drop_staging_sql:
-            engine.execute(stmt)
+            connection.execute(stmt)
 
     # DROP TYPE IF EXISTS predicatekindenum was dead code: the Enum column
     # never set an explicit name=, so SQLAlchemy's generated type name is
-    # actually "predicatekind", meaning this line never matched anything,
-    # with IF EXISTS silently no-op'ing every run. drop_all(tables=[...]) already
-    # drops a shared Enum type exactly once, correctly deduped, once every
-    # table using it is in the same tables= list (true here, both tables
-    # always move together), so no manual DROP TYPE is needed at all.
+    # actually "predicatekind". drop_all(tables=[...]) already drops the
+    # shared Enum type exactly once, deduped, since both tables using it
+    # are always in the same tables= list.
     tables_to_drop = [
         RelationshipMapping.__table__,
         RelationshipClass.__table__,
     ]
-    Base.metadata.drop_all(bind=engine, tables=tables_to_drop, checkfirst=True)  # type: ignore
-    Base.metadata.create_all(bind=engine, tables=tables_to_drop)  # type: ignore
+    # Both tables live in the primary schema (only RelationshipMapping's FK
+    # target is vocab-tagged, via role_fk), so the guard checks Role.PRIMARY.
+    with _open_connection(engine) as connection:
+        with guard_schema_provenance(connection, resolved, role=Role.PRIMARY):
+            Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
+            Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         for model, df in zip(

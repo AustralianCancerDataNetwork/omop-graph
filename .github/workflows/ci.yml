@@ -8,8 +8,8 @@ jobs:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/label-gate.yml@main
   build-test-sqlite:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test.yml@main
-  build-test:
-    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test-postgres.yml@main
+  build-test-postgres:
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test-postgres-v2.yml@main
     with:
       postgres-db: omop_graph_test
       setup-commands: |
