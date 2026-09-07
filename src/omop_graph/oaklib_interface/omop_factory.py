@@ -7,7 +7,7 @@ from typing import Optional, Union
 from sqlalchemy.engine import URL
 
 from .omop_resource import OMOPOntologyResource
-from oa_configurator import ResolvedCDMDatabase, Resolver
+from oa_configurator import SCHEMA_TRANSLATE_MAP_KEY, ResolvedCDMDatabase, Resolver
 from omop_graph.config import OmopGraphConfig
 
 
@@ -34,6 +34,8 @@ def omop_resource(
     OMOPOntologyResource
     """
     execution_options = None
+    vocab_url = None
+    vocab_execution_options = None
     if url is None:
         resolver = Resolver.from_active_config()
         db_name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
@@ -44,10 +46,15 @@ def omop_resource(
                 f"{type(database).__name__}"
             )
         url = database.connection.url
-        execution_options = {"schema_translate_map": database.schema_translate_map()}
+        execution_options = {SCHEMA_TRANSLATE_MAP_KEY: database.schema_translate_map()}
+        if database.connection != database.vocab_connection:
+            vocab_url = database.vocab_connection.url
+            vocab_execution_options = execution_options
 
     return OMOPOntologyResource(
         slug=slug,
         url=url,
         execution_options=execution_options,
+        vocab_url=vocab_url,
+        vocab_execution_options=vocab_execution_options,
     )

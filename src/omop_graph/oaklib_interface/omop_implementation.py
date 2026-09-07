@@ -857,7 +857,10 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         An existing resource object. Takes precedence over ``engine_string`` when
         both are supplied. Ignored when ``kg`` is given directly. To use the
         oa-configurator-configured default, resolve it explicitly via
-        ``omop_resource()`` and pass it here.
+        ``omop_resource()`` and pass it here. When the resolved CDM database
+        has a genuinely separate ``vocab_connection`` configured, the
+        resource carries a second URL for it and a real ``vocab_engine`` is
+        built and passed to ``KnowledgeGraph`` alongside the primary one.
     kg : KnowledgeGraph | None, optional
         An existing Knowledge Graph instance. Takes this class's own engine
         construction out of the picture entirely -- the caller already built
@@ -907,7 +910,14 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
                 engine_kwargs={"echo": False, "future": True},
                 execution_options=self.resource.execution_options,
             )
-            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine)
+            vocab_engine = None
+            if self.resource.vocab_url is not None:
+                vocab_engine = make_engine(
+                    self.resource.vocab_url,
+                    engine_kwargs={"echo": False, "future": True},
+                    execution_options=self.resource.vocab_execution_options,
+                )
+            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine, vocab_engine=vocab_engine)
             bind_default_renderers(kg)
 
         super().__init__(kg=kg, **kwargs)

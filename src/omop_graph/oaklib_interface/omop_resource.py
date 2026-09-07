@@ -32,6 +32,16 @@ class OMOPOntologyResource(OntologyResource):
         ``schema_translate_map``). Not carried by ``url`` itself, so a
         caller resolving through oa-configurator needs this to keep the
         configured schema past this resource object.
+    vocab_url : str | URL, optional
+        Connection URL for a genuinely separate vocabulary server. ``None``
+        when the CDM database has no configured vocabulary split, or when
+        this resource wasn't built by ``omop_resource()``'s config-resolving
+        path (a caller-supplied ``url=`` has no vocabulary split to carry).
+    vocab_execution_options : dict, optional
+        Forwarded to the engine built from ``vocab_url``. The same
+        ``schema_translate_map`` as ``execution_options``: the map itself
+        doesn't change across roles, only which physical connection it's
+        applied to.
     """
 
     url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
@@ -41,6 +51,8 @@ class OMOPOntologyResource(OntologyResource):
     in_memory: bool = False  # type: ignore[assignment]
     readonly: bool = True  # type: ignore[assignment]
     execution_options: Optional[dict] = None  # type: ignore[assignment]
+    vocab_url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
+    vocab_execution_options: Optional[dict] = None  # type: ignore[assignment]
 
     def _parsed_url(self) -> Optional[URL]:
         """

@@ -47,9 +47,11 @@ def make_engine(
         Keyword arguments forwarded to ``sqlalchemy.create_engine`` in both paths.
         Common keys: ``echo``, ``connect_args``, ``pool_size``.
     execution_options : dict, optional
-        Options forwarded to ``engine.execution_options()``. In the resolver path these
-        are merged with the auto-generated ``schema_translate_map`` (resolver wins on
-        that key via ``setdefault``).
+        Options forwarded to ``engine.execution_options()``. In the resolver
+        path, a ``schema_translate_map`` here may add keys the resolver
+        doesn't define, but may not include ``None``: that key is always set
+        from the resolved config, and ``create_engine()`` raises
+        ``ValueError`` if it is overridden here.
 
     Returns
     -------
