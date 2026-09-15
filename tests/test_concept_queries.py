@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Iterator
+from typing import Iterator, cast
 
 import pytest
 import sqlalchemy as sa
@@ -37,7 +37,7 @@ def concept_engine() -> Iterator[sa.Engine]:
         },
     ) as db:
         engine = db.connection.engine
-        Concept.__table__.create(engine)
+        cast(sa.Table, Concept.__table__).create(engine)
 
         valid_from = date(2000, 1, 1)
         valid_until = date(2099, 12, 31)

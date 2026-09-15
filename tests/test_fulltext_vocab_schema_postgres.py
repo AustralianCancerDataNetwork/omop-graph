@@ -19,6 +19,7 @@ transaction.
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
@@ -31,7 +32,10 @@ from omop_graph.graph.queries import q_concept_name_fulltext
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
-_VOCAB_TABLES = (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__)
+_VOCAB_TABLES = cast(
+    "tuple[sa.Table, ...]",
+    (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__),
+)
 
 
 def _scoped(pg_db, *, primary_schema: str, vocab_schema: str) -> sa.Connection:

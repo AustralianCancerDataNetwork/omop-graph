@@ -39,20 +39,10 @@ class WhitelistFilter(logging.Filter):
 
 @pytest.fixture(autouse=True, scope="session")
 def configure_logging_whitelist():
+    """Attach the filter to the root logger's handlers, not the logger itself,
+    so the check runs right before text actually reaches the screen.
     """
-    Attaches the filter to the HANDLERS, not the logger.
-    """
-    # Your allowed list
-    my_whitelisted_loggers = ["omop_graph", "orm_loader", "omop_spires", "tests"]
-
-    # Instantiate the filter
-    my_filter = WhitelistFilter(my_whitelisted_loggers)
-
-    # Get the root logger
-    root_logger = logging.getLogger()
-
-    # --- THE FIX ---
-    # We iterate over the handlers (Console, File, etc.) and attach the filter there.
-    # This forces the check to happen right before the text hits the screen.
-    for handler in root_logger.handlers:
+    whitelisted_loggers = ["omop_graph", "orm_loader", "omop_spires", "tests"]
+    my_filter = WhitelistFilter(whitelisted_loggers)
+    for handler in logging.getLogger().handlers:
         handler.addFilter(my_filter)

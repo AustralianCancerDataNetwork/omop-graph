@@ -19,7 +19,7 @@ genuinely separate physical connections.
 from __future__ import annotations
 
 from datetime import date
-from typing import Iterator, NamedTuple
+from typing import Iterator, NamedTuple, cast
 
 import pytest
 import sqlalchemy as sa
@@ -55,13 +55,16 @@ OBJECT_CONCEPT_ID = 2
 _TODAY = date(2020, 1, 1)
 _FAR_FUTURE = date(2099, 12, 31)
 
-_VOCAB_TABLES = (
-    Domain.__table__,
-    Vocabulary.__table__,
-    Concept_Class.__table__,
-    Concept.__table__,
-    Relationship.__table__,
-    Concept_Relationship.__table__,
+_VOCAB_TABLES = cast(
+    "tuple[sa.Table, ...]",
+    (
+        Domain.__table__,
+        Vocabulary.__table__,
+        Concept_Class.__table__,
+        Concept.__table__,
+        Relationship.__table__,
+        Concept_Relationship.__table__,
+    ),
 )
 
 # Postgres has no cross-database inline FK (unlike cross-schema, which works

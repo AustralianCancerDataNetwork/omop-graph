@@ -22,8 +22,10 @@ paths here, tested separately:
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
 import sqlalchemy as sa
+import sqlalchemy.orm
 
 from oa_configurator import (
     SCHEMA_TRANSLATE_MAP_KEY,
@@ -48,7 +50,10 @@ _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
 _TODAY = date(2020, 1, 1)
 _FAR_FUTURE = date(2099, 12, 31)
-_VOCAB_TABLES = (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__)
+_VOCAB_TABLES = cast(
+    "tuple[sa.Table, ...]",
+    (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__),
+)
 
 
 def _seed_one_concept(bindable: sa.Engine | sa.Connection, *, concept_id: int, name: str) -> None:

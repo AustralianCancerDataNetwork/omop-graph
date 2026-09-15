@@ -25,6 +25,7 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    Connection,
     Engine,
     column,
 )
@@ -324,7 +325,7 @@ def q_concept_name_ilike(
 def q_concept_name_fulltext(
     query_concept_name: str,
     *,
-    engine: Engine,
+    engine: Engine | Connection,
     search_constraint: Optional[ConceptFilter] = None,
     synonym: bool = False,
     sort: bool = True,
