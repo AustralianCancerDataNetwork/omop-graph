@@ -743,23 +743,24 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             {self._parse_predicate(p) for p in predicates} if predicates else None
         )
 
-        for edge in self.kg.iter_edges(
-            concept_id, direction="out", predicate_kinds=None
-        ):
-            if pred_filter and edge.predicate_id not in pred_filter:
-                continue
+        with self.kg.session_factory() as session:
+            for edge in self.kg.iter_edges(
+                session=session, concept_ids=concept_id, direction="out", predicate_kinds=None
+            ):
+                if pred_filter and edge.predicate_id not in pred_filter:
+                    continue
 
-            pred_curie = self._predicate_curie(edge.predicate_id)
+                pred_curie = self._predicate_curie(edge.predicate_id)
 
-            # hierarchical entailment
-            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
-                yield pred_curie, self._concept_curie(edge.object_id)
+                # hierarchical entailment
+                if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
+                    yield pred_curie, self._concept_curie(edge.object_id)
 
-                for parent in self.kg.parents(edge.object_id):
-                    yield pred_curie, self._concept_curie(parent)
+                    for parent in self.kg.parents(edge.object_id):
+                        yield pred_curie, self._concept_curie(parent)
 
-            else:
-                yield pred_curie, self._concept_curie(edge.object_id)
+                else:
+                    yield pred_curie, self._concept_curie(edge.object_id)
 
     def entailed_outputgoing_relationships_by_curie(
         self, *args, **kwargs
@@ -819,9 +820,10 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         obj_id = self._parse_concept(object)
 
         # direct relationships
-        for edge in self.kg.iter_edges(subj_id, direction="out"):
-            if edge.object_id == obj_id:
-                yield self._predicate_curie(edge.predicate_id)
+        with self.kg.session_factory() as session:
+            for edge in self.kg.iter_edges(session=session, concept_ids=subj_id, direction="out"):
+                if edge.object_id == obj_id:
+                    yield self._predicate_curie(edge.predicate_id)
 
         # hierarchical entailment
         if obj_id in self.kg.parents(subj_id):
@@ -905,18 +907,25 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
                     "first, e.g. OMOPAlchemyImplementation(resource=omop_resource())."
                 )
 
-            engine = make_engine(
-                self.engine_string,
-                engine_kwargs={"echo": False, "future": True},
-                execution_options=self.resource.execution_options,
-            )
-            vocab_engine = None
-            if self.resource.vocab_url is not None:
-                vocab_engine = make_engine(
-                    self.resource.vocab_url,
-                    engine_kwargs={"echo": False, "future": True},
-                    execution_options=self.resource.vocab_execution_options,
+            if self.resource.resolved is not None:
+                engine, vocab_engine = self.resource.resolved.create_engines(
+                    echo=False, future=True
                 )
+                if vocab_engine is engine:
+                    vocab_engine = None
+            else:
+                engine = make_engine(
+                    self.engine_string,
+                    engine_kwargs={"echo": False, "future": True},
+                    execution_options=self.resource.execution_options,
+                )
+                vocab_engine = None
+                if self.resource.vocab_url is not None:
+                    vocab_engine = make_engine(
+                        self.resource.vocab_url,
+                        engine_kwargs={"echo": False, "future": True},
+                        execution_options=self.resource.vocab_execution_options,
+                    )
             kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine, vocab_engine=vocab_engine)
             bind_default_renderers(kg)
 

@@ -4,6 +4,8 @@ from typing import Optional, Union
 from oaklib.resource import OntologyResource
 from sqlalchemy.engine import URL, make_url
 
+from oa_configurator import ResolvedCDMDatabase
+
 
 @dataclass
 class OMOPOntologyResource(OntologyResource):
@@ -42,6 +44,10 @@ class OMOPOntologyResource(OntologyResource):
         ``schema_translate_map`` as ``execution_options``: the map itself
         doesn't change across roles, only which physical connection it's
         applied to.
+    resolved : ResolvedCDMDatabase, optional
+        When present, ``OMOPAlchemyImplementation`` builds its engine(s) via
+        ``resolved.create_engines()`` directly instead of reconstructing one
+        from ``url``/``execution_options``.
     """
 
     url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
@@ -53,6 +59,7 @@ class OMOPOntologyResource(OntologyResource):
     execution_options: Optional[dict] = None  # type: ignore[assignment]
     vocab_url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
     vocab_execution_options: Optional[dict] = None  # type: ignore[assignment]
+    resolved: Optional[ResolvedCDMDatabase] = None  # type: ignore[assignment]
 
     def _parsed_url(self) -> Optional[URL]:
         """

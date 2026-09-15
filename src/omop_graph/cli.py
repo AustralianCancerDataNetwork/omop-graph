@@ -19,7 +19,7 @@ from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import make_engine, resolve_cdm_database
+from omop_graph.db.session import resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from omop_graph.cli_utils import populate_test_data
 
@@ -45,9 +45,11 @@ def _main(
 @app.command()
 def populate_with_test_data():
     """Populate the database with synthetic test data."""
-    engine = make_engine()
+    resolved = resolve_cdm_database()
+    engine, vocab_engine = resolved.create_engines()
     Session = sessionmaker(bind=engine, future=True)
-    populate_test_data(Session())
+    VocabSession = sessionmaker(bind=vocab_engine, future=True)
+    populate_test_data(Session(), vocab_session=VocabSession())
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -168,6 +170,16 @@ def relationship_classification(
     if engine is None:
         resolved = resolve_cdm_database()
         engine = resolved.create_engine()
+    if resolved is not None and resolved.connection != resolved.vocab_connection:
+        raise RuntimeError(
+            f"relationship_classification() cannot run against database "
+            f"{resolved.name!r}: its vocab_connection is a genuinely separate "
+            "connection from the primary one, and RelationshipMapping's FK to "
+            "relationship.relationship_id needs both in the same database. "
+            "Point vocab_connection at the same connection as primary for "
+            "this command, or provision relationship_class/relationship_mapping "
+            "manually without the FK constraint."
+        )
     db_schema = schema_of(engine)
     ensure_schema(engine, db_schema)
     ensure_schema(engine, STAGING_SCHEMA)

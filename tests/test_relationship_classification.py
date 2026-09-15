@@ -11,7 +11,11 @@ raw SQL referenced. Confirmed here rather than assumed.
 
 from __future__ import annotations
 
+import dataclasses
+
+import pytest
 import sqlalchemy as sa
+from oa_configurator import Role
 
 from orm_loader.helpers import Base
 
@@ -23,7 +27,7 @@ def _scoped_connection(pg_db, schema: str) -> sa.Connection:
     conn = pg_db.connection
     conn.execute(sa.text(f"CREATE SCHEMA {schema}"))
     return conn.execution_options(
-        schema_translate_map={None: schema, "vocab": schema, "results": schema}
+        schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
     )
 
 
@@ -54,6 +58,21 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
         sa.text("SELECT typname FROM pg_type WHERE typname = 'predicatekind'")
     ).scalar()
     assert enum_type == "predicatekind"
+
+
+def test_relationship_classification_refuses_a_genuinely_split_vocab_connection(pg_db):
+    """Postgres has no cross-database inline FK, so RelationshipMapping's FK
+    to relationship.relationship_id (VOCAB-role) can never be created once
+    vocab_connection is a genuinely separate connection.
+    """
+    resolved = dataclasses.replace(
+        pg_db.resolved,
+        vocab_connection=dataclasses.replace(
+            pg_db.resolved.connection, name="genuinely_different", safe_url="postgresql://other/db"
+        ),
+    )
+    with pytest.raises(RuntimeError, match="genuinely separate"):
+        relationship_classification(engine=pg_db.connection, resolved=resolved)
 
 
 def test_relationship_classification_is_idempotent(pg_db):

@@ -7,6 +7,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
+from oa_configurator import SCHEMA_TRANSLATE_MAP_KEY, Role
 from oa_configurator.testing import isolated_test_database
 from orm_loader.helpers import Base
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
@@ -38,7 +39,9 @@ def mock_cdm_engine() -> Iterator[sa.Engine]:
         "test_cdm_db_sqlite",
         dialect="sqlite",
         future=True,
-        execution_options={"schema_translate_map": {None: None, "vocab": None, "results": None}},
+        execution_options={
+            SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
+        },
     ) as db:
         engine = db.connection.engine
         _create_mock_cdm_tables(engine)

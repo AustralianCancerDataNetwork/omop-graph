@@ -25,6 +25,7 @@ import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 
+from oa_configurator import Role
 from oa_configurator.testing import isolated_test_database, isolated_test_schema
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base
@@ -77,13 +78,19 @@ _shadow_relationship_class = sa.Table(
     _shadow_metadata,
     sa.Column(
         "predicate_kind",
-        sa.Enum(PredicateKind, values_callable=lambda obj: [e.value for e in obj]),
+        sa.Enum(
+            PredicateKind,
+            values_callable=lambda obj: [e.value for e in obj],
+            schema=Role.PRIMARY.value,
+        ),
         primary_key=True,
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
     sa.Column("description", sa.String(80), nullable=False),
     sa.Column("semantics", sa.String(40), nullable=False),
     sa.Column("inference", sa.String(40), nullable=False),
+    # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
+    schema=Role.PRIMARY.value,
 )
 _shadow_relationship_mapping = sa.Table(
     "relationship_mapping",
@@ -91,10 +98,15 @@ _shadow_relationship_mapping = sa.Table(
     sa.Column("relationship_id", sa.String(20), primary_key=True),
     sa.Column(
         "predicate_kind",
-        sa.Enum(PredicateKind, values_callable=lambda obj: [e.value for e in obj]),
+        sa.Enum(
+            PredicateKind,
+            values_callable=lambda obj: [e.value for e in obj],
+            schema=Role.PRIMARY.value,
+        ),
         primary_key=True,
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
+    schema=Role.PRIMARY.value,
 )
 
 
@@ -120,10 +132,18 @@ def split_engines() -> Iterator[_Engines]:
             isolated_test_schema(vocab_raw) as vocab_schema,
         ):
             primary_engine = primary_raw.execution_options(
-                schema_translate_map={None: primary_schema, "vocab": primary_schema, "results": primary_schema}
+                schema_translate_map={
+                    Role.PRIMARY.value: primary_schema,
+                    Role.VOCAB.value: primary_schema,
+                    Role.RESULTS.value: primary_schema,
+                }
             )
             vocab_engine = vocab_raw.execution_options(
-                schema_translate_map={None: vocab_schema, "vocab": vocab_schema, "results": vocab_schema}
+                schema_translate_map={
+                    Role.PRIMARY.value: vocab_schema,
+                    Role.VOCAB.value: vocab_schema,
+                    Role.RESULTS.value: vocab_schema,
+                }
             )
 
             _shadow_metadata.create_all(primary_engine)

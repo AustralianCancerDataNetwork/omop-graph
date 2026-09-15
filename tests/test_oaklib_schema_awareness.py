@@ -26,8 +26,10 @@ from datetime import date
 import sqlalchemy as sa
 
 from oa_configurator import (
+    SCHEMA_TRANSLATE_MAP_KEY,
     ResolvedCDMDatabase,
     ResolvedConnection,
+    Role,
     qualified,
 )
 from oa_configurator.testing import isolated_test_schema
@@ -50,27 +52,17 @@ _VOCAB_TABLES = (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__
 
 
 def _seed_one_concept(bindable: sa.Engine | sa.Connection, *, concept_id: int, name: str) -> None:
-    """Minimal, real vocab bootstrap: Domain/Vocabulary/Concept_Class/Concept
-    form a genuine insert cycle in Postgres (each references-row's own
-    *_concept_id FK requires a Concept row to exist, and that Concept row's
-    domain_id/vocabulary_id/concept_class_id FKs require the reference rows
-    to exist), the same cycle production bulk-loads handle by disabling FK
-    triggers for the load, then re-enabling them. Accepts either an Engine
-    or an already-open Connection: an Engine has no .execute() of its own,
-    so this opens one short-lived connection for the trigger toggles.
+    """Minimal vocab bootstrap: Domain/Vocabulary/Concept_Class/Concept form an
+    FK insert cycle, so triggers are disabled around the insert then
+    re-enabled. Accepts an Engine or an open Connection; an Engine has no
+    .execute() of its own, so one short-lived connection is opened for the
+    trigger toggles.
     """
     opened_here = isinstance(bindable, sa.Engine)
     conn = bindable.connect() if opened_here else bindable
     try:
         for table in _VOCAB_TABLES:
             conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name)} DISABLE TRIGGER ALL"))
-        # Only commit a connection opened here: pg_db's own Connection is
-        # already inside an explicit, rollback-based outer transaction, and
-        # calling .commit() on it directly would end that transaction for
-        # real, defeating the isolation the fixture exists to provide. A
-        # freshly-opened connection has no such transaction to protect, and
-        # DDL needs to actually persist for the Session below (a genuinely
-        # separate connection from the pool) to see it.
         if opened_here:
             conn.commit()
     finally:
@@ -141,8 +133,8 @@ def test_omop_resource_execution_options_carry_the_configured_schema() -> None:
 
     assert resource.execution_options is not None
     assert (
-        engine.get_execution_options()["schema_translate_map"]
-        == resource.execution_options["schema_translate_map"]
+        engine.get_execution_options()[SCHEMA_TRANSLATE_MAP_KEY]
+        == resource.execution_options[SCHEMA_TRANSLATE_MAP_KEY]
     )
 
 
@@ -201,7 +193,7 @@ def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_
     enough to prove the wiring without a second real database."""
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_split") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={None: schema, "vocab": schema, "results": schema}
+            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="Split-wiring concept")
@@ -210,11 +202,11 @@ def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_
         resource = OMOPOntologyResource(
             url=pg_db.connection.engine.url.render_as_string(hide_password=False),
             execution_options={
-                "schema_translate_map": {None: schema, "vocab": schema, "results": schema}
+                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
             },
             vocab_url="sqlite:///:memory:",
             vocab_execution_options={
-                "schema_translate_map": {None: None, "vocab": None, "results": None}
+                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
             },
         )
 
@@ -233,7 +225,7 @@ def test_omop_alchemy_implementation_reuses_one_engine_when_no_split_is_configur
     for every construction that isn't split."""
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_nosplit") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={None: schema, "vocab": schema, "results": schema}
+            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="No-split concept")
@@ -242,7 +234,7 @@ def test_omop_alchemy_implementation_reuses_one_engine_when_no_split_is_configur
         resource = OMOPOntologyResource(
             url=pg_db.connection.engine.url.render_as_string(hide_password=False),
             execution_options={
-                "schema_translate_map": {None: schema, "vocab": schema, "results": schema}
+                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
             },
         )
 
@@ -251,18 +243,63 @@ def test_omop_alchemy_implementation_reuses_one_engine_when_no_split_is_configur
         assert adapter.kg.vocab_engine is adapter.kg.cdm_engine
 
 
+def test_omop_alchemy_implementation_builds_its_engine_via_resolved_create_engines(
+    pg_db, monkeypatch
+) -> None:
+    with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_resolved") as schema:
+        engine = pg_db.connection.engine.execution_options(
+            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+        )
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+        _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="Resolved-path concept")
+        relationship_classification(engine=engine)
+
+        url = pg_db.connection.engine.url
+        connection = ResolvedConnection(
+            name="resolved_path",
+            url=url.render_as_string(hide_password=False),
+            safe_url=url.render_as_string(hide_password=True),
+            _engine_url=url,
+        )
+        resolved = ResolvedCDMDatabase(
+            name="resolved_path",
+            connection=connection,
+            schema_name=schema,
+            vocab_connection=connection,
+            vocab_schema=schema,
+            results_schema=schema,
+        )
+
+        class FakeResolver:
+            def resolve_package_config(self, config_type):
+                assert config_type is OmopGraphConfig
+                return OmopGraphConfig(cdm_db="resolved_path")
+
+            def resolve_database(self, name):
+                assert name == "resolved_path"
+                return resolved
+
+        monkeypatch.setattr(
+            "omop_graph.oaklib_interface.omop_factory.Resolver.from_active_config",
+            lambda: FakeResolver(),
+        )
+
+        resource = omop_resource()
+        assert resource.resolved is resolved
+
+        adapter = OMOPAlchemyImplementation(resource=resource)
+
+        assert adapter.kg.cdm_engine.pool._pre_ping is True
+        assert adapter.kg.vocab_engine is adapter.kg.cdm_engine
+        assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Resolved-path concept"
+
+
 def test_kg_injection_path_resolves_against_the_configured_schema(pg_db) -> None:
-    """The kg= injection path this stack's own production code should
-    prefer: build a schema-aware engine externally, wrap it, pass kg=.
-    The internal make_engine(engine_string, ...) call still runs but its
-    result is discarded. engine_string must still be a resolvable dialect,
-    just never actually connected to, so a bare "sqlite:///:memory:"
-    placeholder is fine here."""
     schema = "phase4_oaklib_kg_injection"
     conn = pg_db.connection
     conn.execute(sa.text(f"CREATE SCHEMA {schema}"))
     scoped = conn.execution_options(
-        schema_translate_map={None: schema, "vocab": schema, "results": schema}
+        schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
     )
     Base.metadata.create_all(bind=scoped, checkfirst=True)
     _seed_one_concept(scoped, concept_id=_CONCEPT_ID, name="Test concept")
@@ -275,16 +312,9 @@ def test_kg_injection_path_resolves_against_the_configured_schema(pg_db) -> None
 
 
 def test_bare_engine_string_path_resolves_against_the_configured_schema(pg_db) -> None:
-    """The one path that can't be dependency-injected: OAK-lib's own
-    generic materialize() mechanism only ever hands a URL string to
-    OMOPAlchemyImplementation, never a live connection. This is the only
-    remaining legitimate use of isolated_test_schema() in this whole plan,
-    since it's the only caller that genuinely can't accept pg_db's
-    rolled-back Connection. Construction goes through omop_resource(),
-    which needs a real, committed, independently-connectable schema."""
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_bare") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={None: schema, "vocab": schema, "results": schema}
+            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="Bare-string concept")
@@ -296,7 +326,7 @@ def test_bare_engine_string_path_resolves_against_the_configured_schema(pg_db) -
             # to open a real connection, not just for display.
             url=pg_db.connection.engine.url.render_as_string(hide_password=False),
             execution_options={
-                "schema_translate_map": {None: schema, "vocab": schema, "results": schema}
+                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
             },
         )
         adapter = OMOPAlchemyImplementation(resource=resource)

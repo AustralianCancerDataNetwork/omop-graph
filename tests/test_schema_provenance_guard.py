@@ -45,13 +45,15 @@ def _resolved(pg_db, *, database_name: str, schema: str):
     all three schemas pointed at schema, and connection.test_only forced
     False so the guard doesn't no-op against pg_db's own test-only marking.
     """
+    patched_connection = dataclasses.replace(pg_db.resolved.connection, test_only=False)
     return dataclasses.replace(
         pg_db.resolved,
         name=database_name,
         schema_name=schema,
         vocab_schema=schema,
         results_schema=schema,
-        connection=dataclasses.replace(pg_db.resolved.connection, test_only=False),
+        connection=patched_connection,
+        vocab_connection=patched_connection,
     )
 
 

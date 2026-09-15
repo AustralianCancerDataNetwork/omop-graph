@@ -31,7 +31,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from oa_configurator import schema_inspect
+from oa_configurator import Role, schema_inspect
 
 from omop_alchemy.backends import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
@@ -352,8 +352,8 @@ def q_concept_name_fulltext(
     name_expr = (
         Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
     )
-
-    inspector = schema_inspect(engine)
+    # Fulltext are in VOCAB schema
+    inspector = schema_inspect(engine, role=Role.VOCAB)
     target_table = Concept_Synonym if synonym else Concept
     target_col = (
         CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN
