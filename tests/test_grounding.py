@@ -60,6 +60,8 @@ def _unconstrained_constraints() -> GroundingConstraints:
     )
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 @pytest.mark.parametrize(
     "query,expected_concept_id",
     [
@@ -96,6 +98,8 @@ def test_grounding_resolves_expected_standard_concepts(
     assert ranked[0].concept_id == expected_concept_id
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_grounding_maps_non_standard_candidate_via_relationships(
     mock_cdm_kg: KnowledgeGraph,
 ) -> None:
@@ -114,6 +118,8 @@ def test_grounding_maps_non_standard_candidate_via_relationships(
     assert ranked[0].concept_id == 196653
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_grounding_rejects_concepts_outside_anchored_hierarchy(
     mock_cdm_kg: KnowledgeGraph,
 ) -> None:
@@ -131,6 +137,8 @@ def test_grounding_rejects_concepts_outside_anchored_hierarchy(
     assert ranked == []
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_grounding_maps_non_standard_candidate_without_parent_ids(
     mock_cdm_kg: KnowledgeGraph,
 ) -> None:
@@ -150,6 +158,8 @@ def test_grounding_maps_non_standard_candidate_without_parent_ids(
     assert ranked[0].identity_hops == 1
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_grounding_standard_candidate_without_parent_ids_is_zero_hop(
     mock_cdm_kg: KnowledgeGraph,
 ) -> None:

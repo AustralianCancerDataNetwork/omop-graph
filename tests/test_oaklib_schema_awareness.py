@@ -22,7 +22,6 @@ paths here, tested separately:
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
 
 import sqlalchemy as sa
 import sqlalchemy.orm
@@ -32,7 +31,6 @@ from oa_configurator import (
     ResolvedCDMDatabase,
     ResolvedConnection,
     Role,
-    qualified,
 )
 from oa_configurator.testing import isolated_test_schema
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
@@ -46,85 +44,62 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.config import OmopGraphConfig
 
+from fixtures.helpers import VOCAB_TABLES, fk_triggers_disabled, schema_translate_map
+
 _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
 _TODAY = date(2020, 1, 1)
 _FAR_FUTURE = date(2099, 12, 31)
-_VOCAB_TABLES = cast(
-    "tuple[sa.Table, ...]",
-    (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__),
-)
 
 
 def _seed_one_concept(bindable: sa.Engine | sa.Connection, *, concept_id: int, name: str) -> None:
     """Minimal vocab bootstrap: Domain/Vocabulary/Concept_Class/Concept form an
     FK insert cycle, so triggers are disabled around the insert then
-    re-enabled. Accepts an Engine or an open Connection; an Engine has no
-    .execute() of its own, so one short-lived connection is opened for the
-    trigger toggles.
+    re-enabled (a no-op on SQLite, which doesn't enforce FK constraints by
+    default).
     """
-    opened_here = isinstance(bindable, sa.Engine)
-    conn = bindable.connect() if opened_here else bindable
-    try:
-        for table in _VOCAB_TABLES:
-            conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name)} DISABLE TRIGGER ALL"))
-        if opened_here:
-            conn.commit()
-    finally:
-        if opened_here:
-            conn.close()
-
-    with sa.orm.Session(bindable) as session:
-        session.add_all(
-            [
-                Concept(
-                    concept_id=_META_CONCEPT_ID,
-                    concept_name="Meta concept",
-                    domain_id="Metadata",
-                    vocabulary_id="OMOP",
-                    concept_class_id="Metadata",
-                    standard_concept="S",
-                    concept_code="META",
-                    valid_start_date=_TODAY,
-                    valid_end_date=_FAR_FUTURE,
-                ),
-                Concept(
-                    concept_id=concept_id,
-                    concept_name=name,
-                    domain_id="Metadata",
-                    vocabulary_id="OMOP",
-                    concept_class_id="Metadata",
-                    standard_concept="S",
-                    concept_code=str(concept_id),
-                    valid_start_date=_TODAY,
-                    valid_end_date=_FAR_FUTURE,
-                ),
-                Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=_META_CONCEPT_ID),
-                Vocabulary(
-                    vocabulary_id="OMOP",
-                    vocabulary_name="OMOP",
-                    vocabulary_reference="local",
-                    vocabulary_version="test",
-                    vocabulary_concept_id=_META_CONCEPT_ID,
-                ),
-                Concept_Class(
-                    concept_class_id="Metadata",
-                    concept_class_name="Metadata",
-                    concept_class_concept_id=_META_CONCEPT_ID,
-                ),
-            ]
-        )
-        session.commit()
-
-    conn = bindable.connect() if opened_here else bindable
-    try:
-        for table in _VOCAB_TABLES:
-            conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name)} ENABLE TRIGGER ALL"))
-        if opened_here:
-            conn.commit()
-    finally:
-        if opened_here:
-            conn.close()
+    with fk_triggers_disabled(bindable, VOCAB_TABLES):
+        with sa.orm.Session(bindable) as session:
+            session.add_all(
+                [
+                    Concept(
+                        concept_id=_META_CONCEPT_ID,
+                        concept_name="Meta concept",
+                        domain_id="Metadata",
+                        vocabulary_id="OMOP",
+                        concept_class_id="Metadata",
+                        standard_concept="S",
+                        concept_code="META",
+                        valid_start_date=_TODAY,
+                        valid_end_date=_FAR_FUTURE,
+                    ),
+                    Concept(
+                        concept_id=concept_id,
+                        concept_name=name,
+                        domain_id="Metadata",
+                        vocabulary_id="OMOP",
+                        concept_class_id="Metadata",
+                        standard_concept="S",
+                        concept_code=str(concept_id),
+                        valid_start_date=_TODAY,
+                        valid_end_date=_FAR_FUTURE,
+                    ),
+                    Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=_META_CONCEPT_ID),
+                    Vocabulary(
+                        vocabulary_id="OMOP",
+                        vocabulary_name="OMOP",
+                        vocabulary_reference="local",
+                        vocabulary_version="test",
+                        vocabulary_concept_id=_META_CONCEPT_ID,
+                    ),
+                    Concept_Class(
+                        concept_class_id="Metadata",
+                        concept_class_name="Metadata",
+                        concept_class_concept_id=_META_CONCEPT_ID,
+                    ),
+                ]
+            )
+            session.commit()
 
 
 def test_omop_resource_execution_options_carry_the_configured_schema() -> None:
@@ -187,18 +162,27 @@ def test_omop_resource_carries_a_configured_split_vocabulary_target(monkeypatch)
 
 
 def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_resource(
-    pg_db,
+    pg_db, tmp_path
 ) -> None:
     """The other half of the split-vocabulary wiring: omop_resource() deriving
     vocab_url/vocab_execution_options is only useful if OMOPAlchemyImplementation
-    actually consumes them. KnowledgeGraph.__init__ eagerly queries via
-    cdm_engine (loading relationship-mapping data), so cdm_engine needs a
-    real, committed, populated schema; vocab_engine is never queried at
-    construction time here, so a syntactically valid but unpopulated URL is
-    enough to prove the wiring without a second real database."""
+    actually consumes them. Every vocab-role KnowledgeGraph query (Phase 4.2's
+    retrofit) now genuinely resolves through vocab_engine, not cdm_engine, so
+    unlike the in-memory-SQLite shortcut this test used before that fix, the
+    vocab side needs a real, separately seeded database -- a SQLite tempfile
+    persists across the adapter's own connections, unlike ``:memory:``."""
+    vocab_db_path = tmp_path / "vocab.db"
+    vocab_url = f"sqlite:///{vocab_db_path}"
+    vocab_engine = sa.create_engine(vocab_url).execution_options(
+        schema_translate_map={Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
+    )
+    Base.metadata.create_all(bind=vocab_engine, checkfirst=True)
+    _seed_one_concept(vocab_engine, concept_id=_CONCEPT_ID, name="Split-wiring concept")
+    vocab_engine.dispose()
+
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_split") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+            schema_translate_map=schema_translate_map(schema)
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="Split-wiring concept")
@@ -209,7 +193,7 @@ def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_
             execution_options={
                 SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
             },
-            vocab_url="sqlite:///:memory:",
+            vocab_url=vocab_url,
             vocab_execution_options={
                 SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
             },
@@ -218,7 +202,7 @@ def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_
         adapter = OMOPAlchemyImplementation(resource=resource)
 
         assert adapter.kg.vocab_engine is not adapter.kg.cdm_engine
-        assert str(adapter.kg.vocab_engine.url) == "sqlite:///:memory:"
+        assert str(adapter.kg.vocab_engine.url) == vocab_url
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Split-wiring concept"
 
 
@@ -230,7 +214,7 @@ def test_omop_alchemy_implementation_reuses_one_engine_when_no_split_is_configur
     for every construction that isn't split."""
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_nosplit") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+            schema_translate_map=schema_translate_map(schema)
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="No-split concept")
@@ -253,7 +237,7 @@ def test_omop_alchemy_implementation_builds_its_engine_via_resolved_create_engin
 ) -> None:
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_resolved") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+            schema_translate_map=schema_translate_map(schema)
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="Resolved-path concept")
@@ -300,11 +284,19 @@ def test_omop_alchemy_implementation_builds_its_engine_via_resolved_create_engin
 
 
 def test_kg_injection_path_resolves_against_the_configured_schema(pg_db) -> None:
+    """Path 1 from this module's docstring: kg= injection. OMOPAlchemyImplementation
+    must use the injected KnowledgeGraph as-is rather than rebuilding its own
+    engine from engine_string -- proved here by pairing a real, schema-aware
+    kg with a deliberately broken engine_string ("sqlite:///:memory:", never
+    actually queried). If the implementation ever fell back to building its
+    own engine instead of using kg=, this would error or return nothing
+    instead of the seeded concept's name.
+    """
     schema = "phase4_oaklib_kg_injection"
     conn = pg_db.connection
     conn.execute(sa.text(f"CREATE SCHEMA {schema}"))
     scoped = conn.execution_options(
-        schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+        schema_translate_map=schema_translate_map(schema)
     )
     Base.metadata.create_all(bind=scoped, checkfirst=True)
     _seed_one_concept(scoped, concept_id=_CONCEPT_ID, name="Test concept")
@@ -317,9 +309,16 @@ def test_kg_injection_path_resolves_against_the_configured_schema(pg_db) -> None
 
 
 def test_bare_engine_string_path_resolves_against_the_configured_schema(pg_db) -> None:
+    """Path 2 from this module's docstring: bare engine_string=/resource=-only
+    construction. OAK-lib's own generic materialize() invocation only ever
+    supplies a URL string, never a live connection or kg= -- this is the one
+    path the original bug actually broke, since schema_translate_map has to
+    be carried through purely via execution_options, with no resolved=
+    object to lean on.
+    """
     with isolated_test_schema(pg_db.connection.engine, prefix="phase4_oaklib_bare") as schema:
         engine = pg_db.connection.engine.execution_options(
-            schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+            schema_translate_map=schema_translate_map(schema)
         )
         Base.metadata.create_all(bind=engine, checkfirst=True)
         _seed_one_concept(engine, concept_id=_CONCEPT_ID, name="Bare-string concept")

@@ -7,8 +7,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from oa_configurator import SCHEMA_TRANSLATE_MAP_KEY, Role
-from oa_configurator.testing import isolated_test_database
+from oa_configurator.testing import isolated_test_database, isolated_test_schema
 from orm_loader.helpers import Base
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
@@ -27,6 +26,8 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
+from .helpers import fk_triggers_disabled, schema_translate_map
+
 PARENT_CANCER_ID = 443392
 CONCEPT_META_ID = 0
 LANGUAGE_CONCEPT_ID = 1
@@ -34,18 +35,12 @@ LANGUAGE_CONCEPT_ID = 1
 
 @pytest.fixture(scope="module")
 def mock_cdm_engine() -> Iterator[sa.Engine]:
-    with isolated_test_database(
-        OmopGraphConfig,
-        "test_cdm_db_sqlite",
-        dialect="sqlite",
-        future=True,
-        execution_options={
-            SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
-        },
-    ) as db:
-        engine = db.connection.engine
-        _create_mock_cdm_tables(engine)
-        yield engine
+    with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
+        raw_engine = db.connection.engine
+        with isolated_test_schema(raw_engine, prefix="mock_cdm") as schema:
+            engine = raw_engine.execution_options(schema_translate_map=schema_translate_map(schema))
+            _create_mock_cdm_tables(engine)
+            yield engine
 
 
 def _create_mock_cdm_tables(engine: sa.Engine) -> None:
@@ -67,9 +62,12 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
 
     Base.metadata.create_all(engine, tables=tables)
 
-    session_local = sessionmaker(bind=engine, future=True)
-    with session_local() as session:
-        seed_mock_cdm(session)
+    # Disable triggers for the whole seed sidesteps ordering entirely, 
+    # since these tables have FK dependencies that form a cycle
+    with fk_triggers_disabled(engine, tuple(tables)):
+        session_local = sessionmaker(bind=engine, future=True)
+        with session_local() as session:
+            seed_mock_cdm(session)
 
 
 @pytest.fixture()

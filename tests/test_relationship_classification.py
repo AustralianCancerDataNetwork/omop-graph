@@ -15,20 +15,19 @@ import dataclasses
 
 import pytest
 import sqlalchemy as sa
-from oa_configurator import Role
 
 from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 
+from fixtures.helpers import schema_translate_map
+
 
 def _scoped_connection(pg_db, schema: str) -> sa.Connection:
     conn = pg_db.connection
     conn.execute(sa.text(f"CREATE SCHEMA {schema}"))
-    return conn.execution_options(
-        schema_translate_map={Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
-    )
+    return conn.execution_options(schema_translate_map=schema_translate_map(schema))
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):

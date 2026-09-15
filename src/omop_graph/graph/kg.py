@@ -330,7 +330,7 @@ class KnowledgeGraph(GraphBackend):
         ConceptView
             The immutable view of the concept.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             row = session.execute(q_concept_view(concept_id)).one()
         return ConceptView.from_row(row)
 
@@ -350,7 +350,7 @@ class KnowledgeGraph(GraphBackend):
         tuple[ConceptView, ...]
             A tuple of concept views.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             concept_views = tuple(
                 ConceptView.from_row(row)
                 for row in session.execute(q_concept_views(concept_ids, sort=sort))
@@ -373,7 +373,7 @@ class KnowledgeGraph(GraphBackend):
         int
             The resolved OMOP Concept ID.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             concept_id = int(
                 session.execute(
                     q_concept_id_by_code(vocabulary_id, concept_code)
@@ -413,7 +413,7 @@ class KnowledgeGraph(GraphBackend):
         elif match_kind == LabelMatchKind.PARTIAL:
             fn = q_concept_name_ilike
         elif match_kind == LabelMatchKind.FTS:
-            fn = functools.partial(q_concept_name_fulltext, engine=self.cdm_engine)
+            fn = functools.partial(q_concept_name_fulltext, engine=self.vocab_engine)
         else:
             raise ValueError(f"Unsupported search mode: {match_kind}")
         try:
@@ -429,7 +429,7 @@ class KnowledgeGraph(GraphBackend):
                 return ()
             raise
 
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             matches = tuple(
                 LabelMatch(
                     input_query=input_query_term,
@@ -449,7 +449,7 @@ class KnowledgeGraph(GraphBackend):
         Find concept IDs that match the label exactly (case-insensitive).
         """
         label = self._normalise_query_term(label)
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_name_match(label)).scalars()
         return tuple(rows)
 
@@ -489,7 +489,7 @@ class KnowledgeGraph(GraphBackend):
         Retrieve the human-readable name of a relationship.
         """
         # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             predicate_name = session.execute(
                 q_predicate_name(relationship_id)
             ).scalar_one()
@@ -681,7 +681,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve parent Concept IDs of concept using Concept_Ancestor table.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             parents = tuple(session.execute(q_parents(concept_id)).scalars())
         return parents
 
@@ -689,7 +689,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve children Concept IDs of concept using Concept_Ancestor table.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
 
@@ -716,7 +716,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve root concepts (no parents).
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             roots = tuple(
                 session.execute(
                     q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
@@ -730,7 +730,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve leaf concepts (no children).
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             leaves = tuple(
                 session.execute(
                     q_leaves(domain_id=domain_id, vocabulary_id=vocabulary_id)
@@ -744,7 +744,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve singleton concepts (no parents and no children).
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             return tuple(
                 session.execute(
                     q_singletons(domain_id=domain_id, vocabulary_id=vocabulary_id)
@@ -755,7 +755,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve all synonyms for a concept.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_synonym_filtered(concept_id)).all()
         return tuple(row.name for row in rows)
 
@@ -782,13 +782,13 @@ class KnowledgeGraph(GraphBackend):
 
     @functools.cached_property
     def _valid_domains(self) -> frozenset[str]:
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_domain_ids()).all()
         return frozenset(row.domain_id for row in rows)
 
     @functools.cached_property
     def _valid_vocabularies(self) -> frozenset[str]:
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_vocabulary_ids()).all()
         return frozenset(row.vocabulary_id for row in rows)
 
@@ -799,7 +799,7 @@ class KnowledgeGraph(GraphBackend):
         Check if an ancestry relationship exists between a child and parent.
         """
 
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             row = session.execute(
                 q_concept_potential_ancestor(child_id, parent_id)
             ).first()
@@ -834,7 +834,7 @@ class KnowledgeGraph(GraphBackend):
         if not parent_ids:
             return {}
 
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(
                 q_concept_potential_ancestors_batch(child_ids, parent_ids)
             ).all()
@@ -852,7 +852,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Get the count of ancestors for a batch of concepts.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_num_ancestors(concept_ids)).all()
         return {row.concept_id: row.num_ancestors for row in rows}
 

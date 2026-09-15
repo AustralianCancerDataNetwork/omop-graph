@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Iterator, cast
+from typing import Iterator
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from oa_configurator import SCHEMA_TRANSLATE_MAP_KEY, Role
-from oa_configurator.testing import isolated_test_database
+from oa_configurator.testing import isolated_test_schema
+from orm_loader.helpers import Base
 
-from omop_alchemy.cdm.model.vocabulary import Concept
+from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.config import OmopGraphConfig
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import (
     q_concept_filtered,
@@ -24,20 +23,16 @@ from omop_graph.graph.queries import (
     q_entities,
 )
 
+from fixtures.helpers import VOCAB_TABLES, fk_triggers_disabled, schema_translate_map
+
+_META_CONCEPT_ID = 0
+
 
 @pytest.fixture()
-def concept_engine() -> Iterator[sa.Engine]:
-    with isolated_test_database(
-        OmopGraphConfig,
-        "test_cdm_db_sqlite",
-        dialect="sqlite",
-        future=True,
-        execution_options={
-            SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
-        },
-    ) as db:
-        engine = db.connection.engine
-        cast(sa.Table, Concept.__table__).create(engine)
+def concept_engine(pg_db) -> Iterator[sa.Engine]:
+    with isolated_test_schema(pg_db.connection.engine, prefix="concept_queries") as schema:
+        engine = pg_db.connection.engine.execution_options(schema_translate_map=schema_translate_map(schema))
+        Base.metadata.create_all(engine, tables=VOCAB_TABLES, checkfirst=True)
 
         valid_from = date(2000, 1, 1)
         valid_until = date(2099, 12, 31)
@@ -61,17 +56,55 @@ def concept_engine() -> Iterator[sa.Engine]:
                 invalid_reason=invalid_reason,
             )
 
-        with Session(engine) as session:
-            session.add_all(
-                [
-                    concept(1, standard_concept="S", invalid_reason=None),
-                    concept(2, standard_concept="C", invalid_reason=" "),
-                    concept(3, standard_concept=None, invalid_reason=None),
-                    concept(4, standard_concept="S", invalid_reason="U"),
-                    concept(5, standard_concept=" ", invalid_reason="X"),
-                ]
-            )
-            session.commit()
+        with fk_triggers_disabled(engine, VOCAB_TABLES):
+            with Session(engine) as session:
+                session.add_all(
+                    [
+                        Concept(
+                            concept_id=_META_CONCEPT_ID,
+                            concept_name="Meta concept",
+                            domain_id="Metadata",
+                            vocabulary_id="OMOP",
+                            concept_class_id="Metadata",
+                            standard_concept="S",
+                            concept_code="META",
+                            valid_start_date=valid_from,
+                            valid_end_date=valid_until,
+                        ),
+                        Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=_META_CONCEPT_ID),
+                        Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=_META_CONCEPT_ID),
+                        Vocabulary(
+                            vocabulary_id="OMOP",
+                            vocabulary_name="OMOP",
+                            vocabulary_reference="local",
+                            vocabulary_version="test",
+                            vocabulary_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Vocabulary(
+                            vocabulary_id="SNOMED",
+                            vocabulary_name="SNOMED",
+                            vocabulary_reference="local",
+                            vocabulary_version="test",
+                            vocabulary_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Concept_Class(
+                            concept_class_id="Metadata",
+                            concept_class_name="Metadata",
+                            concept_class_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Concept_Class(
+                            concept_class_id="Clinical Finding",
+                            concept_class_name="Clinical Finding",
+                            concept_class_concept_id=_META_CONCEPT_ID,
+                        ),
+                        concept(1, standard_concept="S", invalid_reason=None),
+                        concept(2, standard_concept="C", invalid_reason=" "),
+                        concept(3, standard_concept=None, invalid_reason=None),
+                        concept(4, standard_concept="S", invalid_reason="U"),
+                        concept(5, standard_concept=" ", invalid_reason="X"),
+                    ]
+                )
+                session.commit()
 
         yield engine
 

@@ -19,7 +19,7 @@ genuinely separate physical connections.
 from __future__ import annotations
 
 from datetime import date
-from typing import Iterator, NamedTuple, cast
+from typing import Iterator, NamedTuple
 
 import pytest
 import sqlalchemy as sa
@@ -47,6 +47,8 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
+from fixtures.helpers import VOCAB_TABLES, fk_triggers_disabled, schema_translate_map
+
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 META_CONCEPT_ID = 0
@@ -55,17 +57,10 @@ OBJECT_CONCEPT_ID = 2
 _TODAY = date(2020, 1, 1)
 _FAR_FUTURE = date(2099, 12, 31)
 
-_VOCAB_TABLES = cast(
-    "tuple[sa.Table, ...]",
-    (
-        Domain.__table__,
-        Vocabulary.__table__,
-        Concept_Class.__table__,
-        Concept.__table__,
-        Relationship.__table__,
-        Concept_Relationship.__table__,
-    ),
-)
+# This test also needs Relationship/Concept_Relationship beyond the shared
+# core (they're not part of every consumer's minimal vocab bootstrap, but
+# are exactly what the split-connection predicate/edge merge is testing).
+_VOCAB_TABLES = VOCAB_TABLES + (Relationship.__table__, Concept_Relationship.__table__)
 
 # Postgres has no cross-database inline FK (unlike cross-schema, which works
 # fine within one database) -- RelationshipMapping's ORM-mapped FK to
@@ -135,18 +130,10 @@ def split_engines() -> Iterator[_Engines]:
             isolated_test_schema(vocab_raw) as vocab_schema,
         ):
             primary_engine = primary_raw.execution_options(
-                schema_translate_map={
-                    Role.PRIMARY.value: primary_schema,
-                    Role.VOCAB.value: primary_schema,
-                    Role.RESULTS.value: primary_schema,
-                }
+                schema_translate_map=schema_translate_map(primary_schema)
             )
             vocab_engine = vocab_raw.execution_options(
-                schema_translate_map={
-                    Role.PRIMARY.value: vocab_schema,
-                    Role.VOCAB.value: vocab_schema,
-                    Role.RESULTS.value: vocab_schema,
-                }
+                schema_translate_map=schema_translate_map(vocab_schema)
             )
 
             _shadow_metadata.create_all(primary_engine)
@@ -158,15 +145,8 @@ def split_engines() -> Iterator[_Engines]:
             # vocabulary_id/concept_class_id FKs require the reference rows to
             # already exist), the same cycle production bulk-loads handle by
             # disabling FK triggers for the load, then re-enabling them.
-            with vocab_engine.begin() as conn:
-                for table in _VOCAB_TABLES:
-                    conn.execute(sa.text(f'ALTER TABLE "{vocab_schema}"."{table.name}" DISABLE TRIGGER ALL'))
-
-            _seed(primary_engine, vocab_engine)
-
-            with vocab_engine.begin() as conn:
-                for table in _VOCAB_TABLES:
-                    conn.execute(sa.text(f'ALTER TABLE "{vocab_schema}"."{table.name}" ENABLE TRIGGER ALL'))
+            with fk_triggers_disabled(vocab_engine, _VOCAB_TABLES):
+                _seed(primary_engine, vocab_engine)
 
             yield _Engines(primary=primary_engine, vocab=vocab_engine)
 
@@ -339,3 +319,46 @@ def test_edges_predicate_kinds_filter_applies_after_merge(split_engines: _Engine
     )
 
     assert edges == ()
+
+
+# Phase 4.2: KnowledgeGraph's ~15 concept/ancestor/synonym query methods used
+# to always query self.session_factory() (primary), silently wrong once
+# vocab lives on a genuinely separate connection -- not detected, not
+# refused, and (before these tests) not covered at all. Each of these was
+# broken against split_engines before the vocab_session_factory() retrofit,
+# confirmed by running them against this same fixture on the pre-fix code.
+
+
+def test_concept_view_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+    view = kg.concept_view(SUBJECT_CONCEPT_ID)
+
+    assert view.concept_id == SUBJECT_CONCEPT_ID
+    assert view.concept_name == "Subject concept"
+
+
+def test_concept_id_by_code_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+
+    assert kg.concept_id_by_code("SNOMED", "SUBJ") == SUBJECT_CONCEPT_ID
+
+
+def test_concept_ids_by_label_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+
+    assert kg.concept_ids_by_label("Subject concept") == (SUBJECT_CONCEPT_ID,)
+
+
+def test_predicate_name_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+
+    assert kg.predicate_name("maps to") == "Maps to"
+
+
+def test_valid_domains_and_vocabularies_resolve_against_the_vocab_connection(
+    split_engines: _Engines,
+) -> None:
+    kg = _split_kg(split_engines)
+
+    assert {"Metadata", "Condition"} <= kg._valid_domains
+    assert {"OMOP", "SNOMED"} <= kg._valid_vocabularies

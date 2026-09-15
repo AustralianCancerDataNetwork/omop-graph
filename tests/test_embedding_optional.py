@@ -86,6 +86,8 @@ def _make_standard_concept(concept_id: int, name: str) -> StandardConcept:
     )
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_fallback_flag_true_logs_attempt_when_concepts_missing(
     mock_cdm_kg: KnowledgeGraph,
     monkeypatch: pytest.MonkeyPatch,
@@ -133,6 +135,8 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
     assert "Computing missing embeddings on-the-fly" in caplog.text
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_fallback_flag_false_logs_disabled_when_concepts_missing(
     mock_cdm_kg: KnowledgeGraph,
     monkeypatch: pytest.MonkeyPatch,
@@ -256,6 +260,8 @@ class TestTryGetEmbeddingWriterInterface:
 # ── omop-emb#48 split: k threaded explicitly instead of via filter.limit ──
 
 
+@pytest.mark.postgresql
+@pytest.mark.db_dialect
 def test_semantic_similarity_splits_cdm_and_knn_filters(
     mock_cdm_kg: KnowledgeGraph,
     monkeypatch: pytest.MonkeyPatch,

@@ -9,8 +9,12 @@ future edit accidentally forcing the split-path branch unconditionally.
 
 from __future__ import annotations
 
+import pytest
+
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
+
+pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 
 def test_edges_use_single_eager_join_when_no_split_is_configured(

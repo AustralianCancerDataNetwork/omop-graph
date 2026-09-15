@@ -19,23 +19,18 @@ transaction.
 from __future__ import annotations
 
 import uuid
-from typing import cast
 
 import pytest
 import sqlalchemy as sa
 from oa_configurator import Role
 from omop_alchemy.backends import CONCEPT_NAME_TSVECTOR_COLUMN, FullTextError, resolve_backend
-from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from orm_loader.helpers import Base
 
 from omop_graph.graph.queries import q_concept_name_fulltext
 
-pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
+from fixtures.helpers import VOCAB_TABLES, schema_translate_map
 
-_VOCAB_TABLES = cast(
-    "tuple[sa.Table, ...]",
-    (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__),
-)
+pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 
 def _scoped(pg_db, *, primary_schema: str, vocab_schema: str) -> sa.Connection:
@@ -43,11 +38,7 @@ def _scoped(pg_db, *, primary_schema: str, vocab_schema: str) -> sa.Connection:
     conn.execute(sa.text(f"CREATE SCHEMA {primary_schema}"))
     conn.execute(sa.text(f"CREATE SCHEMA {vocab_schema}"))
     return conn.execution_options(
-        schema_translate_map={
-            Role.PRIMARY.value: primary_schema,
-            Role.VOCAB.value: vocab_schema,
-            Role.RESULTS.value: primary_schema,
-        }
+        schema_translate_map=schema_translate_map(primary_schema, vocab_schema=vocab_schema)
     )
 
 
@@ -55,7 +46,7 @@ def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
     primary_schema = f"fulltext_primary_{uuid.uuid4().hex[:8]}"
     vocab_schema = f"fulltext_vocab_{uuid.uuid4().hex[:8]}"
     scoped = _scoped(pg_db, primary_schema=primary_schema, vocab_schema=vocab_schema)
-    Base.metadata.create_all(bind=scoped, tables=_VOCAB_TABLES, checkfirst=True)
+    Base.metadata.create_all(bind=scoped, tables=VOCAB_TABLES, checkfirst=True)
 
     backend = resolve_backend(scoped)
     backend.install_fulltext_on_table(
@@ -84,7 +75,7 @@ def test_fulltext_query_still_raises_when_the_column_is_genuinely_absent(pg_db):
     primary_schema = f"fulltext_primary_{uuid.uuid4().hex[:8]}"
     vocab_schema = f"fulltext_vocab_{uuid.uuid4().hex[:8]}"
     scoped = _scoped(pg_db, primary_schema=primary_schema, vocab_schema=vocab_schema)
-    Base.metadata.create_all(bind=scoped, tables=_VOCAB_TABLES, checkfirst=True)
+    Base.metadata.create_all(bind=scoped, tables=VOCAB_TABLES, checkfirst=True)
 
     with pytest.raises(FullTextError):
         q_concept_name_fulltext("kidney cancer", engine=scoped)

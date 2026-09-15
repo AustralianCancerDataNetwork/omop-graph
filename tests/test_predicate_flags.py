@@ -9,7 +9,11 @@ query layer projects those, so no consumer here ever sees the raw string.
 
 from __future__ import annotations
 
+import pytest
+
 from omop_graph.graph.kg import KnowledgeGraph
+
+pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 
 def test_zero_flag_is_not_read_as_true(mock_cdm_kg: KnowledgeGraph) -> None:
