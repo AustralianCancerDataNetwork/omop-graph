@@ -538,15 +538,13 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             Concept identifiers.
         """
 
-        with self.kg.session_factory() as session:
-            cids = tuple(
-                self.kg.entities(
-                    session=session,
-                    domain=domain,
-                    standard_only=standard_only,
-                    filter_obsoletes=filter_obsoletes,
-                )
+        cids = tuple(
+            self.kg.entities(
+                domain=domain,
+                standard_only=standard_only,
+                filter_obsoletes=filter_obsoletes,
             )
+        )
 
         for cid in cids:
             yield self._concept_curie(cid)
@@ -644,16 +642,14 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             else None
         )
 
-        with self.kg.session_factory() as session:
-            relationships = tuple(
-                self.kg.relationships(
-                    session=session,
-                    subjects=subject_ids,
-                    predicates=predicate_ids,
-                    objects=object_ids,
-                    invert=invert,
-                )
+        relationships = tuple(
+            self.kg.relationships(
+                subjects=subject_ids,
+                predicates=predicate_ids,
+                objects=object_ids,
+                invert=invert,
             )
+        )
 
         for s, p, o in relationships:
             yield (

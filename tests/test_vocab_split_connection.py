@@ -362,3 +362,26 @@ def test_valid_domains_and_vocabularies_resolve_against_the_vocab_connection(
 
     assert {"Metadata", "Condition"} <= kg._valid_domains
     assert {"OMOP", "SNOMED"} <= kg._valid_vocabularies
+
+
+def test_entities_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+    ids = tuple(kg.entities(domain="Condition"))
+
+    assert set(ids) == {SUBJECT_CONCEPT_ID, OBJECT_CONCEPT_ID}
+
+
+def test_relationships_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+    triples = tuple(kg.relationships(subjects=(SUBJECT_CONCEPT_ID,), predicates=None, objects=None))
+
+    assert triples == ((SUBJECT_CONCEPT_ID, "maps to", OBJECT_CONCEPT_ID),)
+
+
+def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines) -> None:
+    kg = _split_kg(split_engines)
+    triples = tuple(
+        kg.relationships(subjects=(OBJECT_CONCEPT_ID,), predicates=None, objects=None, invert=True)
+    )
+
+    assert triples == ((OBJECT_CONCEPT_ID, "maps to", SUBJECT_CONCEPT_ID),)

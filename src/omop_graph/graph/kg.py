@@ -514,7 +514,6 @@ class KnowledgeGraph(GraphBackend):
 
     def relationships(
         self,
-        session: Session,
         subjects: tuple[int, ...] | None,
         predicates: tuple[str, ...] | None,
         objects: tuple[int, ...] | None,
@@ -542,7 +541,6 @@ class KnowledgeGraph(GraphBackend):
         """
         if invert:
             for s, p, o in self.relationships(
-                session=session,
                 subjects=objects,
                 predicates=predicates,
                 objects=subjects,
@@ -550,14 +548,15 @@ class KnowledgeGraph(GraphBackend):
                 yield o, p, s
             return
 
-        for s, p, o in session.execute(
-            q_relationships(
-                subjects=subjects,
-                predicates=predicates,
-                objects=objects,
-            )
-        ):
-            yield s, p, o
+        with self.vocab_session_factory() as session:
+            for s, p, o in session.execute(
+                q_relationships(
+                    subjects=subjects,
+                    predicates=predicates,
+                    objects=objects,
+                )
+            ):
+                yield s, p, o
 
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
         """
@@ -695,7 +694,6 @@ class KnowledgeGraph(GraphBackend):
 
     def entities(
         self,
-        session: Session,
         domain: str | None = None,
         standard_only: bool = True,
         filter_obsoletes: bool = True,
@@ -707,8 +705,9 @@ class KnowledgeGraph(GraphBackend):
             filter_obsoletes=filter_obsoletes,
         )
 
-        for row in session.execute(query):
-            yield int(row.concept_id)
+        with self.vocab_session_factory() as session:
+            for row in session.execute(query):
+                yield int(row.concept_id)
 
     def roots(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
