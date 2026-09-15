@@ -22,7 +22,7 @@ from collections import defaultdict
 from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, Row
 from sqlalchemy.orm import Session, sessionmaker
 from omop_alchemy.backends import FullTextError
 from omop_alchemy.cdm.query import ConceptFilter
@@ -73,6 +73,8 @@ from .queries import (
     q_children,
     q_predicate_name,
     q_predicate_row_with_ancestry,
+    q_relationship_mapping_all,
+    q_relationship_mapping_row,
     q_roots,
     q_singletons,
     q_entities,
@@ -145,6 +147,39 @@ class KnowledgeGraphEmbeddingConfiguration:
         return self.resolved_model.provider.provider
 
 
+def _relationship_mapping_lookup(session: Session) -> dict[str, Row]:
+    """RelationshipMapping rows keyed by relationship_id.
+
+    RelationshipMapping is an omop-graph extension table, not vocab-role, so
+    it never lives on a split ``vocab_engine``. This always runs against
+    the primary connection.
+    """
+    return {
+        row.relationship_id: row
+        for row in session.execute(q_relationship_mapping_all()).all()
+    }
+
+
+def _predicate_from_rows(ancestry_row: Row, mapping_row: Row) -> Predicate:
+    """Build a Predicate from a Relationship-ancestry row and a RelationshipMapping row.
+
+    The two rows come from the same query in a same-connection deployment
+    (pass the row twice), or from two separately-fetched engines in a
+    split-connection one. This is the one place that shape difference
+    collapses back into a single code path.
+    """
+    return Predicate(
+        relationship_id=ancestry_row.relationship_id,
+        name=ancestry_row.relationship_name,
+        reverse_id=ancestry_row.reverse_relationship_id,
+        is_hierarchical=bool(ancestry_row.is_hierarchical),
+        anc_up=bool(ancestry_row.anc_up),
+        anc_down=bool(ancestry_row.anc_down),
+        predicate_kind=PredicateKind(mapping_row.predicate_kind),
+        predicate_subkind=mapping_row.predicate_subkind,
+    )
+
+
 class KnowledgeGraph(GraphBackend):
     """
     The main entry point for interacting with the OMOP Graph.
@@ -156,15 +191,31 @@ class KnowledgeGraph(GraphBackend):
     ----------
     cdm_engine : Engine
         The SQLAlchemy engine for the OMOP CDM database.
+    vocab_engine : Engine, optional
+        A separate engine for the vocabulary connection, for a deployment
+        where ``vocab_connection`` names a physically different server than
+        ``connection``. Omit (the common case) when vocabulary tables sit on
+        the same connection as everything else: same-connection queries
+        stay a single eager join. When given and different from
+        ``cdm_engine``, the three queries that join a vocab-role table
+        (Concept/Concept_Relationship/Relationship) against
+        RelationshipMapping (not vocab-role, since it's an omop-graph
+        extension table) fetch each side from its own engine and merge in
+        Python, since a SQL join cannot span two physical connections.
     """
 
     def __init__(
         self,
         cdm_engine: Engine,
+        vocab_engine: Optional[Engine] = None,
         emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
     ):
         self.cdm_engine = cdm_engine
         self.session_factory = sessionmaker(bind=self.cdm_engine, future=True)
+
+        self.vocab_engine = vocab_engine if vocab_engine is not None else cdm_engine
+        self._vocab_split = self.vocab_engine is not self.cdm_engine
+        self.vocab_session_factory = sessionmaker(bind=self.vocab_engine, future=True)
 
         try:
             with self.session_factory() as session:
@@ -279,7 +330,7 @@ class KnowledgeGraph(GraphBackend):
         ConceptView
             The immutable view of the concept.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             row = session.execute(q_concept_view(concept_id)).one()
         return ConceptView.from_row(row)
 
@@ -299,7 +350,7 @@ class KnowledgeGraph(GraphBackend):
         tuple[ConceptView, ...]
             A tuple of concept views.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             concept_views = tuple(
                 ConceptView.from_row(row)
                 for row in session.execute(q_concept_views(concept_ids, sort=sort))
@@ -322,7 +373,7 @@ class KnowledgeGraph(GraphBackend):
         int
             The resolved OMOP Concept ID.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             concept_id = int(
                 session.execute(
                     q_concept_id_by_code(vocabulary_id, concept_code)
@@ -362,7 +413,7 @@ class KnowledgeGraph(GraphBackend):
         elif match_kind == LabelMatchKind.PARTIAL:
             fn = q_concept_name_ilike
         elif match_kind == LabelMatchKind.FTS:
-            fn = functools.partial(q_concept_name_fulltext, engine=self.cdm_engine)
+            fn = functools.partial(q_concept_name_fulltext, engine=self.vocab_engine)
         else:
             raise ValueError(f"Unsupported search mode: {match_kind}")
         try:
@@ -378,7 +429,7 @@ class KnowledgeGraph(GraphBackend):
                 return ()
             raise
 
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             matches = tuple(
                 LabelMatch(
                     input_query=input_query_term,
@@ -398,7 +449,7 @@ class KnowledgeGraph(GraphBackend):
         Find concept IDs that match the label exactly (case-insensitive).
         """
         label = self._normalise_query_term(label)
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_name_match(label)).scalars()
         return tuple(rows)
 
@@ -416,25 +467,29 @@ class KnowledgeGraph(GraphBackend):
         Predicate
             The predicate definition.
         """
+        if self._vocab_split:
+            with self.vocab_session_factory() as vsession:
+                ancestry_row = vsession.execute(
+                    q_predicate_row_with_ancestry(
+                        relationship_id, include_classification=False
+                    )
+                ).one()
+            with self.session_factory() as session:
+                mapping_row = session.execute(
+                    q_relationship_mapping_row(relationship_id)
+                ).one()
+            return _predicate_from_rows(ancestry_row, mapping_row)
+
         with self.session_factory() as session:
             row = session.execute(q_predicate_row_with_ancestry(relationship_id)).one()
-        return Predicate(
-            relationship_id=row.relationship_id,
-            name=row.relationship_name,
-            reverse_id=row.reverse_relationship_id,
-            is_hierarchical=bool(row.is_hierarchical),
-            anc_up=bool(row.anc_up),
-            anc_down=bool(row.anc_down),
-            predicate_kind=PredicateKind(row.predicate_kind),
-            predicate_subkind=row.predicate_subkind,
-        )
+        return _predicate_from_rows(row, row)
 
     def predicate_name(self, relationship_id: str) -> str:
         """
         Retrieve the human-readable name of a relationship.
         """
         # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             predicate_name = session.execute(
                 q_predicate_name(relationship_id)
             ).scalar_one()
@@ -459,7 +514,6 @@ class KnowledgeGraph(GraphBackend):
 
     def relationships(
         self,
-        session: Session,
         subjects: tuple[int, ...] | None,
         predicates: tuple[str, ...] | None,
         objects: tuple[int, ...] | None,
@@ -487,7 +541,6 @@ class KnowledgeGraph(GraphBackend):
         """
         if invert:
             for s, p, o in self.relationships(
-                session=session,
                 subjects=objects,
                 predicates=predicates,
                 objects=subjects,
@@ -495,14 +548,15 @@ class KnowledgeGraph(GraphBackend):
                 yield o, p, s
             return
 
-        for s, p, o in session.execute(
-            q_relationships(
-                subjects=subjects,
-                predicates=predicates,
-                objects=objects,
-            )
-        ):
-            yield s, p, o
+        with self.vocab_session_factory() as session:
+            for s, p, o in session.execute(
+                q_relationships(
+                    subjects=subjects,
+                    predicates=predicates,
+                    objects=objects,
+                )
+            ):
+                yield s, p, o
 
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
         """
@@ -573,6 +627,32 @@ class KnowledgeGraph(GraphBackend):
         within_domain: bool = True,
     ) -> Generator[EdgeView, None, None]:
 
+        if self._vocab_split:
+            with self.vocab_session_factory() as vsession:
+                vocab_rows = vsession.execute(
+                    q_edges(
+                        concept_ids=concept_ids,
+                        predicate_ids=predicate_ids,
+                        direction=direction,
+                        active_only=active_only,
+                        on=on,
+                        within_domain=within_domain,
+                        include_classification=False,
+                    )
+                ).all()
+            mapping_by_id = _relationship_mapping_lookup(session)
+            for vrow in vocab_rows:
+                mapping = mapping_by_id.get(vrow.predicate_id)
+                if mapping is None:
+                    continue
+                if predicate_kinds and PredicateKind(mapping.predicate_kind) not in predicate_kinds:
+                    continue
+                data = dict(vrow._mapping)
+                data["predicate_kind"] = PredicateKind(mapping.predicate_kind)
+                data["predicate_subkind"] = mapping.predicate_subkind
+                yield EdgeView(**data)
+            return
+
         stmt = q_edges(
             concept_ids=concept_ids,
             predicate_ids=predicate_ids,
@@ -600,7 +680,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve parent Concept IDs of concept using Concept_Ancestor table.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             parents = tuple(session.execute(q_parents(concept_id)).scalars())
         return parents
 
@@ -608,13 +688,12 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve children Concept IDs of concept using Concept_Ancestor table.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
 
     def entities(
         self,
-        session: Session,
         domain: str | None = None,
         standard_only: bool = True,
         filter_obsoletes: bool = True,
@@ -626,8 +705,9 @@ class KnowledgeGraph(GraphBackend):
             filter_obsoletes=filter_obsoletes,
         )
 
-        for row in session.execute(query):
-            yield int(row.concept_id)
+        with self.vocab_session_factory() as session:
+            for row in session.execute(query):
+                yield int(row.concept_id)
 
     def roots(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
@@ -635,7 +715,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve root concepts (no parents).
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             roots = tuple(
                 session.execute(
                     q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
@@ -649,7 +729,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve leaf concepts (no children).
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             leaves = tuple(
                 session.execute(
                     q_leaves(domain_id=domain_id, vocabulary_id=vocabulary_id)
@@ -663,7 +743,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve singleton concepts (no parents and no children).
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             return tuple(
                 session.execute(
                     q_singletons(domain_id=domain_id, vocabulary_id=vocabulary_id)
@@ -674,7 +754,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Retrieve all synonyms for a concept.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_synonym_filtered(concept_id)).all()
         return tuple(row.name for row in rows)
 
@@ -682,31 +762,32 @@ class KnowledgeGraph(GraphBackend):
         """
         Return all predicates known to the knowledge graph.
         """
+        if self._vocab_split:
+            with self.vocab_session_factory() as vsession:
+                ancestry_rows = vsession.execute(
+                    q_all_predicates_with_ancestry(include_classification=False)
+                ).all()
+            with self.session_factory() as session:
+                mapping_by_id = _relationship_mapping_lookup(session)
+            return tuple(
+                _predicate_from_rows(row, mapping_by_id[row.relationship_id])
+                for row in ancestry_rows
+                if row.relationship_id in mapping_by_id
+            )
+
         with self.session_factory() as session:
             rows = session.execute(q_all_predicates_with_ancestry()).all()
-        return tuple(
-            Predicate(
-                relationship_id=row.relationship_id,
-                name=row.relationship_name,
-                reverse_id=row.reverse_relationship_id,
-                is_hierarchical=bool(row.is_hierarchical),
-                anc_up=bool(row.anc_up),
-                anc_down=bool(row.anc_down),
-                predicate_kind=PredicateKind(row.predicate_kind),
-                predicate_subkind=row.predicate_subkind,
-            )
-            for row in rows
-        )
+        return tuple(_predicate_from_rows(row, row) for row in rows)
 
     @functools.cached_property
     def _valid_domains(self) -> frozenset[str]:
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_domain_ids()).all()
         return frozenset(row.domain_id for row in rows)
 
     @functools.cached_property
     def _valid_vocabularies(self) -> frozenset[str]:
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_vocabulary_ids()).all()
         return frozenset(row.vocabulary_id for row in rows)
 
@@ -717,7 +798,7 @@ class KnowledgeGraph(GraphBackend):
         Check if an ancestry relationship exists between a child and parent.
         """
 
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             row = session.execute(
                 q_concept_potential_ancestor(child_id, parent_id)
             ).first()
@@ -752,7 +833,7 @@ class KnowledgeGraph(GraphBackend):
         if not parent_ids:
             return {}
 
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(
                 q_concept_potential_ancestors_batch(child_ids, parent_ids)
             ).all()
@@ -770,7 +851,7 @@ class KnowledgeGraph(GraphBackend):
         """
         Get the count of ancestors for a batch of concepts.
         """
-        with self.session_factory() as session:
+        with self.vocab_session_factory() as session:
             rows = session.execute(q_concept_num_ancestors(concept_ids)).all()
         return {row.concept_id: row.num_ancestors for row in rows}
 

@@ -538,15 +538,13 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             Concept identifiers.
         """
 
-        with self.kg.session_factory() as session:
-            cids = tuple(
-                self.kg.entities(
-                    session=session,
-                    domain=domain,
-                    standard_only=standard_only,
-                    filter_obsoletes=filter_obsoletes,
-                )
+        cids = tuple(
+            self.kg.entities(
+                domain=domain,
+                standard_only=standard_only,
+                filter_obsoletes=filter_obsoletes,
             )
+        )
 
         for cid in cids:
             yield self._concept_curie(cid)
@@ -644,16 +642,14 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             else None
         )
 
-        with self.kg.session_factory() as session:
-            relationships = tuple(
-                self.kg.relationships(
-                    session=session,
-                    subjects=subject_ids,
-                    predicates=predicate_ids,
-                    objects=object_ids,
-                    invert=invert,
-                )
+        relationships = tuple(
+            self.kg.relationships(
+                subjects=subject_ids,
+                predicates=predicate_ids,
+                objects=object_ids,
+                invert=invert,
             )
+        )
 
         for s, p, o in relationships:
             yield (
@@ -743,23 +739,24 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             {self._parse_predicate(p) for p in predicates} if predicates else None
         )
 
-        for edge in self.kg.iter_edges(
-            concept_id, direction="out", predicate_kinds=None
-        ):
-            if pred_filter and edge.predicate_id not in pred_filter:
-                continue
+        with self.kg.session_factory() as session:
+            for edge in self.kg.iter_edges(
+                session=session, concept_ids=concept_id, direction="out", predicate_kinds=None
+            ):
+                if pred_filter and edge.predicate_id not in pred_filter:
+                    continue
 
-            pred_curie = self._predicate_curie(edge.predicate_id)
+                pred_curie = self._predicate_curie(edge.predicate_id)
 
-            # hierarchical entailment
-            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
-                yield pred_curie, self._concept_curie(edge.object_id)
+                # hierarchical entailment
+                if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
+                    yield pred_curie, self._concept_curie(edge.object_id)
 
-                for parent in self.kg.parents(edge.object_id):
-                    yield pred_curie, self._concept_curie(parent)
+                    for parent in self.kg.parents(edge.object_id):
+                        yield pred_curie, self._concept_curie(parent)
 
-            else:
-                yield pred_curie, self._concept_curie(edge.object_id)
+                else:
+                    yield pred_curie, self._concept_curie(edge.object_id)
 
     def entailed_outputgoing_relationships_by_curie(
         self, *args, **kwargs
@@ -819,9 +816,10 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         obj_id = self._parse_concept(object)
 
         # direct relationships
-        for edge in self.kg.iter_edges(subj_id, direction="out"):
-            if edge.object_id == obj_id:
-                yield self._predicate_curie(edge.predicate_id)
+        with self.kg.session_factory() as session:
+            for edge in self.kg.iter_edges(session=session, concept_ids=subj_id, direction="out"):
+                if edge.object_id == obj_id:
+                    yield self._predicate_curie(edge.predicate_id)
 
         # hierarchical entailment
         if obj_id in self.kg.parents(subj_id):
@@ -851,23 +849,33 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     Parameters
     ----------
     engine_string : str | URL | None, optional
-        The database connection string. Required unless ``resource`` is given.
+        The database connection string. Ignored when ``kg`` is given
+        directly; required otherwise, unless ``resource`` is given.
     resource : OMOPOntologyResource | None, optional
         An existing resource object. Takes precedence over ``engine_string`` when
-        both are supplied. To use the oa-configurator-configured default, 
-        resolve it explicitly via ``omop_resource()`` and pass it here.
+        both are supplied. Ignored when ``kg`` is given directly. To use the
+        oa-configurator-configured default, resolve it explicitly via
+        ``omop_resource()`` and pass it here. When the resolved CDM database
+        has a genuinely separate ``vocab_connection`` configured, the
+        resource carries a second URL for it and a real ``vocab_engine`` is
+        built and passed to ``KnowledgeGraph`` alongside the primary one.
     kg : KnowledgeGraph | None, optional
-        An existing Knowledge Graph instance. If None, one is created from
-        ``engine_string`` / ``resource``.
+        An existing Knowledge Graph instance. Takes this class's own engine
+        construction out of the picture entirely -- the caller already built
+        (and is responsible for) whatever engine ``kg`` wraps, so
+        ``engine_string``/``resource`` are neither required nor consulted.
+        If None, a ``KnowledgeGraph`` is created from ``engine_string`` /
+        ``resource`` instead.
     kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
         Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
         Required to enable embedding-based similarity. See
         :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
+        Ignored when ``kg`` is given directly.
 
     Raises
     ------
     ValueError
-        If neither ``engine_string`` nor ``resource`` is given.
+        If ``kg`` is not given and neither ``engine_string`` nor ``resource`` is.
     """
 
     def __init__(
@@ -878,30 +886,43 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         kg_emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
         **kwargs,
     ):
-        if engine_string is not None:
-            self.engine_string = engine_string
-            self.resource = resource or omop_resource(url=self.engine_string)
-        elif resource is not None:
-            self.resource = resource
-            self.engine_string = self.resource.url
-        else:
-            raise ValueError(
-                "OMOPAlchemyImplementation requires either 'engine_string' or "
-                "'resource'. To use the oa-configurator-configured default, "
-                "resolve it explicitly first, e.g. "
-                "OMOPAlchemyImplementation(resource=omop_resource())."
-            )
-
-        assert self.engine_string is not None, (
-            "No database URL provided for OMOPAlchemyImplementation"
-        )
-
-        engine = make_engine(self.engine_string, engine_kwargs={"echo": False, "future": True})
-
         self._connection = None
 
         if kg is None:
-            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine)
+            if engine_string is not None:
+                self.engine_string = engine_string
+                self.resource = resource or omop_resource(url=self.engine_string)
+            elif resource is not None:
+                self.resource = resource
+                self.engine_string = self.resource.url
+            else:
+                raise ValueError(
+                    "OMOPAlchemyImplementation requires 'kg', or one of "
+                    "'engine_string'/'resource'. To use the "
+                    "oa-configurator-configured default, resolve it explicitly "
+                    "first, e.g. OMOPAlchemyImplementation(resource=omop_resource())."
+                )
+
+            if self.resource.resolved is not None:
+                engine, vocab_engine = self.resource.resolved.create_engines(
+                    echo=False, future=True
+                )
+                if vocab_engine is engine:
+                    vocab_engine = None
+            else:
+                engine = make_engine(
+                    self.engine_string,
+                    engine_kwargs={"echo": False, "future": True},
+                    execution_options=self.resource.execution_options,
+                )
+                vocab_engine = None
+                if self.resource.vocab_url is not None:
+                    vocab_engine = make_engine(
+                        self.resource.vocab_url,
+                        engine_kwargs={"echo": False, "future": True},
+                        execution_options=self.resource.vocab_execution_options,
+                    )
+            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine, vocab_engine=vocab_engine)
             bind_default_renderers(kg)
 
         super().__init__(kg=kg, **kwargs)

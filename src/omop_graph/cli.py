@@ -1,5 +1,7 @@
 import logging
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from importlib import resources
 from pathlib import Path
 from typing import Annotated, Optional, cast
@@ -9,13 +11,15 @@ import sqlalchemy as sa
 import typer
 from sqlalchemy.orm import sessionmaker
 
-from orm_loader.backends import resolve_backend
+from oa_configurator import ResolvedCDMDatabase, Role, ensure_schema, guard_schema_provenance, schema_of
+
+from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import make_engine
+from omop_graph.db.session import resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from omop_graph.cli_utils import populate_test_data
 
@@ -41,9 +45,11 @@ def _main(
 @app.command()
 def populate_with_test_data():
     """Populate the database with synthetic test data."""
-    engine = make_engine()
+    resolved = resolve_cdm_database()
+    engine, vocab_engine = resolved.create_engines()
     Session = sessionmaker(bind=engine, future=True)
-    populate_test_data(Session())
+    VocabSession = sessionmaker(bind=vocab_engine, future=True)
+    populate_test_data(Session(), vocab_session=VocabSession())
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -57,20 +63,42 @@ def packaged_predicate_csv_dir() -> Path:
     return Path(str(resources.files("omop_graph") / "data"))
 
 
-@app.command()
+@contextmanager
+def _open_connection(bindable: sa.Engine | sa.Connection) -> Iterator[sa.Connection]:
+    """Yield a Connection: opens its own transaction for an Engine, or uses
+    an already-open Connection directly, participating in the caller's own
+    transaction (needed by the rollback-based pg_db test fixture).
+    """
+    if isinstance(bindable, sa.Engine):
+        with bindable.begin() as connection:
+            yield connection
+    else:
+        yield bindable
+
+
 def relationship_classification(
-    pred_class_dir: Annotated[
-        Optional[str],
-        typer.Option(
-            help=(
-                "Path to the directory containing `predicate_classification.csv` "
-                "and `predicate_mapping.csv`. Defaults to the copies shipped with "
-                "omop-graph; pass a directory to override them."
-            )
-        ),
-    ] = None,
-):
-    """Load pre-classified predicates into the database."""
+    pred_class_dir: Optional[str] = None,
+    *,
+    engine: sa.Engine | sa.Connection | None = None,
+    resolved: ResolvedCDMDatabase | None = None,
+) -> None:
+    """Load pre-classified predicates into the database.
+
+    Parameters
+    ----------
+    pred_class_dir : str, optional
+        Path to the directory containing `predicate_classification.csv` and
+        `predicate_mapping.csv`. Defaults to the copies shipped with
+        omop-graph.
+    engine : sqlalchemy.Engine or sqlalchemy.Connection, optional
+        Bindable to run against. Defaults to the active oa-configurator
+        config's resolved CDM engine, in which case resolved is also
+        resolved internally and any value passed here is ignored.
+    resolved : ResolvedCDMDatabase, optional
+        Enables the schema-provenance guard. Only meaningful together with
+        an explicitly injected engine/connection, since the engine=None
+        path always resolves its own regardless of what's passed here.
+    """
     pred_class_dir_pl = (
         Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     )
@@ -139,32 +167,56 @@ def relationship_classification(
         subset=["relationship_id", "predicate_kind", "predicate_subkind"]
     )
 
-    engine = make_engine()
+    if engine is None:
+        resolved = resolve_cdm_database()
+        engine = resolved.create_engine()
+    if resolved is not None and resolved.connection != resolved.vocab_connection:
+        raise RuntimeError(
+            f"relationship_classification() cannot run against database "
+            f"{resolved.name!r}: its vocab_connection is a genuinely separate "
+            "connection from the primary one, and RelationshipMapping's FK to "
+            "relationship.relationship_id needs both in the same database. "
+            "Point vocab_connection at the same connection as primary for "
+            "this command, or provision relationship_class/relationship_mapping "
+            "manually without the FK constraint."
+        )
+    db_schema = schema_of(engine)
+    ensure_schema(engine, db_schema)
+    ensure_schema(engine, STAGING_SCHEMA)
+
     Session = sessionmaker(bind=engine, future=True)
     session = Session()
-    loader_backend = resolve_backend(engine)
+    loader_backend = resolve_backend(engine, staging_schema=STAGING_SCHEMA)
 
-    with engine.begin() as conn:
-        conn.execute(
-            sa.text(
-                "DROP TABLE IF EXISTS "
-                f"{loader_backend.qualified_staging_name(RelationshipMapping.__tablename__)} CASCADE"
-            )
-        )
-        conn.execute(
-            sa.text(
-                "DROP TABLE IF EXISTS "
-                f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
-            )
-        )
-        conn.execute(sa.text("DROP TYPE IF EXISTS predicatekindenum CASCADE;"))
+    drop_staging_sql = (
+        sa.text(
+            "DROP TABLE IF EXISTS "
+            f"{loader_backend.qualified_staging_name(RelationshipMapping.__tablename__)} CASCADE"
+        ),
+        sa.text(
+            "DROP TABLE IF EXISTS "
+            f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
+        ),
+    )
+    with _open_connection(engine) as connection:
+        for stmt in drop_staging_sql:
+            connection.execute(stmt)
 
+    # DROP TYPE IF EXISTS predicatekindenum was dead code: the Enum column
+    # never set an explicit name=, so SQLAlchemy's generated type name is
+    # actually "predicatekind". drop_all(tables=[...]) already drops the
+    # shared Enum type exactly once, deduped, since both tables using it
+    # are always in the same tables= list.
     tables_to_drop = [
         RelationshipMapping.__table__,
         RelationshipClass.__table__,
     ]
-    Base.metadata.drop_all(bind=engine, tables=tables_to_drop, checkfirst=True)  # type: ignore
-    Base.metadata.create_all(bind=engine, tables=tables_to_drop)  # type: ignore
+    # Both tables live in the primary schema (only RelationshipMapping's FK
+    # target is vocab-tagged, via role_fk), so the guard checks Role.PRIMARY.
+    with _open_connection(engine) as connection:
+        with guard_schema_provenance(connection, resolved, role=Role.PRIMARY):
+            Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
+            Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         for model, df in zip(
@@ -184,8 +236,26 @@ def relationship_classification(
                     dedupe=True,
                     merge_strategy="replace",
                     loader=PandasLoader(),
+                    staging_schema=STAGING_SCHEMA,
                 )
                 session.commit()
+
+
+@app.command(name="relationship-classification")
+def relationship_classification_cmd(
+    pred_class_dir: Annotated[
+        Optional[str],
+        typer.Option(
+            help=(
+                "Path to the directory containing `predicate_classification.csv` "
+                "and `predicate_mapping.csv`. Defaults to the copies shipped with "
+                "omop-graph; pass a directory to override them."
+            )
+        ),
+    ] = None,
+):
+    """Load pre-classified predicates into the database."""
+    relationship_classification(pred_class_dir)
 
 
 if __name__ == "__main__":
