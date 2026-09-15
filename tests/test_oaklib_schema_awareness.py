@@ -190,9 +190,7 @@ def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_
 
         resource = OMOPOntologyResource(
             url=pg_db.connection.engine.url.render_as_string(hide_password=False),
-            execution_options={
-                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
-            },
+            execution_options={SCHEMA_TRANSLATE_MAP_KEY: schema_translate_map(schema)},
             vocab_url=vocab_url,
             vocab_execution_options={
                 SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: None, Role.VOCAB.value: None, Role.RESULTS.value: None}
@@ -223,7 +221,7 @@ def test_omop_alchemy_implementation_reuses_one_engine_when_no_split_is_configur
         resource = OMOPOntologyResource(
             url=pg_db.connection.engine.url.render_as_string(hide_password=False),
             execution_options={
-                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+                SCHEMA_TRANSLATE_MAP_KEY: schema_translate_map(schema)
             },
         )
 
@@ -330,7 +328,7 @@ def test_bare_engine_string_path_resolves_against_the_configured_schema(pg_db) -
             # to open a real connection, not just for display.
             url=pg_db.connection.engine.url.render_as_string(hide_password=False),
             execution_options={
-                SCHEMA_TRANSLATE_MAP_KEY: {Role.PRIMARY.value: schema, Role.VOCAB.value: schema, Role.RESULTS.value: schema}
+                SCHEMA_TRANSLATE_MAP_KEY: schema_translate_map(schema)
             },
         )
         adapter = OMOPAlchemyImplementation(resource=resource)
