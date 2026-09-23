@@ -12,9 +12,11 @@ raw SQL referenced. Confirmed here rather than assumed.
 from __future__ import annotations
 
 import dataclasses
+import uuid
 
 import pytest
 import sqlalchemy as sa
+from oa_configurator import Role, SchemaDriftError, record_schema_provenance
 
 from orm_loader.helpers import Base
 
@@ -91,3 +93,45 @@ def test_relationship_classification_is_idempotent(pg_db):
         sa.select(sa.func.count()).select_from(RelationshipClass.__table__)
     ).scalar()
     assert n_class and n_class > 0
+
+
+def test_relationship_classification_guard_fires_on_reconfigured_schema(pg_db):
+    """Unlike the two tests above, resolved= is genuinely passed here -- proves
+    the guard actually detects drift for relationship_classification itself,
+    not just that it no-ops correctly when a caller opts out."""
+    database_name = f"guard_wiring_test_db_{uuid.uuid4().hex[:8]}"
+    schema_a = "phase4_guard_wiring_a"
+    schema_b = "phase4_guard_wiring_b"
+
+    # Both connection and vocab_connection must point at the same object: relationship_classification()
+    # refuses a genuinely split vocab connection, and dataclasses.replace() only overrides fields
+    # explicitly passed, so leaving vocab_connection untouched would desync it from the new connection.
+    single_connection = dataclasses.replace(pg_db.resolved.connection, test_only=False)
+    resolved_a = dataclasses.replace(
+        pg_db.resolved,
+        name=database_name,
+        schema_name=schema_a,
+        vocab_schema=schema_a,
+        results_schema=schema_a,
+        connection=single_connection,
+        vocab_connection=single_connection,
+    )
+    # Baseline must be recorded before schema_a has any tables, or the guard's own
+    # first-time-population check trips on Base.metadata.create_all() below.
+    scoped_a = _scoped_connection(pg_db, schema_a)
+    record_schema_provenance(
+        scoped_a,
+        database_name=database_name,
+        schema_tag=Role.PRIMARY.value,
+        new_physical_schema=schema_a,
+        reason="test setup",
+    )
+    Base.metadata.create_all(bind=scoped_a, checkfirst=True)
+    relationship_classification(engine=scoped_a, resolved=resolved_a)
+
+    resolved_b = dataclasses.replace(
+        resolved_a, schema_name=schema_b, vocab_schema=schema_b, results_schema=schema_b
+    )
+    scoped_b = _scoped_connection(pg_db, schema_b)
+    with pytest.raises(SchemaDriftError):
+        relationship_classification(engine=scoped_b, resolved=resolved_b)
