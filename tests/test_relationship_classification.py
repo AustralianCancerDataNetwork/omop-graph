@@ -31,6 +31,9 @@ def _scoped_connection(pg_db, schema: str) -> sa.Connection:
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
+    """No resolved= is passed, so guard_schema_provenance_for() no-ops here by
+    design (a bare engine= caller with no resolved config behind it); this test
+    is about schema routing, not provenance drift protection."""
     scoped = _scoped_connection(pg_db, "phase4_regression_test")
     Base.metadata.create_all(bind=scoped, checkfirst=True)
 
@@ -76,7 +79,8 @@ def test_relationship_classification_refuses_a_genuinely_split_vocab_connection(
 
 def test_relationship_classification_is_idempotent(pg_db):
     """Re-running against the same schema, the real-world redeploy case the
-    DROP TABLE/enum-drop cleanup exists for, must not fail."""
+    DROP TABLE/enum-drop cleanup exists for, must not fail. No resolved= here
+    either, so guard_schema_provenance_for() no-ops by design, same as above."""
     scoped = _scoped_connection(pg_db, "phase4_idempotent_test")
     Base.metadata.create_all(bind=scoped, checkfirst=True)
 

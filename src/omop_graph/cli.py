@@ -1,7 +1,5 @@
 import logging
 import tempfile
-from collections.abc import Iterator
-from contextlib import contextmanager
 from importlib import resources
 from pathlib import Path
 from typing import Annotated, Optional, cast
@@ -12,10 +10,11 @@ import typer
 from sqlalchemy.orm import sessionmaker
 
 from oa_configurator import (
-    ResolvedCDMDatabase, 
-    Role, 
-    ensure_schema, 
-    guard_schema_provenance_for, 
+    ResolvedCDMDatabase,
+    Role,
+    ensure_schema,
+    guard_schema_provenance_for,
+    open_connection,
     schema_of
 )
 
@@ -67,19 +66,6 @@ def packaged_predicate_csv_dir() -> Path:
     leaving ``relationship-classification`` unrunnable from a normal install.
     """
     return Path(str(resources.files("omop_graph") / "data"))
-
-
-@contextmanager
-def _open_connection(bindable: sa.Engine | sa.Connection) -> Iterator[sa.Connection]:
-    """Yield a Connection: opens its own transaction for an Engine, or uses
-    an already-open Connection directly, participating in the caller's own
-    transaction (needed by the rollback-based pg_db test fixture).
-    """
-    if isinstance(bindable, sa.Engine):
-        with bindable.begin() as connection:
-            yield connection
-    else:
-        yield bindable
 
 
 def relationship_classification(
@@ -204,7 +190,7 @@ def relationship_classification(
             f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
         ),
     )
-    with _open_connection(engine) as connection:
+    with open_connection(engine) as connection:
         for stmt in drop_staging_sql:
             connection.execute(stmt)
 
@@ -219,9 +205,9 @@ def relationship_classification(
     ]
     # Both tables live in the primary schema (only RelationshipMapping's FK
     # target is vocab-tagged, via role_fk), so the guard checks Role.PRIMARY.
-    with _open_connection(engine) as connection:
+    with open_connection(engine) as connection:
         guard = guard_schema_provenance_for(
-            connection, resolved, role=Role.PRIMARY, tables=tables_to_drop  # ty: ignore[invalid-argument-type]
+            connection, resolved, schema_tag=Role.PRIMARY, tables=tables_to_drop  # ty: ignore[invalid-argument-type]
         )
         with guard:
             Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
