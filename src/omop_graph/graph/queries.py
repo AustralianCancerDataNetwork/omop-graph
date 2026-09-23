@@ -33,7 +33,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from oa_configurator import Role, schema_of
+from oa_configurator import Role, physical_schema_of
 
 from omop_alchemy.backends import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
@@ -356,7 +356,7 @@ def q_concept_name_fulltext(
     )
     # Fulltext are in VOCAB schema
     inspector = inspect(engine)
-    vocab_schema = schema_of(engine, schema_tag=Role.VOCAB)
+    vocab_schema = physical_schema_of(engine, schema_tag=Role.VOCAB)
     target_table = Concept_Synonym if synonym else Concept
     target_col = (
         CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN

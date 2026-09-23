@@ -15,7 +15,7 @@ from oa_configurator import (
     ensure_schema,
     guard_schema_provenance_for,
     open_connection,
-    schema_of
+    physical_schema_of
 )
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
@@ -172,7 +172,7 @@ def relationship_classification(
             "this command, or provision relationship_class/relationship_mapping "
             "manually without the FK constraint."
         )
-    db_schema = schema_of(engine)
+    db_schema = physical_schema_of(engine)
     ensure_schema(engine, db_schema)
     ensure_schema(engine, STAGING_SCHEMA)
 
