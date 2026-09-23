@@ -150,7 +150,7 @@ class KnowledgeGraphEmbeddingConfiguration:
 def _relationship_mapping_lookup(session: Session) -> dict[str, Row]:
     """RelationshipMapping rows keyed by relationship_id.
 
-    RelationshipMapping is an omop-graph extension table, not vocab-role, so
+    RelationshipMapping is an omop-graph extension table, not vocab-tagged, so
     it never lives on a split ``vocab_engine``. This always runs against
     the primary connection.
     """
@@ -197,9 +197,9 @@ class KnowledgeGraph(GraphBackend):
         ``connection``. Omit (the common case) when vocabulary tables sit on
         the same connection as everything else: same-connection queries
         stay a single eager join. When given and different from
-        ``cdm_engine``, the three queries that join a vocab-role table
+        ``cdm_engine``, the three queries that join a vocab-tagged table
         (Concept/Concept_Relationship/Relationship) against
-        RelationshipMapping (not vocab-role, since it's an omop-graph
+        RelationshipMapping (not vocab-tagged, since it's an omop-graph
         extension table) fetch each side from its own engine and merge in
         Python, since a SQL join cannot span two physical connections.
     """

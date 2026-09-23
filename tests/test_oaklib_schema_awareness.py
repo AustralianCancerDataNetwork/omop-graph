@@ -164,13 +164,10 @@ def test_omop_resource_carries_a_configured_split_vocabulary_target(monkeypatch)
 def test_omop_alchemy_implementation_builds_a_genuine_vocab_engine_from_a_split_resource(
     pg_db, tmp_path
 ) -> None:
-    """The other half of the split-vocabulary wiring: omop_resource() deriving
-    vocab_url/vocab_execution_options is only useful if OMOPAlchemyImplementation
-    actually consumes them. Every vocab-role KnowledgeGraph query (Phase 4.2's
-    retrofit) now genuinely resolves through vocab_engine, not cdm_engine, so
-    unlike the in-memory-SQLite shortcut this test used before that fix, the
-    vocab side needs a real, separately seeded database -- a SQLite tempfile
-    persists across the adapter's own connections, unlike ``:memory:``."""
+    """Confirms OMOPAlchemyImplementation actually builds vocab_engine from
+    omop_resource()'s vocab_url/vocab_execution_options, not just carries them.
+    Needs a real seeded database, not ``:memory:``, since a SQLite tempfile
+    persists across the adapter's own connections and ``:memory:`` doesn't."""
     vocab_db_path = tmp_path / "vocab.db"
     vocab_url = f"sqlite:///{vocab_db_path}"
     vocab_engine = sa.create_engine(vocab_url).execution_options(

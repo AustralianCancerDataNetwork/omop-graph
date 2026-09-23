@@ -61,7 +61,7 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
 
 def test_relationship_classification_refuses_a_genuinely_split_vocab_connection(pg_db):
     """Postgres has no cross-database inline FK, so RelationshipMapping's FK
-    to relationship.relationship_id (VOCAB-role) can never be created once
+    to relationship.relationship_id (VOCAB-tagged) can never be created once
     vocab_connection is a genuinely separate connection.
     """
     resolved = dataclasses.replace(

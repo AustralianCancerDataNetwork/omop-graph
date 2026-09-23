@@ -1,18 +1,14 @@
-"""Split-connection vocab routing (Phase 3.2 of the schema_translate_map fix).
+"""Split-connection vocab routing.
 
-``q_edges``, ``q_predicate_row_with_ancestry``, and ``q_all_predicates_with_ancestry``
-join a vocab-role table (Relationship/Concept_Relationship) against
-RelationshipMapping (an omop-graph extension table, not vocab-role). When
-``vocab_connection`` names a physically different server than ``connection``,
-a single SQL join can't span both. ``KnowledgeGraph`` fetches each side
-from its own engine and merges in Python instead (see kg.py's
-``_vocab_split``/``_predicate_from_rows``/``_relationship_mapping_lookup``).
+q_edges/q_predicate_row_with_ancestry/q_all_predicates_with_ancestry join a
+vocab-tagged table against RelationshipMapping. A genuinely separate 
+vocab_connection can't do it in one SQL join. Instead, KnowledgeGraph fetches each side 
+from its own engine and merges in Python (see kg.py's
+_vocab_split/_predicate_from_rows/_relationship_mapping_lookup).
 
-Uses two genuinely distinct, real Postgres connections (``test_cdm``,
-``test_orm``) standing in for "primary server" and "vocab server". Each
-engine gets its own real, uniquely-named schema via
-``oa_configurator.testing.isolated_test_schema()``, since rollback-based
-isolation (a single already-open connection) can't stand in for two
+Uses two real, distinct Postgres connections (test_cdm, test_orm) standing
+in for primary/vocab servers, each with its own schema via
+isolated_test_schema(). Note: rollback-based isolation can't stand in for two
 genuinely separate physical connections.
 """
 
@@ -57,19 +53,14 @@ OBJECT_CONCEPT_ID = 2
 _TODAY = date(2020, 1, 1)
 _FAR_FUTURE = date(2099, 12, 31)
 
-# This test also needs Relationship/Concept_Relationship beyond the shared
-# core (they're not part of every consumer's minimal vocab bootstrap, but
-# are exactly what the split-connection predicate/edge merge is testing).
+# Relationship/Concept_Relationship aren't in the shared minimal vocab
+# bootstrap, but are exactly what the split-connection merge is testing.
 _VOCAB_TABLES = VOCAB_TABLES + (Relationship.__table__, Concept_Relationship.__table__)
 
-# Postgres has no cross-database inline FK (unlike cross-schema, which works
-# fine within one database) -- RelationshipMapping's ORM-mapped FK to
-# relationship.relationship_id can't be created as DDL when vocab lives on a
-# genuinely different database, confirmed empirically while writing this
-# test. That FK isn't what's under test here (the Python-side merge is), so
-# these shadow tables reproduce RelationshipClass/RelationshipMapping's
-# columns without it -- the real ORM classes read/write them identically,
-# since a SELECT/INSERT only depends on column shape, not on constraint DDL.
+# Postgres has no cross-database inline FK, so RelationshipMapping's FK to
+# relationship.relationship_id can't be created as DDL across genuinely
+# separate databases. These shadow tables reproduce the real columns
+# without it, since a SELECT/INSERT only depends on column shape.
 _shadow_metadata = sa.MetaData()
 _shadow_relationship_class = sa.Table(
     "relationship_class",
@@ -139,12 +130,9 @@ def split_engines() -> Iterator[_Engines]:
             _shadow_metadata.create_all(primary_engine)
             Base.metadata.create_all(vocab_engine, tables=_VOCAB_TABLES, checkfirst=True)
 
-            # Domain/Vocabulary/Concept_Class/Concept form a genuine bootstrap
-            # cycle (each reference row's own *_concept_id FK requires a Concept
-            # row to already exist, and that Concept row's domain_id/
-            # vocabulary_id/concept_class_id FKs require the reference rows to
-            # already exist), the same cycle production bulk-loads handle by
-            # disabling FK triggers for the load, then re-enabling them.
+            # Domain/Vocabulary/Concept_Class/Concept form a genuine FK bootstrap
+            # cycle, handled the same way production bulk-loads do: disable FK
+            # triggers for the load, then re-enable them.
             with fk_triggers_disabled(vocab_engine, _VOCAB_TABLES):
                 _seed(primary_engine, vocab_engine)
 
@@ -319,14 +307,6 @@ def test_edges_predicate_kinds_filter_applies_after_merge(split_engines: _Engine
     )
 
     assert edges == ()
-
-
-# Phase 4.2: KnowledgeGraph's ~15 concept/ancestor/synonym query methods used
-# to always query self.session_factory() (primary), silently wrong once
-# vocab lives on a genuinely separate connection -- not detected, not
-# refused, and (before these tests) not covered at all. Each of these was
-# broken against split_engines before the vocab_session_factory() retrofit,
-# confirmed by running them against this same fixture on the pre-fix code.
 
 
 def test_concept_view_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:

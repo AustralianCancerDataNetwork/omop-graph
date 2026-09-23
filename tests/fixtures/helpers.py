@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from typing import Iterator, cast
 
 import sqlalchemy as sa
-from oa_configurator import Role, qualified
+from oa_configurator import Role, qualified, schema_of, validate_schema_tag
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 
 VOCAB_TABLES = cast(
@@ -70,7 +70,8 @@ def fk_triggers_disabled(
     conn = bindable.connect() if opened_here else bindable
     try:
         for table in tables:
-            conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name)} DISABLE TRIGGER ALL"))
+            physical_schema = schema_of(conn, schema_tag=validate_schema_tag(table))
+            conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name, physical_schema=physical_schema)} DISABLE TRIGGER ALL"))
         if opened_here:
             conn.commit()
     finally:
@@ -83,7 +84,8 @@ def fk_triggers_disabled(
         conn = bindable.connect() if opened_here else bindable
         try:
             for table in tables:
-                conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name)} ENABLE TRIGGER ALL"))
+                physical_schema = schema_of(conn, schema_tag=validate_schema_tag(table))
+                conn.execute(sa.text(f"ALTER TABLE {qualified(conn, table.name, physical_schema=physical_schema)} ENABLE TRIGGER ALL"))
             if opened_here:
                 conn.commit()
         finally:

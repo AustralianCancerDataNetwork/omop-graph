@@ -22,6 +22,7 @@ from sqlalchemy import (
     case,
     exists,
     func,
+    inspect,
     literal,
     or_,
     select,
@@ -32,7 +33,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from oa_configurator import Role, schema_inspect
+from oa_configurator import Role, schema_of
 
 from omop_alchemy.backends import (
     CONCEPT_NAME_TSVECTOR_COLUMN,
@@ -354,7 +355,8 @@ def q_concept_name_fulltext(
         Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
     )
     # Fulltext are in VOCAB schema
-    inspector = schema_inspect(engine, role=Role.VOCAB)
+    inspector = inspect(engine)
+    vocab_schema = schema_of(engine, schema_tag=Role.VOCAB)
     target_table = Concept_Synonym if synonym else Concept
     target_col = (
         CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN
@@ -366,7 +368,7 @@ def q_concept_name_fulltext(
     tsvector_col = next(
         (
             c["name"]
-            for c in inspector.get_columns(target_table.__tablename__)
+            for c in inspector.get_columns(target_table.__tablename__, schema=vocab_schema)
             if c["name"] == target_col
         ),
         None,
@@ -438,7 +440,7 @@ def q_predicate_row_with_ancestry(
     ----------
     include_classification : bool, optional
         Join in RelationshipMapping's predicate_kind/predicate_subkind. Set to
-        False for a split-connection deployment (Relationship is vocab-role,
+        False for a split-connection deployment (Relationship is vocab-tagged,
         RelationshipMapping is not, so they can live on different physical
         connections). The caller fetches RelationshipMapping separately via
         :func:`q_relationship_mapping_row` and merges in Python.
@@ -506,7 +508,7 @@ def q_all_predicates_with_ancestry(*, include_classification: bool = True) -> Se
 def q_relationship_mapping_row(relationship_id: str) -> Select:
     """Query one RelationshipMapping row by relationship_id.
 
-    The primary-role half of a split-connection predicate lookup, pairing
+    The primary-tagged half of a split-connection predicate lookup, pairing
     with :func:`q_predicate_row_with_ancestry`'s ``include_classification=False``.
     """
     return select(
@@ -519,7 +521,7 @@ def q_relationship_mapping_row(relationship_id: str) -> Select:
 def q_relationship_mapping_all() -> Select:
     """Query every RelationshipMapping row, keyed by relationship_id.
 
-    The primary-role half of a split-connection edges/predicates lookup.
+    The primary-tagged half of a split-connection edges/predicates lookup.
     RelationshipMapping is a small reference table, so callers merge it as a
     plain dict rather than joining across connections.
     """
@@ -546,7 +548,7 @@ def q_edges(
     ----------
     include_classification : bool, optional
         Join in RelationshipMapping's predicate_kind/predicate_subkind.
-        Concept_Relationship is vocab-role, RelationshipMapping is not, so
+        Concept_Relationship is vocab-tagged, RelationshipMapping is not, so
         for a split-connection deployment set this to False and merge
         RelationshipMapping (via :func:`q_relationship_mapping_all`)
         in Python instead. ``predicate_kinds`` cannot be applied in SQL

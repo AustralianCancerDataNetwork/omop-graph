@@ -80,7 +80,11 @@ def test_relationship_classification_guard_fires_on_reconfigured_schema(
             # already-populated database would have to do.
             with engine_a.begin() as conn:
                 record_schema_provenance(
-                    conn, resolved_a, role=Role.PRIMARY, new_schema=schema_a, reason="test setup baseline"
+                    conn,
+                    database_name=resolved_a.name,
+                    schema_tag=Role.PRIMARY,
+                    new_physical_schema=schema_a,
+                    reason="test setup baseline",
                 )
             monkeypatch.setattr(omop_graph_cli, "resolve_cdm_database", lambda: resolved_a)
             omop_graph_cli.relationship_classification()

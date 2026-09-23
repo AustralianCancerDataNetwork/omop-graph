@@ -1,19 +1,13 @@
 """q_concept_name_fulltext() must inspect the VOCAB schema, not primary.
 
-Concept/Concept_Synonym are VOCAB-role tables. schema_inspect(engine) with
-no role= defaults to Role.PRIMARY, so whenever vocab_schema differs from
-cdm_schema (a normal same-server split, not just a same-schema deployment),
-the old code inspected the wrong schema, found no tsvector column, and
-raised a false FullTextError even though the column genuinely exists. The
-only prior coverage (test_fulltext_optional.py) uses SQLite, where
-supports_schemas() is False and every role folds to None -- masking this
-completely. Real, distinct primary/vocab Postgres schemas here instead.
+Concept/Concept_Synonym are VOCAB-tagged; inspecting without an explicit
+schema= defaults to Role.PRIMARY, so a real primary/vocab split (unlike
+SQLite, where every schema tag folds to None) would raise a false
+FullTextError even though the tsvector column exists.
 
-Schemas are created directly on pg_db's own already-open connection
-(CREATE SCHEMA, rolled back automatically at teardown) rather than via
-isolated_test_schema(): that opens a second, genuinely separate connection
-from the same pool, which can starve waiting on pg_db's own still-open
-transaction.
+Schemas are created directly on pg_db's own connection rather than via
+isolated_test_schema(), which opens a second connection that can starve
+against pg_db's still-open transaction.
 """
 
 from __future__ import annotations
@@ -56,7 +50,7 @@ def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
         index_name="idx_concept_name_tsvector_test",
         create_indexes=True,
         fastupdate=True,
-        role=Role.VOCAB,
+        schema_tag=Role.VOCAB.value,
     )
 
     # Confirmed absent from primary_schema: proves a real vocab/primary

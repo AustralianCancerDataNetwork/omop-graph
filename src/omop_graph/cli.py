@@ -11,7 +11,13 @@ import sqlalchemy as sa
 import typer
 from sqlalchemy.orm import sessionmaker
 
-from oa_configurator import ResolvedCDMDatabase, Role, ensure_schema, guard_schema_provenance, schema_of
+from oa_configurator import (
+    ResolvedCDMDatabase, 
+    Role, 
+    ensure_schema, 
+    guard_schema_provenance_for, 
+    schema_of
+)
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
@@ -214,7 +220,10 @@ def relationship_classification(
     # Both tables live in the primary schema (only RelationshipMapping's FK
     # target is vocab-tagged, via role_fk), so the guard checks Role.PRIMARY.
     with _open_connection(engine) as connection:
-        with guard_schema_provenance(connection, resolved, role=Role.PRIMARY):
+        guard = guard_schema_provenance_for(
+            connection, resolved, role=Role.PRIMARY, tables=tables_to_drop  # ty: ignore[invalid-argument-type]
+        )
+        with guard:
             Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
             Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
 
