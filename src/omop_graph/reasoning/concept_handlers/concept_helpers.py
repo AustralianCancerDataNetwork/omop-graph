@@ -18,9 +18,15 @@ def standardise_ids(
     """
     Map a set of concept IDs to their Standard Concept IDs.
 
-    This function attempts to find a 'Maps to' relationship for each input ID.
-    If a 'Maps to' edge exists, the target ID is used (Standard Concept).
-    If no such edge exists, the original ID is returned (fallback to self).
+    Currently disabled: always raises ``NotImplementedError``. The predicate
+    search this relied on changed and the body below was never updated to
+    match (it also still calls ``kg.iter_edges(predicate=...)``, a parameter
+    that no longer exists; see ``predicate_ids``/``predicate_kinds``).
+
+    Intended behavior once reimplemented: attempts to find a 'Maps to'
+    relationship for each input ID. If a 'Maps to' edge exists, the target ID
+    is used (Standard Concept). If no such edge exists, the original ID is
+    returned (fallback to self).
 
     Parameters
     ----------

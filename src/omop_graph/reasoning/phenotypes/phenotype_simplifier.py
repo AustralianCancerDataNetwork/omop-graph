@@ -22,7 +22,12 @@ def descendants_exhaustive_subsumes(
     exclude_roots: set[int] | None = None,
 ) -> set[int]:
     """
-    Exhaustive descendant closure using ONLY 'Subsumes'
+    Exhaustive descendant closure using ONLY 'Subsumes'.
+
+    Currently disabled: always raises ``NotImplementedError``. The predicate
+    search this relied on changed and the body below was never updated to
+    match (it also still calls ``kg.iter_edges(predicate=...)``, a parameter
+    that no longer exists; see ``predicate_ids``/``predicate_kinds``).
     """
 
     if exclude_roots is None:

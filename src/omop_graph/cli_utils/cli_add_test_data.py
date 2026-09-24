@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from omop_alchemy.cdm.model.structural.episode import Episode
 from omop_alchemy.cdm.model.structural.episode_event import Episode_Event
-from omop_alchemy.cdm.model.derived import Observation_Period
+from omop_alchemy.cdm.model.clinical import Observation_Period
 from omop_alchemy.cdm.model.health_system import (
     Location,
     Care_Site,
@@ -261,12 +261,22 @@ def populate_conditions_and_modifiers(
     session.commit()
 
 
-def populate_test_data(session):
-    """Brute force addition of test data for development/testing purposes."""
+def populate_test_data(session, vocab_session):
+    """Brute force addition of test data for development/testing purposes.
+
+    Parameters
+    ----------
+    session
+        Bound to the primary connection; every write (Person, Visit_Occurrence,
+        Condition_Occurrence, ...) goes through this session.
+    vocab_session
+        Bound to the vocab connection, for the Concept/Concept_Ancestor reads
+        below.
+    """
 
     # Data
     concept_by_domain = pd.DataFrame(
-        session.query(*Concept.__table__.columns).filter(
+        vocab_session.query(*Concept.__table__.columns).filter(
             sa.or_(
                 Concept.domain_id.in_(
                     [
@@ -316,7 +326,7 @@ def populate_test_data(session):
     )
 
     staging_parents = pd.DataFrame(
-        session.query(*Concept.__table__.columns)
+        vocab_session.query(*Concept.__table__.columns)
         .join(
             Concept_Ancestor,
             Concept.concept_id == Concept_Ancestor.descendant_concept_id,
@@ -332,7 +342,7 @@ def populate_test_data(session):
             staging_parents[staging_parents.concept_name.str.contains(axis)].concept_id
         )
         s = pd.DataFrame(
-            session.query(*Concept.__table__.columns)
+            vocab_session.query(*Concept.__table__.columns)
             .join(
                 Concept_Ancestor,
                 Concept.concept_id == Concept_Ancestor.descendant_concept_id,

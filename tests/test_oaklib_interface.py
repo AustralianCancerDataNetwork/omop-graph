@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPTextAnnotatorInterface
+
+pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 
 def test_annotate_text_standardizes_non_standard_candidate_without_parent_annotation(

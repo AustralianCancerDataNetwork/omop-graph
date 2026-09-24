@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Iterator
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from omop_alchemy.cdm.model.vocabulary import Concept
+from oa_configurator.testing import isolated_test_schema
+from orm_loader.helpers import Base
+
+from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.nodes import ConceptView
@@ -19,47 +23,90 @@ from omop_graph.graph.queries import (
     q_entities,
 )
 
+from fixtures.helpers import VOCAB_TABLES, fk_triggers_disabled, schema_translate_map
+
+_META_CONCEPT_ID = 0
+
 
 @pytest.fixture()
-def concept_engine() -> sa.Engine:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:", future=True)
-    Concept.__table__.create(engine)
+def concept_engine(pg_db) -> Iterator[sa.Engine]:
+    with isolated_test_schema(pg_db.connection.engine, prefix="concept_queries") as schema:
+        engine = pg_db.connection.engine.execution_options(schema_translate_map=schema_translate_map(schema))
+        Base.metadata.create_all(engine, tables=VOCAB_TABLES, checkfirst=True)
 
-    valid_from = date(2000, 1, 1)
-    valid_until = date(2099, 12, 31)
+        valid_from = date(2000, 1, 1)
+        valid_until = date(2099, 12, 31)
 
-    def concept(
-        concept_id: int,
-        *,
-        standard_concept: str | None,
-        invalid_reason: str | None,
-    ) -> Concept:
-        return Concept(
-            concept_id=concept_id,
-            concept_name="Shared label",
-            domain_id="Condition",
-            vocabulary_id="SNOMED",
-            concept_class_id="Clinical Finding",
-            standard_concept=standard_concept,
-            concept_code=f"TEST-{concept_id}",
-            valid_start_date=valid_from,
-            valid_end_date=valid_until,
-            invalid_reason=invalid_reason,
-        )
+        def concept(
+            concept_id: int,
+            *,
+            standard_concept: str | None,
+            invalid_reason: str | None,
+        ) -> Concept:
+            return Concept(
+                concept_id=concept_id,
+                concept_name="Shared label",
+                domain_id="Condition",
+                vocabulary_id="SNOMED",
+                concept_class_id="Clinical Finding",
+                standard_concept=standard_concept,
+                concept_code=f"TEST-{concept_id}",
+                valid_start_date=valid_from,
+                valid_end_date=valid_until,
+                invalid_reason=invalid_reason,
+            )
 
-    with Session(engine) as session:
-        session.add_all(
-            [
-                concept(1, standard_concept="S", invalid_reason=None),
-                concept(2, standard_concept="C", invalid_reason=" "),
-                concept(3, standard_concept=None, invalid_reason=None),
-                concept(4, standard_concept="S", invalid_reason="U"),
-                concept(5, standard_concept=" ", invalid_reason="X"),
-            ]
-        )
-        session.commit()
+        with fk_triggers_disabled(engine, VOCAB_TABLES):
+            with Session(engine) as session:
+                session.add_all(
+                    [
+                        Concept(
+                            concept_id=_META_CONCEPT_ID,
+                            concept_name="Meta concept",
+                            domain_id="Metadata",
+                            vocabulary_id="OMOP",
+                            concept_class_id="Metadata",
+                            standard_concept="S",
+                            concept_code="META",
+                            valid_start_date=valid_from,
+                            valid_end_date=valid_until,
+                        ),
+                        Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=_META_CONCEPT_ID),
+                        Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=_META_CONCEPT_ID),
+                        Vocabulary(
+                            vocabulary_id="OMOP",
+                            vocabulary_name="OMOP",
+                            vocabulary_reference="local",
+                            vocabulary_version="test",
+                            vocabulary_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Vocabulary(
+                            vocabulary_id="SNOMED",
+                            vocabulary_name="SNOMED",
+                            vocabulary_reference="local",
+                            vocabulary_version="test",
+                            vocabulary_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Concept_Class(
+                            concept_class_id="Metadata",
+                            concept_class_name="Metadata",
+                            concept_class_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Concept_Class(
+                            concept_class_id="Clinical Finding",
+                            concept_class_name="Clinical Finding",
+                            concept_class_concept_id=_META_CONCEPT_ID,
+                        ),
+                        concept(1, standard_concept="S", invalid_reason=None),
+                        concept(2, standard_concept="C", invalid_reason=" "),
+                        concept(3, standard_concept=None, invalid_reason=None),
+                        concept(4, standard_concept="S", invalid_reason="U"),
+                        concept(5, standard_concept=" ", invalid_reason="X"),
+                    ]
+                )
+                session.commit()
 
-    return engine
+        yield engine
 
 
 def test_concept_filter_applies_canonical_graph_constraints(
