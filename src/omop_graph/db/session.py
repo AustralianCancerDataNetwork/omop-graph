@@ -49,9 +49,9 @@ def make_engine(
     execution_options : dict, optional
         Options forwarded to ``engine.execution_options()``. In the resolver
         path, a ``schema_translate_map`` here may add keys the resolver
-        doesn't define, but may not include ``None``: that key is always set
-        from the resolved config, and ``create_engine()`` raises
-        ``ValueError`` if it is overridden here.
+        doesn't define, but may not include the resolver's own reserved
+        keys: those are always set from the resolved config, and
+        ``create_engine()`` raises ``ValueError`` if any are overridden here.
 
     Returns
     -------

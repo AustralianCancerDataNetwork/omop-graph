@@ -731,6 +731,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
         """
         Retrieve outgoing relationships, including those implied by the hierarchy.
+
+        Currently disabled: always raises ``NotImplementedError``, per the
+        raise message below, since a CDM change broke the body's assumptions.
         """
         raise NotImplementedError("Changes to the CDM currently prevents this function")
         concept_id = self._parse_concept(curie)
@@ -807,6 +810,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterable[PRED_CURIE]:
         """
         Find relationships connecting a subject and object, including hierarchical ones.
+
+        Currently disabled: always raises ``NotImplementedError``, per the
+        raise message below, since a CDM change broke the body's assumptions.
         """
         raise NotImplementedError(
             "Change in OMOP CDM made this function not work anymore"

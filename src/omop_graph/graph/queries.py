@@ -542,10 +542,12 @@ def q_edges(
     within_domain: bool = False,
     include_classification: bool = True,
 ) -> Select:
-    """Query outgoing edges for a batch of concept IDs.
+    """Query edges for a batch of concept IDs, in either direction.
 
     Parameters
     ----------
+    direction : {"in", "out"}
+        Whether to query incoming or outgoing edges for ``concept_ids``.
     include_classification : bool, optional
         Join in RelationshipMapping's predicate_kind/predicate_subkind.
         Concept_Relationship is vocab-tagged, RelationshipMapping is not, so
