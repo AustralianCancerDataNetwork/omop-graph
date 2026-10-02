@@ -7,8 +7,8 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from oa_configurator.testing import isolated_test_database, isolated_test_schema
-from orm_loader.helpers import Base
+from oa_configurator.testing import isolated_test_database, scoped_test_schema
+from orm_loader.helpers import Base, bulk_load_context
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_class import Concept_Class
@@ -26,8 +26,6 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
-from .helpers import fk_triggers_disabled, schema_translate_map
-
 PARENT_CANCER_ID = 443392
 CONCEPT_META_ID = 0
 LANGUAGE_CONCEPT_ID = 1
@@ -36,11 +34,9 @@ LANGUAGE_CONCEPT_ID = 1
 @pytest.fixture(scope="module")
 def mock_cdm_engine() -> Iterator[sa.Engine]:
     with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
-        raw_engine = db.connection.engine
-        with isolated_test_schema(raw_engine, prefix="mock_cdm") as schema:
-            engine = raw_engine.execution_options(schema_translate_map=schema_translate_map(schema))
-            _create_mock_cdm_tables(engine)
-            yield engine
+        with scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped:
+            _create_mock_cdm_tables(scoped.engine)
+            yield scoped.engine
 
 
 def _create_mock_cdm_tables(engine: sa.Engine) -> None:
@@ -62,12 +58,13 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
 
     Base.metadata.create_all(engine, tables=tables)
 
-    # Disable triggers for the whole seed sidesteps ordering entirely, 
+    # Disabling FK checks for the whole seed sidesteps ordering entirely,
     # since these tables have FK dependencies that form a cycle
-    with fk_triggers_disabled(engine, tuple(tables)):
-        session_local = sessionmaker(bind=engine, future=True)
-        with session_local() as session:
+    session_local = sessionmaker(bind=engine, future=True)
+    with session_local() as session:
+        with bulk_load_context(session):
             seed_mock_cdm(session)
+        session.commit()
 
 
 @pytest.fixture()
@@ -366,4 +363,4 @@ def seed_mock_cdm(session: Session) -> None:
         )
     )
 
-    session.commit()
+    session.flush()

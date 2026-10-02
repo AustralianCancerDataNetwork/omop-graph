@@ -80,6 +80,9 @@ omop-graph = "omop_graph.cli:app"
 [project.entry-points."omop.config"]
 omop_graph = "omop_graph.config:OmopGraphConfig"
 
+[project.entry-points."oaklib.plugins"]
+omop = "omop_graph.oaklib_interface.omop_implementation:OMOPAlchemyImplementation"
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"

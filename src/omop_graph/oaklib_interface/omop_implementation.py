@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import ClassVar, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
@@ -36,12 +36,10 @@ from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
-from omop_graph.oaklib_interface.omop_factory import omop_resource
+from omop_graph.db.session import resolve_cdm_database
 
-
-from sqlalchemy.engine import URL
-
-from omop_graph.db.session import make_engine
+from oa_configurator import ResolvedCDMDatabase, SchemaClaim
+from oaklib.resource import OntologyResource
 
 logger = logging.getLogger(__name__)
 
@@ -841,97 +839,72 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     A :class:`OntologyInterface` implementation wrapping a SQL Relational Database
     conforming to the OMOP CDM.
 
-    To connect, either use OMOPAlchemyImplementation directly:
+    Select it through oaklib with an oa-configurator database name, or omit
+    the name to use ``OmopGraphConfig.cdm_db``:
 
-    >>> from omop_graph.oaklib_interface import OMOPAlchemyImplementation
-    >>> from omop_graph.oaklib_interface.omop_factory import omop_resource
-    >>> resource = omop_resource(url='postgresql+psycopg2://uid:pid@host:5432/dbname')
-    >>> adapter = OMOPAlchemyImplementation(resource=resource)
+    >>> from oaklib import get_adapter
+    >>> adapter = get_adapter("omop:cdm_db")
 
-    or pass a connection string directly:
+    or construct it directly from an already-resolved database:
 
-    >>> adapter = OMOPAlchemyImplementation(engine_string="sqlite:////path/to/omop.db")
+    >>> from omop_graph.db.session import resolve_cdm_database
+    >>> adapter = OMOPAlchemyImplementation(resolved=resolve_cdm_database())
 
     Parameters
     ----------
-    engine_string : str | URL | None, optional
-        The database connection string. Ignored when ``kg`` is given
-        directly; required otherwise, unless ``resource`` is given.
-    resource : OMOPOntologyResource | None, optional
-        An existing resource object. Takes precedence over ``engine_string`` when
-        both are supplied. Ignored when ``kg`` is given directly. To use the
-        oa-configurator-configured default, resolve it explicitly via
-        ``omop_resource()`` and pass it here. When the resolved CDM database
-        has a genuinely separate ``vocab_connection`` configured, the
-        resource carries a second URL for it and a real ``vocab_engine`` is
-        built and passed to ``KnowledgeGraph`` alongside the primary one.
+    resource : OntologyResource | None, optional
+        The oaklib resource. Its ``slug`` names the ``[databases.*]`` entry to
+        resolve; ``None`` resolves ``OmopGraphConfig.cdm_db``. Ignored when
+        ``resolved`` or ``kg`` is given.
+    resolved : ResolvedCDMDatabase | None, optional
+        An already-resolved CDM database to build the engines from, without
+        registering schema claims. Ignored when ``kg`` is given.
+    schema_claims : Iterable[SchemaClaim], optional
+        Forwarded to ``ResolvedCDMDatabase.create_engines()``.
+    execution_options : dict | None, optional
+        Non-schema execution options forwarded to ``ResolvedCDMDatabase.create_engines()``.
     kg : KnowledgeGraph | None, optional
-        An existing Knowledge Graph instance. Takes this class's own engine
-        construction out of the picture entirely -- the caller already built
-        (and is responsible for) whatever engine ``kg`` wraps, so
-        ``engine_string``/``resource`` are neither required nor consulted.
-        If None, a ``KnowledgeGraph`` is created from ``engine_string`` /
-        ``resource`` instead.
+        An existing Knowledge Graph, used as-is. The caller owns whatever
+        engine it wraps.
     kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
         Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
-        Required to enable embedding-based similarity. See
-        :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
-        Ignored when ``kg`` is given directly.
-
-    Raises
-    ------
-    ValueError
-        If ``kg`` is not given and neither ``engine_string`` nor ``resource`` is.
+        Ignored when ``kg`` is given.
     """
+
+    # oaklib's class_resolver keys plugins by class name; this adds the "omop:" scheme.
+    synonyms: ClassVar[tuple[str, ...]] = ("omop",)
 
     def __init__(
         self,
-        engine_string: str | URL | None = None,
-        resource: OMOPOntologyResource | None = None,
+        resource: OntologyResource | None = None,
+        *,
+        resolved: ResolvedCDMDatabase | None = None,
+        schema_claims: Iterable[SchemaClaim] = (),
+        execution_options: dict | None = None,
         kg: KnowledgeGraph | None = None,
         kg_emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
         **kwargs,
     ):
-        self._connection = None
-
+        if resource is None:
+            resource = OMOPOntologyResource()
         if kg is None:
-            if engine_string is not None:
-                self.engine_string = engine_string
-                self.resource = resource or omop_resource(url=self.engine_string)
-            elif resource is not None:
-                self.resource = resource
-                self.engine_string = self.resource.url
-            else:
-                raise ValueError(
-                    "OMOPAlchemyImplementation requires 'kg', or one of "
-                    "'engine_string'/'resource'. To use the "
-                    "oa-configurator-configured default, resolve it explicitly "
-                    "first, e.g. OMOPAlchemyImplementation(resource=omop_resource())."
-                )
-
-            if self.resource.resolved is not None:
-                engine, vocab_engine = self.resource.resolved.create_engines(
-                    echo=False, future=True
-                )
-                if vocab_engine is engine:
-                    vocab_engine = None
-            else:
-                engine = make_engine(
-                    self.engine_string,
-                    engine_kwargs={"echo": False, "future": True},
-                    execution_options=self.resource.execution_options,
-                )
-                vocab_engine = None
-                if self.resource.vocab_url is not None:
-                    vocab_engine = make_engine(
-                        self.resource.vocab_url,
-                        engine_kwargs={"echo": False, "future": True},
-                        execution_options=self.resource.vocab_execution_options,
-                    )
-            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine, vocab_engine=vocab_engine)
+            if resolved is None:
+                resolved = resolve_cdm_database(resource.slug)
+            engine, vocab_engine = resolved.create_engines(
+                schema_claims=schema_claims,
+                execution_options=execution_options,
+                register_claims=False,
+                echo=False,
+                future=True,
+            )
+            kg = KnowledgeGraph(
+                emb_config=kg_emb_config,
+                cdm_engine=engine,
+                vocab_engine=None if vocab_engine is engine else vocab_engine,
+            )
             bind_default_renderers(kg)
 
-        super().__init__(kg=kg, **kwargs)
+        super().__init__(resource=resource, kg=kg, **kwargs)
 
     # TODO: Implement if necessary!
     def _all_relationships(self):

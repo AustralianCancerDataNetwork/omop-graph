@@ -1,102 +1,40 @@
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional
 
 from oaklib.resource import OntologyResource
-from sqlalchemy.engine import URL, make_url
-
-from oa_configurator import ResolvedCDMDatabase
 
 
 @dataclass
 class OMOPOntologyResource(OntologyResource):
     """
-    Ontology resource backed by a live SQLAlchemy database.
+    Ontology resource naming an oa-configurator CDM database.
 
-    This class extends the `OntologyResource` to support database URLs specifically
-    for OMOP backends using SQLAlchemy.
+    Selected by oaklib as ``get_adapter("omop:<database_name>")``.
 
     Parameters
     ----------
-    url : str | URL, optional
-        The database connection URL.
     slug : str, optional
-        A unique slug/identifier for this resource.
+        Name of the ``[databases.*]`` entry to resolve. ``None`` resolves
+        ``OmopGraphConfig.cdm_db``.
     scheme : str, optional
-        The scheme identifier. Defaults to 'omop_alchemy'.
-    local : bool, optional
-        Whether the resource is local. Defaults to False.
-    in_memory : bool, optional
-        Whether the resource is in-memory. Defaults to False.
+        The oaklib scheme. Defaults to 'omop'.
     readonly : bool, optional
         Whether the resource is read-only. Defaults to True.
-    execution_options : dict, optional
-        Forwarded to the engine built from ``url`` (e.g. a
-        ``schema_translate_map``). Not carried by ``url`` itself, so a
-        caller resolving through oa-configurator needs this to keep the
-        configured schema past this resource object.
-    vocab_url : str | URL, optional
-        Connection URL for a genuinely separate vocabulary server. ``None``
-        when the CDM database has no configured vocabulary split, or when
-        this resource wasn't built by ``omop_resource()``'s config-resolving
-        path (a caller-supplied ``url=`` has no vocabulary split to carry).
-    vocab_execution_options : dict, optional
-        Forwarded to the engine built from ``vocab_url``. The same
-        ``schema_translate_map`` as ``execution_options``: the map itself
-        doesn't change across roles, only which physical connection it's
-        applied to.
-    resolved : ResolvedCDMDatabase, optional
-        When present, ``OMOPAlchemyImplementation`` builds its engine(s) via
-        ``resolved.create_engines()`` directly instead of reconstructing one
-        from ``url``/``execution_options``.
     """
 
-    url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
     slug: Optional[str] = None  # type: ignore[assignment]
-    scheme: str = "omop_alchemy"  # type: ignore[assignment]
-    local: bool = False  # type: ignore[assignment]
-    in_memory: bool = False  # type: ignore[assignment]
+    scheme: str = "omop"  # type: ignore[assignment]
     readonly: bool = True  # type: ignore[assignment]
-    execution_options: Optional[dict] = None  # type: ignore[assignment]
-    vocab_url: Optional[Union[str, URL]] = None  # type: ignore[assignment]
-    vocab_execution_options: Optional[dict] = None  # type: ignore[assignment]
-    resolved: Optional[ResolvedCDMDatabase] = None  # type: ignore[assignment]
-
-    def _parsed_url(self) -> Optional[URL]:
-        """
-        Parse the connection URL into a SQLAlchemy URL object.
-
-        Returns
-        -------
-        URL | None
-            The parsed URL object, or None if no URL is set.
-        """
-        if not self.url:
-            return None
-        return make_url(self.url) if isinstance(self.url, str) else self.url
-
-    @property
-    def display_slug(self) -> Optional[str]:
-        """
-        Get a safe, redacted identifier for logs / UI.
-
-        Returns
-        -------
-        str | None
-            The string representation of the parsed URL.
-        """
-        u = self._parsed_url()
-        return str(u) if u else None
 
     def valid(self) -> bool:
         """
-        Check if the database ontology resource is valid.
+        Always True: a missing slug resolves the configured default database.
 
         Returns
         -------
         bool
-            True if a URL is present, False otherwise.
         """
-        return bool(self.url)
+        return True
 
     @property
     def local_path(self) -> None:
@@ -106,15 +44,6 @@ class OMOPOntologyResource(OntologyResource):
         Returns
         -------
         None
-            Always returns None as database-backed resources have no filesystem path.
+            Always None as database-backed resources have no filesystem path.
         """
         return None
-
-    def __repr__(self) -> str:
-        parts = []
-        if self.slug:
-            parts.append(f"slug={self.slug!r}")
-        if self.url:
-            parts.append(f"url={str(make_url(self.url))!r}")
-        parts.append(f"scheme={self.scheme!r}")
-        return f"{type(self).__name__}({', '.join(parts)})"

@@ -14,7 +14,7 @@ The queries cover:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Literal, Union
+from typing import Optional, Tuple, Literal, Union, cast
 from datetime import date
 
 from sqlalchemy import (
@@ -22,23 +22,19 @@ from sqlalchemy import (
     case,
     exists,
     func,
-    inspect,
     literal,
     or_,
     select,
     Connection,
     Engine,
-    column,
+    Table,
 )
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from oa_configurator import Role, physical_schema_of
 
 from omop_alchemy.backends import (
-    CONCEPT_NAME_TSVECTOR_COLUMN,
-    CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN,
-    FullTextError,
+    resolve_backend,
 )
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
@@ -332,12 +328,11 @@ def q_concept_name_fulltext(
     sort: bool = True,
 ) -> Select:
     """
-    Query for concept names using PostgreSQL full-text search via optional
+    Query for concept names using PostgreSQL full-text search via the
     pre-computed tsvector columns and GIN indices.
 
-    This query only works when the stored tsvector columns have been installed
-    and registered in the ORM metadata via ``omop-maint fulltext install`` and
-    ``omop-maint fulltext populate``. If those columns are absent, this raises
+    Requires the stored tsvector columns from ``omop-alchemy fulltext install``
+    and ``omop-alchemy fulltext populate``. If they are absent, this raises
     ``FullTextError`` instead of falling back to on-demand tsvector
     generation.
 
@@ -345,42 +340,26 @@ def q_concept_name_fulltext(
     ----------
     query_concept_name : str
         The concept name to search for.
+    engine : Engine or Connection
+        Bindable whose schema_translate_map locates the vocabulary schema.
     search_constraint : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
+    sort : bool, optional
+        Whether to order by match quality.
 
+    Raises
+    ------
+    FullTextError
+        If the stored tsvector column is missing.
     """
     name_expr = (
         Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
     )
-    # Fulltext are in VOCAB schema
-    inspector = inspect(engine)
-    vocab_schema = physical_schema_of(engine, schema_tag=Role.VOCAB)
     target_table = Concept_Synonym if synonym else Concept
-    target_col = (
-        CONCEPT_SYNONYM_NAME_TSVECTOR_COLUMN
-        if synonym
-        else CONCEPT_NAME_TSVECTOR_COLUMN
-    )
     stmt = q_concept_synonym() if synonym else q_concept_name()
-
-    tsvector_col = next(
-        (
-            c["name"]
-            for c in inspector.get_columns(target_table.__tablename__, schema=vocab_schema)
-            if c["name"] == target_col
-        ),
-        None,
-    )
-
-    if tsvector_col is None:
-        raise FullTextError(
-            f"Full-text search column '{target_col}' not found in table '{target_table.__tablename__}'. "
-            "Make sure to run 'omop-maint fulltext install' and 'omop-maint fulltext populate' to set up full-text search."
-        )
-
-    vector = column(tsvector_col)
+    vector = resolve_backend(engine).fulltext_vector_column(engine, cast(Table, target_table.__table__))
     query = func.plainto_tsquery("english", query_concept_name)
 
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly

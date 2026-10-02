@@ -13,9 +13,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
 import typer
 
-import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
-
 import numpy as np
 from oa_configurator import Resolver, ResolvedModel, ResolvedProvider
 from omop_emb.config import (
@@ -45,7 +42,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_graph.db.session import make_engine
+from omop_graph.db.session import resolve_cdm_database
 app = typer.Typer()
 
 
@@ -163,21 +160,6 @@ def load_cases(path: Path) -> List[BenchmarkCase]:
     raise TypeError(f"Unsupported benchmark case file shape: {type(payload).__name__}")
 
 
-def build_session_factory() -> sessionmaker:
-    """Build a SQLAlchemy session factory via oa-configurator."""
-    return sessionmaker(bind=make_engine(), future=True)
-
-
-def build_engine() -> sa.Engine:
-    """Build a SQLAlchemy engine via oa-configurator."""
-    return make_engine()
-
-
-def build_knowledge_graph() -> KnowledgeGraph:
-    """Create a KnowledgeGraph backed by the live OMOP CDM database."""
-    return KnowledgeGraph(cdm_engine=make_engine())
-
-
 def build_embedding_knowledge_graph(
     embedding_metric: MetricType,
     resolved_model: ResolvedModel,
@@ -185,7 +167,7 @@ def build_embedding_knowledge_graph(
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
-    cdm_engine = make_engine()
+    cdm_engine = resolve_cdm_database().create_engine()
     config = KnowledgeGraphEmbeddingConfiguration(
         metric_type=embedding_metric,
         backend=backend,
@@ -616,7 +598,7 @@ def run_benchmark(
             for case in cases
         }
 
-    kg = build_knowledge_graph()
+    kg = KnowledgeGraph(cdm_engine=resolve_cdm_database().create_engine())
     configs = build_grounded_configs()
 
     errors: Dict[str, str] = {}

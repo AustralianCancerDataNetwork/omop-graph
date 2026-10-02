@@ -18,7 +18,7 @@ from oa_configurator import (
     physical_schema_of
 )
 
-from orm_loader.backends import STAGING_SCHEMA, resolve_backend
+from orm_loader.backends import STAGING_SCHEMA, resolve_backend, staging_schema_claim
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
@@ -83,9 +83,10 @@ def relationship_classification(
         `predicate_mapping.csv`. Defaults to the copies shipped with
         omop-graph.
     engine : sqlalchemy.Engine or sqlalchemy.Connection, optional
-        Bindable to run against. Defaults to the active oa-configurator
-        config's resolved CDM engine, in which case resolved is also
-        resolved internally and any value passed here is ignored.
+        Bindable to run against, carrying ``orm_loader.staging_schema_claim()``.
+        Defaults to the active oa-configurator config's resolved CDM engine,
+        in which case resolved is also resolved internally and any value
+        passed here is ignored.
     resolved : ResolvedCDMDatabase, optional
         Enables the schema-provenance guard. Only meaningful together with
         an explicitly injected engine/connection, since the engine=None
@@ -161,7 +162,7 @@ def relationship_classification(
 
     if engine is None:
         resolved = resolve_cdm_database()
-        engine = resolved.create_engine()
+        engine = resolved.create_engine(schema_claims=[staging_schema_claim()])
     if resolved is not None and resolved.connection != resolved.vocab_connection:
         raise RuntimeError(
             f"relationship_classification() cannot run against database "
@@ -206,9 +207,7 @@ def relationship_classification(
     # Both tables live in the primary schema (only RelationshipMapping's FK
     # target is vocab-tagged, via role_fk), so the guard checks Role.PRIMARY.
     with open_connection(engine) as connection:
-        guard = guard_schema_provenance_for(
-            connection, resolved, schema_tag=Role.PRIMARY, tables=tables_to_drop  # ty: ignore[invalid-argument-type]
-        )
+        guard = guard_schema_provenance_for(connection, resolved, schema_tag=Role.PRIMARY)
         with guard:
             Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
             Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore

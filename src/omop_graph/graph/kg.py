@@ -103,7 +103,7 @@ class KnowledgeGraphEmbeddingConfiguration:
         similarity computations are consistent.
     backend : omop_emb.EmbeddingBackend
         An already-constructed embedding backend, e.g. via
-        ``omop_emb.backends.resolve_backend_from_resolved``.
+        ``omop_emb.backends.resolve_backend_from_resolved_vector_store``.
     resolved_model : oa_configurator.ResolvedModel
         A model resolved via ``oa_configurator.Resolver.resolve_model()``, carrying real
         provider connection details. ``model_name``/``provider_type`` (see below) are

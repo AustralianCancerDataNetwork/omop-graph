@@ -9,8 +9,8 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from oa_configurator.testing import isolated_test_schema
-from orm_loader.helpers import Base
+from oa_configurator.testing import scoped_test_schema
+from orm_loader.helpers import Base, bulk_load_context
 
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
@@ -23,15 +23,15 @@ from omop_graph.graph.queries import (
     q_entities,
 )
 
-from fixtures.helpers import VOCAB_TABLES, fk_triggers_disabled, schema_translate_map
+from fixtures.helpers import VOCAB_TABLES
 
 _META_CONCEPT_ID = 0
 
 
 @pytest.fixture()
 def concept_engine(pg_db) -> Iterator[sa.Engine]:
-    with isolated_test_schema(pg_db.connection.engine, prefix="concept_queries") as schema:
-        engine = pg_db.connection.engine.execution_options(schema_translate_map=schema_translate_map(schema))
+    with scoped_test_schema(pg_db.resolved, prefix="concept_queries") as scoped:
+        engine = scoped.engine
         Base.metadata.create_all(engine, tables=VOCAB_TABLES, checkfirst=True)
 
         valid_from = date(2000, 1, 1)
@@ -56,8 +56,8 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
                 invalid_reason=invalid_reason,
             )
 
-        with fk_triggers_disabled(engine, VOCAB_TABLES):
-            with Session(engine) as session:
+        with Session(engine) as session:
+            with bulk_load_context(session):
                 session.add_all(
                     [
                         Concept(
@@ -104,7 +104,8 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
                         concept(5, standard_concept=" ", invalid_reason="X"),
                     ]
                 )
-                session.commit()
+                session.flush()
+            session.commit()
 
         yield engine
 

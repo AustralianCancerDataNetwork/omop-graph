@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import text
 
-from omop_graph.db.session import make_engine
+from omop_graph.db.session import resolve_cdm_database
 
 DOMAIN_QUERY = text(
     """
@@ -148,7 +148,7 @@ def main() -> None:
     levels = [int(x) for x in args.levels.split(",")]
 
     payload = json.loads(args.cases_file.read_text())
-    engine = make_engine()
+    engine = resolve_cdm_database().create_engine()
 
     total_stats = Stats.empty_for(levels)
     for bucket_name, cases in payload.items():
