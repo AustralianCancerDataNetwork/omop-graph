@@ -104,7 +104,7 @@ def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> Knowle
     cdm_engine = resolve_cdm_database().create_engine()
     try:
         from oa_configurator import Resolver
-        from omop_emb.backends import resolve_backend_from_resolved_vector_store
+        from omop_emb.backends import open_vector_store_writer
         from omop_emb.config import MetricType
 
         resolved_metric = metric_type if metric_type is not None else MetricType.COSINE
@@ -118,7 +118,7 @@ def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> Knowle
         resolver = Resolver.from_active_config()
         resolved_model = resolver.resolve_model(resolved_model_name)
         resolved_vector_store = resolver.resolve_vector_store(cfg.vector_store_name)
-        backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+        backend = open_vector_store_writer(resolved_vector_store)
 
         emb_config = KnowledgeGraphEmbeddingConfiguration(
             metric_type=resolved_metric,

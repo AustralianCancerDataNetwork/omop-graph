@@ -62,7 +62,7 @@ This requires the optional `omop-emb` package — see the [installation guide](.
 ```python
 from sqlalchemy import create_engine
 from oa_configurator import Resolver
-from omop_emb.backends import resolve_backend_from_resolved_vector_store
+from omop_emb.backends import open_vector_store_writer
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_emb.config import MetricType
 
@@ -71,7 +71,7 @@ engine = create_engine("postgresql://user:pass@localhost/omop")
 resolver = Resolver.from_active_config()
 resolved_vector_store = resolver.resolve_vector_store("vector_store")   # a [vector_stores.*] entry name
 resolved_model = resolver.resolve_model("embedding-model")              # a [models.*] entry name
-backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+backend = open_vector_store_writer(resolved_vector_store)
 
 emb_config = KnowledgeGraphEmbeddingConfiguration(
     metric_type=MetricType.COSINE,

@@ -22,7 +22,7 @@ from omop_emb.config import (
     parse_metric_type,
 )
 from omop_emb.interface import EmbeddingRole
-from omop_emb.backends import EmbeddingBackend, resolve_backend_from_resolved_vector_store
+from omop_emb.backends import EmbeddingBackend, open_vector_store_writer
 from omop_emb.backends.index_config import index_config_from_index_type
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
@@ -574,7 +574,7 @@ def run_benchmark(
                 "via `omop-config configure omop_graph`."
             )
         resolved_vector_store = Resolver.from_active_config().resolve_vector_store(resolved_name)
-        embedding_backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+        embedding_backend = open_vector_store_writer(resolved_vector_store)
 
         embedding_kg = build_embedding_knowledge_graph(
             embedding_metric=resolved_embedding_metric_type,
