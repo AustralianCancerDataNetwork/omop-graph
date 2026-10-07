@@ -11,11 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from oa_configurator import (
     ResolvedCDMDatabase,
-    Role,
-    ensure_schema,
-    guard_schema_provenance_for,
     open_connection,
-    physical_schema_of
 )
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend, staging_schema_claim
@@ -51,6 +47,11 @@ def _main(
 def populate_with_test_data():
     """Populate the database with synthetic test data."""
     resolved = resolve_cdm_database()
+    if not resolved.connection.test_only or not resolved.vocab_connection.test_only:
+        raise RuntimeError(
+            f"Refusing to populate {resolved.name!r} with synthetic test data: "
+            "both its primary and vocab connections must be test_only."
+        )
     engine, vocab_engine = resolved.create_engines()
     Session = sessionmaker(bind=engine, future=True)
     VocabSession = sessionmaker(bind=vocab_engine, future=True)
@@ -173,13 +174,10 @@ def relationship_classification(
             "this command, or provision relationship_class/relationship_mapping "
             "manually without the FK constraint."
         )
-    db_schema = physical_schema_of(engine)
-    ensure_schema(engine, db_schema)
-    ensure_schema(engine, STAGING_SCHEMA)
 
     Session = sessionmaker(bind=engine, future=True)
     session = Session()
-    loader_backend = resolve_backend(engine, staging_schema=STAGING_SCHEMA)
+    loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)
 
     drop_staging_sql = (
         sa.text(
@@ -204,13 +202,9 @@ def relationship_classification(
         RelationshipMapping.__table__,
         RelationshipClass.__table__,
     ]
-    # Both tables live in the primary schema (only RelationshipMapping's FK
-    # target is vocab-tagged, via role_fk), so the guard checks Role.PRIMARY.
     with open_connection(engine) as connection:
-        guard = guard_schema_provenance_for(connection, resolved, schema_tag=Role.PRIMARY)
-        with guard:
-            Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
-            Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
+        Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
+        Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         for model, df in zip(
@@ -230,7 +224,7 @@ def relationship_classification(
                     dedupe=True,
                     merge_strategy="replace",
                     loader=PandasLoader(),
-                    staging_schema=STAGING_SCHEMA,
+                    staging_schema_tag=STAGING_SCHEMA,
                 )
                 session.commit()
 

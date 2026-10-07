@@ -31,6 +31,7 @@ from oa_configurator import ResolvedModel
 if TYPE_CHECKING:
     from omop_emb import (
         EmbeddingBackend,
+        EmbeddingStoreReader,
         EmbeddingWriterInterface,
         EmbeddingReaderInterface,
     )
@@ -101,9 +102,12 @@ class KnowledgeGraphEmbeddingConfiguration:
         The similarity/distance metric to use for embedding comparisons (e.g., cosine, euclidean).
         This is required to ensure that the correct type of index is used in the backend and that
         similarity computations are consistent.
-    backend : omop_emb.EmbeddingBackend
-        An already-constructed embedding backend, e.g. via
-        ``omop_emb.backends.open_vector_store_writer``.
+    backend : omop_emb.EmbeddingBackend or omop_emb.EmbeddingStoreReader
+        An already-constructed embedding backend. A write-capable
+        ``EmbeddingBackend`` (e.g. via ``omop_emb.backends.open_vector_store_writer``)
+        is required when ``write=True``; the narrower read-only
+        ``EmbeddingStoreReader`` (via ``open_vector_store_reader``) suffices
+        when ``write=False``.
     resolved_model : oa_configurator.ResolvedModel
         A model resolved via ``oa_configurator.Resolver.resolve_model()``, carrying real
         provider connection details. ``model_name``/``provider_type`` (see below) are
@@ -123,7 +127,7 @@ class KnowledgeGraphEmbeddingConfiguration:
     """
 
     metric_type: EmbeddingMetricType
-    backend: "EmbeddingBackend"
+    backend: "EmbeddingBackend | EmbeddingStoreReader"
     resolved_model: ResolvedModel
     write: bool = False
     compute_missing_embeddings: bool = False
@@ -266,6 +270,13 @@ class KnowledgeGraph(GraphBackend):
                 )
 
             if self._emb_config.write:
+                from omop_emb import EmbeddingBackend
+
+                if not isinstance(self._emb_config.backend, EmbeddingBackend):
+                    raise ValueError(
+                        "write=True requires a write-capable EmbeddingBackend, "
+                        f"got {type(self._emb_config.backend).__name__}."
+                    )
                 # Write-capable interface: the KG builds its own embedding model backend.
                 self._emb = EmbeddingWriterInterface(
                     backend=self._emb_config.backend,
