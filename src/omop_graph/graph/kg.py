@@ -74,7 +74,6 @@ from .queries import (
     q_children,
     q_predicate_name,
     q_predicate_row_with_ancestry,
-    q_relationship_mapping_all,
     q_relationship_mapping_row,
     q_roots,
     q_singletons,
@@ -151,20 +150,9 @@ class KnowledgeGraphEmbeddingConfiguration:
         return self.resolved_model.provider.provider
 
 
-def _relationship_mapping_lookup(session: Session) -> dict[str, Row]:
-    """RelationshipMapping rows keyed by relationship_id.
-
-    RelationshipMapping is an omop-graph extension table, not vocab-tagged, so
-    it never lives on a split ``vocab_engine``. This always runs against
-    the primary connection.
-    """
-    return {
-        row.relationship_id: row
-        for row in session.execute(q_relationship_mapping_all()).all()
-    }
-
-
-def _predicate_from_rows(ancestry_row: Row, mapping_row: Row) -> Predicate:
+def _predicate_from_rows(
+    ancestry_row: Row, mapping_row: "Row | RelationshipMappingElement"
+) -> Predicate:
     """Build a Predicate from a Relationship-ancestry row and a RelationshipMapping row.
 
     The two rows come from the same query in a same-connection deployment
@@ -651,7 +639,7 @@ class KnowledgeGraph(GraphBackend):
                         include_classification=False,
                     )
                 ).all()
-            mapping_by_id = _relationship_mapping_lookup(session)
+            mapping_by_id = self._relationship_mapping
             for vrow in vocab_rows:
                 mapping = mapping_by_id.get(vrow.predicate_id)
                 if mapping is None:
@@ -778,8 +766,7 @@ class KnowledgeGraph(GraphBackend):
                 ancestry_rows = vsession.execute(
                     q_all_predicates_with_ancestry(include_classification=False)
                 ).all()
-            with self.session_factory() as session:
-                mapping_by_id = _relationship_mapping_lookup(session)
+            mapping_by_id = self._relationship_mapping
             return tuple(
                 _predicate_from_rows(row, mapping_by_id[row.relationship_id])
                 for row in ancestry_rows

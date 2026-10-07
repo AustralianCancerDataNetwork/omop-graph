@@ -14,6 +14,8 @@ from oa_configurator import (
     open_connection,
 )
 
+from omop_alchemy.cdm.model.vocabulary import Relationship
+
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend, staging_schema_claim
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
@@ -21,7 +23,11 @@ from orm_loader.loaders.loader_interface import PandasLoader
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import resolve_cdm_database
-from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
+from omop_graph.extensions.omop_alchemy import (
+    RelationshipClass,
+    RelationshipMapping,
+    relationship_mapping_table_without_vocab_fk,
+)
 from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
@@ -92,6 +98,11 @@ def relationship_classification(
         Enables the schema-provenance guard. Only meaningful together with
         an explicitly injected engine/connection, since the engine=None
         path always resolves its own regardless of what's passed here.
+        Also determines whether ``vocab_connection`` is a genuinely
+        separate physical connection: if so, ``RelationshipMapping`` is
+        created without its FK to ``relationship.relationship_id``, 
+        and relationship IDs absent from the vocab connection's own `relationship` table 
+        are dropped instead of relying on the FK to reject them.
     """
     pred_class_dir_pl = (
         Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
@@ -164,16 +175,29 @@ def relationship_classification(
     if engine is None:
         resolved = resolve_cdm_database()
         engine = resolved.create_engine(schema_claims=[staging_schema_claim()])
-    if resolved is not None and resolved.connection != resolved.vocab_connection:
-        raise RuntimeError(
-            f"relationship_classification() cannot run against database "
-            f"{resolved.name!r}: its vocab_connection is a genuinely separate "
-            "connection from the primary one, and RelationshipMapping's FK to "
-            "relationship.relationship_id needs both in the same database. "
-            "Point vocab_connection at the same connection as primary for "
-            "this command, or provision relationship_class/relationship_mapping "
-            "manually without the FK constraint."
-        )
+    split_vocab = resolved is not None and resolved.connection != resolved.vocab_connection
+
+    if split_vocab:
+        if not isinstance(engine, sa.Engine):
+            raise TypeError(
+                "relationship_classification() needs an Engine (not a bare "
+                "Connection) to build the vocab connection's own engine when "
+                "vocab_connection is genuinely separate."
+            )
+        vocab_engine = resolved.vocab_engine_for(engine)
+        with open_connection(vocab_engine) as vocab_connection:
+            known_relationship_ids = {
+                row.relationship_id
+                for row in vocab_connection.execute(sa.select(Relationship.relationship_id))
+            }
+        unknown_mask = ~df_rel_mapping_to_export["relationship_id"].isin(known_relationship_ids)
+        unknown_ids = df_rel_mapping_to_export.loc[unknown_mask, "relationship_id"].unique().tolist()
+        if unknown_ids:
+            logger.warning(
+                f"Dropping {len(unknown_ids)} relationships absent from the vocabulary "
+                f"connection's relationship table: {unknown_ids}"
+            )
+        df_rel_mapping_to_export = df_rel_mapping_to_export.loc[~unknown_mask]
 
     Session = sessionmaker(bind=engine, future=True)
     session = Session()
@@ -204,7 +228,11 @@ def relationship_classification(
     ]
     with open_connection(engine) as connection:
         Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
-        Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
+        if split_vocab:
+            Base.metadata.create_all(bind=connection, tables=[RelationshipClass.__table__])  # type: ignore
+            relationship_mapping_table_without_vocab_fk().create(bind=connection, checkfirst=True)
+        else:
+            Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         for model, df in zip(

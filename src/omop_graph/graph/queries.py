@@ -497,20 +497,6 @@ def q_relationship_mapping_row(relationship_id: str) -> Select:
     ).where(RelationshipMapping.relationship_id == relationship_id)
 
 
-def q_relationship_mapping_all() -> Select:
-    """Query every RelationshipMapping row, keyed by relationship_id.
-
-    The primary-tagged half of a split-connection edges/predicates lookup.
-    RelationshipMapping is a small reference table, so callers merge it as a
-    plain dict rather than joining across connections.
-    """
-    return select(
-        RelationshipMapping.relationship_id,
-        RelationshipMapping.predicate_kind,
-        RelationshipMapping.predicate_subkind,
-    )
-
-
 def q_edges(
     concept_ids: Union[Tuple[int, ...], int],
     direction: Literal["in", "out"],
@@ -531,10 +517,10 @@ def q_edges(
         Join in RelationshipMapping's predicate_kind/predicate_subkind.
         Concept_Relationship is vocab-tagged, RelationshipMapping is not, so
         for a split-connection deployment set this to False and merge
-        RelationshipMapping (via :func:`q_relationship_mapping_all`)
-        in Python instead. ``predicate_kinds`` cannot be applied in SQL
-        when this is False (the column isn't joined); the caller must
-        filter after merging.
+        ``KnowledgeGraph``'s own cached ``_relationship_mapping`` in Python
+        instead. ``predicate_kinds`` cannot be applied in SQL when this is
+        False (the column isn't joined); the caller must filter after
+        merging.
     """
     if isinstance(concept_ids, int):
         concept_ids = (concept_ids,)

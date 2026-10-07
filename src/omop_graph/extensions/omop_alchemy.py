@@ -96,6 +96,43 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     )
 
 
+def relationship_mapping_table_without_vocab_fk() -> sa.Table:
+    """RelationshipMapping's DDL without its FK to vocab.relationship_id.
+
+    Postgres has no cross-database inline FK, so when vocab_connection is a
+    genuinely separate physical connection, CREATE TABLE on the real ORM
+    table fails there. This reproduces the same columns under the same
+    name/schema in a throwaway MetaData, so CREATE TABLE succeeds while
+    RelationshipMapping's own ORM class still reads/writes the same
+    physical table afterward.
+    """
+    metadata = sa.MetaData()
+    return sa.Table(
+        RelationshipMapping.__tablename__,
+        metadata,
+        sa.Column("relationship_id", sa.String(20), primary_key=True),
+        sa.Column(
+            "predicate_kind",
+            sa.Enum(
+                PredicateKind,
+                values_callable=lambda obj: [e.value for e in obj],
+                schema=Role.PRIMARY.value,
+            ),
+            primary_key=True,
+        ),
+        sa.Column("predicate_subkind", sa.String(20), primary_key=True),
+        sa.ForeignKeyConstraint(
+            ["predicate_kind", "predicate_subkind"],
+            [
+                RelationshipClass.__table__.c.predicate_kind,
+                RelationshipClass.__table__.c.predicate_subkind,
+            ],
+            name="fk_rel_mapping_to_rel_class",
+        ),
+        schema=Role.PRIMARY.value,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class RelationshipMappingElement:
     relationship_id: str

@@ -9,9 +9,8 @@ column never set an explicit ``name=``, so the real generated type is
 
 from __future__ import annotations
 
-import pytest
 import sqlalchemy as sa
-from oa_configurator import ConnectionConfig, Resolver, Role
+from oa_configurator import Role
 from oa_configurator.testing import scoped_test_schema
 
 from orm_loader.backends import staging_schema_claim
@@ -46,23 +45,6 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
         assert n_mapping and n_mapping > 0
         assert sa.inspect(scoped.engine).has_table("relationship_class", schema=schema)
         assert enum_schema == schema
-
-
-def test_relationship_classification_refuses_a_genuinely_split_vocab_connection(pg_db):
-    """Postgres has no cross-database inline FK, so RelationshipMapping's FK
-    to relationship.relationship_id (VOCAB-tagged) can never be created once
-    vocab_connection is a genuinely separate connection.
-    """
-    name = pg_db.resolved.name
-    resolver = Resolver.from_active_config()
-    resolved = resolver.with_overrides(
-        connections={
-            "genuinely_different": ConnectionConfig(dialect="postgresql+psycopg", host="other", database_name="db")
-        },
-        databases={name: resolver.config.databases[name].model_copy(update={"vocab_connection": "genuinely_different"})},
-    ).resolve_database(name)
-    with pytest.raises(RuntimeError, match="genuinely separate"):
-        relationship_classification(engine=pg_db.connection, resolved=resolved)
 
 
 def test_relationship_classification_is_idempotent(pg_db):

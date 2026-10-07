@@ -21,8 +21,9 @@ import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 
-from oa_configurator import Resolver, Role
+from oa_configurator import ResolvedCDMDatabase, Resolver, Role
 from oa_configurator.testing import isolated_test_database, resolve_with_role_schemas, scoped_test_schema
+from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -35,6 +36,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Vocabulary,
 )
 
+from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -102,6 +104,7 @@ _shadow_relationship_mapping = sa.Table(
 class _Engines(NamedTuple):
     primary: sa.Engine
     vocab: sa.Engine
+    resolved: ResolvedCDMDatabase
 
 
 @pytest.fixture()
@@ -137,7 +140,7 @@ def split_engines() -> Iterator[_Engines]:
                 _shadow_metadata.create_all(primary_engine)
                 Base.metadata.create_all(vocab_setup_engine, tables=_VOCAB_TABLES, checkfirst=True)
                 _seed(primary_engine, vocab_setup_engine)
-                yield _Engines(primary=primary_engine, vocab=vocab_engine)
+                yield _Engines(primary=primary_engine, vocab=vocab_engine, resolved=scoped.resolved)
             finally:
                 vocab_setup_engine.dispose()
                 primary_engine.dispose()
@@ -372,3 +375,40 @@ def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines
     )
 
     assert triples == ((OBJECT_CONCEPT_ID, "maps to", SUBJECT_CONCEPT_ID),)
+
+
+def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection(
+    split_engines: _Engines, tmp_path
+) -> None:
+    """relationship_classification() creates RelationshipMapping
+    without that FK in a split connection and validates relationship_id 
+    against the vocab connection's own `relationship` table in Python instead
+    """
+    (tmp_path / "predicate_classification.csv").write_text(
+        "class,subclass,description,semantics,inference\n"
+        "Identity,mapping,Identity mapping,identity,none\n"
+    )
+    (tmp_path / "predicate_mapping.csv").write_text(
+        "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
+        "Identity,mapping,maps to,Maps to,,,\n"
+        "Identity,mapping,totally_unknown_relationship,Unknown,,,\n"
+    )
+
+    staging_engine = split_engines.resolved.create_engine(schema_claims=[staging_schema_claim()])
+    try:
+        relationship_classification(
+            str(tmp_path), engine=staging_engine, resolved=split_engines.resolved
+        )
+    finally:
+        staging_engine.dispose()
+
+    with so.Session(split_engines.primary) as session:
+        relationship_ids = set(
+            session.execute(sa.select(RelationshipMapping.relationship_id)).scalars()
+        )
+    assert relationship_ids == {"maps to"}
+
+    kg = _split_kg(split_engines)
+    predicate = kg.predicate("maps to")
+    assert predicate.predicate_kind == PredicateKind.IDENTITY
+    assert predicate.predicate_subkind == "mapping"
