@@ -12,20 +12,30 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
-from oa_configurator import Role
-from oa_configurator.testing import scoped_test_schema
+from oa_configurator import SchemaClaim
+from oa_configurator.testing import isolated_test_schema, scoped_test_schema
 
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base
 
+from omop_alchemy.config import EXTENSION_SCHEMA
 from omop_graph.cli import relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
-    with scoped_test_schema(pg_db.resolved, prefix="relclass_routing", schema_claims=[staging_schema_claim()]) as scoped:
-        schema = scoped.schemas[Role.PRIMARY]
+    with (
+        isolated_test_schema(pg_db.committing_engine, prefix="relclass_routing_ext") as extension_schema,
+        scoped_test_schema(
+            pg_db.resolved,
+            prefix="relclass_routing",
+            schema_claims=[
+                staging_schema_claim(),
+                SchemaClaim(schema_tag=EXTENSION_SCHEMA, physical_schema=extension_schema, reserved=True),
+            ],
+        ) as scoped,
+    ):
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
@@ -43,18 +53,28 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
                     "SELECT n.nspname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace "
                     "WHERE t.typname = 'predicatekind' AND n.nspname = :schema"
                 ),
-                {"schema": schema},
+                {"schema": extension_schema},
             ).scalar()
         assert n_class and n_class > 0
         assert n_mapping and n_mapping > 0
-        assert sa.inspect(scoped.engine).has_table("relationship_class", schema=schema)
-        assert enum_schema == schema
+        assert sa.inspect(scoped.engine).has_table("relationship_class", schema=extension_schema)
+        assert enum_schema == extension_schema
 
 
 def test_relationship_classification_is_idempotent(pg_db):
     """Re-running against the same schema, the real-world redeploy case the
     DROP TABLE/enum-drop cleanup exists for, must not fail."""
-    with scoped_test_schema(pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]) as scoped:
+    with (
+        isolated_test_schema(pg_db.committing_engine, prefix="relclass_idempotent_ext") as extension_schema,
+        scoped_test_schema(
+            pg_db.resolved,
+            prefix="relclass_idempotent",
+            schema_claims=[
+                staging_schema_claim(),
+                SchemaClaim(schema_tag=EXTENSION_SCHEMA, physical_schema=extension_schema, reserved=True),
+            ],
+        ) as scoped,
+    ):
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 

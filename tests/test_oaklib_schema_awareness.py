@@ -11,16 +11,19 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import date
+from typing import Iterator
 
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm
 from oaklib import get_adapter
 
-from oa_configurator import Resolver, Role
-from oa_configurator.testing import scoped_test_schema
+from oa_configurator import Resolver, Role, SchemaClaim
+from oa_configurator.testing import isolated_test_schema, scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA
 from omop_alchemy.cross_database import cdm_sessionmaker
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base, bulk_load_context
@@ -88,6 +91,19 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
         session.commit()
 
 
+@contextmanager
+def _extension_schema_claim(engine: sa.Engine, *, prefix: str) -> Iterator[SchemaClaim]:
+    """A SchemaClaim for a fresh, test-isolated physical extension schema.
+
+    RelationshipClass/RelationshipMapping live in CDM_EXTENSION_SCHEMA, so
+    every scoped_test_schema() call that will create_all() them needs
+    this claimed too -- unlike primary/vocab/results, scoped_test_schema()
+    doesn't scope non-Role tags on its own.
+    """
+    with isolated_test_schema(engine, prefix=f"{prefix}_ext") as physical_schema:
+        yield SchemaClaim(schema_tag=CDM_EXTENSION_SCHEMA, physical_schema=physical_schema, reserved=True)
+
+
 def _populate(scoped, *, name: str) -> None:
     Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
     _seed_one_concept(scoped.engine, concept_id=_CONCEPT_ID, name=name)
@@ -99,7 +115,12 @@ def _populate(scoped, *, name: str) -> None:
 def test_get_adapter_resolves_the_slug_as_the_database_name(
     pg_db, monkeypatch, descriptor, expected_name
 ) -> None:
-    with scoped_test_schema(pg_db.resolved, prefix="oaklib_get_adapter", schema_claims=[staging_schema_claim()]) as scoped:
+    with (
+        _extension_schema_claim(pg_db.committing_engine, prefix="oaklib_get_adapter") as ext_claim,
+        scoped_test_schema(
+            pg_db.resolved, prefix="oaklib_get_adapter", schema_claims=[staging_schema_claim(), ext_claim]
+        ) as scoped,
+    ):
         _populate(scoped, name="Adapter concept")
 
         def fake_resolve_cdm_database(name):
@@ -125,7 +146,12 @@ def test_resolve_cdm_database_resolves_a_named_entry(pg_db) -> None:
 
 
 def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
-    with scoped_test_schema(pg_db.resolved, prefix="oaklib_resolved", schema_claims=[staging_schema_claim()]) as scoped:
+    with (
+        _extension_schema_claim(pg_db.committing_engine, prefix="oaklib_resolved") as ext_claim,
+        scoped_test_schema(
+            pg_db.resolved, prefix="oaklib_resolved", schema_claims=[staging_schema_claim(), ext_claim]
+        ) as scoped,
+    ):
         _populate(scoped, name="Resolved-path concept")
 
         adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
@@ -147,7 +173,15 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
         connections={"oaklib_split_vocab": resolver.config.connections[pg_db.resolved.connection.name]},
         databases={name: resolver.config.databases[name].model_copy(update={"vocab_connection": "oaklib_split_vocab"})},
     )
-    with scoped_test_schema(resolver.resolve_database(name), prefix="oaklib_split", resolver=resolver, schema_claims=[staging_schema_claim()]) as scoped:
+    with (
+        _extension_schema_claim(pg_db.committing_engine, prefix="oaklib_split") as ext_claim,
+        scoped_test_schema(
+            resolver.resolve_database(name),
+            prefix="oaklib_split",
+            resolver=resolver,
+            schema_claims=[staging_schema_claim(), ext_claim],
+        ) as scoped,
+    ):
         assert scoped.resolved.connection.name != scoped.resolved.vocab_connection.name
         assert scoped.resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
         _populate(scoped, name="Split-wiring concept")
@@ -159,7 +193,12 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
 
 
 def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
-    with scoped_test_schema(pg_db.resolved, prefix="oaklib_kg", schema_claims=[staging_schema_claim()]) as scoped:
+    with (
+        _extension_schema_claim(pg_db.committing_engine, prefix="oaklib_kg") as ext_claim,
+        scoped_test_schema(
+            pg_db.resolved, prefix="oaklib_kg", schema_claims=[staging_schema_claim(), ext_claim]
+        ) as scoped,
+    ):
         _populate(scoped, name="Injected concept")
         kg = KnowledgeGraph(
             cdm_sessionmaker(scoped.resolved, primary=scoped.engine, vocab=scoped.engine)

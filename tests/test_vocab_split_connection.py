@@ -19,8 +19,14 @@ import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 
-from oa_configurator import ResolvedCDMDatabase, Resolver, Role
-from oa_configurator.testing import isolated_test_database, resolve_with_role_schemas, scoped_test_schema
+from oa_configurator import ResolvedCDMDatabase, Resolver, Role, SchemaClaim
+from oa_configurator.testing import (
+    isolated_test_database,
+    isolated_test_schema,
+    resolve_with_role_schemas,
+    scoped_test_schema,
+)
+from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -32,6 +38,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
     Vocabulary,
 )
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA
 from omop_alchemy.cross_database import cdm_sessionmaker
 
 from omop_graph.cli import relationship_classification
@@ -70,7 +77,7 @@ _shadow_relationship_class = sa.Table(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [e.value for e in obj],
-            schema=Role.PRIMARY.value,
+            schema=CDM_EXTENSION_SCHEMA,
         ),
         primary_key=True,
     ),
@@ -79,7 +86,7 @@ _shadow_relationship_class = sa.Table(
     sa.Column("semantics", sa.String(40), nullable=False),
     sa.Column("inference", sa.String(40), nullable=False),
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
-    schema=Role.PRIMARY.value,
+    schema=CDM_EXTENSION_SCHEMA,
 )
 _shadow_relationship_mapping = sa.Table(
     "relationship_mapping",
@@ -90,12 +97,12 @@ _shadow_relationship_mapping = sa.Table(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [e.value for e in obj],
-            schema=Role.PRIMARY.value,
+            schema=CDM_EXTENSION_SCHEMA,
         ),
         primary_key=True,
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
-    schema=Role.PRIMARY.value,
+    schema=CDM_EXTENSION_SCHEMA,
 )
 
 
@@ -103,6 +110,10 @@ class _Engines(NamedTuple):
     primary: sa.Engine
     vocab: sa.Engine
     resolved: ResolvedCDMDatabase
+    extension_schema_claim: SchemaClaim
+    """Reusable claim for any later engine built from .resolved (e.g. the
+    staging engine in test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection):
+    schema_claims aren't inherited across separate create_engine() calls."""
 
 
 @pytest.fixture()
@@ -113,7 +124,11 @@ def split_engines() -> Iterator[_Engines]:
     with (
         isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as primary_db,
         isolated_test_database(OrmLoaderConfig, "test_orm_db_pg") as vocab_db,
+        # RelationshipClass/RelationshipMapping live in the extension schema,
+        # on the same physical connection as primary.
+        isolated_test_schema(primary_db.committing_engine, prefix="vocab_split_ext") as extension_schema,
     ):
+        ext_claim = SchemaClaim(schema_tag=CDM_EXTENSION_SCHEMA, physical_schema=extension_schema, reserved=True)
         name = primary_db.resolved.name
         resolver = Resolver.from_active_config()
         resolver = resolver.with_overrides(
@@ -124,8 +139,10 @@ def split_engines() -> Iterator[_Engines]:
             }
         )
         split = resolver.resolve_database(name)
-        with scoped_test_schema(split, prefix="vocab_split", resolver=resolver) as scoped:
-            primary_engine, vocab_engine = scoped.resolved.create_engines()
+        with scoped_test_schema(
+            split, prefix="vocab_split", resolver=resolver, schema_claims=[ext_claim]
+        ) as scoped:
+            primary_engine, vocab_engine = scoped.resolved.create_engines(schema_claims=[ext_claim])
             # Vocab tables are created through the vocab server's own resolved:
             # create_all on the split vocab engine also emits the PRIMARY-tagged
             # predicatekind type, whose schema only exists on the primary server.
@@ -138,7 +155,12 @@ def split_engines() -> Iterator[_Engines]:
                 _shadow_metadata.create_all(primary_engine)
                 Base.metadata.create_all(vocab_setup_engine, tables=_VOCAB_TABLES, checkfirst=True)
                 _seed(primary_engine, vocab_setup_engine)
-                yield _Engines(primary=primary_engine, vocab=vocab_engine, resolved=scoped.resolved)
+                yield _Engines(
+                    primary=primary_engine,
+                    vocab=vocab_engine,
+                    resolved=scoped.resolved,
+                    extension_schema_claim=ext_claim,
+                )
             finally:
                 vocab_setup_engine.dispose()
                 primary_engine.dispose()
