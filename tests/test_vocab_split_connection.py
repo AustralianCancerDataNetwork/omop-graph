@@ -22,7 +22,6 @@ import sqlalchemy.orm as so
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role, SchemaClaim
 from oa_configurator.testing import (
     isolated_test_database,
-    isolated_test_schema,
     resolve_with_role_schemas,
     scoped_test_schema,
 )
@@ -50,7 +49,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
-from fixtures.helpers import VOCAB_TABLES
+from fixtures.helpers import VOCAB_TABLES, extension_schema_claim
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
@@ -126,9 +125,8 @@ def split_engines() -> Iterator[_Engines]:
         isolated_test_database(OrmLoaderConfig, "test_orm_db_pg") as vocab_db,
         # RelationshipClass/RelationshipMapping live in the extension schema,
         # on the same physical connection as primary.
-        isolated_test_schema(primary_db.committing_engine, prefix="vocab_split_ext") as extension_schema,
+        extension_schema_claim(primary_db.committing_engine, prefix="vocab_split") as ext_claim,
     ):
-        ext_claim = SchemaClaim(schema_tag=CDM_EXTENSION_SCHEMA, physical_schema=extension_schema, reserved=True)
         name = primary_db.resolved.name
         resolver = Resolver.from_active_config()
         resolver = resolver.with_overrides(
@@ -140,17 +138,24 @@ def split_engines() -> Iterator[_Engines]:
         )
         split = resolver.resolve_database(name)
         with scoped_test_schema(
-            split, prefix="vocab_split", resolver=resolver, schema_claims=[ext_claim]
+            split, prefix="vocab_split", resolver=resolver, schema_claims=[ext_claim], register_claims=False
         ) as scoped:
-            primary_engine, vocab_engine = scoped.resolved.create_engines(schema_claims=[ext_claim])
+            primary_engine, vocab_engine = scoped.resolved.create_engines(
+                schema_claims=[ext_claim], register_claims=False
+            )
             # Vocab tables are created through the vocab server's own resolved:
-            # create_all on the split vocab engine also emits the PRIMARY-tagged
-            # predicatekind type, whose schema only exists on the primary server.
+            # create_all on the split vocab engine also emits the extension-tagged
+            # predicatekind type (metadata-wide, not scoped to tables=), whose
+            # schema only exists on the primary server -- co-locate it with
+            # vocab_schema here since nothing on this engine touches its content.
             vocab_schema = scoped.schemas[Role.VOCAB]
             vocab_only = resolve_with_role_schemas(
                 vocab_db.resolved, {role: vocab_schema for role in vocab_db.resolved.schema_tags()}
             )
-            vocab_setup_engine, _ = vocab_only.create_engines()
+            vocab_setup_engine, _ = vocab_only.create_engines(
+                schema_claims=[SchemaClaim(schema_tag=CDM_EXTENSION_SCHEMA, physical_schema=vocab_schema)],
+                register_claims=False,
+            )
             try:
                 _shadow_metadata.create_all(primary_engine)
                 Base.metadata.create_all(vocab_setup_engine, tables=_VOCAB_TABLES, checkfirst=True)

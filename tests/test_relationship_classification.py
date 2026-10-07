@@ -12,30 +12,29 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
-from oa_configurator import SchemaClaim
-from oa_configurator.testing import isolated_test_schema, scoped_test_schema
+from oa_configurator.testing import scoped_test_schema
 
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base
 
-from omop_alchemy.config import EXTENSION_SCHEMA
 from omop_graph.cli import relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
+from fixtures.helpers import extension_schema_claim
+
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
     with (
-        isolated_test_schema(pg_db.committing_engine, prefix="relclass_routing_ext") as extension_schema,
+        extension_schema_claim(pg_db.committing_engine, prefix="relclass_routing") as ext_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="relclass_routing",
-            schema_claims=[
-                staging_schema_claim(),
-                SchemaClaim(schema_tag=EXTENSION_SCHEMA, physical_schema=extension_schema, reserved=True),
-            ],
+            schema_claims=[staging_schema_claim(), ext_claim],
+            register_claims=False,
         ) as scoped,
     ):
+        extension_schema = ext_claim.physical_schema
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
@@ -65,14 +64,12 @@ def test_relationship_classification_is_idempotent(pg_db):
     """Re-running against the same schema, the real-world redeploy case the
     DROP TABLE/enum-drop cleanup exists for, must not fail."""
     with (
-        isolated_test_schema(pg_db.committing_engine, prefix="relclass_idempotent_ext") as extension_schema,
+        extension_schema_claim(pg_db.committing_engine, prefix="relclass_idempotent") as ext_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="relclass_idempotent",
-            schema_claims=[
-                staging_schema_claim(),
-                SchemaClaim(schema_tag=EXTENSION_SCHEMA, physical_schema=extension_schema, reserved=True),
-            ],
+            schema_claims=[staging_schema_claim(), ext_claim],
+            register_claims=False,
         ) as scoped,
     ):
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)

@@ -26,6 +26,8 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
+from fixtures.helpers import extension_schema_claim
+
 PARENT_CANCER_ID = 443392
 CONCEPT_META_ID = 0
 LANGUAGE_CONCEPT_ID = 1
@@ -34,9 +36,12 @@ LANGUAGE_CONCEPT_ID = 1
 @pytest.fixture(scope="module")
 def mock_cdm_engine() -> Iterator[sa.Engine]:
     with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
-        with scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped:
-            _create_mock_cdm_tables(scoped.engine)
-            yield scoped.engine
+        with extension_schema_claim(db.committing_engine, prefix="mock_cdm") as ext_claim:
+            with scoped_test_schema(
+                db.resolved, prefix="mock_cdm", schema_claims=[ext_claim], register_claims=False
+            ) as scoped:
+                _create_mock_cdm_tables(scoped.engine)
+                yield scoped.engine
 
 
 @pytest.fixture(scope="module")
