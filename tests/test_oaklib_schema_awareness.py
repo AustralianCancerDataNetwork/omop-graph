@@ -33,7 +33,7 @@ from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
-from fixtures.helpers import extension_schema_claim
+from fixtures.helpers import cdm_extension_schema_claim
 
 _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
@@ -102,7 +102,7 @@ def test_get_adapter_resolves_the_slug_as_the_database_name(
     pg_db, monkeypatch, descriptor, expected_name
 ) -> None:
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="oaklib_get_adapter") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_get_adapter") as ext_claim,
         scoped_test_schema(
             pg_db.resolved, prefix="oaklib_get_adapter", schema_claims=[staging_schema_claim(), ext_claim],
             register_claims=False,
@@ -134,7 +134,7 @@ def test_resolve_cdm_database_resolves_a_named_entry(pg_db) -> None:
 
 def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="oaklib_resolved") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_resolved") as ext_claim,
         scoped_test_schema(
             pg_db.resolved, prefix="oaklib_resolved", schema_claims=[staging_schema_claim(), ext_claim],
             register_claims=False,
@@ -162,7 +162,7 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
         databases={name: resolver.config.databases[name].model_copy(update={"vocab_connection": "oaklib_split_vocab"})},
     )
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="oaklib_split") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_split") as ext_claim,
         scoped_test_schema(
             resolver.resolve_database(name),
             prefix="oaklib_split",
@@ -183,7 +183,7 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
 
 def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="oaklib_kg") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_kg") as ext_claim,
         scoped_test_schema(
             pg_db.resolved, prefix="oaklib_kg", schema_claims=[staging_schema_claim(), ext_claim],
             register_claims=False,

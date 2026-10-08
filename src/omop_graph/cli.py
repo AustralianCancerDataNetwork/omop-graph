@@ -233,7 +233,6 @@ def _load_relationship_classification(
         RelationshipMapping.__table__,
         RelationshipClass.__table__,
     ]
-    ensure_schema(engine, physical_schema_of(engine, schema_tag=EXTENSION_SCHEMA))
     with open_connection(engine) as connection:
         Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
         create_extension_tables(connection, resolved=resolved)

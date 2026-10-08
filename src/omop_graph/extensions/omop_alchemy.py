@@ -37,7 +37,7 @@ class RelationshipClass(ReferenceTable, CDMExtensionTableBase):
             values_callable=lambda obj: [
                 e.value for e in obj
             ],
-            # Must match the table's own schema to ensure that
+            # Must match CDMExtensionTableBase's own schema to ensure that
             # schema_translate_map routes the enum correctly.
             schema=CDM_EXTENSION_SCHEMA,
         ),
@@ -69,7 +69,7 @@ class RelationshipMapping(ReferenceTable, CDMExtensionTableBase):
             values_callable=lambda obj: [
                 e.value for e in obj
             ],
-            # Must match the table's own schema to ensure that
+            # Must match CDMExtensionTableBase's own schema to ensure that
             # schema_translate_map routes the enum correctly.
             schema=CDM_EXTENSION_SCHEMA,
         ),
@@ -79,9 +79,8 @@ class RelationshipMapping(ReferenceTable, CDMExtensionTableBase):
         sa.String(20), primary_key=True
     )
 
-    # relationship_class lives in the same fixed extension schema
-    # (CDMExtensionTableBase's default). The target is a plain qualified
-    # string rather than role_fk() since there is no Role.EXTENSION.
+    # Qualified string to RelationshipClass as it lives in the same 
+    # fixed extension schema (CDMExtensionTableBase's default).
     __table_args__ = merge_table_args(
         sa.ForeignKeyConstraint(
             ["predicate_kind", "predicate_subkind"],

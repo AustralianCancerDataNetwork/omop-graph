@@ -23,7 +23,7 @@ from omop_graph.graph.queries import (
     q_entities,
 )
 
-from fixtures.helpers import VOCAB_TABLES, extension_schema_claim
+from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
 
 _META_CONCEPT_ID = 0
 
@@ -31,7 +31,7 @@ _META_CONCEPT_ID = 0
 @pytest.fixture()
 def concept_engine(pg_db) -> Iterator[sa.Engine]:
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="concept_queries") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="concept_queries") as ext_claim,
         scoped_test_schema(
             pg_db.resolved, prefix="concept_queries", schema_claims=[ext_claim], register_claims=False
         ) as scoped,

@@ -14,7 +14,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Domain,
     Vocabulary
 )
-from omop_alchemy.config import EXTENSION_SCHEMA
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
 
 VOCAB_TABLES = cast(
     "tuple[sa.Table, ...]",
@@ -27,30 +27,12 @@ tuple rather than redefining its own copy of the shared core.
 """
 
 
-EXTENSION_SCHEMA_TEST_OWNER = "omop_graph"
-"""Fixed owner for every EXTENSION_SCHEMA claim in this suite, matching
-relationship_classification()'s own internal claim (cli.py, engine=None path):
-that one leaves owner unset, so oa-configurator auto-derives it from the
-top-level package of its own call site, "omop_graph".
-
-create_engine() derives owner from the immediate caller's own top-level
-module whenever a SchemaClaim doesn't set one explicitly, and a test
-file is its own top-level module -- so two test files claiming the same
-schema_tag without this override would each get a different, auto-derived
-owner, and SchemaOwnershipError fires for the *tag* existing under a
-different owner on the same connection (checked across the whole shared
-test database, not scoped per test run). Matching the literal value
-production itself falls back to lets every test file's own claim, and
-relationship_classification()'s internal one, coexist as "the same owner
-reclaiming" instead of conflicting -- each still gets its own physical_schema,
-scoped independently by SchemaDriftError's own database_config_name key.
-"""
-
-
 @contextmanager
-def extension_schema_claim(engine: sa.Engine, *, prefix: str) -> Generator[SchemaClaim, None, None]:
+def cdm_extension_schema_claim(engine: sa.Engine, *, prefix: str) -> Generator[SchemaClaim, None, None]:
     """A SchemaClaim for a fresh, test-isolated physical extension schema.
 
+    Notes
+    -----
     Needed before any Base.metadata.create_all() call reachable from a test,
     even one scoped via tables=: a dialect-level custom type (e.g.
     RelationshipClass's predicate_kind) is created metadata-wide, not
@@ -61,7 +43,7 @@ def extension_schema_claim(engine: sa.Engine, *, prefix: str) -> Generator[Schem
     """
     with isolated_test_schema(engine, prefix=f"{prefix}_ext") as physical_schema:
         yield SchemaClaim(
-            schema_tag=EXTENSION_SCHEMA,
+            schema_tag=CDM_EXTENSION_SCHEMA,
             physical_schema=physical_schema,
-            owner=EXTENSION_SCHEMA_TEST_OWNER,
+            owner=CDM_EXTENSION_SCHEMA_OWNER,
         )

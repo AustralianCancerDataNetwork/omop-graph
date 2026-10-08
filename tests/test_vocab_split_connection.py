@@ -49,7 +49,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
-from fixtures.helpers import VOCAB_TABLES, extension_schema_claim
+from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
@@ -109,7 +109,7 @@ class _Engines(NamedTuple):
     primary: sa.Engine
     vocab: sa.Engine
     resolved: ResolvedCDMDatabase
-    extension_schema_claim: SchemaClaim
+    cdm_extension_schema_claim: SchemaClaim
     """Reusable claim for any later engine built from .resolved (e.g. the
     staging engine in test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection):
     schema_claims aren't inherited across separate create_engine() calls."""
@@ -125,7 +125,7 @@ def split_engines() -> Iterator[_Engines]:
         isolated_test_database(OrmLoaderConfig, "test_orm_db_pg") as vocab_db,
         # RelationshipClass/RelationshipMapping live in the extension schema,
         # on the same physical connection as primary.
-        extension_schema_claim(primary_db.committing_engine, prefix="vocab_split") as ext_claim,
+        cdm_extension_schema_claim(primary_db.committing_engine, prefix="vocab_split") as ext_claim,
     ):
         name = primary_db.resolved.name
         resolver = Resolver.from_active_config()
@@ -164,7 +164,7 @@ def split_engines() -> Iterator[_Engines]:
                     primary=primary_engine,
                     vocab=vocab_engine,
                     resolved=scoped.resolved,
-                    extension_schema_claim=ext_claim,
+                    cdm_extension_schema_claim=ext_claim,
                 )
             finally:
                 vocab_setup_engine.dispose()

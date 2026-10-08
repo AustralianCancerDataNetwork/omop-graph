@@ -21,12 +21,12 @@ from omop_graph.cli import relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
-from fixtures.helpers import extension_schema_claim
+from fixtures.helpers import cdm_extension_schema_claim
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="relclass_routing") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="relclass_routing") as ext_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="relclass_routing",
@@ -64,7 +64,7 @@ def test_relationship_classification_is_idempotent(pg_db):
     """Re-running against the same schema, the real-world redeploy case the
     DROP TABLE/enum-drop cleanup exists for, must not fail."""
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="relclass_idempotent") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="relclass_idempotent") as ext_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="relclass_idempotent",

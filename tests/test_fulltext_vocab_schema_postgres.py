@@ -17,14 +17,14 @@ from orm_loader.helpers import Base
 
 from omop_graph.graph.queries import q_concept_name_fulltext
 
-from fixtures.helpers import VOCAB_TABLES, extension_schema_claim
+from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 
 def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="fulltext_a") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="fulltext_a") as ext_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="fulltext",
@@ -60,7 +60,7 @@ def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
 
 def test_fulltext_query_still_raises_when_the_column_is_genuinely_absent(pg_db):
     with (
-        extension_schema_claim(pg_db.committing_engine, prefix="fulltext_b") as ext_claim,
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="fulltext_b") as ext_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="fulltext",
