@@ -209,7 +209,6 @@ def semantic_similarity(
     knn_filter = EmbeddingConceptFilter(concept_ids=concept_ids)
 
     missing_sc_embeddings = embedding_reader.get_concepts_without_embedding(
-        omop_cdm_engine=kg.cdm_engine,
         concept_filter=cdm_filter,
     )
 
@@ -231,7 +230,7 @@ def semantic_similarity(
                     concept_ids=missing_concept_ids, limit=len(missing_concept_ids)
                 )
                 concept_meta = fetch_cdm_concepts_for_filter(
-                    missing_filter, cdm_engine=kg.cdm_engine
+                    missing_filter, cdm_session_factory=kg.session_factory
                 )
 
                 embedding_writer.embed_and_upsert_concepts(

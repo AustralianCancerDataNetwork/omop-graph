@@ -78,7 +78,7 @@ def mock_cdm_kg(
         lambda _kg: None,
     )
 
-    return KnowledgeGraph(cdm_engine=mock_cdm_engine)
+    return KnowledgeGraph(sessionmaker(bind=mock_cdm_engine))
 
 
 def seed_mock_cdm(session: Session) -> None:

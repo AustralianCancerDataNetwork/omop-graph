@@ -4,6 +4,8 @@ from typing import ClassVar, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
+from omop_alchemy.config import create_cdm_engines
+from omop_alchemy.cross_database import cdm_sessionmaker
 
 from linkml_runtime.linkml_model.annotations import Annotation
 from oaklib.datamodels.search import (
@@ -38,7 +40,7 @@ from omop_graph.render import bind_default_renderers
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.db.session import resolve_cdm_database
 
-from oa_configurator import ResolvedCDMDatabase, SchemaClaim
+from oa_configurator import ResolvedCDMDatabase
 from oaklib.resource import OntologyResource
 
 logger = logging.getLogger(__name__)
@@ -857,12 +859,9 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         resolve; ``None`` resolves ``OmopGraphConfig.cdm_db``. Ignored when
         ``resolved`` or ``kg`` is given.
     resolved : ResolvedCDMDatabase | None, optional
-        An already-resolved CDM database to build the engines from, without
-        registering schema claims. Ignored when ``kg`` is given.
-    schema_claims : Iterable[SchemaClaim], optional
-        Forwarded to ``ResolvedCDMDatabase.create_engines()``.
-    execution_options : dict | None, optional
-        Non-schema execution options forwarded to ``ResolvedCDMDatabase.create_engines()``.
+        An already-resolved CDM database to build the engines from with
+        ``create_cdm_engines()``, without registering schema claims. Ignored
+        when ``kg`` is given.
     kg : KnowledgeGraph | None, optional
         An existing Knowledge Graph, used as-is. The caller owns whatever
         engine it wraps.
@@ -879,8 +878,6 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         resource: OntologyResource | None = None,
         *,
         resolved: ResolvedCDMDatabase | None = None,
-        schema_claims: Iterable[SchemaClaim] = (),
-        execution_options: dict | None = None,
         kg: KnowledgeGraph | None = None,
         kg_emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
         **kwargs,
@@ -890,17 +887,10 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         if kg is None:
             if resolved is None:
                 resolved = resolve_cdm_database(resource.slug)
-            engine, vocab_engine = resolved.create_engines(
-                schema_claims=schema_claims,
-                execution_options=execution_options,
-                register_claims=False,
-                echo=False,
-                future=True,
-            )
+            engine, vocab_engine = create_cdm_engines(resolved, register_claims=False)
             kg = KnowledgeGraph(
+                cdm_sessionmaker(resolved, primary=engine, vocab=vocab_engine),
                 emb_config=kg_emb_config,
-                cdm_engine=engine,
-                vocab_engine=None if vocab_engine is engine else vocab_engine,
             )
             bind_default_renderers(kg)
 

@@ -36,15 +36,14 @@ For larger deployments use `[pgvector]` or `[faiss-cpu]` instead (or in addition
 
 ### KnowledgeGraph
 
-`KnowledgeGraph` is the main entry point. It wraps a SQLAlchemy `Engine` connected to an OMOP vocabulary schema and provides a high-level Pythonic API over the relational tables.
+`KnowledgeGraph` is the main entry point. It takes a factory of sessions on the OMOP CDM and provides a high-level Pythonic API over the relational tables.
 
 ```python
-from sqlalchemy import create_engine
+from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 
-engine = create_engine("postgresql://user:pass@localhost/omop")
-kg = KnowledgeGraph(cdm_engine=engine)
+kg = KnowledgeGraph(cdm_session_factory())  # the configured cdm_db
 
 # Lookup a concept by label
 matches = kg.concept_lookup("Atrial Fibrillation", match_kind=LabelMatchKind.EXACT)

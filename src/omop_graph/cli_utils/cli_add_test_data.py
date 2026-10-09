@@ -261,22 +261,21 @@ def populate_conditions_and_modifiers(
     session.commit()
 
 
-def populate_test_data(session, vocab_session):
+def populate_test_data(session):
     """Brute force addition of test data for development/testing purposes.
 
     Parameters
     ----------
     session
-        Bound to the primary connection; every write (Person, Visit_Occurrence,
-        Condition_Occurrence, ...) goes through this session.
-    vocab_session
-        Bound to the vocab connection, for the Concept/Concept_Ancestor reads
-        below.
+        From ``omop_alchemy.cross_database.cdm_sessionmaker``, so the
+        Concept/Concept_Ancestor reads reach the vocabulary and the clinical
+        writes (Person, Visit_Occurrence, Condition_Occurrence, ...) reach the
+        primary database.
     """
 
     # Data
     concept_by_domain = pd.DataFrame(
-        vocab_session.query(*Concept.__table__.columns).filter(
+        session.query(*Concept.__table__.columns).filter(
             sa.or_(
                 Concept.domain_id.in_(
                     [
@@ -326,7 +325,7 @@ def populate_test_data(session, vocab_session):
     )
 
     staging_parents = pd.DataFrame(
-        vocab_session.query(*Concept.__table__.columns)
+        session.query(*Concept.__table__.columns)
         .join(
             Concept_Ancestor,
             Concept.concept_id == Concept_Ancestor.descendant_concept_id,
@@ -342,7 +341,7 @@ def populate_test_data(session, vocab_session):
             staging_parents[staging_parents.concept_name.str.contains(axis)].concept_id
         )
         s = pd.DataFrame(
-            vocab_session.query(*Concept.__table__.columns)
+            session.query(*Concept.__table__.columns)
             .join(
                 Concept_Ancestor,
                 Concept.concept_id == Concept_Ancestor.descendant_concept_id,

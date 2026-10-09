@@ -42,7 +42,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_graph.db.session import resolve_cdm_database
+from omop_graph.db.session import cdm_session_factory
 app = typer.Typer()
 
 
@@ -167,7 +167,7 @@ def build_embedding_knowledge_graph(
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
-    cdm_engine = resolve_cdm_database().create_engine()
+    cdm_sessions = cdm_session_factory()
     config = KnowledgeGraphEmbeddingConfiguration(
         metric_type=embedding_metric,
         backend=backend,
@@ -176,7 +176,7 @@ def build_embedding_knowledge_graph(
         compute_missing_embeddings=True,
     )
     return KnowledgeGraph(
-        cdm_engine=cdm_engine,
+        cdm_sessions,
         emb_config=config
     )
 
@@ -598,7 +598,7 @@ def run_benchmark(
             for case in cases
         }
 
-    kg = KnowledgeGraph(cdm_engine=resolve_cdm_database().create_engine())
+    kg = KnowledgeGraph(cdm_session_factory())
     configs = build_grounded_configs()
 
     errors: Dict[str, str] = {}

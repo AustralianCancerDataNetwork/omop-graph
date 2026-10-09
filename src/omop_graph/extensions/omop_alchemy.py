@@ -1,7 +1,7 @@
 # Extension to omop-alchemy package
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from orm_loader.helpers import Base
+from orm_loader.helpers import Base, create_tables
 from omop_alchemy.cdm.base import (
     ReferenceTable,
     cdm_table,
@@ -9,10 +9,11 @@ from omop_alchemy.cdm.base import (
     merge_table_args,
     role_fk,
 )
-from oa_configurator import Role
+from oa_configurator import ResolvedCDMDatabase, Role
 
 from enum import Enum
 from dataclasses import dataclass
+from typing import cast
 
 
 class PredicateKind(Enum):
@@ -96,40 +97,32 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     )
 
 
-def relationship_mapping_table_without_vocab_fk() -> sa.Table:
-    """RelationshipMapping's DDL without its FK to vocab.relationship_id.
+def create_extension_tables(
+    connection: sa.Connection,
+    *,
+    resolved: ResolvedCDMDatabase,
+) -> None:
+    """Create the extension tables as they can physically exist on *resolved*.
 
-    Postgres has no cross-database inline FK, so when vocab_connection is a
-    genuinely separate physical connection, CREATE TABLE on the real ORM
-    table fails there. This reproduces the same columns under the same
-    name/schema in a throwaway MetaData, so CREATE TABLE succeeds while
-    RelationshipMapping's own ORM class still reads/writes the same
-    physical table afterward.
+    Goes through ``orm_loader``'s ``create_tables``: on a split deployment the
+    foreign key to the vocabulary is left out, since no dialect can express a
+    foreign key across two databases, and every same-tag key, including the
+    composite key from relationship_mapping to relationship_class, is kept.
+
+    The ORM classes keep their own ForeignKey declarations and remain what
+    reads and writes these tables. SQLAlchemy infers join conditions from
+    that in-Python metadata, not from constraints present in the database,
+    so relationship loading is unaffected either way.
     """
-    metadata = sa.MetaData()
-    return sa.Table(
-        RelationshipMapping.__tablename__,
-        metadata,
-        sa.Column("relationship_id", sa.String(20), primary_key=True),
-        sa.Column(
-            "predicate_kind",
-            sa.Enum(
-                PredicateKind,
-                values_callable=lambda obj: [e.value for e in obj],
-                schema=Role.PRIMARY.value,
-            ),
-            primary_key=True,
-        ),
-        sa.Column("predicate_subkind", sa.String(20), primary_key=True),
-        sa.ForeignKeyConstraint(
-            ["predicate_kind", "predicate_subkind"],
-            [
-                RelationshipClass.__table__.c.predicate_kind,
-                RelationshipClass.__table__.c.predicate_subkind,
-            ],
-            name="fk_rel_mapping_to_rel_class",
-        ),
-        schema=Role.PRIMARY.value,
+    # cast: the declarative __table__ is typed FromClause, but a mapped class
+    # backed by a table always carries a Table here.
+    create_tables(
+        connection,
+        [
+            cast(sa.Table, RelationshipClass.__table__),
+            cast(sa.Table, RelationshipMapping.__table__),
+        ],
+        resolved=resolved,
     )
 
 

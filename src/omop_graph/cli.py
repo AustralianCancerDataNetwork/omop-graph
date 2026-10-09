@@ -7,27 +7,23 @@ from typing import Annotated, Optional, cast
 import pandas as pd
 import sqlalchemy as sa
 import typer
-from sqlalchemy.orm import sessionmaker
+import sqlalchemy.orm as so
 
-from oa_configurator import (
-    ResolvedCDMDatabase,
-    open_connection,
-)
+from oa_configurator import ResolvedCDMDatabase, open_connection
 
-from omop_alchemy.cdm.model.vocabulary import Relationship
-
-from orm_loader.backends import STAGING_SCHEMA, resolve_backend, staging_schema_claim
+from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import resolve_cdm_database
+from omop_graph.db.session import resolve_cdm_database, open_cdm_sessions
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
-    relationship_mapping_table_without_vocab_fk,
+    create_extension_tables,
 )
+from omop_alchemy.cross_database import cdm_sessionmaker
 from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
@@ -58,10 +54,17 @@ def populate_with_test_data():
             f"Refusing to populate {resolved.name!r} with synthetic test data: "
             "both its primary and vocab connections must be test_only."
         )
+    with open_cdm_sessions(resolved) as cdm_sessions:
+        with cdm_sessions() as session:
+            populate_test_data(session)
+
     engine, vocab_engine = resolved.create_engines()
-    Session = sessionmaker(bind=engine, future=True)
-    VocabSession = sessionmaker(bind=vocab_engine, future=True)
-    populate_test_data(Session(), vocab_session=VocabSession())
+    try:
+        with cdm_sessionmaker(resolved, primary=engine, vocab=vocab_engine)() as session:
+            populate_test_data(session)
+    finally:
+        for owned in {engine, vocab_engine}:
+            owned.dispose()
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -78,7 +81,6 @@ def packaged_predicate_csv_dir() -> Path:
 def relationship_classification(
     pred_class_dir: Optional[str] = None,
     *,
-    engine: sa.Engine | sa.Connection | None = None,
     resolved: ResolvedCDMDatabase | None = None,
 ) -> None:
     """Load pre-classified predicates into the database.
@@ -89,21 +91,26 @@ def relationship_classification(
         Path to the directory containing `predicate_classification.csv` and
         `predicate_mapping.csv`. Defaults to the copies shipped with
         omop-graph.
-    engine : sqlalchemy.Engine or sqlalchemy.Connection, optional
-        Bindable to run against, carrying ``orm_loader.staging_schema_claim()``.
-        Defaults to the active oa-configurator config's resolved CDM engine,
-        in which case resolved is also resolved internally and any value
-        passed here is ignored.
     resolved : ResolvedCDMDatabase, optional
-        Enables the schema-provenance guard. Only meaningful together with
-        an explicitly injected engine/connection, since the engine=None
-        path always resolves its own regardless of what's passed here.
-        Also determines whether ``vocab_connection`` is a genuinely
-        separate physical connection: if so, ``RelationshipMapping`` is
-        created without its FK to ``relationship.relationship_id``, 
-        and relationship IDs absent from the vocab connection's own `relationship` table 
-        are dropped instead of relying on the FK to reject them.
+        Database to load into. Defaults to the active config's CDM database.
+        When the vocabulary has its own database, ``RelationshipMapping`` is
+        created without its FK to ``relationship.relationship_id``.
     """
+    if resolved is None:
+        resolved = resolve_cdm_database()
+    with open_cdm_sessions(resolved) as cdm_sessions:
+        with cdm_sessions() as session:
+            engine = session.get_bind(RelationshipMapping).engine
+        _load_relationship_classification(pred_class_dir, resolved=resolved, engine=engine)
+
+
+def _load_relationship_classification(
+    pred_class_dir: Optional[str],
+    *,
+    resolved: ResolvedCDMDatabase,
+    engine: sa.Engine,
+) -> None:
+    """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
     pred_class_dir_pl = (
         Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     )
@@ -172,35 +179,6 @@ def relationship_classification(
         subset=["relationship_id", "predicate_kind", "predicate_subkind"]
     )
 
-    if engine is None:
-        resolved = resolve_cdm_database()
-        engine = resolved.create_engine(schema_claims=[staging_schema_claim()])
-    split_vocab = resolved is not None and resolved.connection != resolved.vocab_connection
-
-    if split_vocab:
-        if not isinstance(engine, sa.Engine):
-            raise TypeError(
-                "relationship_classification() needs an Engine (not a bare "
-                "Connection) to build the vocab connection's own engine when "
-                "vocab_connection is genuinely separate."
-            )
-        vocab_engine = resolved.vocab_engine_for(engine)
-        with open_connection(vocab_engine) as vocab_connection:
-            known_relationship_ids = {
-                row.relationship_id
-                for row in vocab_connection.execute(sa.select(Relationship.relationship_id))
-            }
-        unknown_mask = ~df_rel_mapping_to_export["relationship_id"].isin(known_relationship_ids)
-        unknown_ids = df_rel_mapping_to_export.loc[unknown_mask, "relationship_id"].unique().tolist()
-        if unknown_ids:
-            logger.warning(
-                f"Dropping {len(unknown_ids)} relationships absent from the vocabulary "
-                f"connection's relationship table: {unknown_ids}"
-            )
-        df_rel_mapping_to_export = df_rel_mapping_to_export.loc[~unknown_mask]
-
-    Session = sessionmaker(bind=engine, future=True)
-    session = Session()
     loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)
 
     drop_staging_sql = (
@@ -228,13 +206,9 @@ def relationship_classification(
     ]
     with open_connection(engine) as connection:
         Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
-        if split_vocab:
-            Base.metadata.create_all(bind=connection, tables=[RelationshipClass.__table__])  # type: ignore
-            relationship_mapping_table_without_vocab_fk().create(bind=connection, checkfirst=True)
-        else:
-            Base.metadata.create_all(bind=connection, tables=tables_to_drop)  # type: ignore
+        create_extension_tables(connection, resolved=resolved)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory() as tmp_dir, so.Session(engine) as session:
         for model, df in zip(
             [RelationshipClass, RelationshipMapping],
             [df_rel_cls_to_export, df_rel_mapping_to_export],

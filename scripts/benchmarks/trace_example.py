@@ -32,7 +32,7 @@ from rich.progress import (
 )
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import resolve_cdm_database
+from omop_graph.db.session import cdm_session_factory
 from omop_graph.extensions.emb import get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_alchemy.cdm.query import ConceptFilter
@@ -101,7 +101,7 @@ RESOLVER_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
 
 def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> KnowledgeGraph:
     """Build a KG with embedding support, resolved from OmopGraphConfig."""
-    cdm_engine = resolve_cdm_database().create_engine()
+    cdm_sessions = cdm_session_factory()
     try:
         from oa_configurator import Resolver
         from omop_emb.backends import open_vector_store_writer
@@ -127,10 +127,10 @@ def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> Knowle
             write=True,
         )
         logger.info("Embedding config loaded (model=%s, metric=%s).", resolved_model.model, resolved_metric.value)
-        return KnowledgeGraph(cdm_engine=cdm_engine, emb_config=emb_config)
+        return KnowledgeGraph(cdm_sessions, emb_config=emb_config)
     except Exception as exc:
         logger.warning("Error occurred while loading embedding config:\n%s.\nRunning without embedding.", exc)
-        return KnowledgeGraph(cdm_engine=cdm_engine)
+        return KnowledgeGraph(cdm_sessions)
 
 
 def _resolver_label(resolver) -> str:
@@ -1719,7 +1719,7 @@ def panel_svg(
     else:
         selected = cases
 
-    kg = KnowledgeGraph(cdm_engine=resolve_cdm_database().create_engine())
+    kg = KnowledgeGraph(cdm_session_factory())
     rel_class_cache: Dict[int, Dict] = {}
 
     out_dir = trace_dir_pl / "plots" / "panel"
@@ -1782,7 +1782,7 @@ def graph_svg(
     else:
         selected = cases
 
-    kg = KnowledgeGraph(cdm_engine=resolve_cdm_database().create_engine())
+    kg = KnowledgeGraph(cdm_session_factory())
 
     out_dir = trace_dir_pl / "plots" / "graph"
     out_dir.mkdir(parents=True, exist_ok=True)

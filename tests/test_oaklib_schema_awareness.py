@@ -18,14 +18,16 @@ import sqlalchemy as sa
 import sqlalchemy.orm
 from oaklib import get_adapter
 
-from oa_configurator import Resolver
+from oa_configurator import Resolver, Role
 from oa_configurator.testing import scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
+from omop_alchemy.cross_database import cdm_sessionmaker
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base, bulk_load_context
 
 from omop_graph.cli import relationship_classification
 from omop_graph.db.session import resolve_cdm_database
+from omop_graph.extensions.omop_alchemy import RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
@@ -85,10 +87,10 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
         session.commit()
 
 
-def _populate(scoped, *, name: str, guarded: bool = True) -> None:
+def _populate(scoped, *, name: str) -> None:
     Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
     _seed_one_concept(scoped.engine, concept_id=_CONCEPT_ID, name=name)
-    relationship_classification(engine=scoped.engine, resolved=scoped.resolved if guarded else None)
+    relationship_classification(resolved=scoped.resolved)
 
 
 @pytest.mark.parametrize(("descriptor", "expected_name"), [("omop:named_db", "named_db"), ("omop:", None)])
@@ -110,6 +112,12 @@ def test_get_adapter_resolves_the_slug_as_the_database_name(
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Adapter concept"
 
 
+def _one_engine_for_both_roles(kg: KnowledgeGraph) -> bool:
+    """Do the graph's sessions send vocabulary and extension tables to one engine?"""
+    with kg.session_factory() as session:
+        return session.get_bind(Concept) is session.get_bind(RelationshipMapping)
+
+
 def test_resolve_cdm_database_resolves_a_named_entry(pg_db) -> None:
     assert resolve_cdm_database(pg_db.resolved.name).name == pg_db.resolved.name
 
@@ -120,12 +128,17 @@ def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
 
         adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
 
-        assert adapter.kg.vocab_engine is adapter.kg.cdm_engine
-        assert adapter.kg.cdm_engine.pool._pre_ping is True
+        assert _one_engine_for_both_roles(adapter.kg)
+        with adapter.kg.session_factory() as session:
+            assert session.get_bind(Concept).pool._pre_ping is True
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Resolved-path concept"
 
 
-def test_resolved_path_builds_a_genuine_vocab_engine_for_a_split_connection(pg_db) -> None:
+def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -> None:
+    """A second connection entry naming the same physical database is not a
+    split, so the adapter gets one engine for both roles and the cross-schema
+    foreign key stays creatable. Deciding this by config identity instead
+    would open a second pool to a database already in use and drop that key."""
     name = pg_db.resolved.name
     resolver = Resolver.from_active_config()
     resolver = resolver.with_overrides(
@@ -133,20 +146,22 @@ def test_resolved_path_builds_a_genuine_vocab_engine_for_a_split_connection(pg_d
         databases={name: resolver.config.databases[name].model_copy(update={"vocab_connection": "oaklib_split_vocab"})},
     )
     with scoped_test_schema(resolver.resolve_database(name), prefix="oaklib_split", resolver=resolver, schema_claims=[staging_schema_claim()]) as scoped:
-        # Both connections share one physical server, so the cross-schema FK
-        # works; resolved= would make relationship_classification() refuse the split.
-        _populate(scoped, name="Split-wiring concept", guarded=False)
+        assert scoped.resolved.connection.name != scoped.resolved.vocab_connection.name
+        assert scoped.resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
+        _populate(scoped, name="Split-wiring concept")
 
         adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
 
-        assert adapter.kg.vocab_engine is not adapter.kg.cdm_engine
+        assert _one_engine_for_both_roles(adapter.kg)
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Split-wiring concept"
 
 
 def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
     with scoped_test_schema(pg_db.resolved, prefix="oaklib_kg", schema_claims=[staging_schema_claim()]) as scoped:
         _populate(scoped, name="Injected concept")
-        kg = KnowledgeGraph(cdm_engine=scoped.engine)
+        kg = KnowledgeGraph(
+            cdm_sessionmaker(scoped.resolved, primary=scoped.engine, vocab=scoped.engine)
+        )
 
         adapter = OMOPAlchemyImplementation(kg=kg)
 

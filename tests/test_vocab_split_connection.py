@@ -1,10 +1,8 @@
 """Split-connection vocab routing.
 
-q_edges/q_predicate_row_with_ancestry/q_all_predicates_with_ancestry join a
-vocab-tagged table against RelationshipMapping. A genuinely separate 
-vocab_connection can't do it in one SQL join. Instead, KnowledgeGraph fetches each side 
-from its own engine and merges in Python (see kg.py's
-_vocab_split/_predicate_from_rows/_relationship_mapping_lookup).
+KnowledgeGraph reads vocabulary rows through its routed sessions and
+classifies them from the relationship mapping read at construction, so no
+query joins the vocabulary database against RelationshipMapping on primary.
 
 Uses two real, distinct Postgres connections (test_cdm, test_orm) standing
 in for primary/vocab servers, each with its own schema via
@@ -23,7 +21,6 @@ import sqlalchemy.orm as so
 
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role
 from oa_configurator.testing import isolated_test_database, resolve_with_role_schemas, scoped_test_schema
-from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -35,6 +32,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
     Vocabulary,
 )
+from omop_alchemy.cross_database import cdm_sessionmaker
 
 from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
@@ -135,7 +133,7 @@ def split_engines() -> Iterator[_Engines]:
             vocab_only = resolve_with_role_schemas(
                 vocab_db.resolved, {role: vocab_schema for role in vocab_db.resolved.schema_tags()}
             )
-            vocab_setup_engine = vocab_only.create_engine()
+            vocab_setup_engine, _ = vocab_only.create_engines()
             try:
                 _shadow_metadata.create_all(primary_engine)
                 Base.metadata.create_all(vocab_setup_engine, tables=_VOCAB_TABLES, checkfirst=True)
@@ -266,7 +264,9 @@ def _seed(primary_engine: sa.Engine, vocab_engine: sa.Engine) -> None:
 
 
 def _split_kg(engines: _Engines) -> KnowledgeGraph:
-    return KnowledgeGraph(cdm_engine=engines.primary, vocab_engine=engines.vocab)
+    return KnowledgeGraph(
+        cdm_sessionmaker(engines.resolved, primary=engines.primary, vocab=engines.vocab)
+    )
 
 
 def test_predicate_merges_across_split_connections(split_engines: _Engines) -> None:
@@ -380,10 +380,9 @@ def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines
 def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection(
     split_engines: _Engines, tmp_path
 ) -> None:
-    """relationship_classification() creates RelationshipMapping
-    without that FK in a split connection and validates relationship_id 
-    against the vocab connection's own `relationship` table in Python instead
-    """
+    """relationship_classification() creates RelationshipMapping without its
+    FK to the vocabulary. A relationship ID the vocabulary lacks is loaded
+    but inert: no predicate or edge is built from it."""
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
         "Identity,mapping,Identity mapping,identity,none\n"
@@ -391,24 +390,19 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
     (tmp_path / "predicate_mapping.csv").write_text(
         "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
         "Identity,mapping,maps to,Maps to,,,\n"
-        "Identity,mapping,totally_unknown_relationship,Unknown,,,\n"
+        "Identity,mapping,unknown_rel,Unknown,,,\n"
     )
 
-    staging_engine = split_engines.resolved.create_engine(schema_claims=[staging_schema_claim()])
-    try:
-        relationship_classification(
-            str(tmp_path), engine=staging_engine, resolved=split_engines.resolved
-        )
-    finally:
-        staging_engine.dispose()
+    relationship_classification(str(tmp_path), resolved=split_engines.resolved)
 
     with so.Session(split_engines.primary) as session:
         relationship_ids = set(
             session.execute(sa.select(RelationshipMapping.relationship_id)).scalars()
         )
-    assert relationship_ids == {"maps to"}
+    assert relationship_ids == {"maps to", "unknown_rel"}
 
     kg = _split_kg(split_engines)
+    assert "unknown_rel" not in {p.relationship_id for p in kg.predicates()}
     predicate = kg.predicate("maps to")
     assert predicate.predicate_kind == PredicateKind.IDENTITY
     assert predicate.predicate_subkind == "mapping"

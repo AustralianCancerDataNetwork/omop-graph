@@ -25,7 +25,7 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
         schema = scoped.schemas[Role.PRIMARY]
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
 
-        relationship_classification(engine=scoped.engine, resolved=scoped.resolved)
+        relationship_classification(resolved=scoped.resolved)
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -53,8 +53,8 @@ def test_relationship_classification_is_idempotent(pg_db):
     with scoped_test_schema(pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
 
-        relationship_classification(engine=scoped.engine, resolved=scoped.resolved)
-        relationship_classification(engine=scoped.engine, resolved=scoped.resolved)
+        relationship_classification(resolved=scoped.resolved)
+        relationship_classification(resolved=scoped.resolved)
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
