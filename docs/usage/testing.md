@@ -12,11 +12,12 @@ The test runner configuration lives in `pytest.toml` at the repository root:
 
 ## What Is Currently Tested
 
-The full suite runs against an **in-memory SQLite mock CDM** (`tests/fixtures/mock_cdm.py`'s `mock_cdm_engine` fixture): no real database, no oa-configurator setup, and no environment variables are needed to run it. Current coverage is centered on functional behavior and integration-style graph operations, including:
+The default suite runs graph queries against an **in-memory SQLite mock CDM** (`tests/fixtures/mock_cdm.py`'s `mock_cdm_engine_sqlite` fixture, used by `mock_cdm_kg`). PostgreSQL-only integration tests use the separate `mock_cdm_engine` fixture and oa-configurator's isolated test database fixture. Current SQLite coverage includes:
 
 - Grounding behavior from text inputs to expected OMOP concept IDs
 - Rendering behavior for text and Mermaid output under `tests/render`
 - Optional full-text behavior guards when sidecar full-text metadata/columns are not present
+- KnowledgeGraph full-text lookup returning no matches when SQLite does not support full-text search
 
 The grounding test suite is structured with parametrized cases so each clinical term is a separate pytest case for easier isolation and debugging.
 

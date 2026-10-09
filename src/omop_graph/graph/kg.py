@@ -24,7 +24,8 @@ from dataclasses import dataclass
 
 from sqlalchemy import Row
 from sqlalchemy.orm import Session
-from omop_alchemy.backends import FullTextError
+from sqlalchemy.engine import Engine
+from omop_alchemy.backends import BackendNotSupportedError, FullTextError
 from omop_alchemy.cdm.model.vocabulary import Concept
 from omop_alchemy.cdm.query import ConceptFilter
 from oa_configurator import ResolvedModel
@@ -188,6 +189,11 @@ class KnowledgeGraph(GraphBackend):
         *,
         emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
     ):
+        if isinstance(cdm_sessions, Engine) or not callable(cdm_sessions):
+            raise TypeError(
+                "cdm_sessions must be a callable session factory, not an Engine; "
+                "pass cdm_session_factory() or a sessionmaker."
+            )
         self.session_factory = cdm_sessions
         try:
             with self.session_factory() as session:
@@ -403,7 +409,7 @@ class KnowledgeGraph(GraphBackend):
                     synonym=synonym,
                     sort=sort,
                 )
-            except FullTextError as e:
+            except (FullTextError, BackendNotSupportedError) as e:
                 if match_kind == LabelMatchKind.FTS:
                     logger.info(e)
                     return ()

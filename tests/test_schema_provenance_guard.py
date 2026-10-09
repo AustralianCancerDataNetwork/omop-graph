@@ -5,11 +5,9 @@ Monkeypatches omop_graph.cli.resolve_cdm_database (the one call site) rather
 than the whole oa-configurator config chain, to point at a real, isolated
 Postgres schema without touching the active on-disk config.
 
-Enforcement now happens at create_engine() construction time (see
-oa-configurator's architectural note on guard_schema_provenance_for()), not
-via a guard wrapped around this call site's own DDL: the SchemaDriftError
-below is raised while building scoped_b's own engine, before
-relationship_classification() is even reachable.
+The test first runs classification on one scoped schema, then reconfigures the
+primary schema and verifies that calling relationship_classification() raises
+SchemaDriftError while its session engines are being built.
 
 scoped_test_schema() commits real schemas, so every registry row this test
 writes is a genuine commit. The Role-tag rows are reset around the test.
@@ -18,12 +16,18 @@ writes is a genuine commit. The Role-tag rows are reset around the test.
 from __future__ import annotations
 
 import pytest
-from oa_configurator import SchemaDriftError
-from oa_configurator.testing import guarded_resolver, reset_schema_registry_rows, scoped_test_schema
+from oa_configurator import Role, SchemaDriftError
+from oa_configurator.testing import (
+    guarded_resolver,
+    reset_schema_registry_rows,
+    resolve_with_role_schemas,
+    scoped_test_schema,
+)
 
 from orm_loader.helpers import Base
 
 from omop_graph import cli as omop_graph_cli
+from fixtures.mock_cdm import seed_relationship_vocabulary
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
@@ -37,11 +41,14 @@ def test_relationship_classification_guard_fires_on_reconfigured_schema(
 
     with scoped_test_schema(resolved, prefix="graph_guard_a", resolver=resolver) as scoped_a:
         Base.metadata.create_all(bind=scoped_a.engine, checkfirst=True)
+        seed_relationship_vocabulary(scoped_a.engine)
         monkeypatch.setattr(omop_graph_cli, "resolve_cdm_database", lambda: scoped_a.resolved)
         omop_graph_cli.relationship_classification()
 
-    # Drift is now caught at create_engine() construction time, before
-    # relationship_classification() is even reachable.
+    drifted = resolve_with_role_schemas(
+        scoped_a.resolved,
+        {Role.PRIMARY: "graph_guard_b"},
+        resolver=resolver,
+    )
     with pytest.raises(SchemaDriftError):
-        with scoped_test_schema(resolved, prefix="graph_guard_b", resolver=resolver):
-            pass
+        omop_graph_cli.relationship_classification(resolved=drifted)

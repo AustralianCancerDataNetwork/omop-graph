@@ -31,6 +31,7 @@ from omop_graph.extensions.omop_alchemy import RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
+from fixtures.mock_cdm import seed_relationship_vocabulary
 
 _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
@@ -90,6 +91,7 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
 def _populate(scoped, *, name: str) -> None:
     Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
     _seed_one_concept(scoped.engine, concept_id=_CONCEPT_ID, name=name)
+    seed_relationship_vocabulary(scoped.engine)
     relationship_classification(resolved=scoped.resolved)
 
 

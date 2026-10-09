@@ -381,8 +381,8 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
     split_engines: _Engines, tmp_path
 ) -> None:
     """relationship_classification() creates RelationshipMapping without its
-    FK to the vocabulary. A relationship ID the vocabulary lacks is loaded
-    but inert: no predicate or edge is built from it."""
+    FK to the vocabulary. A relationship ID the vocabulary lacks is warned
+    about and dropped."""
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
         "Identity,mapping,Identity mapping,identity,none\n"
@@ -399,7 +399,7 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
         relationship_ids = set(
             session.execute(sa.select(RelationshipMapping.relationship_id)).scalars()
         )
-    assert relationship_ids == {"maps to", "unknown_rel"}
+    assert relationship_ids == {"maps to"}
 
     kg = _split_kg(split_engines)
     assert "unknown_rel" not in {p.relationship_id for p in kg.predicates()}

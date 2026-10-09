@@ -4,8 +4,6 @@ from typing import ClassVar, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
-from omop_alchemy.config import create_cdm_engines
-from omop_alchemy.cross_database import cdm_sessionmaker
 
 from linkml_runtime.linkml_model.annotations import Annotation
 from oaklib.datamodels.search import (
@@ -38,7 +36,7 @@ from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
-from omop_graph.db.session import resolve_cdm_database
+from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 
 from oa_configurator import ResolvedCDMDatabase
 from oaklib.resource import OntologyResource
@@ -887,9 +885,8 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         if kg is None:
             if resolved is None:
                 resolved = resolve_cdm_database(resource.slug)
-            engine, vocab_engine = create_cdm_engines(resolved, register_claims=False)
             kg = KnowledgeGraph(
-                cdm_sessionmaker(resolved, primary=engine, vocab=vocab_engine),
+                cdm_session_factory(resolved=resolved),
                 emb_config=kg_emb_config,
             )
             bind_default_renderers(kg)

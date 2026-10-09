@@ -9,6 +9,8 @@ column never set an explicit ``name=``, so the real generated type is
 
 from __future__ import annotations
 
+import logging
+
 import sqlalchemy as sa
 from oa_configurator import Role
 from oa_configurator.testing import scoped_test_schema
@@ -18,12 +20,14 @@ from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
+from fixtures.mock_cdm import seed_relationship_vocabulary
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
     with scoped_test_schema(pg_db.resolved, prefix="relclass_routing", schema_claims=[staging_schema_claim()]) as scoped:
         schema = scoped.schemas[Role.PRIMARY]
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
+        seed_relationship_vocabulary(scoped.engine)
 
         relationship_classification(resolved=scoped.resolved)
 
@@ -52,6 +56,7 @@ def test_relationship_classification_is_idempotent(pg_db):
     DROP TABLE/enum-drop cleanup exists for, must not fail."""
     with scoped_test_schema(pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
+        seed_relationship_vocabulary(scoped.engine)
 
         relationship_classification(resolved=scoped.resolved)
         relationship_classification(resolved=scoped.resolved)
@@ -61,3 +66,38 @@ def test_relationship_classification_is_idempotent(pg_db):
                 sa.select(sa.func.count()).select_from(RelationshipClass.__table__)
             ).scalar()
         assert n_class and n_class > 0
+
+
+def test_relationship_classification_warns_and_drops_unknown_ids_colocated(
+    pg_db, tmp_path, caplog
+):
+    (tmp_path / "predicate_classification.csv").write_text(
+        "class,subclass,description,semantics,inference\n"
+        "Identity,mapping,Identity mapping,identity,none\n"
+    )
+    (tmp_path / "predicate_mapping.csv").write_text(
+        "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
+        "Identity,mapping,Maps to,Maps to,,,\n"
+        "Identity,mapping,unknown_rel,Unknown,,,\n"
+    )
+
+    with scoped_test_schema(
+        pg_db.resolved,
+        prefix="relclass_unknown",
+        schema_claims=[staging_schema_claim()],
+    ) as scoped:
+        Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
+        seed_relationship_vocabulary(scoped.engine)
+
+        with caplog.at_level(logging.WARNING, logger="omop_graph.cli"):
+            relationship_classification(str(tmp_path), resolved=scoped.resolved)
+
+        with scoped.engine.connect() as connection:
+            relationship_ids = set(
+                connection.execute(
+                    sa.select(RelationshipMapping.relationship_id)
+                ).scalars()
+            )
+
+    assert relationship_ids == {"Maps to"}
+    assert "unknown_rel" in caplog.text

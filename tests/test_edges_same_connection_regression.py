@@ -13,8 +13,6 @@ import pytest
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
 
-pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
-
 
 def test_edges_are_classified_from_the_relationship_mapping(
     mock_cdm_kg: KnowledgeGraph,

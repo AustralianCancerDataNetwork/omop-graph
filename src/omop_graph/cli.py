@@ -15,6 +15,7 @@ from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
+from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import resolve_cdm_database, open_cdm_sessions
@@ -23,11 +24,35 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipMapping,
     create_extension_tables,
 )
-from omop_alchemy.cross_database import cdm_sessionmaker
 from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
+
+
+def _filter_unknown_relationship_ids(
+    mapping: pd.DataFrame, vocabulary_ids: set[str]
+) -> pd.DataFrame:
+    """Drop and report relationship mappings absent from the CDM vocabulary."""
+    if not vocabulary_ids:
+        raise RuntimeError(
+            "The CDM relationship vocabulary is empty; load vocabulary data "
+            "before running `relationship-classification`."
+        )
+    unknown_ids = sorted(set(mapping["relationship_id"].dropna()) - vocabulary_ids)
+    if unknown_ids:
+        logger.warning(
+            "Dropping %d relationships not found in the CDM vocabulary: %s",
+            len(unknown_ids),
+            unknown_ids,
+        )
+        mapping = mapping[mapping["relationship_id"].isin(vocabulary_ids)]
+    if mapping.empty:
+        raise RuntimeError(
+            "None of the relationship mappings match IDs in the CDM vocabulary; "
+            "no relationship classifications were loaded."
+        )
+    return mapping
 
 
 @app.callback()
@@ -57,14 +82,6 @@ def populate_with_test_data():
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             populate_test_data(session)
-
-    engine, vocab_engine = resolved.create_engines()
-    try:
-        with cdm_sessionmaker(resolved, primary=engine, vocab=vocab_engine)() as session:
-            populate_test_data(session)
-    finally:
-        for owned in {engine, vocab_engine}:
-            owned.dispose()
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -101,7 +118,15 @@ def relationship_classification(
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
-        _load_relationship_classification(pred_class_dir, resolved=resolved, engine=engine)
+            relationship_ids = set(
+                session.scalars(sa.select(Relationship.relationship_id)).all()
+            )
+        _load_relationship_classification(
+            pred_class_dir,
+            resolved=resolved,
+            engine=engine,
+            relationship_ids=relationship_ids,
+        )
 
 
 def _load_relationship_classification(
@@ -109,6 +134,7 @@ def _load_relationship_classification(
     *,
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
+    relationship_ids: set[str],
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
     pred_class_dir_pl = (
@@ -163,6 +189,9 @@ def _load_relationship_classification(
     df_rel_mapping = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
     ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")  # type: ignore[call-overload]
+    df_rel_mapping = _filter_unknown_relationship_ids(
+        df_rel_mapping, relationship_ids
+    )
     invalid_mask = (
         df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
     )

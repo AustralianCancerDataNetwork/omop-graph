@@ -6,6 +6,7 @@ from typing import Optional
 from collections.abc import Generator
 from contextlib import contextmanager
 import sqlalchemy.orm as so
+from sqlalchemy.engine import Engine
 from oa_configurator import ResolvedCDMDatabase, Resolver
 from omop_alchemy.config import create_cdm_engines
 from omop_alchemy.cross_database import CDMSession, cdm_sessionmaker
@@ -42,7 +43,9 @@ def resolve_cdm_database(name: Optional[str] = None) -> ResolvedCDMDatabase:
     return resolved
 
 
-def cdm_session_factory(name: Optional[str] = None) -> sessionmaker[CDMSession]:
+def cdm_session_factory(
+    name: Optional[str] = None, *, resolved: ResolvedCDMDatabase | None = None
+) -> sessionmaker[CDMSession]:
     """Read-only routed session factory on a CDM database from the active config.
 
     Builds the engine pair with ``create_cdm_engines()``, checking its schema
@@ -54,9 +57,18 @@ def cdm_session_factory(name: Optional[str] = None) -> sessionmaker[CDMSession]:
     name : str, optional
         As for :func:`resolve_cdm_database`.
     """
-    resolved = resolve_cdm_database(name)
-    primary, vocab = create_cdm_engines(resolved, register_claims=False)
-    return cdm_sessionmaker(resolved, primary=primary, vocab=vocab)
+    resolved = resolved or resolve_cdm_database(name)
+    return _create_cdm_sessions(resolved, register_claims=False)[0]
+
+
+def _create_cdm_sessions(
+    resolved: ResolvedCDMDatabase, *, register_claims: bool
+) -> tuple[sessionmaker[CDMSession], Engine, Engine]:
+    """Build routed sessions and their owned engine pair through omop-alchemy."""
+    primary, vocab = create_cdm_engines(
+        resolved, register_claims=register_claims
+    )
+    return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab
 
 
 @contextmanager
@@ -75,11 +87,11 @@ def open_cdm_sessions(
     ------
     sqlalchemy.orm.sessionmaker[CDMSession]
     """
-    primary, vocab = resolved.create_engines(
-        register_claims=register_claims
+    cdm_sessions, primary, vocab = _create_cdm_sessions(
+        resolved, register_claims=register_claims
     )
     try:
-        yield cdm_sessionmaker(resolved, primary=primary, vocab=vocab)
+        yield cdm_sessions
     finally:
         for engine in {primary, vocab}:
             engine.dispose()
