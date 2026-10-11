@@ -12,12 +12,18 @@ def test_pg_db_yields_a_working_connection_and_session(pg_db):
     assert pg_db.session.connection() is pg_db.connection
 
 
-def test_pg_db_rolls_back_between_tests(pg_db):
-    """A second, independent test using the same fixture must not see
-    anything from a prior test -- proving isolation, not just connectivity."""
+def test_pg_db_creates_table_for_rollback_check(pg_db):
+    """Create a table whose absence is checked by the next test."""
     exists = pg_db.connection.execute(
         sa.text("SELECT to_regclass('pg_db_fixture_smoke_test')")
     ).scalar()
     assert exists is None
     pg_db.connection.execute(sa.text("CREATE TABLE pg_db_fixture_smoke_test (id INT)"))
-    # Never committed -- rolled back automatically when this test ends.
+
+
+def test_pg_db_rolls_back_between_tests(pg_db):
+    """The table created by the preceding test must have been rolled back."""
+    exists = pg_db.connection.execute(
+        sa.text("SELECT to_regclass('pg_db_fixture_smoke_test')")
+    ).scalar()
+    assert exists is None

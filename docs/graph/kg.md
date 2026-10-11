@@ -59,13 +59,11 @@ This requires the optional `omop-emb` package — see the [installation guide](.
 `KnowledgeGraphEmbeddingConfiguration` is a complete configuration: `backend` (an already-constructed `omop_emb.EmbeddingBackend`) and `resolved_model` (an `oa_configurator.ResolvedModel`) are both required fields, not Optional. omop-graph never resolves either itself: the caller (the actual CLI/entry-point boundary, e.g. omop-spires) resolves the vector store and the model, builds the backend, and passes both in here. `model_name`/`provider_type` are plain properties reading straight off `resolved_model` (`.model`/`.provider.provider`); there's nothing to pass for them separately.
 
 ```python
-from sqlalchemy import create_engine
 from oa_configurator import Resolver
 from omop_emb.backends import open_vector_store_writer
+from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_emb.config import MetricType
-
-engine = create_engine("postgresql://user:pass@localhost/omop")
 
 resolver = Resolver.from_active_config()
 resolved_vector_store = resolver.resolve_vector_store("vector_store")   # a [vector_stores.*] entry name
