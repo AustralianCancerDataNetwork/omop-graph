@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -507,6 +507,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="What Is Currently Tested">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-only-integration-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostgreSQL-only integration suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1102,6 +1119,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What Is Currently Tested">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-only-integration-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostgreSQL-only integration suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1193,16 +1227,28 @@
 <li>CLI logging enabled at <code>DEBUG</code>, filtered to <code>omop_graph</code>/<code>orm_loader</code>/<code>omop_spires</code>/<code>tests</code> namespaces (an autouse session fixture in <code>tests/conftest.py</code>)</li>
 </ul>
 <h2 id="what-is-currently-tested">What Is Currently Tested</h2>
-<p>The full suite runs against an <strong>in-memory SQLite mock CDM</strong> (<code>tests/fixtures/mock_cdm.py</code>'s <code>mock_cdm_engine</code> fixture): no real database, no oa-configurator setup, and no environment variables are needed to run it. Current coverage is centered on functional behavior and integration-style graph operations, including:</p>
+<p>The default suite runs graph queries against an <strong>in-memory SQLite mock CDM</strong> (<code>tests/fixtures/mock_cdm.py</code>'s <code>mock_cdm_engine_sqlite</code> fixture, used by <code>mock_cdm_kg</code>). PostgreSQL-only integration tests use the separate <code>mock_cdm_engine</code> fixture and oa-configurator's isolated test database fixture. Current SQLite coverage includes:</p>
 <ul>
 <li>Grounding behavior from text inputs to expected OMOP concept IDs</li>
 <li>Rendering behavior for text and Mermaid output under <code>tests/render</code></li>
 <li>Optional full-text behavior guards when sidecar full-text metadata/columns are not present</li>
+<li>KnowledgeGraph full-text lookup returning no matches when SQLite does not support full-text search</li>
 </ul>
 <p>The grounding test suite is structured with parametrized cases so each clinical term is a separate pytest case for easier isolation and debugging.</p>
+<h3 id="postgresql-only-integration-suite">PostgreSQL-only integration suite</h3>
+<p>A separate suite, tagged with the <code>db_dialect</code> marker and excluded from the
+default run (<code>pytest.toml</code>'s <code>-m "not db_dialect"</code>), runs against a real
+PostgreSQL database via oa-configurator's test infrastructure. This is where
+schema-drift protection and split-connection behavior are covered:
+<code>test_schema_provenance_guard.py</code>, <code>test_vocab_split_connection.py</code>,
+<code>test_oaklib_schema_awareness.py</code>, <code>test_fulltext_vocab_schema_postgres.py</code>,
+<code>test_predicate_flags.py</code>, <code>test_relationship_classification.py</code>.</p>
 <h2 id="running-tests">Running Tests</h2>
-<p>Run all tests:</p>
+<p>Run all tests (SQLite suite only, the default):</p>
 <div class="highlight"><pre><span></span><code>pytest
+</code></pre></div>
+<p>Include the PostgreSQL-only suite:</p>
+<div class="highlight"><pre><span></span><code>pytest<span class="w"> </span>-m<span class="w"> </span>db_dialect
 </code></pre></div>
 <p>Run one file:</p>
 <div class="highlight"><pre><span></span><code>pytest<span class="w"> </span>tests/test_grounding.py
@@ -1268,7 +1314,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/katex.js"></script>
       

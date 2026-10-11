@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1299,14 +1299,14 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
 <p>It focuses on data definitions and classification logic, not graph traversal algorithms.</p>
 
 
-<details class="supported-relationships" open>
-  <summary>Supported Relationships</summary>
+<details class="supported-relationships-(``predicatekind``)" open>
+  <summary>Supported Relationships (<code>PredicateKind</code>)</summary>
   <ul>
-<li><strong>Mapping:</strong> Semantic equivalence (e.g., source code to standard concept).</li>
-<li><strong>Versioning:</strong> Lifecycle tracking (e.g., 'replaced by', 'is a').</li>
-<li><strong>Ontological:</strong> Hierarchical structure (e.g., 'is a', 'subsumes').</li>
+<li><strong>Hierarchy:</strong> Structural parent/child relationships (e.g., 'is a', 'subsumes').</li>
+<li><strong>Identity:</strong> Semantic equivalence (e.g., 'maps to', source code to standard concept).</li>
+<li><strong>Composition:</strong> Part-whole/component relationships.</li>
+<li><strong>Association:</strong> General, non-hierarchical relationships between concepts.</li>
 <li><strong>Attribute:</strong> Descriptive properties (e.g., 'has dose form').</li>
-<li><strong>Metadata:</strong> Administrative or low-semantic value connections.</li>
 </ul>
 </details>
 
@@ -1466,7 +1466,7 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).</p>
+                <p>The high-level category of this predicate (Hierarchy, Identity, Composition, Association, or Attribute).</p>
               </div>
             </td>
             <td>
@@ -1482,7 +1482,7 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)</p>
+                <p>The more fine-grained subclass of this predicate (e.g. for Identity: 'standard to non-standard', 'source to standard', etc.)</p>
               </div>
             </td>
             <td>
@@ -1731,7 +1731,7 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).</p>
+                <p>The high-level category of this predicate (Hierarchy, Identity, Composition, Association, or Attribute).</p>
               </div>
             </td>
             <td>
@@ -1747,7 +1747,7 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)</p>
+                <p>The more fine-grained subclass of this predicate (e.g. for Identity: 'standard to non-standard', 'source to standard', etc.)</p>
               </div>
             </td>
             <td>
@@ -1994,7 +1994,7 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/katex.js"></script>
       

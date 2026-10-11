@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1295,13 +1295,12 @@
 </ul>
 <hr />
 <h3 id="basic-usage">Basic Usage</h3>
-<p>The <code>KnowledgeGraph</code> can be used standalone after connecting to the OMOP CDM database.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_engine</span>
+<p>The <code>KnowledgeGraph</code> takes a factory of sessions on the OMOP CDM. <code>cdm_session_factory()</code> builds one for the configured database; to build it yourself, pass the pair from <code>create_engines()</code> to <code>omop_alchemy.cross_database.cdm_sessionmaker</code>. Its sessions send each table to the database hosting it, so the graph works the same when the vocabulary lives on its own server.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.db.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">cdm_session_factory</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.kg</span><span class="w"> </span><span class="kn">import</span> <span class="n">KnowledgeGraph</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.nodes</span><span class="w"> </span><span class="kn">import</span> <span class="n">LabelMatchKind</span>
 
-<span class="n">engine</span> <span class="o">=</span> <span class="n">create_engine</span><span class="p">(</span><span class="s2">&quot;postgresql://user:pass@localhost/omop&quot;</span><span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_session_factory</span><span class="p">())</span>  <span class="c1"># the configured cdm_db</span>
 
 <span class="c1"># Lookup a concept by its label</span>
 <span class="n">matches</span> <span class="o">=</span> <span class="n">kg</span><span class="o">.</span><span class="n">concept_lookup</span><span class="p">(</span><span class="s2">&quot;Atrial Fibrillation&quot;</span><span class="p">,</span> <span class="n">match_kind</span><span class="o">=</span><span class="n">LabelMatchKind</span><span class="o">.</span><span class="n">EXACT</span><span class="p">)</span>
@@ -1321,18 +1320,16 @@ This requires the optional <code>omop-emb</code> package — see the <a href="..
 <p><code>omop-emb</code> manages all embedding storage, backends, and retrieval. Full documentation, including backend setup, CLI reference, FAISS sidecar, and configuration, is available at <a href="https://australiancancerdatanetwork.github.io/omop-emb/">australiancancerdatanetwork.github.io/omop-emb</a>.</p>
 </div>
 <p><code>KnowledgeGraphEmbeddingConfiguration</code> is a complete configuration: <code>backend</code> (an already-constructed <code>omop_emb.EmbeddingBackend</code>) and <code>resolved_model</code> (an <code>oa_configurator.ResolvedModel</code>) are both required fields, not Optional. omop-graph never resolves either itself: the caller (the actual CLI/entry-point boundary, e.g. omop-spires) resolves the vector store and the model, builds the backend, and passes both in here. <code>model_name</code>/<code>provider_type</code> are plain properties reading straight off <code>resolved_model</code> (<code>.model</code>/<code>.provider.provider</code>); there's nothing to pass for them separately.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_engine</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">oa_configurator</span><span class="w"> </span><span class="kn">import</span> <span class="n">Resolver</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb.backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_backend_from_resolved_vector_store</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">oa_configurator</span><span class="w"> </span><span class="kn">import</span> <span class="n">Resolver</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb.backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">open_vector_store_writer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.db.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">cdm_session_factory</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">omop_graph.graph.kg</span><span class="w"> </span><span class="kn">import</span> <span class="n">KnowledgeGraph</span><span class="p">,</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">omop_emb.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">MetricType</span>
-
-<span class="n">engine</span> <span class="o">=</span> <span class="n">create_engine</span><span class="p">(</span><span class="s2">&quot;postgresql://user:pass@localhost/omop&quot;</span><span class="p">)</span>
 
 <span class="n">resolver</span> <span class="o">=</span> <span class="n">Resolver</span><span class="o">.</span><span class="n">from_active_config</span><span class="p">()</span>
 <span class="n">resolved_vector_store</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">resolve_vector_store</span><span class="p">(</span><span class="s2">&quot;vector_store&quot;</span><span class="p">)</span>   <span class="c1"># a [vector_stores.*] entry name</span>
 <span class="n">resolved_model</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">resolve_model</span><span class="p">(</span><span class="s2">&quot;embedding-model&quot;</span><span class="p">)</span>              <span class="c1"># a [models.*] entry name</span>
-<span class="n">backend</span> <span class="o">=</span> <span class="n">resolve_backend_from_resolved_vector_store</span><span class="p">(</span><span class="n">resolved_vector_store</span><span class="p">)</span>
+<span class="n">backend</span> <span class="o">=</span> <span class="n">open_vector_store_writer</span><span class="p">(</span><span class="n">resolved_vector_store</span><span class="p">)</span>
 
 <span class="n">emb_config</span> <span class="o">=</span> <span class="n">KnowledgeGraphEmbeddingConfiguration</span><span class="p">(</span>
     <span class="n">metric_type</span><span class="o">=</span><span class="n">MetricType</span><span class="o">.</span><span class="n">COSINE</span><span class="p">,</span>
@@ -1340,7 +1337,7 @@ This requires the optional <code>omop-emb</code> package — see the <a href="..
     <span class="n">resolved_model</span><span class="o">=</span><span class="n">resolved_model</span><span class="p">,</span>
     <span class="c1"># write defaults to False</span>
 <span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_session_factory</span><span class="p">(),</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
 </code></pre></div>
 <p>See <a href="https://AustralianCancerDataNetwork.github.io/omop-llm/usage/asymmetric-embeddings/">omop-llm: Asymmetric Embeddings</a> and
 <a href="https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#modelsname">oa-configurator: <code>[models.&lt;name&gt;]</code></a>
@@ -1353,7 +1350,7 @@ for how a model (provider, connection details, embedding dimension, and asymmetr
     <span class="n">resolved_model</span><span class="o">=</span><span class="n">resolved_model</span><span class="p">,</span>
     <span class="n">write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_session_factory</span><span class="p">(),</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
 </code></pre></div>
 <p><code>faiss_cache_dir</code> (optional <code>str</code>) is read-only-path-only: a directory to cache FAISS index files, passed straight through to <code>EmbeddingReaderInterface</code>.</p>
 <h4 id="fallback-embedding-calculation">Fallback embedding calculation</h4>
@@ -1371,7 +1368,7 @@ for any missing concepts on-the-fly during a similarity call.</p>
     <span class="n">write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">compute_missing_embeddings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
+<span class="n">kg</span> <span class="o">=</span> <span class="n">KnowledgeGraph</span><span class="p">(</span><span class="n">cdm_session_factory</span><span class="p">(),</span> <span class="n">emb_config</span><span class="o">=</span><span class="n">emb_config</span><span class="p">)</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1457,7 +1454,7 @@ for any missing concepts on-the-fly during a similarity call.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/katex.js"></script>
       
