@@ -6,13 +6,13 @@ relationships (edges) between concepts in the OMOP Knowledge Graph.
 
 It focuses on data definitions and classification logic, not graph traversal algorithms.
 
-Supported Relationships
------------------------
-* **Mapping:** Semantic equivalence (e.g., source code to standard concept).
-* **Versioning:** Lifecycle tracking (e.g., 'replaced by', 'is a').
-* **Ontological:** Hierarchical structure (e.g., 'is a', 'subsumes').
+Supported Relationships (``PredicateKind``)
+--------------------------------------------
+* **Hierarchy:** Structural parent/child relationships (e.g., 'is a', 'subsumes').
+* **Identity:** Semantic equivalence (e.g., 'maps to', source code to standard concept).
+* **Composition:** Part-whole/component relationships.
+* **Association:** General, non-hierarchical relationships between concepts.
 * **Attribute:** Descriptive properties (e.g., 'has dose form').
-* **Metadata:** Administrative or low-semantic value connections.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy.engine import Row
 
 from omop_alchemy.cdm.model import normalised_flag
 
@@ -54,9 +53,9 @@ class EdgeView:
     invalid_reason : str, optional
         The reason for invalidation (e.g., 'D' for deleted), if applicable.
     predicate_kind : PredicateKind
-        The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).
+        The high-level category of this predicate (Hierarchy, Identity, Composition, Association, or Attribute).
     predicate_subkind : str
-        The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)
+        The more fine-grained subclass of this predicate (e.g. for Identity: 'standard to non-standard', 'source to standard', etc.)
     """
 
     subject_id: int
@@ -91,13 +90,6 @@ class EdgeView:
 
         return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
 
-    @classmethod
-    def from_query(cls, entry: Row) -> "EdgeView":
-        data = dict(entry._mapping)
-        if "predicate_kind" in data:
-            data["predicate_kind"] = PredicateKind(data["predicate_kind"])
-        return cls(**data)
-
 
 @dataclass(frozen=True)
 class Predicate:
@@ -119,9 +111,9 @@ class Predicate:
     anc_down : bool
         Whether this relationship defines 'defines_ancestry' downwards (deprecated logic).
     predicate_kind : PredicateKind
-        The high-level category of this predicate (e.g. Mapping, Versioning, Ontological, Attribute, Metadata).
+        The high-level category of this predicate (Hierarchy, Identity, Composition, Association, or Attribute).
     predicate_subkind : str
-        The more fine-grained subclass of this predicate (e.g. for Mapping: 'standard to non-standard', 'source to standard', etc.)
+        The more fine-grained subclass of this predicate (e.g. for Identity: 'standard to non-standard', 'source to standard', etc.)
     """
 
     relationship_id: str

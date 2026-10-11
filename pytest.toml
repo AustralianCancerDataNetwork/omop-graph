@@ -1,6 +1,6 @@
 [pytest]
 testpaths = ["tests"]
-addopts = ["-rf", "-rx", "--disable-pytest-warnings"]
+addopts = ["-rf", "-rx", "--disable-pytest-warnings", "-m", "not db_dialect"]
 log_cli = true
 log_cli_level = "DEBUG"
 log_cli_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"

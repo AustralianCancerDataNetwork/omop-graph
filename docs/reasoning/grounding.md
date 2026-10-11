@@ -43,7 +43,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | `parent_ids` | `tuple[int, ...]` | `None` | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). |
 | `search_constraint` | `ConceptFilter` | `None` | Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit). |
 | `max_depth` | `int` | `6` | Maximum hop distance allowed between a candidate and its standard anchor. |
-| `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. |
+| `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. Currently locked: `__post_init__` raises `ValueError` for any value other than exactly `frozenset({PredicateKind.IDENTITY})` — not yet configurable in practice, despite being a normal dataclass field. |
 
 ### ConceptFilter
 
@@ -99,15 +99,15 @@ TotalScore = Relevance - ParsimonyPenalty + BroadnessBonus
 $$
 
 #### 1. Relevance
-Relevance represents the initial semantic fit and is computed as **either** embedding similarity **or** textual similarity — not both simultaneously:
+Relevance represents the initial semantic fit and is computed as **either** embedding similarity **or** textual similarity, chosen per candidate rather than globally — not both simultaneously for the same candidate:
 
-- **Without embeddings**: textual similarity is used exclusively.
-- **With embeddings** (default when `omop-graph[emb]` is installed and configured): embedding cosine similarity **replaces** the textual score entirely.
+- A candidate resolved by `EmbeddingResolver` (`match_kind == LabelMatchKind.EMBEDDING`) gets embedding cosine similarity.
+- Every other candidate — resolved via exact/partial/full-text matching — always gets textual similarity, whether or not `omop-graph[emb]` is installed.
 
 The two scoring modes:
 
-- **Embedding Similarity**: Cosine similarity between the input text embedding and the concept embedding. Requires `omop-graph[emb]` and a configured `KnowledgeGraphEmbeddingConfiguration` — see the [Knowledge Graph docs](../graph/kg.md#embedding-configuration) and the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/) for setup.
-- **Textual Similarity**: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name. Used as a fallback when no embedding is available.
+- **Embedding Similarity**: Cosine similarity between the input text embedding and the concept embedding. Only applies to candidates resolved via `EmbeddingResolver`, which requires `omop-graph[emb]` and a configured `KnowledgeGraphEmbeddingConfiguration` — see the [Knowledge Graph docs](../graph/kg.md#embedding-configuration), [Resolver Pipelines](resolvers.md), and the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/) for setup.
+- **Textual Similarity**: A custom token-overlap score that heavily penalizes missing words from the user's query but allows for "extra" descriptive words in the OMOP concept name. Used for every candidate not resolved via embeddings.
 
 #### 2. Parsimony: Distance Penalty
 OMOP is a deep hierarchy. A concept that is 1 hop away from your search term is more likely to be correct than one found 5 hops away.

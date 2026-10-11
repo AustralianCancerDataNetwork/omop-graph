@@ -7,20 +7,52 @@ from typing import Annotated, Optional, cast
 import pandas as pd
 import sqlalchemy as sa
 import typer
-from sqlalchemy.orm import sessionmaker
+import sqlalchemy.orm as so
 
-from orm_loader.backends import resolve_backend
+from oa_configurator import ResolvedCDMDatabase, open_connection
+
+from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
+from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import make_engine
-from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
+from omop_graph.db.session import resolve_cdm_database, open_cdm_sessions
+from omop_graph.extensions.omop_alchemy import (
+    RelationshipClass,
+    RelationshipMapping,
+    create_extension_tables,
+)
 from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
+
+
+def _filter_unknown_relationship_ids(
+    mapping: pd.DataFrame, vocabulary_ids: set[str]
+) -> pd.DataFrame:
+    """Drop and report relationship mappings absent from the CDM vocabulary."""
+    if not vocabulary_ids:
+        raise RuntimeError(
+            "The CDM relationship vocabulary is empty; load vocabulary data "
+            "before running `relationship-classification`."
+        )
+    unknown_ids = sorted(set(mapping["relationship_id"].dropna()) - vocabulary_ids)
+    if unknown_ids:
+        logger.warning(
+            "Dropping %d relationships not found in the CDM vocabulary: %s",
+            len(unknown_ids),
+            unknown_ids,
+        )
+        mapping = mapping[mapping["relationship_id"].isin(vocabulary_ids)]
+    if mapping.empty:
+        raise RuntimeError(
+            "None of the relationship mappings match IDs in the CDM vocabulary; "
+            "no relationship classifications were loaded."
+        )
+    return mapping
 
 
 @app.callback()
@@ -41,9 +73,15 @@ def _main(
 @app.command()
 def populate_with_test_data():
     """Populate the database with synthetic test data."""
-    engine = make_engine()
-    Session = sessionmaker(bind=engine, future=True)
-    populate_test_data(Session())
+    resolved = resolve_cdm_database()
+    if not resolved.connection.test_only or not resolved.vocab_connection.test_only:
+        raise RuntimeError(
+            f"Refusing to populate {resolved.name!r} with synthetic test data: "
+            "both its primary and vocab connections must be test_only."
+        )
+    with open_cdm_sessions(resolved) as cdm_sessions:
+        with cdm_sessions() as session:
+            populate_test_data(session)
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -57,20 +95,48 @@ def packaged_predicate_csv_dir() -> Path:
     return Path(str(resources.files("omop_graph") / "data"))
 
 
-@app.command()
 def relationship_classification(
-    pred_class_dir: Annotated[
-        Optional[str],
-        typer.Option(
-            help=(
-                "Path to the directory containing `predicate_classification.csv` "
-                "and `predicate_mapping.csv`. Defaults to the copies shipped with "
-                "omop-graph; pass a directory to override them."
+    pred_class_dir: Optional[str] = None,
+    *,
+    resolved: ResolvedCDMDatabase | None = None,
+) -> None:
+    """Load pre-classified predicates into the database.
+
+    Parameters
+    ----------
+    pred_class_dir : str, optional
+        Path to the directory containing `predicate_classification.csv` and
+        `predicate_mapping.csv`. Defaults to the copies shipped with
+        omop-graph.
+    resolved : ResolvedCDMDatabase, optional
+        Database to load into. Defaults to the active config's CDM database.
+        When the vocabulary has its own database, ``RelationshipMapping`` is
+        created without its FK to ``relationship.relationship_id``.
+    """
+    if resolved is None:
+        resolved = resolve_cdm_database()
+    with open_cdm_sessions(resolved) as cdm_sessions:
+        with cdm_sessions() as session:
+            engine = session.get_bind(RelationshipMapping).engine
+            relationship_ids = set(
+                session.scalars(sa.select(Relationship.relationship_id)).all()
             )
-        ),
-    ] = None,
-):
-    """Load pre-classified predicates into the database."""
+        _load_relationship_classification(
+            pred_class_dir,
+            resolved=resolved,
+            engine=engine,
+            relationship_ids=relationship_ids,
+        )
+
+
+def _load_relationship_classification(
+    pred_class_dir: Optional[str],
+    *,
+    resolved: ResolvedCDMDatabase,
+    engine: sa.Engine,
+    relationship_ids: set[str],
+) -> None:
+    """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
     pred_class_dir_pl = (
         Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     )
@@ -123,6 +189,9 @@ def relationship_classification(
     df_rel_mapping = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
     ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")  # type: ignore[call-overload]
+    df_rel_mapping = _filter_unknown_relationship_ids(
+        df_rel_mapping, relationship_ids
+    )
     invalid_mask = (
         df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
     )
@@ -139,34 +208,36 @@ def relationship_classification(
         subset=["relationship_id", "predicate_kind", "predicate_subkind"]
     )
 
-    engine = make_engine()
-    Session = sessionmaker(bind=engine, future=True)
-    session = Session()
-    loader_backend = resolve_backend(engine)
+    loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)
 
-    with engine.begin() as conn:
-        conn.execute(
-            sa.text(
-                "DROP TABLE IF EXISTS "
-                f"{loader_backend.qualified_staging_name(RelationshipMapping.__tablename__)} CASCADE"
-            )
-        )
-        conn.execute(
-            sa.text(
-                "DROP TABLE IF EXISTS "
-                f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
-            )
-        )
-        conn.execute(sa.text("DROP TYPE IF EXISTS predicatekindenum CASCADE;"))
+    drop_staging_sql = (
+        sa.text(
+            "DROP TABLE IF EXISTS "
+            f"{loader_backend.qualified_staging_name(RelationshipMapping.__tablename__)} CASCADE"
+        ),
+        sa.text(
+            "DROP TABLE IF EXISTS "
+            f"{loader_backend.qualified_staging_name(RelationshipClass.__tablename__)} CASCADE"
+        ),
+    )
+    with open_connection(engine) as connection:
+        for stmt in drop_staging_sql:
+            connection.execute(stmt)
 
+    # DROP TYPE IF EXISTS predicatekindenum was dead code: the Enum column
+    # never set an explicit name=, so SQLAlchemy's generated type name is
+    # actually "predicatekind". drop_all(tables=[...]) already drops the
+    # shared Enum type exactly once, deduped, since both tables using it
+    # are always in the same tables= list.
     tables_to_drop = [
         RelationshipMapping.__table__,
         RelationshipClass.__table__,
     ]
-    Base.metadata.drop_all(bind=engine, tables=tables_to_drop, checkfirst=True)  # type: ignore
-    Base.metadata.create_all(bind=engine, tables=tables_to_drop)  # type: ignore
+    with open_connection(engine) as connection:
+        Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
+        create_extension_tables(connection, resolved=resolved)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory() as tmp_dir, so.Session(engine) as session:
         for model, df in zip(
             [RelationshipClass, RelationshipMapping],
             [df_rel_cls_to_export, df_rel_mapping_to_export],
@@ -184,8 +255,26 @@ def relationship_classification(
                     dedupe=True,
                     merge_strategy="replace",
                     loader=PandasLoader(),
+                    staging_schema_tag=STAGING_SCHEMA,
                 )
                 session.commit()
+
+
+@app.command(name="relationship-classification")
+def relationship_classification_cmd(
+    pred_class_dir: Annotated[
+        Optional[str],
+        typer.Option(
+            help=(
+                "Path to the directory containing `predicate_classification.csv` "
+                "and `predicate_mapping.csv`. Defaults to the copies shipped with "
+                "omop-graph; pass a directory to override them."
+            )
+        ),
+    ] = None,
+):
+    """Load pre-classified predicates into the database."""
+    relationship_classification(pred_class_dir)
 
 
 if __name__ == "__main__":

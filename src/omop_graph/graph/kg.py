@@ -19,18 +19,21 @@ import logging
 import re
 from datetime import date
 from collections import defaultdict
-from typing import Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
+from typing import Callable, Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
 from dataclasses import dataclass
 
-from sqlalchemy import Engine
-from sqlalchemy.orm import Session, sessionmaker
-from omop_alchemy.backends import FullTextError
+from sqlalchemy import Row
+from sqlalchemy.orm import Session
+from sqlalchemy.engine import Engine
+from omop_alchemy.backends import BackendNotSupportedError, FullTextError
+from omop_alchemy.cdm.model.vocabulary import Concept
 from omop_alchemy.cdm.query import ConceptFilter
 from oa_configurator import ResolvedModel
 
 if TYPE_CHECKING:
     from omop_emb import (
         EmbeddingBackend,
+        EmbeddingStoreReader,
         EmbeddingWriterInterface,
         EmbeddingReaderInterface,
     )
@@ -99,9 +102,12 @@ class KnowledgeGraphEmbeddingConfiguration:
         The similarity/distance metric to use for embedding comparisons (e.g., cosine, euclidean).
         This is required to ensure that the correct type of index is used in the backend and that
         similarity computations are consistent.
-    backend : omop_emb.EmbeddingBackend
-        An already-constructed embedding backend, e.g. via
-        ``omop_emb.backends.resolve_backend_from_resolved``.
+    backend : omop_emb.EmbeddingBackend or omop_emb.EmbeddingStoreReader
+        An already-constructed embedding backend. A write-capable
+        ``EmbeddingBackend`` (e.g. via ``omop_emb.backends.open_vector_store_writer``)
+        is required when ``write=True``; the narrower read-only
+        ``EmbeddingStoreReader`` (via ``open_vector_store_reader``) suffices
+        when ``write=False``.
     resolved_model : oa_configurator.ResolvedModel
         A model resolved via ``oa_configurator.Resolver.resolve_model()``, carrying real
         provider connection details. ``model_name``/``provider_type`` (see below) are
@@ -121,7 +127,7 @@ class KnowledgeGraphEmbeddingConfiguration:
     """
 
     metric_type: EmbeddingMetricType
-    backend: "EmbeddingBackend"
+    backend: "EmbeddingBackend | EmbeddingStoreReader"
     resolved_model: ResolvedModel
     write: bool = False
     compute_missing_embeddings: bool = False
@@ -145,6 +151,20 @@ class KnowledgeGraphEmbeddingConfiguration:
         return self.resolved_model.provider.provider
 
 
+def _predicate_from_rows(ancestry_row: Row, mapping: RelationshipMappingElement) -> Predicate:
+    """Build a Predicate from a Relationship-ancestry row and its classification."""
+    return Predicate(
+        relationship_id=ancestry_row.relationship_id,
+        name=ancestry_row.relationship_name,
+        reverse_id=ancestry_row.reverse_relationship_id,
+        is_hierarchical=bool(ancestry_row.is_hierarchical),
+        anc_up=bool(ancestry_row.anc_up),
+        anc_down=bool(ancestry_row.anc_down),
+        predicate_kind=mapping.predicate_kind,
+        predicate_subkind=mapping.predicate_subkind,
+    )
+
+
 class KnowledgeGraph(GraphBackend):
     """
     The main entry point for interacting with the OMOP Graph.
@@ -154,18 +174,27 @@ class KnowledgeGraph(GraphBackend):
 
     Parameters
     ----------
-    cdm_engine : Engine
-        The SQLAlchemy engine for the OMOP CDM database.
+    cdm_sessions : Callable[[], Session]
+        Opens sessions on the OMOP CDM, e.g. from
+        ``omop_alchemy.cross_database.cdm_sessionmaker``, which sends each
+        table to the database hosting it. The relationship classification
+        is read once at construction and applied to vocabulary rows in
+        Python, so no query joins the two databases.
+    emb_config : KnowledgeGraphEmbeddingConfiguration, optional
     """
 
     def __init__(
         self,
-        cdm_engine: Engine,
+        cdm_sessions: Callable[[], Session],
+        *,
         emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
     ):
-        self.cdm_engine = cdm_engine
-        self.session_factory = sessionmaker(bind=self.cdm_engine, future=True)
-
+        if isinstance(cdm_sessions, Engine) or not callable(cdm_sessions):
+            raise TypeError(
+                "cdm_sessions must be a callable session factory, not an Engine; "
+                "pass cdm_session_factory() or a sessionmaker."
+            )
+        self.session_factory = cdm_sessions
         try:
             with self.session_factory() as session:
                 self._relationship_mapping: dict[str, RelationshipMappingElement] = (
@@ -215,12 +244,19 @@ class KnowledgeGraph(GraphBackend):
                 )
 
             if self._emb_config.write:
+                from omop_emb import EmbeddingBackend
+
+                if not isinstance(self._emb_config.backend, EmbeddingBackend):
+                    raise ValueError(
+                        "write=True requires a write-capable EmbeddingBackend, "
+                        f"got {type(self._emb_config.backend).__name__}."
+                    )
                 # Write-capable interface: the KG builds its own embedding model backend.
                 self._emb = EmbeddingWriterInterface(
                     backend=self._emb_config.backend,
                     metric_type=self._emb_config.metric_type,
                     resolved_model=self._emb_config.resolved_model,
-                    omop_cdm_engine=self.cdm_engine,
+                    cdm_session_factory=self.session_factory,
                 )
             else:
                 # Read-only interface: only ever needs model identity, never live credentials.
@@ -228,7 +264,7 @@ class KnowledgeGraph(GraphBackend):
                     model=self._emb_config.model_name,
                     backend=self._emb_config.backend,
                     metric_type=self._emb_config.metric_type,
-                    omop_cdm_engine=self.cdm_engine,
+                    cdm_session_factory=self.session_factory,
                     provider_type=self._emb_config.provider_type,
                     faiss_cache_dir=self._emb_config.faiss_cache_dir,
                 )
@@ -357,28 +393,28 @@ class KnowledgeGraph(GraphBackend):
         if not input_query_term:
             return ()
 
-        if match_kind == LabelMatchKind.EXACT:
-            fn = q_concept_name_match
-        elif match_kind == LabelMatchKind.PARTIAL:
-            fn = q_concept_name_ilike
-        elif match_kind == LabelMatchKind.FTS:
-            fn = functools.partial(q_concept_name_fulltext, engine=self.cdm_engine)
-        else:
-            raise ValueError(f"Unsupported search mode: {match_kind}")
-        try:
-            cn = fn(
-                input_query_term,
-                search_constraint=search_constraint,
-                synonym=synonym,
-                sort=sort,
-            )
-        except FullTextError as e:
-            if match_kind == LabelMatchKind.FTS:
-                logger.info(e)
-                return ()
-            raise
-
         with self.session_factory() as session:
+            if match_kind == LabelMatchKind.EXACT:
+                fn = q_concept_name_match
+            elif match_kind == LabelMatchKind.PARTIAL:
+                fn = q_concept_name_ilike
+            elif match_kind == LabelMatchKind.FTS:
+                fn = functools.partial(q_concept_name_fulltext, engine=session.get_bind(Concept))
+            else:
+                raise ValueError(f"Unsupported search mode: {match_kind}")
+            try:
+                cn = fn(
+                    input_query_term,
+                    search_constraint=search_constraint,
+                    synonym=synonym,
+                    sort=sort,
+                )
+            except (FullTextError, BackendNotSupportedError) as e:
+                if match_kind == LabelMatchKind.FTS:
+                    logger.info(e)
+                    return ()
+                raise
+
             matches = tuple(
                 LabelMatch(
                     input_query=input_query_term,
@@ -418,16 +454,7 @@ class KnowledgeGraph(GraphBackend):
         """
         with self.session_factory() as session:
             row = session.execute(q_predicate_row_with_ancestry(relationship_id)).one()
-        return Predicate(
-            relationship_id=row.relationship_id,
-            name=row.relationship_name,
-            reverse_id=row.reverse_relationship_id,
-            is_hierarchical=bool(row.is_hierarchical),
-            anc_up=bool(row.anc_up),
-            anc_down=bool(row.anc_down),
-            predicate_kind=PredicateKind(row.predicate_kind),
-            predicate_subkind=row.predicate_subkind,
-        )
+        return _predicate_from_rows(row, self._mapping_for(relationship_id))
 
     def predicate_name(self, relationship_id: str) -> str:
         """
@@ -444,10 +471,14 @@ class KnowledgeGraph(GraphBackend):
         """
         Classify the predicate into a semantic kind.
         """
+        return self._mapping_for(relationship_id).predicate_kind
+
+    def _mapping_for(self, relationship_id: str) -> RelationshipMappingElement:
+        """Classification of *relationship_id*, raising AttributeError if it has none."""
         item = self._relationship_mapping.get(relationship_id)
         if item is None:
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
-        return item.predicate_kind
+        return item
 
     def predicate_kinds(
         self, relationship_ids: tuple[str, ...]
@@ -459,7 +490,6 @@ class KnowledgeGraph(GraphBackend):
 
     def relationships(
         self,
-        session: Session,
         subjects: tuple[int, ...] | None,
         predicates: tuple[str, ...] | None,
         objects: tuple[int, ...] | None,
@@ -487,7 +517,6 @@ class KnowledgeGraph(GraphBackend):
         """
         if invert:
             for s, p, o in self.relationships(
-                session=session,
                 subjects=objects,
                 predicates=predicates,
                 objects=subjects,
@@ -495,14 +524,15 @@ class KnowledgeGraph(GraphBackend):
                 yield o, p, s
             return
 
-        for s, p, o in session.execute(
-            q_relationships(
-                subjects=subjects,
-                predicates=predicates,
-                objects=objects,
-            )
-        ):
-            yield s, p, o
+        with self.session_factory() as session:
+            for s, p, o in session.execute(
+                q_relationships(
+                    subjects=subjects,
+                    predicates=predicates,
+                    objects=objects,
+                )
+            ):
+                yield s, p, o
 
     def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
         """
@@ -572,19 +602,39 @@ class KnowledgeGraph(GraphBackend):
         on: Optional[date] = None,
         within_domain: bool = True,
     ) -> Generator[EdgeView, None, None]:
+        """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
+
+        A *predicate_kinds* filter is applied in SQL as the relationship IDs
+        of those kinds. Edges whose relationship has no classification are
+        skipped.
+        """
+        if predicate_kinds:
+            kind_ids = frozenset(
+                relationship_id
+                for relationship_id, mapping in self._relationship_mapping.items()
+                if mapping.predicate_kind in predicate_kinds
+            )
+            predicate_ids = kind_ids & predicate_ids if predicate_ids else kind_ids
+            if not predicate_ids:
+                return
 
         stmt = q_edges(
             concept_ids=concept_ids,
             predicate_ids=predicate_ids,
             direction=direction,
-            predicate_kinds=predicate_kinds,
             active_only=active_only,
             on=on,
             within_domain=within_domain,
         )
-
         for row in session.execute(stmt):
-            yield EdgeView.from_query(row)
+            mapping = self._relationship_mapping.get(row.predicate_id)
+            if mapping is None:
+                continue
+            yield EdgeView(
+                **row._mapping,
+                predicate_kind=mapping.predicate_kind,
+                predicate_subkind=mapping.predicate_subkind,
+            )
 
     def specificity(self, concept_id: int) -> float:
         """
@@ -614,7 +664,6 @@ class KnowledgeGraph(GraphBackend):
 
     def entities(
         self,
-        session: Session,
         domain: str | None = None,
         standard_only: bool = True,
         filter_obsoletes: bool = True,
@@ -626,8 +675,9 @@ class KnowledgeGraph(GraphBackend):
             filter_obsoletes=filter_obsoletes,
         )
 
-        for row in session.execute(query):
-            yield int(row.concept_id)
+        with self.session_factory() as session:
+            for row in session.execute(query):
+                yield int(row.concept_id)
 
     def roots(
         self, domain_id: str | None = None, vocabulary_id: str | None = None
@@ -685,17 +735,9 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             rows = session.execute(q_all_predicates_with_ancestry()).all()
         return tuple(
-            Predicate(
-                relationship_id=row.relationship_id,
-                name=row.relationship_name,
-                reverse_id=row.reverse_relationship_id,
-                is_hierarchical=bool(row.is_hierarchical),
-                anc_up=bool(row.anc_up),
-                anc_down=bool(row.anc_down),
-                predicate_kind=PredicateKind(row.predicate_kind),
-                predicate_subkind=row.predicate_subkind,
-            )
+            _predicate_from_rows(row, self._relationship_mapping[row.relationship_id])
             for row in rows
+            if row.relationship_id in self._relationship_mapping
         )
 
     @functools.cached_property

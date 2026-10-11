@@ -17,7 +17,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from fixtures.mock_cdm import PARENT_CANCER_ID  # type: ignore
+from fixtures.mock_cdm import PARENT_CANCER_ID
 
 
 class TestQueryTextWithContext:

@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import ClassVar, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
@@ -36,12 +36,10 @@ from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
-from omop_graph.oaklib_interface.omop_factory import omop_resource
+from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 
-
-from sqlalchemy.engine import URL
-
-from omop_graph.db.session import make_engine
+from oa_configurator import ResolvedCDMDatabase
+from oaklib.resource import OntologyResource
 
 logger = logging.getLogger(__name__)
 
@@ -538,15 +536,13 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             Concept identifiers.
         """
 
-        with self.kg.session_factory() as session:
-            cids = tuple(
-                self.kg.entities(
-                    session=session,
-                    domain=domain,
-                    standard_only=standard_only,
-                    filter_obsoletes=filter_obsoletes,
-                )
+        cids = tuple(
+            self.kg.entities(
+                domain=domain,
+                standard_only=standard_only,
+                filter_obsoletes=filter_obsoletes,
             )
+        )
 
         for cid in cids:
             yield self._concept_curie(cid)
@@ -644,16 +640,14 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             else None
         )
 
-        with self.kg.session_factory() as session:
-            relationships = tuple(
-                self.kg.relationships(
-                    session=session,
-                    subjects=subject_ids,
-                    predicates=predicate_ids,
-                    objects=object_ids,
-                    invert=invert,
-                )
+        relationships = tuple(
+            self.kg.relationships(
+                subjects=subject_ids,
+                predicates=predicate_ids,
+                objects=object_ids,
+                invert=invert,
             )
+        )
 
         for s, p, o in relationships:
             yield (
@@ -735,6 +729,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
         """
         Retrieve outgoing relationships, including those implied by the hierarchy.
+
+        Currently disabled: always raises ``NotImplementedError``, per the
+        raise message below, since a CDM change broke the body's assumptions.
         """
         raise NotImplementedError("Changes to the CDM currently prevents this function")
         concept_id = self._parse_concept(curie)
@@ -743,23 +740,24 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             {self._parse_predicate(p) for p in predicates} if predicates else None
         )
 
-        for edge in self.kg.iter_edges(
-            concept_id, direction="out", predicate_kinds=None
-        ):
-            if pred_filter and edge.predicate_id not in pred_filter:
-                continue
+        with self.kg.session_factory() as session:
+            for edge in self.kg.iter_edges(
+                session=session, concept_ids=concept_id, direction="out", predicate_kinds=None
+            ):
+                if pred_filter and edge.predicate_id not in pred_filter:
+                    continue
 
-            pred_curie = self._predicate_curie(edge.predicate_id)
+                pred_curie = self._predicate_curie(edge.predicate_id)
 
-            # hierarchical entailment
-            if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
-                yield pred_curie, self._concept_curie(edge.object_id)
+                # hierarchical entailment
+                if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
+                    yield pred_curie, self._concept_curie(edge.object_id)
 
-                for parent in self.kg.parents(edge.object_id):
-                    yield pred_curie, self._concept_curie(parent)
+                    for parent in self.kg.parents(edge.object_id):
+                        yield pred_curie, self._concept_curie(parent)
 
-            else:
-                yield pred_curie, self._concept_curie(edge.object_id)
+                else:
+                    yield pred_curie, self._concept_curie(edge.object_id)
 
     def entailed_outputgoing_relationships_by_curie(
         self, *args, **kwargs
@@ -810,6 +808,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterable[PRED_CURIE]:
         """
         Find relationships connecting a subject and object, including hierarchical ones.
+
+        Currently disabled: always raises ``NotImplementedError``, per the
+        raise message below, since a CDM change broke the body's assumptions.
         """
         raise NotImplementedError(
             "Change in OMOP CDM made this function not work anymore"
@@ -819,9 +820,10 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         obj_id = self._parse_concept(object)
 
         # direct relationships
-        for edge in self.kg.iter_edges(subj_id, direction="out"):
-            if edge.object_id == obj_id:
-                yield self._predicate_curie(edge.predicate_id)
+        with self.kg.session_factory() as session:
+            for edge in self.kg.iter_edges(session=session, concept_ids=subj_id, direction="out"):
+                if edge.object_id == obj_id:
+                    yield self._predicate_curie(edge.predicate_id)
 
         # hierarchical entailment
         if obj_id in self.kg.parents(subj_id):
@@ -837,74 +839,59 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     A :class:`OntologyInterface` implementation wrapping a SQL Relational Database
     conforming to the OMOP CDM.
 
-    To connect, either use OMOPAlchemyImplementation directly:
+    Select it through oaklib with an oa-configurator database name, or omit
+    the name to use ``OmopGraphConfig.cdm_db``:
 
-    >>> from omop_graph.oaklib_interface import OMOPAlchemyImplementation
-    >>> from omop_graph.oaklib_interface.omop_factory import omop_resource
-    >>> resource = omop_resource(url='postgresql+psycopg2://uid:pid@host:5432/dbname')
-    >>> adapter = OMOPAlchemyImplementation(resource=resource)
+    >>> from oaklib import get_adapter
+    >>> adapter = get_adapter("omop:cdm_db")
 
-    or pass a connection string directly:
+    or construct it directly from an already-resolved database:
 
-    >>> adapter = OMOPAlchemyImplementation(engine_string="sqlite:////path/to/omop.db")
+    >>> from omop_graph.db.session import resolve_cdm_database
+    >>> adapter = OMOPAlchemyImplementation(resolved=resolve_cdm_database())
 
     Parameters
     ----------
-    engine_string : str | URL | None, optional
-        The database connection string. Required unless ``resource`` is given.
-    resource : OMOPOntologyResource | None, optional
-        An existing resource object. Takes precedence over ``engine_string`` when
-        both are supplied. To use the oa-configurator-configured default, 
-        resolve it explicitly via ``omop_resource()`` and pass it here.
+    resource : OntologyResource | None, optional
+        The oaklib resource. Its ``slug`` names the ``[databases.*]`` entry to
+        resolve; ``None`` resolves ``OmopGraphConfig.cdm_db``. Ignored when
+        ``resolved`` or ``kg`` is given.
+    resolved : ResolvedCDMDatabase | None, optional
+        An already-resolved CDM database to build the engines from with
+        ``create_cdm_engines()``, without registering schema claims. Ignored
+        when ``kg`` is given.
     kg : KnowledgeGraph | None, optional
-        An existing Knowledge Graph instance. If None, one is created from
-        ``engine_string`` / ``resource``.
+        An existing Knowledge Graph, used as-is. The caller owns whatever
+        engine it wraps.
     kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
         Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
-        Required to enable embedding-based similarity. See
-        :class:`~omop_graph.graph.kg.KnowledgeGraphEmbeddingConfiguration`.
-
-    Raises
-    ------
-    ValueError
-        If neither ``engine_string`` nor ``resource`` is given.
+        Ignored when ``kg`` is given.
     """
+
+    # oaklib's class_resolver keys plugins by class name; this adds the "omop:" scheme.
+    synonyms: ClassVar[tuple[str, ...]] = ("omop",)
 
     def __init__(
         self,
-        engine_string: str | URL | None = None,
-        resource: OMOPOntologyResource | None = None,
+        resource: OntologyResource | None = None,
+        *,
+        resolved: ResolvedCDMDatabase | None = None,
         kg: KnowledgeGraph | None = None,
         kg_emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
         **kwargs,
     ):
-        if engine_string is not None:
-            self.engine_string = engine_string
-            self.resource = resource or omop_resource(url=self.engine_string)
-        elif resource is not None:
-            self.resource = resource
-            self.engine_string = self.resource.url
-        else:
-            raise ValueError(
-                "OMOPAlchemyImplementation requires either 'engine_string' or "
-                "'resource'. To use the oa-configurator-configured default, "
-                "resolve it explicitly first, e.g. "
-                "OMOPAlchemyImplementation(resource=omop_resource())."
-            )
-
-        assert self.engine_string is not None, (
-            "No database URL provided for OMOPAlchemyImplementation"
-        )
-
-        engine = make_engine(self.engine_string, engine_kwargs={"echo": False, "future": True})
-
-        self._connection = None
-
+        if resource is None:
+            resource = OMOPOntologyResource()
         if kg is None:
-            kg = KnowledgeGraph(emb_config=kg_emb_config, cdm_engine=engine)
+            if resolved is None:
+                resolved = resolve_cdm_database(resource.slug)
+            kg = KnowledgeGraph(
+                cdm_session_factory(resolved=resolved),
+                emb_config=kg_emb_config,
+            )
             bind_default_renderers(kg)
 
-        super().__init__(kg=kg, **kwargs)
+        super().__init__(resource=resource, kg=kg, **kwargs)
 
     # TODO: Implement if necessary!
     def _all_relationships(self):

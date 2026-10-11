@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
+from typing import Iterator, cast
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
-from orm_loader.helpers import Base
+from oa_configurator.testing import isolated_test_database, scoped_test_schema
+from orm_loader.helpers import Base, bulk_load_context
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_class import Concept_Class
@@ -17,6 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
     RelationshipClass,
@@ -30,8 +32,26 @@ LANGUAGE_CONCEPT_ID = 1
 
 
 @pytest.fixture(scope="module")
-def mock_cdm_engine() -> sa.Engine:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:", future=True)
+def mock_cdm_engine() -> Iterator[sa.Engine]:
+    with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
+        with scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped:
+            _create_mock_cdm_tables(scoped.engine)
+            yield scoped.engine
+
+
+@pytest.fixture(scope="module")
+def mock_cdm_engine_sqlite() -> Iterator[sa.Engine]:
+    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
+        schema_translate_map={"primary": None, "vocab": None}
+    )
+    _create_mock_cdm_tables(engine)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+def _create_mock_cdm_tables(engine: sa.Engine) -> None:
     tables = cast(
         list[sa.Table],
         [
@@ -50,25 +70,41 @@ def mock_cdm_engine() -> sa.Engine:
 
     Base.metadata.create_all(engine, tables=tables)
 
+    # Disabling FK checks for the whole seed sidesteps ordering entirely,
+    # since these tables have FK dependencies that form a cycle
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
-        seed_mock_cdm(session)
+        if engine.dialect.name == "postgresql":
+            with bulk_load_context(session):
+                seed_mock_cdm(session)
+        else:
+            seed_mock_cdm(session)
+        session.commit()
 
-    return engine
 
-
-@pytest.fixture()
+@pytest.fixture(
+    params=[
+        pytest.param("sqlite", id="sqlite"),
+        pytest.param(
+            "postgresql",
+            id="postgresql",
+            marks=[pytest.mark.postgresql, pytest.mark.db_dialect],
+        ),
+    ]
+)
 def mock_cdm_kg(
-    mock_cdm_engine: sa.Engine,
-    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 ) -> KnowledgeGraph:
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr(
         "omop_graph.reasoning.grounding.try_get_embedding_writer_interface",
         lambda _kg: None,
     )
-
-    return KnowledgeGraph(cdm_engine=mock_cdm_engine)
+    fixture_name = (
+        "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
+    )
+    engine = request.getfixturevalue(fixture_name)
+    return KnowledgeGraph(sessionmaker(bind=engine))
 
 
 def seed_mock_cdm(session: Session) -> None:
@@ -353,4 +389,62 @@ def seed_mock_cdm(session: Session) -> None:
         )
     )
 
-    session.commit()
+    session.flush()
+
+
+def seed_relationship_vocabulary(engine: sa.Engine) -> None:
+    """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
+    session_local = sessionmaker(bind=engine, future=True)
+    with session_local() as session:
+        with bulk_load_context(session):
+            if session.get(Concept, CONCEPT_META_ID) is None:
+                session.add_all(
+                    [
+                        Concept(
+                            concept_id=CONCEPT_META_ID,
+                            concept_name="Meta concept",
+                            domain_id="Metadata",
+                            vocabulary_id="OMOP",
+                            concept_class_id="Metadata",
+                            standard_concept="S",
+                            concept_code="META",
+                            valid_start_date=date(2020, 1, 1),
+                            valid_end_date=date(2099, 12, 31),
+                        ),
+                        Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=CONCEPT_META_ID),
+                        Vocabulary(
+                            vocabulary_id="OMOP",
+                            vocabulary_name="OMOP",
+                            vocabulary_reference="local",
+                            vocabulary_version="test",
+                            vocabulary_concept_id=CONCEPT_META_ID,
+                        ),
+                        Concept_Class(
+                            concept_class_id="Metadata",
+                            concept_class_name="Metadata",
+                            concept_class_concept_id=CONCEPT_META_ID,
+                        ),
+                    ]
+                )
+            session.add_all(
+                [
+                    Relationship(
+                        relationship_id="Maps to",
+                        relationship_name="Maps to",
+                        is_hierarchical="0",
+                        defines_ancestry="0",
+                        reverse_relationship_id="Mapped from",
+                        relationship_concept_id=CONCEPT_META_ID,
+                    ),
+                    Relationship(
+                        relationship_id="Mapped from",
+                        relationship_name="Mapped from",
+                        is_hierarchical="0",
+                        defines_ancestry="0",
+                        reverse_relationship_id="Maps to",
+                        relationship_concept_id=CONCEPT_META_ID,
+                    ),
+                ]
+            )
+            session.flush()
+        session.commit()

@@ -26,29 +26,34 @@ from pathlib import Path
 from typing import Dict, List
 from dataclasses import dataclass
 
-from sqlalchemy import text
+import sqlalchemy as sa
+from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Ancestor
 
-from omop_graph.db.session import make_engine
+from omop_graph.db.session import cdm_session_factory
 
-DOMAIN_QUERY = text(
-    """
-    SELECT concept_id, domain_id
-    FROM omop.concept
-    WHERE concept_id = ANY(:ids)
-    """
-)
 
-ANCESTOR_QUERY = text(
-    """
-    SELECT ca.descendant_concept_id, ca.ancestor_concept_id, ca.min_levels_of_separation,
-           c.concept_name, c.domain_id
-    FROM omop.concept_ancestor ca
-    JOIN omop.concept c ON c.concept_id = ca.ancestor_concept_id
-    WHERE ca.descendant_concept_id = ANY(:ids)
-      AND ca.min_levels_of_separation > 0
-      AND c.standard_concept = 'S'
-    """
-)
+def _domain_query(ids: List[int]) -> sa.Select:
+    """Each target concept's domain."""
+    return sa.select(Concept.concept_id, Concept.domain_id).where(Concept.concept_id.in_(ids))
+
+
+def _ancestor_query(ids: List[int]) -> sa.Select:
+    """Standard strict ancestors of each target, with their name and domain."""
+    return (
+        sa.select(
+            Concept_Ancestor.descendant_concept_id,
+            Concept_Ancestor.ancestor_concept_id,
+            Concept_Ancestor.min_levels_of_separation,
+            Concept.concept_name,
+            Concept.domain_id,
+        )
+        .join(Concept, Concept.concept_id == Concept_Ancestor.ancestor_concept_id)
+        .where(
+            Concept_Ancestor.descendant_concept_id.in_(ids),
+            Concept_Ancestor.min_levels_of_separation > 0,
+            Concept.standard_concept == "S",
+        )
+    )
 
 @dataclass
 class LevelStats:
@@ -81,17 +86,17 @@ class Stats:
         return self
 
 
-def enrich_cases(engine, cases: List[Dict], levels: List[int]) -> Stats:
+def enrich_cases(cdm_sessions, cases: List[Dict], levels: List[int]) -> Stats:
     target_ids = sorted({c["expected_concept_id"] for c in cases if c.get("expected_concept_id")})
 
-    with engine.connect() as conn:
+    with cdm_sessions() as session:
         domain_by_target = {
             row.concept_id: row.domain_id
-            for row in conn.execute(DOMAIN_QUERY, {"ids": target_ids}).fetchall()
+            for row in session.execute(_domain_query(target_ids)).all()
         }
 
         ancestors_by_target: Dict[int, List] = defaultdict(list)
-        for row in conn.execute(ANCESTOR_QUERY, {"ids": target_ids}).fetchall():
+        for row in session.execute(_ancestor_query(target_ids)).all():
             ancestors_by_target[row.descendant_concept_id].append(row)
 
     stats: Stats = Stats(levels={level: LevelStats() for level in levels}, no_target=0)
@@ -148,11 +153,11 @@ def main() -> None:
     levels = [int(x) for x in args.levels.split(",")]
 
     payload = json.loads(args.cases_file.read_text())
-    engine = make_engine()
+    cdm_sessions = cdm_session_factory()
 
     total_stats = Stats.empty_for(levels)
     for bucket_name, cases in payload.items():
-        stats = enrich_cases(engine, cases, levels)
+        stats = enrich_cases(cdm_sessions, cases, levels)
         print(f"[{bucket_name}] {stats}")
         total_stats += stats
 

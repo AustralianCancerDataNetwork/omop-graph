@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from omop_alchemy.cdm.model.structural.episode import Episode
 from omop_alchemy.cdm.model.structural.episode_event import Episode_Event
-from omop_alchemy.cdm.model.derived import Observation_Period
+from omop_alchemy.cdm.model.clinical import Observation_Period
 from omop_alchemy.cdm.model.health_system import (
     Location,
     Care_Site,
@@ -262,7 +262,16 @@ def populate_conditions_and_modifiers(
 
 
 def populate_test_data(session):
-    """Brute force addition of test data for development/testing purposes."""
+    """Brute force addition of test data for development/testing purposes.
+
+    Parameters
+    ----------
+    session
+        From ``omop_alchemy.cross_database.cdm_sessionmaker``, so the
+        Concept/Concept_Ancestor reads reach the vocabulary and the clinical
+        writes (Person, Visit_Occurrence, Condition_Occurrence, ...) reach the
+        primary database.
+    """
 
     # Data
     concept_by_domain = pd.DataFrame(

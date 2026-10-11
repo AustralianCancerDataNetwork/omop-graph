@@ -57,5 +57,5 @@ omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 
 | Option | Short | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **`--pred-class-dir`** | | `String` | **Required** | Path to the directory containing the classification CSVs. |
-| **`--verbose`** | `-v` | `Count` | `0` | Increase logging verbosity (use `-v` or `-vv`). |
+| **`--pred-class-dir`** | | `String` | `None` (bundled CSVs) | Path to a directory of classification CSVs, overriding the bundled defaults. |
+| **`--verbose`**{: title="Global option, not specific to this subcommand — see the note above." } | `-v` | `Count` | `0` | Increase logging verbosity (use `-v` or `-vv`). Global option; must precede the subcommand name (see note above). |

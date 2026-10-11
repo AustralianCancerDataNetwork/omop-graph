@@ -1,67 +1,97 @@
-"""SQLAlchemy engine helper for the OMOP CDM database."""
+"""Resolution helper for the OMOP CDM database."""
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional
+from collections.abc import Generator
+from contextlib import contextmanager
+import sqlalchemy.orm as so
+from sqlalchemy.engine import Engine
+from oa_configurator import ResolvedCDMDatabase, Resolver
+from omop_alchemy.config import create_cdm_engines
+from omop_alchemy.cross_database import CDMSession, cdm_sessionmaker
+from sqlalchemy.orm import sessionmaker
 
-from sqlalchemy import create_engine, URL, Engine
-from sqlalchemy.orm import sessionmaker, Session
-
-from oa_configurator import Resolver
 from omop_graph.config import OmopGraphConfig
 
 
-def make_engine(
-    url: Optional[Union[URL, str]] = None,
-    *,
-    engine_kwargs: Optional[dict] = None,
-    execution_options: Optional[dict] = None,
-) -> Engine:
-    """Return a SQLAlchemy engine.
-
-    When url is omitted, reads connection details from the active oa-configurator
-    stack config (schema translate map applied automatically). Pass url explicitly
-    to override.
+def resolve_cdm_database(name: Optional[str] = None) -> ResolvedCDMDatabase:
+    """Resolve a CDM database from the active oa-configurator config.
 
     Parameters
     ----------
-    url : URL or str, optional
-        SQLAlchemy database URL. If None, resolved from the active oa-configurator config.
-    engine_kwargs : dict, optional
-        Keyword arguments forwarded to ``sqlalchemy.create_engine`` in both paths.
-        Common keys: ``echo``, ``connect_args``, ``pool_size``.
-    execution_options : dict, optional
-        Options forwarded to ``engine.execution_options()``. In the resolver path these
-        are merged with the auto-generated ``schema_translate_map`` (resolver wins on
-        that key via ``setdefault``).
+    name : str, optional
+        Name of the ``[databases.*]`` entry. Defaults to ``OmopGraphConfig.cdm_db``.
 
     Returns
     -------
-    Engine
-        A SQLAlchemy engine instance.
+    ResolvedCDMDatabase
+
+    Raises
+    ------
+    TypeError
+        If the entry is not a CDM database.
     """
-    engine_kwargs = engine_kwargs or {}
-    if url is None:
-        resolver = Resolver.from_active_config()
-        db_name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
-        database = resolver.resolve_database(db_name)
-        return database.create_engine(execution_options=execution_options, **engine_kwargs)
-
-    from sqlalchemy import make_url as _make_url
-
-    if isinstance(url, str):
-        url = _make_url(url)
-    engine = create_engine(url, **engine_kwargs)
-    if execution_options:
-        engine = engine.execution_options(**execution_options)
-    return engine
+    resolver = Resolver.from_active_config()
+    if name is None:
+        name = resolver.resolve_package_config(OmopGraphConfig).cdm_db
+    resolved = resolver.resolve_database(name)
+    if not isinstance(resolved, ResolvedCDMDatabase):
+        raise TypeError(
+            f"Database {name!r} must resolve to a CDM database, got {type(resolved).__name__}"
+        )
+    return resolved
 
 
-def make_session(
-    url: str,
-    *,
-    echo: bool = False,
-) -> Session:
-    engine = make_engine(url, engine_kwargs={"echo": echo})
-    SessionLocal = sessionmaker(bind=engine)
-    return SessionLocal()
+def cdm_session_factory(
+    name: Optional[str] = None, *, resolved: ResolvedCDMDatabase | None = None
+) -> sessionmaker[CDMSession]:
+    """Read-only routed session factory on a CDM database from the active config.
+
+    Builds the engine pair with ``create_cdm_engines()``, checking its schema
+    claims without registering them. The engines live as long as the process,
+    so this suits scripts that run once.
+
+    Parameters
+    ----------
+    name : str, optional
+        As for :func:`resolve_cdm_database`.
+    """
+    resolved = resolved or resolve_cdm_database(name)
+    return _create_cdm_sessions(resolved, register_claims=False)[0]
+
+
+def _create_cdm_sessions(
+    resolved: ResolvedCDMDatabase, *, register_claims: bool
+) -> tuple[sessionmaker[CDMSession], Engine, Engine]:
+    """Build routed sessions and their owned engine pair through omop-alchemy."""
+    primary, vocab = create_cdm_engines(
+        resolved, register_claims=register_claims
+    )
+    return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab
+
+
+@contextmanager
+def open_cdm_sessions(
+    resolved: ResolvedCDMDatabase, *, register_claims: bool = True
+) -> Generator[so.sessionmaker[CDMSession], None, None]:
+    """Yield a routed session factory on ``create_cdm_engines(resolved)``, disposing both engines on exit.
+
+    Parameters
+    ----------
+    resolved : ResolvedCDMDatabase
+    register_claims : bool, optional
+        As for :func:`create_cdm_engines`.
+
+    Yields
+    ------
+    sqlalchemy.orm.sessionmaker[CDMSession]
+    """
+    cdm_sessions, primary, vocab = _create_cdm_sessions(
+        resolved, register_claims=register_claims
+    )
+    try:
+        yield cdm_sessions
+    finally:
+        for engine in {primary, vocab}:
+            engine.dispose()

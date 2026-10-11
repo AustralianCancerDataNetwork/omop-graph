@@ -29,29 +29,40 @@ The primary adapter class that inherits from multiple OAK interfaces:
 * **`TextAnnotatorInterface`**: Provides a pipeline to ground raw text spans to OMOP Concept IDs using the internal `KnowledgeGraph` resolvers.
 
 ### Resource Management
-To initialize a connection, `omop-graph` uses a specialized resource factory:
+The adapter resolves its database through oa-configurator; there is no URL-based construction.
 
-* **`OMOPOntologyResource`**: A dataclass that wraps the SQLAlchemy connection URL, treating the database as a live ontology source.
-* **`omop_resource()`**: A factory function that resolves database credentials from an explicit URL, or from the active oa-configurator stack config (`OmopGraphConfig.cdm_db`) when no URL is given.
+* **`OMOPOntologyResource`**: The oaklib resource for the `omop` scheme. Its `slug` names a `[databases.*]` entry; no slug resolves `OmopGraphConfig.cdm_db`.
+* **`resolved=`**: Pass an already-resolved `ResolvedCDMDatabase` to build the engines from it directly. A separate `vocab_connection` produces a second, vocabulary-only engine.
+* **`kg=`**: Pass an existing `KnowledgeGraph` to use its engines as-is.
 
 ---
 
 ## Usage Examples
 
 ### Initializing the Adapter
-You can get an OAK-compliant adapter by providing a SQLAlchemy connection string:
+Select the adapter through oaklib with an oa-configurator database name:
 
 ```python
-from omop_graph.oaklib_interface import OMOPAlchemyImplementation
+from oaklib import get_adapter
 
-# Initialize via connection string
-adapter = OMOPAlchemyImplementation(
-    engine_string="postgresql://user:pass@localhost/omop"
-)
+# Named [databases.*] entry
+adapter = get_adapter("omop:cdm_db")
+
+# Or OmopGraphConfig.cdm_db
+adapter = get_adapter("omop:")
 
 # Use standard OAK methods
 label = adapter.label("OMOP:44819488")
 print(f"Label: {label}")
+```
+
+Or construct it from an already-resolved database:
+
+```python
+from omop_graph.db.session import resolve_cdm_database
+from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
+
+adapter = OMOPAlchemyImplementation(resolved=resolve_cdm_database("cdm_db"))
 ```
 
 ### Searching and Traversal

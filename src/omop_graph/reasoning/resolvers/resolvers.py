@@ -45,6 +45,9 @@ class CandidateHit:
         The kind of match of this hit.
     matched_concept_label : str
         The specific text in the database (name or synonym) that matched.
+    synonym : bool
+        Whether ``matched_concept_label`` came from a synonym rather than
+        the concept's own name.
     """
 
     concept_id: int

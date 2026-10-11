@@ -13,9 +13,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
 import typer
 
-import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
-
 import numpy as np
 from oa_configurator import Resolver, ResolvedModel, ResolvedProvider
 from omop_emb.config import (
@@ -25,7 +22,7 @@ from omop_emb.config import (
     parse_metric_type,
 )
 from omop_emb.interface import EmbeddingRole
-from omop_emb.backends import EmbeddingBackend, resolve_backend_from_resolved_vector_store
+from omop_emb.backends import EmbeddingBackend, open_vector_store_writer
 from omop_emb.backends.index_config import index_config_from_index_type
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
@@ -45,7 +42,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_graph.db.session import make_engine
+from omop_graph.db.session import cdm_session_factory
 app = typer.Typer()
 
 
@@ -163,21 +160,6 @@ def load_cases(path: Path) -> List[BenchmarkCase]:
     raise TypeError(f"Unsupported benchmark case file shape: {type(payload).__name__}")
 
 
-def build_session_factory() -> sessionmaker:
-    """Build a SQLAlchemy session factory via oa-configurator."""
-    return sessionmaker(bind=make_engine(), future=True)
-
-
-def build_engine() -> sa.Engine:
-    """Build a SQLAlchemy engine via oa-configurator."""
-    return make_engine()
-
-
-def build_knowledge_graph() -> KnowledgeGraph:
-    """Create a KnowledgeGraph backed by the live OMOP CDM database."""
-    return KnowledgeGraph(cdm_engine=make_engine())
-
-
 def build_embedding_knowledge_graph(
     embedding_metric: MetricType,
     resolved_model: ResolvedModel,
@@ -185,7 +167,7 @@ def build_embedding_knowledge_graph(
 ) -> KnowledgeGraph:
     """Create a KnowledgeGraph with embedding support configured."""
 
-    cdm_engine = make_engine()
+    cdm_sessions = cdm_session_factory()
     config = KnowledgeGraphEmbeddingConfiguration(
         metric_type=embedding_metric,
         backend=backend,
@@ -194,7 +176,7 @@ def build_embedding_knowledge_graph(
         compute_missing_embeddings=True,
     )
     return KnowledgeGraph(
-        cdm_engine=cdm_engine,
+        cdm_sessions,
         emb_config=config
     )
 
@@ -592,7 +574,7 @@ def run_benchmark(
                 "via `omop-config configure omop_graph`."
             )
         resolved_vector_store = Resolver.from_active_config().resolve_vector_store(resolved_name)
-        embedding_backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+        embedding_backend = open_vector_store_writer(resolved_vector_store)
 
         embedding_kg = build_embedding_knowledge_graph(
             embedding_metric=resolved_embedding_metric_type,
@@ -616,7 +598,7 @@ def run_benchmark(
             for case in cases
         }
 
-    kg = build_knowledge_graph()
+    kg = KnowledgeGraph(cdm_session_factory())
     configs = build_grounded_configs()
 
     errors: Dict[str, str] = {}

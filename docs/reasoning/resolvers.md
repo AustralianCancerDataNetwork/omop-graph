@@ -6,14 +6,15 @@ The backbone of the `ResolverPipeline` are specific **resolvers**. `omop-graph` 
 
 - **`ExactLabelResolver`**: Exact case-insensitive match. Is there anywhere in the the [`concept`](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept) table the exact string `"Hodgkin lymphoma"`
 - **`ExactSynonymResolver`**: Similar to `ExactLabelResolver` yet searching the [`concept_synonym`](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept_synonym) table
-- **`FullTextResolver`**: Matches irrespective of word order. Not as relevant for the example above but relevant for others (e.g., "Kidney Cancer" -> "Cancer of Kidney").
-- **`FullTextSynonymResolver`**: Similar to `FullTextResolver` yet searching the [`concept_synonym`](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept_synonym) table
 - **`PartialLabelResolver`**: Substring match. Is the search string `"Hodgkin lymphoma"` a partial component of any [`concept`](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept)?
 - **`PartialSynonymResolver`**: Similar to `PartialLabelResolver` yet searching the [`concept_synonym`](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept_synonym) table
+- **`FullTextResolver`**: Matches irrespective of word order. Not as relevant for the example above but relevant for others (e.g., "Kidney Cancer" -> "Cancer of Kidney").
+- **`FullTextSynonymResolver`**: Similar to `FullTextResolver` yet searching the [`concept_synonym`](https://ohdsi.github.io/CommonDataModel/cdm54.html#concept_synonym) table
+- **`EmbeddingResolver`**: Vector-similarity match, appended to the pipeline only when `omop-graph[emb]` (`omop-emb`) is installed.
 
 !!! tip
     
-    Traversing each of the resolvers one by one can be an exhaustive search. The `ResolverPipeline` therefore offers a `stop_after_resolver` option. If set, retrieval from the DB stops after that resolver has concluded. The resolvers are ordered based on their confidence as above (i.e. **`ExactLabelResolver`** >> **`ExactSynonymResolver`** >> etc.)
+    Traversing each of the resolvers one by one can be an exhaustive search. The `ResolverPipeline` therefore offers a `stop_after_resolver` option. If set, retrieval from the DB stops after that resolver has concluded. `ALL_RESOLVERS`, the default sequence, is ordered exactly as listed above (i.e. **`ExactLabelResolver`** >> **`ExactSynonymResolver`** >> **`PartialLabelResolver`** >> ... >> **`EmbeddingResolver`**).
 
 ```python
 from omop_alchemy.cdm.query import ConceptFilter

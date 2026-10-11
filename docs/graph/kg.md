@@ -27,15 +27,14 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 
 ### Basic Usage
 
-The `KnowledgeGraph` can be used standalone after connecting to the OMOP CDM database.
+The `KnowledgeGraph` takes a factory of sessions on the OMOP CDM. `cdm_session_factory()` builds one for the configured database; to build it yourself, pass the pair from `create_engines()` to `omop_alchemy.cross_database.cdm_sessionmaker`. Its sessions send each table to the database hosting it, so the graph works the same when the vocabulary lives on its own server.
 
 ```python
-from sqlalchemy import create_engine
+from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 
-engine = create_engine("postgresql://user:pass@localhost/omop")
-kg = KnowledgeGraph(cdm_engine=engine)
+kg = KnowledgeGraph(cdm_session_factory())  # the configured cdm_db
 
 # Lookup a concept by its label
 matches = kg.concept_lookup("Atrial Fibrillation", match_kind=LabelMatchKind.EXACT)
@@ -60,18 +59,16 @@ This requires the optional `omop-emb` package — see the [installation guide](.
 `KnowledgeGraphEmbeddingConfiguration` is a complete configuration: `backend` (an already-constructed `omop_emb.EmbeddingBackend`) and `resolved_model` (an `oa_configurator.ResolvedModel`) are both required fields, not Optional. omop-graph never resolves either itself: the caller (the actual CLI/entry-point boundary, e.g. omop-spires) resolves the vector store and the model, builds the backend, and passes both in here. `model_name`/`provider_type` are plain properties reading straight off `resolved_model` (`.model`/`.provider.provider`); there's nothing to pass for them separately.
 
 ```python
-from sqlalchemy import create_engine
 from oa_configurator import Resolver
-from omop_emb.backends import resolve_backend_from_resolved_vector_store
+from omop_emb.backends import open_vector_store_writer
+from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_emb.config import MetricType
-
-engine = create_engine("postgresql://user:pass@localhost/omop")
 
 resolver = Resolver.from_active_config()
 resolved_vector_store = resolver.resolve_vector_store("vector_store")   # a [vector_stores.*] entry name
 resolved_model = resolver.resolve_model("embedding-model")              # a [models.*] entry name
-backend = resolve_backend_from_resolved_vector_store(resolved_vector_store)
+backend = open_vector_store_writer(resolved_vector_store)
 
 emb_config = KnowledgeGraphEmbeddingConfiguration(
     metric_type=MetricType.COSINE,
@@ -79,7 +76,7 @@ emb_config = KnowledgeGraphEmbeddingConfiguration(
     resolved_model=resolved_model,
     # write defaults to False
 )
-kg = KnowledgeGraph(cdm_engine=engine, emb_config=emb_config)
+kg = KnowledgeGraph(cdm_session_factory(), emb_config=emb_config)
 ```
 
 See [omop-llm: Asymmetric Embeddings](https://AustralianCancerDataNetwork.github.io/omop-llm/usage/asymmetric-embeddings/) and
@@ -97,7 +94,7 @@ emb_config = KnowledgeGraphEmbeddingConfiguration(
     resolved_model=resolved_model,
     write=True,
 )
-kg = KnowledgeGraph(cdm_engine=engine, emb_config=emb_config)
+kg = KnowledgeGraph(cdm_session_factory(), emb_config=emb_config)
 ```
 
 `faiss_cache_dir` (optional `str`) is read-only-path-only: a directory to cache FAISS index files, passed straight through to `EmbeddingReaderInterface`.
@@ -119,7 +116,7 @@ emb_config = KnowledgeGraphEmbeddingConfiguration(
     write=True,
     compute_missing_embeddings=True,
 )
-kg = KnowledgeGraph(cdm_engine=engine, emb_config=emb_config)
+kg = KnowledgeGraph(cdm_session_factory(), emb_config=emb_config)
 ```
 
 | `compute_missing_embeddings` | `write` | Behaviour |
