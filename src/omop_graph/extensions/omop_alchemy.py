@@ -1,14 +1,14 @@
 # Extension to omop-alchemy package
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from orm_loader.helpers import Base, create_tables
+from orm_loader.helpers import create_tables
 from omop_alchemy.cdm.base import (
     ReferenceTable,
-    cdm_table,
-    CDMTableBase,
+    CDMExtensionTableBase,
     merge_table_args,
     role_fk,
 )
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA
 from oa_configurator import ResolvedCDMDatabase, Role
 
 from enum import Enum
@@ -24,25 +24,22 @@ class PredicateKind(Enum):
     ATTRIBUTE = "Attribute"
 
 
-@cdm_table
-class RelationshipClass(ReferenceTable, CDMTableBase, Base):
+class RelationshipClass(ReferenceTable, CDMExtensionTableBase):
     """
     Extensions table: Defines the semantic categories (Parent)
     and entity types (Child).
     """
 
     __tablename__ = "relationship_class"
-    # Must match RelationshipMapping's schema, or SQLAlchemy silently builds a second, unlinked Table object.
-    __table_args__ = merge_table_args({"schema": Role.PRIMARY.value})
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [
                 e.value for e in obj
             ],
-            # Must match __table_args__'s schema to ensure that schema_translate_map
-            # routes the enum correctly.
-            schema=Role.PRIMARY.value,
+            # Must match CDMExtensionTableBase's own schema to ensure that
+            # schema_translate_map routes the enum correctly.
+            schema=CDM_EXTENSION_SCHEMA,
         ),
         primary_key=True,
     )
@@ -54,8 +51,7 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     inference: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
 
 
-@cdm_table
-class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
+class RelationshipMapping(ReferenceTable, CDMExtensionTableBase):
     """
     Extensions table: Maps standard OMOP relationship_ids to
     their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses  .
@@ -73,9 +69,9 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
             values_callable=lambda obj: [
                 e.value for e in obj
             ],
-            # Must match __table_args__'s schema to ensure that schema_translate_map
-            # routes the enum correctly.
-            schema=Role.PRIMARY.value,
+            # Must match CDMExtensionTableBase's own schema to ensure that
+            # schema_translate_map routes the enum correctly.
+            schema=CDM_EXTENSION_SCHEMA,
         ),
         primary_key=True,
     )
@@ -83,17 +79,18 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
         sa.String(20), primary_key=True
     )
 
-    # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
+    # Qualified string to RelationshipClass as it lives in the same 
+    # fixed extension schema (CDMExtensionTableBase's default).
     __table_args__ = merge_table_args(
         sa.ForeignKeyConstraint(
             ["predicate_kind", "predicate_subkind"],
             [
-                role_fk(Role.PRIMARY, "relationship_class.predicate_kind"),
-                role_fk(Role.PRIMARY, "relationship_class.predicate_subkind"),
+                f"{CDM_EXTENSION_SCHEMA}.relationship_class.predicate_kind",
+                f"{CDM_EXTENSION_SCHEMA}.relationship_class.predicate_subkind",
             ],
             name="fk_rel_mapping_to_rel_class",
         ),
-        {"schema": Role.PRIMARY.value},
+        {"schema": CDM_EXTENSION_SCHEMA},
     )
 
 

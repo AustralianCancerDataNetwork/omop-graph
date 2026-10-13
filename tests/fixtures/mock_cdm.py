@@ -7,6 +7,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
+from oa_configurator import Dialect
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
 from orm_loader.helpers import Base, bulk_load_context
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
@@ -17,6 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA_CLAIM
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
@@ -26,6 +28,8 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
+from fixtures.helpers import cdm_extension_schema_claim
+
 PARENT_CANCER_ID = 443392
 CONCEPT_META_ID = 0
 LANGUAGE_CONCEPT_ID = 1
@@ -34,21 +38,22 @@ LANGUAGE_CONCEPT_ID = 1
 @pytest.fixture(scope="module")
 def mock_cdm_engine() -> Iterator[sa.Engine]:
     with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
-        with scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped:
-            _create_mock_cdm_tables(scoped.engine)
-            yield scoped.engine
+        with cdm_extension_schema_claim(db.committing_engine, prefix="mock_cdm") as ext_claim:
+            with scoped_test_schema(
+                db.resolved, prefix="mock_cdm", schema_claims=[ext_claim], register_claims=False
+            ) as scoped:
+                _create_mock_cdm_tables(scoped.engine)
+                yield scoped.engine
 
 
 @pytest.fixture(scope="module")
 def mock_cdm_engine_sqlite() -> Iterator[sa.Engine]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
-    _create_mock_cdm_tables(engine)
-    try:
-        yield engine
-    finally:
-        engine.dispose()
+    with isolated_test_database(
+        OmopGraphConfig, "test_cdm_db_sqlite", dialect=Dialect.SQLITE,
+        schema_claims=[CDM_EXTENSION_SCHEMA_CLAIM],
+    ) as db:
+        _create_mock_cdm_tables(db.committing_engine)
+        yield db.committing_engine
 
 
 def _create_mock_cdm_tables(engine: sa.Engine) -> None:

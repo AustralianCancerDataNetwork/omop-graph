@@ -19,8 +19,13 @@ import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 
-from oa_configurator import ResolvedCDMDatabase, Resolver, Role
-from oa_configurator.testing import isolated_test_database, resolve_with_role_schemas, scoped_test_schema
+from oa_configurator import ResolvedCDMDatabase, Resolver, Role, SchemaClaim
+from oa_configurator.testing import (
+    isolated_test_database,
+    resolve_with_role_schemas,
+    scoped_test_schema,
+)
+from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -32,9 +37,10 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
     Vocabulary,
 )
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
 from omop_alchemy.cross_database import cdm_sessionmaker
 
-from omop_graph.cli import relationship_classification
+from omop_graph.cli import _load_relationship_classification
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -43,7 +49,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
-from fixtures.helpers import VOCAB_TABLES
+from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
@@ -70,7 +76,7 @@ _shadow_relationship_class = sa.Table(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [e.value for e in obj],
-            schema=Role.PRIMARY.value,
+            schema=CDM_EXTENSION_SCHEMA,
         ),
         primary_key=True,
     ),
@@ -79,7 +85,7 @@ _shadow_relationship_class = sa.Table(
     sa.Column("semantics", sa.String(40), nullable=False),
     sa.Column("inference", sa.String(40), nullable=False),
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
-    schema=Role.PRIMARY.value,
+    schema=CDM_EXTENSION_SCHEMA,
 )
 _shadow_relationship_mapping = sa.Table(
     "relationship_mapping",
@@ -90,12 +96,12 @@ _shadow_relationship_mapping = sa.Table(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [e.value for e in obj],
-            schema=Role.PRIMARY.value,
+            schema=CDM_EXTENSION_SCHEMA,
         ),
         primary_key=True,
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
-    schema=Role.PRIMARY.value,
+    schema=CDM_EXTENSION_SCHEMA,
 )
 
 
@@ -113,6 +119,9 @@ def split_engines() -> Iterator[_Engines]:
     with (
         isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as primary_db,
         isolated_test_database(OrmLoaderConfig, "test_orm_db_pg") as vocab_db,
+        # RelationshipClass/RelationshipMapping live in the extension schema,
+        # on the same physical connection as primary.
+        cdm_extension_schema_claim(primary_db.committing_engine, prefix="vocab_split") as ext_claim,
     ):
         name = primary_db.resolved.name
         resolver = Resolver.from_active_config()
@@ -124,21 +133,38 @@ def split_engines() -> Iterator[_Engines]:
             }
         )
         split = resolver.resolve_database(name)
-        with scoped_test_schema(split, prefix="vocab_split", resolver=resolver) as scoped:
-            primary_engine, vocab_engine = scoped.resolved.create_engines()
-            # Vocab tables are created through the vocab server's own resolved:
-            # create_all on the split vocab engine also emits the PRIMARY-tagged
-            # predicatekind type, whose schema only exists on the primary server.
+        with scoped_test_schema(
+            split, prefix="vocab_split", resolver=resolver, schema_claims=[ext_claim], register_claims=False
+        ) as scoped:
+            primary_engine, vocab_engine = scoped.resolved.create_engines(
+                schema_claims=[staging_schema_claim(), ext_claim], register_claims=False
+            )
+            # create_all() on the vocab engine also emits the extension-tagged
+            # predicatekind type; co-locate it with vocab_schema since its own
+            # schema only exists on the primary server.
             vocab_schema = scoped.schemas[Role.VOCAB]
             vocab_only = resolve_with_role_schemas(
                 vocab_db.resolved, {role: vocab_schema for role in vocab_db.resolved.schema_tags()}
             )
-            vocab_setup_engine, _ = vocab_only.create_engines()
+            vocab_setup_engine, _ = vocab_only.create_engines(
+                schema_claims=[
+                    SchemaClaim(
+                        schema_tag=CDM_EXTENSION_SCHEMA,
+                        physical_schema=vocab_schema,
+                        owner=CDM_EXTENSION_SCHEMA_OWNER,
+                    )
+                ],
+                register_claims=False,
+            )
             try:
                 _shadow_metadata.create_all(primary_engine)
                 Base.metadata.create_all(vocab_setup_engine, tables=_VOCAB_TABLES, checkfirst=True)
                 _seed(primary_engine, vocab_setup_engine)
-                yield _Engines(primary=primary_engine, vocab=vocab_engine, resolved=scoped.resolved)
+                yield _Engines(
+                    primary=primary_engine,
+                    vocab=vocab_engine,
+                    resolved=scoped.resolved,
+                )
             finally:
                 vocab_setup_engine.dispose()
                 primary_engine.dispose()
@@ -380,9 +406,9 @@ def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines
 def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection(
     split_engines: _Engines, tmp_path
 ) -> None:
-    """relationship_classification() creates RelationshipMapping without its
-    FK to the vocabulary. A relationship ID the vocabulary lacks is warned
-    about and dropped."""
+    """The loading body creates RelationshipMapping without its FK to the
+    vocabulary when they're on separate connections. A relationship ID the
+    vocabulary lacks is warned about and dropped."""
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
         "Identity,mapping,Identity mapping,identity,none\n"
@@ -393,7 +419,12 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
         "Identity,mapping,unknown_rel,Unknown,,,\n"
     )
 
-    relationship_classification(str(tmp_path), resolved=split_engines.resolved)
+    with so.Session(split_engines.vocab) as session:
+        relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
+    _load_relationship_classification(
+        str(tmp_path), resolved=split_engines.resolved, engine=split_engines.primary,
+        relationship_ids=relationship_ids,
+    )
 
     with so.Session(split_engines.primary) as session:
         relationship_ids = set(

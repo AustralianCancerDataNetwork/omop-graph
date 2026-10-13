@@ -23,14 +23,19 @@ from omop_graph.graph.queries import (
     q_entities,
 )
 
-from fixtures.helpers import VOCAB_TABLES
+from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
 
 _META_CONCEPT_ID = 0
 
 
 @pytest.fixture()
 def concept_engine(pg_db) -> Iterator[sa.Engine]:
-    with scoped_test_schema(pg_db.resolved, prefix="concept_queries") as scoped:
+    with (
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="concept_queries") as ext_claim,
+        scoped_test_schema(
+            pg_db.resolved, prefix="concept_queries", schema_claims=[ext_claim], register_claims=False
+        ) as scoped,
+    ):
         engine = scoped.engine
         Base.metadata.create_all(engine, tables=VOCAB_TABLES, checkfirst=True)
 

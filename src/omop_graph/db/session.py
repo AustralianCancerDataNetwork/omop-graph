@@ -8,8 +8,9 @@ from contextlib import contextmanager
 import sqlalchemy.orm as so
 from sqlalchemy.engine import Engine
 from oa_configurator import ResolvedCDMDatabase, Resolver
-from omop_alchemy.config import create_cdm_engines
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA_CLAIM
 from omop_alchemy.cross_database import CDMSession, cdm_sessionmaker
+from orm_loader.backends import staging_schema_claim
 from sqlalchemy.orm import sessionmaker
 
 from omop_graph.config import OmopGraphConfig
@@ -48,9 +49,9 @@ def cdm_session_factory(
 ) -> sessionmaker[CDMSession]:
     """Read-only routed session factory on a CDM database from the active config.
 
-    Builds the engine pair with ``create_cdm_engines()``, checking its schema
-    claims without registering them. The engines live as long as the process,
-    so this suits scripts that run once.
+    Builds the engine pair directly, checking its schema claims without
+    registering them. The engines live as long as the process, so this
+    suits scripts that run once.
 
     Parameters
     ----------
@@ -62,34 +63,41 @@ def cdm_session_factory(
 
 
 def _create_cdm_sessions(
-    resolved: ResolvedCDMDatabase, *, register_claims: bool
+    resolved: ResolvedCDMDatabase,
+    *,
+    register_claims: bool,
 ) -> tuple[sessionmaker[CDMSession], Engine, Engine]:
-    """Build routed sessions and their owned engine pair through omop-alchemy."""
-    primary, vocab = create_cdm_engines(
-        resolved, register_claims=register_claims
+    """Build routed sessions and their owned engine pair.
+
+    Notes
+    -----
+    Claims the following additional schemas:
+    - staging schema: for CSV bulk-loading of RelationshipClass/RelationshipMapping
+    - CDM_EXTENSION_SCHEMA: for the tables those two live in
+    """
+
+    primary, vocab = resolved.create_engines(
+        schema_claims=[staging_schema_claim(), CDM_EXTENSION_SCHEMA_CLAIM],
+        register_claims=register_claims,
     )
     return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab
 
 
 @contextmanager
 def open_cdm_sessions(
-    resolved: ResolvedCDMDatabase, *, register_claims: bool = True
+    resolved: ResolvedCDMDatabase,
 ) -> Generator[so.sessionmaker[CDMSession], None, None]:
-    """Yield a routed session factory on ``create_cdm_engines(resolved)``, disposing both engines on exit.
+    """Yield a routed session factory, disposing both engines on exit.
 
     Parameters
     ----------
     resolved : ResolvedCDMDatabase
-    register_claims : bool, optional
-        As for :func:`create_cdm_engines`.
 
     Yields
     ------
     sqlalchemy.orm.sessionmaker[CDMSession]
     """
-    cdm_sessions, primary, vocab = _create_cdm_sessions(
-        resolved, register_claims=register_claims
-    )
+    cdm_sessions, primary, vocab = _create_cdm_sessions(resolved, register_claims=True)
     try:
         yield cdm_sessions
     finally:

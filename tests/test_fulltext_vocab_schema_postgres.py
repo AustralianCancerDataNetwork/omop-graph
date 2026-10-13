@@ -17,13 +17,22 @@ from orm_loader.helpers import Base
 
 from omop_graph.graph.queries import q_concept_name_fulltext
 
-from fixtures.helpers import VOCAB_TABLES
+from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
 
 def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
-    with scoped_test_schema(pg_db.resolved, prefix="fulltext", split_roles=[Role.VOCAB]) as scoped:
+    with (
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="fulltext_a") as ext_claim,
+        scoped_test_schema(
+            pg_db.resolved,
+            prefix="fulltext",
+            split_roles=[Role.VOCAB],
+            schema_claims=[ext_claim],
+            register_claims=False,
+        ) as scoped,
+    ):
         engine = scoped.engine
         Base.metadata.create_all(bind=engine, tables=VOCAB_TABLES, checkfirst=True)
 
@@ -50,7 +59,16 @@ def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
 
 
 def test_fulltext_query_still_raises_when_the_column_is_genuinely_absent(pg_db):
-    with scoped_test_schema(pg_db.resolved, prefix="fulltext", split_roles=[Role.VOCAB]) as scoped:
+    with (
+        cdm_extension_schema_claim(pg_db.committing_engine, prefix="fulltext_b") as ext_claim,
+        scoped_test_schema(
+            pg_db.resolved,
+            prefix="fulltext",
+            split_roles=[Role.VOCAB],
+            schema_claims=[ext_claim],
+            register_claims=False,
+        ) as scoped,
+    ):
         Base.metadata.create_all(bind=scoped.engine, tables=VOCAB_TABLES, checkfirst=True)
 
         with pytest.raises(FullTextError):
