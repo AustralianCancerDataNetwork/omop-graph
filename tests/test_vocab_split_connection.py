@@ -22,10 +22,10 @@ import sqlalchemy.orm as so
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role, SchemaClaim
 from oa_configurator.testing import (
     isolated_test_database,
-    reset_schema_registry_rows,
     resolve_with_role_schemas,
     scoped_test_schema,
 )
+from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -40,7 +40,7 @@ from omop_alchemy.cdm.model.vocabulary import (
 from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
 from omop_alchemy.cross_database import cdm_sessionmaker
 
-from omop_graph.cli import relationship_classification
+from omop_graph.cli import _load_relationship_classification
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -109,10 +109,6 @@ class _Engines(NamedTuple):
     primary: sa.Engine
     vocab: sa.Engine
     resolved: ResolvedCDMDatabase
-    cdm_extension_schema_claim: SchemaClaim
-    """Reusable claim for any later engine built from .resolved (e.g. the
-    staging engine in test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection):
-    schema_claims aren't inherited across separate create_engine() calls."""
 
 
 @pytest.fixture()
@@ -141,13 +137,11 @@ def split_engines() -> Iterator[_Engines]:
             split, prefix="vocab_split", resolver=resolver, schema_claims=[ext_claim], register_claims=False
         ) as scoped:
             primary_engine, vocab_engine = scoped.resolved.create_engines(
-                schema_claims=[ext_claim], register_claims=False
+                schema_claims=[staging_schema_claim(), ext_claim], register_claims=False
             )
-            # Vocab tables are created through the vocab server's own resolved:
-            # create_all on the split vocab engine also emits the extension-tagged
-            # predicatekind type (metadata-wide, not scoped to tables=), whose
-            # schema only exists on the primary server -- co-locate it with
-            # vocab_schema here since nothing on this engine touches its content.
+            # create_all() on the vocab engine also emits the extension-tagged
+            # predicatekind type; co-locate it with vocab_schema since its own
+            # schema only exists on the primary server.
             vocab_schema = scoped.schemas[Role.VOCAB]
             vocab_only = resolve_with_role_schemas(
                 vocab_db.resolved, {role: vocab_schema for role in vocab_db.resolved.schema_tags()}
@@ -170,7 +164,6 @@ def split_engines() -> Iterator[_Engines]:
                     primary=primary_engine,
                     vocab=vocab_engine,
                     resolved=scoped.resolved,
-                    cdm_extension_schema_claim=ext_claim,
                 )
             finally:
                 vocab_setup_engine.dispose()
@@ -411,11 +404,11 @@ def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines
 
 
 def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection(
-    split_engines: _Engines, tmp_path, cleanup_after_test
+    split_engines: _Engines, tmp_path
 ) -> None:
-    """relationship_classification() creates RelationshipMapping without its
-    FK to the vocabulary. A relationship ID the vocabulary lacks is warned
-    about and dropped."""
+    """The loading body creates RelationshipMapping without its FK to the
+    vocabulary when they're on separate connections. A relationship ID the
+    vocabulary lacks is warned about and dropped."""
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
         "Identity,mapping,Identity mapping,identity,none\n"
@@ -426,14 +419,11 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
         "Identity,mapping,unknown_rel,Unknown,,,\n"
     )
 
-    # relationship_classification() below registers its own claim
-    # (register_claims=True, the default), so reset the shared registry row
-    # for CDM_EXTENSION_SCHEMA around it to avoid leaving it pointed at this
-    # test's own physical schema for whichever test runs next.
-    reset_schema_registry_rows(cleanup_after_test, split_engines.primary, schema_tags=[CDM_EXTENSION_SCHEMA])
-    relationship_classification(
-        str(tmp_path), resolved=split_engines.resolved,
-        schema_claims=[split_engines.cdm_extension_schema_claim],
+    with so.Session(split_engines.vocab) as session:
+        relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
+    _load_relationship_classification(
+        str(tmp_path), resolved=split_engines.resolved, engine=split_engines.primary,
+        relationship_ids=relationship_ids,
     )
 
     with so.Session(split_engines.primary) as session:

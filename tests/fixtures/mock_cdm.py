@@ -7,6 +7,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
+from oa_configurator import Dialect
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
 from orm_loader.helpers import Base, bulk_load_context
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
@@ -17,7 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA_CLAIM
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
@@ -47,14 +48,12 @@ def mock_cdm_engine() -> Iterator[sa.Engine]:
 
 @pytest.fixture(scope="module")
 def mock_cdm_engine_sqlite() -> Iterator[sa.Engine]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None, CDM_EXTENSION_SCHEMA: None}
-    )
-    _create_mock_cdm_tables(engine)
-    try:
-        yield engine
-    finally:
-        engine.dispose()
+    with isolated_test_database(
+        OmopGraphConfig, "test_cdm_db_sqlite", dialect=Dialect.SQLITE,
+        schema_claims=[CDM_EXTENSION_SCHEMA_CLAIM],
+    ) as db:
+        _create_mock_cdm_tables(db.committing_engine)
+        yield db.committing_engine
 
 
 def _create_mock_cdm_tables(engine: sa.Engine) -> None:

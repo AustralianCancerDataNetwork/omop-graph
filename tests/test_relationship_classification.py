@@ -12,25 +12,25 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
-from oa_configurator.testing import reset_schema_registry_rows, scoped_test_schema
+import sqlalchemy.orm as so
+from oa_configurator.testing import scoped_test_schema
 
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base
 
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA
-from omop_graph.cli import relationship_classification
+from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
+from omop_graph.cli import _load_relationship_classification, relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
 from fixtures.helpers import cdm_extension_schema_claim
 
 
-def test_relationship_classification_respects_the_configured_schema(pg_db, cleanup_after_test):
-    # relationship_classification() below registers its own claim (register_claims=True,
-    # the default, needed so it can actually create the schema it writes into) under the
-    # same owner the literal production default uses, so this leaves the shared registry
-    # row for CDM_EXTENSION_SCHEMA pointing at this test's own physical schema unless reset.
-    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
+def test_relationship_classification_respects_the_configured_schema(pg_db):
+    """The loading body creates RelationshipClass/RelationshipMapping (and the
+    predicatekind enum) wherever its engine resolves CDM_EXTENSION_SCHEMA to,
+    not a hardcoded literal schema name.
+    """
     with (
         cdm_extension_schema_claim(pg_db.committing_engine, prefix="relclass_routing") as ext_claim,
         scoped_test_schema(
@@ -44,7 +44,11 @@ def test_relationship_classification_respects_the_configured_schema(pg_db, clean
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
-        relationship_classification(resolved=scoped.resolved, schema_claims=[ext_claim])
+        with so.Session(scoped.engine) as session:
+            relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
+        _load_relationship_classification(
+            None, resolved=scoped.resolved, engine=scoped.engine, relationship_ids=relationship_ids
+        )
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -66,24 +70,20 @@ def test_relationship_classification_respects_the_configured_schema(pg_db, clean
         assert enum_schema == extension_schema
 
 
-def test_relationship_classification_is_idempotent(pg_db, cleanup_after_test):
+def test_relationship_classification_is_idempotent(pg_db):
     """Re-running against the same schema, the real-world redeploy case the
     DROP TABLE/enum-drop cleanup exists for, must not fail."""
-    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
-    with (
-        cdm_extension_schema_claim(pg_db.committing_engine, prefix="relclass_idempotent") as ext_claim,
-        scoped_test_schema(
-            pg_db.resolved,
-            prefix="relclass_idempotent",
-            schema_claims=[staging_schema_claim(), ext_claim],
-            register_claims=False,
-        ) as scoped,
-    ):
+    with scoped_test_schema(
+        pg_db.resolved,
+        prefix="relclass_idempotent",
+        schema_claims=[staging_schema_claim()],
+        register_claims=False,
+    ) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
-        relationship_classification(resolved=scoped.resolved, schema_claims=[ext_claim])
-        relationship_classification(resolved=scoped.resolved, schema_claims=[ext_claim])
+        relationship_classification(resolved=scoped.resolved)
+        relationship_classification(resolved=scoped.resolved)
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -93,7 +93,7 @@ def test_relationship_classification_is_idempotent(pg_db, cleanup_after_test):
 
 
 def test_relationship_classification_warns_and_drops_unknown_ids_colocated(
-    pg_db, tmp_path, caplog, cleanup_after_test
+    pg_db, tmp_path, caplog
 ):
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
@@ -105,23 +105,17 @@ def test_relationship_classification_warns_and_drops_unknown_ids_colocated(
         "Identity,mapping,unknown_rel,Unknown,,,\n"
     )
 
-    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
-    with (
-        cdm_extension_schema_claim(pg_db.committing_engine, prefix="relclass_unknown") as ext_claim,
-        scoped_test_schema(
-            pg_db.resolved,
-            prefix="relclass_unknown",
-            schema_claims=[staging_schema_claim(), ext_claim],
-            register_claims=False,
-        ) as scoped,
-    ):
+    with scoped_test_schema(
+        pg_db.resolved,
+        prefix="relclass_unknown",
+        schema_claims=[staging_schema_claim()],
+        register_claims=False,
+    ) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
         with caplog.at_level(logging.WARNING, logger="omop_graph.cli"):
-            relationship_classification(
-                str(tmp_path), resolved=scoped.resolved, schema_claims=[ext_claim]
-            )
+            relationship_classification(str(tmp_path), resolved=scoped.resolved)
 
         with scoped.engine.connect() as connection:
             relationship_ids = set(

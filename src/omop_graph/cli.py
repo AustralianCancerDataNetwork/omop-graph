@@ -2,14 +2,14 @@ import logging
 import tempfile
 from importlib import resources
 from pathlib import Path
-from typing import Annotated, Iterable, Optional, cast
+from typing import Annotated, Optional, cast
 
 import pandas as pd
 import sqlalchemy as sa
 import typer
 import sqlalchemy.orm as so
 
-from oa_configurator import ResolvedCDMDatabase, SchemaClaim, open_connection
+from oa_configurator import ResolvedCDMDatabase, open_connection
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
@@ -99,7 +99,6 @@ def relationship_classification(
     pred_class_dir: Optional[str] = None,
     *,
     resolved: ResolvedCDMDatabase | None = None,
-    schema_claims: Iterable[SchemaClaim] = (),
 ) -> None:
     """Load pre-classified predicates into the database.
 
@@ -113,14 +112,10 @@ def relationship_classification(
         Database to load into. Defaults to the active config's CDM database.
         When the vocabulary has its own database, ``RelationshipMapping`` is
         created without its FK to ``relationship.relationship_id``.
-    schema_claims : Iterable[SchemaClaim], optional
-        Forwarded to ``open_cdm_sessions()``/``create_cdm_engines()``, e.g.
-        a test's own test-isolated CDM_EXTENSION_SCHEMA claim overriding
-        the literal default this would otherwise always resolve to.
     """
     if resolved is None:
         resolved = resolve_cdm_database()
-    with open_cdm_sessions(resolved, schema_claims=schema_claims) as cdm_sessions:
+    with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
             relationship_ids = set(
