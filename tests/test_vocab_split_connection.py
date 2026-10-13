@@ -22,10 +22,10 @@ import sqlalchemy.orm as so
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role, SchemaClaim
 from oa_configurator.testing import (
     isolated_test_database,
+    reset_schema_registry_rows,
     resolve_with_role_schemas,
     scoped_test_schema,
 )
-from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -37,7 +37,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
     Vocabulary,
 )
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
 from omop_alchemy.cross_database import cdm_sessionmaker
 
 from omop_graph.cli import relationship_classification
@@ -153,7 +153,13 @@ def split_engines() -> Iterator[_Engines]:
                 vocab_db.resolved, {role: vocab_schema for role in vocab_db.resolved.schema_tags()}
             )
             vocab_setup_engine, _ = vocab_only.create_engines(
-                schema_claims=[SchemaClaim(schema_tag=CDM_EXTENSION_SCHEMA, physical_schema=vocab_schema)],
+                schema_claims=[
+                    SchemaClaim(
+                        schema_tag=CDM_EXTENSION_SCHEMA,
+                        physical_schema=vocab_schema,
+                        owner=CDM_EXTENSION_SCHEMA_OWNER,
+                    )
+                ],
                 register_claims=False,
             )
             try:
@@ -405,7 +411,7 @@ def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines
 
 
 def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connection(
-    split_engines: _Engines, tmp_path
+    split_engines: _Engines, tmp_path, cleanup_after_test
 ) -> None:
     """relationship_classification() creates RelationshipMapping without its
     FK to the vocabulary. A relationship ID the vocabulary lacks is warned
@@ -420,7 +426,15 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
         "Identity,mapping,unknown_rel,Unknown,,,\n"
     )
 
-    relationship_classification(str(tmp_path), resolved=split_engines.resolved)
+    # relationship_classification() below registers its own claim
+    # (register_claims=True, the default), so reset the shared registry row
+    # for CDM_EXTENSION_SCHEMA around it to avoid leaving it pointed at this
+    # test's own physical schema for whichever test runs next.
+    reset_schema_registry_rows(cleanup_after_test, split_engines.primary, schema_tags=[CDM_EXTENSION_SCHEMA])
+    relationship_classification(
+        str(tmp_path), resolved=split_engines.resolved,
+        schema_claims=[split_engines.cdm_extension_schema_claim],
+    )
 
     with so.Session(split_engines.primary) as session:
         relationship_ids = set(

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from typing import Optional
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 import sqlalchemy.orm as so
 from sqlalchemy.engine import Engine
-from oa_configurator import ResolvedCDMDatabase, Resolver
+from oa_configurator import ResolvedCDMDatabase, Resolver, SchemaClaim
 from omop_alchemy.config import create_cdm_engines
 from omop_alchemy.cross_database import CDMSession, cdm_sessionmaker
 from sqlalchemy.orm import sessionmaker
@@ -62,24 +62,33 @@ def cdm_session_factory(
 
 
 def _create_cdm_sessions(
-    resolved: ResolvedCDMDatabase, *, register_claims: bool
+    resolved: ResolvedCDMDatabase,
+    *,
+    schema_claims: Iterable[SchemaClaim] = (),
+    register_claims: bool,
 ) -> tuple[sessionmaker[CDMSession], Engine, Engine]:
     """Build routed sessions and their owned engine pair through omop-alchemy."""
     primary, vocab = create_cdm_engines(
-        resolved, register_claims=register_claims
+        resolved, schema_claims=schema_claims, register_claims=register_claims
     )
     return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab
 
 
 @contextmanager
 def open_cdm_sessions(
-    resolved: ResolvedCDMDatabase, *, register_claims: bool = True
+    resolved: ResolvedCDMDatabase,
+    *,
+    schema_claims: Iterable[SchemaClaim] = (),
+    register_claims: bool = True,
 ) -> Generator[so.sessionmaker[CDMSession], None, None]:
     """Yield a routed session factory on ``create_cdm_engines(resolved)``, disposing both engines on exit.
 
     Parameters
     ----------
     resolved : ResolvedCDMDatabase
+    schema_claims : Iterable[SchemaClaim], optional
+        As for :func:`create_cdm_engines`, e.g. a test's own test-isolated
+        CDM_EXTENSION_SCHEMA claim.
     register_claims : bool, optional
         As for :func:`create_cdm_engines`.
 
@@ -88,7 +97,7 @@ def open_cdm_sessions(
     sqlalchemy.orm.sessionmaker[CDMSession]
     """
     cdm_sessions, primary, vocab = _create_cdm_sessions(
-        resolved, register_claims=register_claims
+        resolved, schema_claims=schema_claims, register_claims=register_claims
     )
     try:
         yield cdm_sessions

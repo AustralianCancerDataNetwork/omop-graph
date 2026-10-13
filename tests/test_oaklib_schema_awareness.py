@@ -18,9 +18,10 @@ import sqlalchemy as sa
 import sqlalchemy.orm
 from oaklib import get_adapter
 
-from oa_configurator import Resolver, Role
-from oa_configurator.testing import scoped_test_schema
+from oa_configurator import Resolver, Role, SchemaClaim
+from oa_configurator.testing import reset_schema_registry_rows, scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
+from omop_alchemy.config import CDM_EXTENSION_SCHEMA
 from omop_alchemy.cross_database import cdm_sessionmaker
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base, bulk_load_context
@@ -90,17 +91,26 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
         session.commit()
 
 
-def _populate(scoped, *, name: str) -> None:
+def _populate(scoped, *, name: str, ext_claim: SchemaClaim) -> None:
+    """Seed one concept plus the relationship vocabulary/classification.
+
+    relationship_classification() registers ext_claim (register_claims=True,
+    the default, needed so it can create the schema it writes into), so
+    every caller resets the registry's shared CDM_EXTENSION_SCHEMA row
+    around this (via cleanup_after_test) to avoid leaving it pointed at
+    this test's own physical schema for whichever test runs next.
+    """
     Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
     _seed_one_concept(scoped.engine, concept_id=_CONCEPT_ID, name=name)
     seed_relationship_vocabulary(scoped.engine)
-    relationship_classification(resolved=scoped.resolved)
+    relationship_classification(resolved=scoped.resolved, schema_claims=[ext_claim])
 
 
 @pytest.mark.parametrize(("descriptor", "expected_name"), [("omop:named_db", "named_db"), ("omop:", None)])
 def test_get_adapter_resolves_the_slug_as_the_database_name(
-    pg_db, monkeypatch, descriptor, expected_name
+    pg_db, monkeypatch, descriptor, expected_name, cleanup_after_test
 ) -> None:
+    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
     with (
         cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_get_adapter") as ext_claim,
         scoped_test_schema(
@@ -108,7 +118,7 @@ def test_get_adapter_resolves_the_slug_as_the_database_name(
             register_claims=False,
         ) as scoped,
     ):
-        _populate(scoped, name="Adapter concept")
+        _populate(scoped, name="Adapter concept", ext_claim=ext_claim)
 
         def fake_resolve_cdm_database(name):
             assert name == expected_name
@@ -132,7 +142,8 @@ def test_resolve_cdm_database_resolves_a_named_entry(pg_db) -> None:
     assert resolve_cdm_database(pg_db.resolved.name).name == pg_db.resolved.name
 
 
-def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
+def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db, cleanup_after_test) -> None:
+    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
     with (
         cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_resolved") as ext_claim,
         scoped_test_schema(
@@ -140,7 +151,7 @@ def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
             register_claims=False,
         ) as scoped,
     ):
-        _populate(scoped, name="Resolved-path concept")
+        _populate(scoped, name="Resolved-path concept", ext_claim=ext_claim)
 
         adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
 
@@ -150,11 +161,12 @@ def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Resolved-path concept"
 
 
-def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -> None:
+def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db, cleanup_after_test) -> None:
     """A second connection entry naming the same physical database is not a
     split, so the adapter gets one engine for both roles and the cross-schema
     foreign key stays creatable. Deciding this by config identity instead
     would open a second pool to a database already in use and drop that key."""
+    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
     name = pg_db.resolved.name
     resolver = Resolver.from_active_config()
     resolver = resolver.with_overrides(
@@ -173,7 +185,7 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
     ):
         assert scoped.resolved.connection.name != scoped.resolved.vocab_connection.name
         assert scoped.resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
-        _populate(scoped, name="Split-wiring concept")
+        _populate(scoped, name="Split-wiring concept", ext_claim=ext_claim)
 
         adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
 
@@ -181,7 +193,8 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Split-wiring concept"
 
 
-def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
+def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db, cleanup_after_test) -> None:
+    reset_schema_registry_rows(cleanup_after_test, pg_db.committing_engine, schema_tags=[CDM_EXTENSION_SCHEMA])
     with (
         cdm_extension_schema_claim(pg_db.committing_engine, prefix="oaklib_kg") as ext_claim,
         scoped_test_schema(
@@ -189,7 +202,7 @@ def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
             register_claims=False,
         ) as scoped,
     ):
-        _populate(scoped, name="Injected concept")
+        _populate(scoped, name="Injected concept", ext_claim=ext_claim)
         kg = KnowledgeGraph(
             cdm_sessionmaker(scoped.resolved, primary=scoped.engine, vocab=scoped.engine)
         )
