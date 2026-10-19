@@ -2447,7 +2447,7 @@ never resolves omop-emb's config.</p>
 
 
 <h4 id="omop_graph.graph.kg.KnowledgeGraph.edges" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">edges</span><span class="p">(</span><span class="n">concept_ids</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">predicate_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">active_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">edges</span><span class="p">(</span><span class="n">concept_ids</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">predicate_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">active_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h4>
 
@@ -2573,11 +2573,15 @@ never resolves omop-emb's config.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If True, only return edges where source/target domains match.</p>
+                <p>If True, only return edges where source/target domains match.
+Defaults to False: most attribute edges cross domains (e.g. a
+Procedure's <code>Has method</code> -&gt; Observation, <code>Has dir proc site</code>
+-&gt; Spec Anatomic Site), so filtering here would hide them. Path
+search keeps its own <code>within_domain=True</code> default to limit noise.</p>
               </div>
             </td>
             <td>
-                  <code>True</code>
+                  <code>False</code>
             </td>
           </tr>
       </tbody>
@@ -2721,7 +2725,7 @@ never resolves omop-emb's config.</p>
 
 
 <h4 id="omop_graph.graph.kg.KnowledgeGraph.iter_edges" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">iter_edges</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">concept_ids</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">predicate_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">active_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">iter_edges</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">concept_ids</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">predicate_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">predicate_kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">active_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">within_domain</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h4>
 
