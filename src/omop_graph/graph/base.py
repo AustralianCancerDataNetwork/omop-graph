@@ -38,7 +38,7 @@ class GraphBackend(ABC):
         predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
-        within_domain: bool = True,
+        within_domain: bool = False,
     ) -> Iterable[EdgeView]:
         """
         Iterate over edges for a concept with filtering.
@@ -63,6 +63,10 @@ class GraphBackend(ABC):
             Check validity on a specific date.
         within_domain : bool
             If True, only return edges where source/target domains match.
+            Defaults to False: most attribute edges cross domains (e.g. a
+            Procedure's ``Has method`` -> Observation, ``Has dir proc site``
+            -> Spec Anatomic Site), so filtering here would hide them. Path
+            search keeps its own ``within_domain=True`` default to limit noise.
 
         Yields
         -------
