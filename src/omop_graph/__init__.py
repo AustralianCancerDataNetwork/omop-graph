@@ -1,17 +1,17 @@
 from .api import (
-    KnowledgeGraph,
     GraphPath,
-    Subgraph,
     GraphTrace,
+    KnowledgeGraph,
     PathExplanation,
     PathProfile,
+    Subgraph,
 )
 
 __all__ = [
-    "KnowledgeGraph",
     "GraphPath",
-    "Subgraph",
     "GraphTrace",
+    "KnowledgeGraph",
     "PathExplanation",
     "PathProfile",
+    "Subgraph",
 ]

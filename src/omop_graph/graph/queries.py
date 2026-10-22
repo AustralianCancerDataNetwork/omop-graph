@@ -14,24 +14,8 @@ The queries cover:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Literal, Union, cast
 from datetime import date
-
-from sqlalchemy import (
-    and_,
-    case,
-    exists,
-    func,
-    literal,
-    or_,
-    select,
-    Connection,
-    Engine,
-    Table,
-)
-from sqlalchemy.orm import aliased
-from sqlalchemy.sql import Select
-
+from typing import Literal, cast
 
 from omop_alchemy.backends import (
     resolve_backend,
@@ -44,6 +28,20 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
 )
 from omop_alchemy.cdm.query import ConceptFilter
+from sqlalchemy import (
+    Connection,
+    Engine,
+    Table,
+    and_,
+    case,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+)
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql import Select
 
 from ..extensions.omop_alchemy import RelationshipMapping
 
@@ -135,7 +133,7 @@ def q_concept_view(concept_id: int) -> Select:
     ).where(Concept.concept_id == concept_id)
 
 
-def q_concept_views(concept_ids: Tuple[int, ...], sort: bool = True) -> Select:
+def q_concept_views(concept_ids: tuple[int, ...], sort: bool = True) -> Select:
     """
     Query for multiple concepts by their IDs.
 
@@ -228,7 +226,7 @@ def q_concept_synonym() -> Select:
 
 def q_concept_name_match(
     query_concept_name: str,
-    search_constraint: Optional[ConceptFilter] = None,
+    search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -268,7 +266,7 @@ def q_concept_name_match(
 
 def q_concept_name_ilike(
     query_concept_name: str,
-    search_constraint: Optional[ConceptFilter] = None,
+    search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -311,7 +309,7 @@ def q_concept_name_fulltext(
     query_concept_name: str,
     *,
     engine: Engine | Connection,
-    search_constraint: Optional[ConceptFilter] = None,
+    search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -424,11 +422,11 @@ def q_all_predicates_with_ancestry() -> Select:
 
 
 def q_edges(
-    concept_ids: Union[Tuple[int, ...], int],
+    concept_ids: tuple[int, ...] | int,
     direction: Literal["in", "out"],
-    predicate_ids: Optional[frozenset[str]] = None,
+    predicate_ids: frozenset[str] | None = None,
     active_only: bool = False,
-    on: Optional[date] = None,
+    on: date | None = None,
     within_domain: bool = False,
 ) -> Select:
     """Query edges for a batch of concept IDs, in either direction.
@@ -503,9 +501,9 @@ def q_ancestors(concept_id: int) -> Select:
 
 
 def q_relationships(
-    subjects: Optional[tuple[int, ...]],
-    predicates: Optional[tuple[str, ...]],
-    objects: Optional[tuple[int, ...]],
+    subjects: tuple[int, ...] | None,
+    predicates: tuple[str, ...] | None,
+    objects: tuple[int, ...] | None,
 ) -> Select:
 
     stmt = select(
@@ -538,9 +536,7 @@ def q_entities(
     ).apply(select(Concept.concept_id))
 
 
-def q_concept_filtered(
-    vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_concept_filtered(vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """Helper query for selecting standard concepts filtered by vocab/domain."""
     return ConceptFilter(
         domains=(domain_id,) if domain_id else None,
@@ -556,7 +552,7 @@ def q_concept_synonym_filtered(concept_id: int) -> Select:
     return stmt.where(Concept_Synonym.concept_id == concept_id)
 
 
-def q_singletons(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None) -> Select:
+def q_singletons(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """
     Query for singleton concepts (no parents, no children).
     Uses NOT EXISTS subqueries on the ancestor table.
@@ -584,7 +580,7 @@ def q_singletons(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str
     )
 
 
-def q_roots(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None) -> Select:
+def q_roots(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """Query for root concepts (no parents)."""
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
     return stmt.where(
@@ -599,7 +595,7 @@ def q_roots(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = N
     )
 
 
-def q_leaves(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None) -> Select:
+def q_leaves(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """Query for leaf concepts (no children)."""
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
     return stmt.where(
@@ -642,7 +638,7 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
 
 
 def q_concept_potential_ancestors_batch(
-    child_ids: Tuple[int, ...], parent_ids: Tuple[int, ...]
+    child_ids: tuple[int, ...], parent_ids: tuple[int, ...]
 ) -> Select:
     """
     Check which of several candidate parents are ancestors of one or more children.
@@ -667,7 +663,7 @@ def q_concept_potential_ancestors_batch(
     )
 
 
-def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
+def q_concept_num_ancestors(concept_ids: tuple[int, ...]) -> Select:
     """
     Count the number of ancestors for each concept in the batch.
     """
@@ -686,7 +682,7 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     )
 
 
-def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
+def q_concept_num_descendants(concept_ids: tuple[int, ...]) -> Select:
     """
     Count the number of descendants for each concept in the batch.
     """

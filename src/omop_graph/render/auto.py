@@ -3,25 +3,24 @@ from __future__ import annotations
 from typing import Literal
 
 from omop_graph.graph.paths import GraphPath, PathExplanation
-from omop_graph.graph.traverse import Subgraph, GraphTrace
+from omop_graph.graph.traverse import GraphTrace, Subgraph
 
 from .html import (
+    explained_path_html,
+    path_html,
     subgraph_html,
     trace_html_with_cards,
-    path_html,
-    explained_path_html,
-)
-from .text import (
-    subgraph_text,
-    trace_text,
-    path_text,
-    explained_path_text,
 )
 from .mmd import (
-    subgraph_mermaid,
     path_mermaid,
+    subgraph_mermaid,
 )
-
+from .text import (
+    explained_path_text,
+    path_text,
+    subgraph_text,
+    trace_text,
+)
 
 Format = Literal["auto", "html", "text", "mmd"]
 
@@ -95,7 +94,7 @@ def render_explained_path(
 
 
 def bind_default_renderers(kg):
-    from omop_graph.render import render_subgraph, render_trace, render_path
+    from omop_graph.render import render_path, render_subgraph, render_trace
 
     Subgraph._repr_html_ = lambda self: render_subgraph(kg, self, format="html")  # type: ignore
     GraphTrace._repr_html_ = lambda self: render_trace(kg, self, format="html")  # type: ignore

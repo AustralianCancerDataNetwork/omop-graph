@@ -1,27 +1,26 @@
-from random import randint, choice
-import numpy as np
 from datetime import date, timedelta
+from random import choice, randint
+
+import numpy as np
 import pandas as pd
-
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
-
-from omop_alchemy.cdm.model.structural.episode import Episode
-from omop_alchemy.cdm.model.structural.episode_event import Episode_Event
-from omop_alchemy.cdm.model.clinical import Observation_Period
-from omop_alchemy.cdm.model.health_system import (
-    Location,
-    Care_Site,
-    Provider,
-    Visit_Occurrence,
-)
 from omop_alchemy.cdm.model.clinical import (
-    Person,
     Condition_Occurrence,
     Death,
     Measurement,
+    Observation_Period,
+    Person,
 )
+from omop_alchemy.cdm.model.health_system import (
+    Care_Site,
+    Location,
+    Provider,
+    Visit_Occurrence,
+)
+from omop_alchemy.cdm.model.structural.episode import Episode
+from omop_alchemy.cdm.model.structural.episode_event import Episode_Event
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Ancestor
+from sqlalchemy.orm import Session
 
 
 def populate_reference_data(

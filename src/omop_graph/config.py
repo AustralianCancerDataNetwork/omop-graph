@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Annotated, ClassVar, Final
 
-from pydantic import Field
 from oa_configurator import (
     CDMDatabaseConfig,
     ModelConfig,
@@ -12,6 +11,7 @@ from oa_configurator import (
     RefTo,
     VectorStoreConfig,
 )
+from pydantic import Field
 
 TOOL_NAME: Final[str] = "omop_graph"
 

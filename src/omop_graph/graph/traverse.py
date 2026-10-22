@@ -12,9 +12,10 @@ Algorithms that explore the graph structure (e.g., "Find all neighbors within 3 
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING
 
 # Local Application Imports
 from omop_graph.extensions.omop_alchemy import PredicateKind
@@ -79,10 +80,10 @@ class GraphTrace:
     """
 
     seeds: tuple[int, ...]
-    steps: List[TraceStep]
-    terminated_reason: Optional[str] = None
+    steps: list[TraceStep]
+    terminated_reason: str | None = None
 
-    def summary(self, kg: "KnowledgeGraph", max_steps: int = 10) -> str:
+    def summary(self, kg: KnowledgeGraph, max_steps: int = 10) -> str:
         """
         Generate a human-readable summary of the traversal.
 
@@ -112,14 +113,14 @@ class GraphTrace:
 
 
 def traverse(
-    kg: "KnowledgeGraph",
+    kg: KnowledgeGraph,
     seeds: Iterable[int],
-    predicate_kinds: Optional[Set[PredicateKind]],
+    predicate_kinds: set[PredicateKind] | None,
     max_depth: int,
-    on: Optional[date],
-    max_nodes: Optional[int],
+    on: date | None,
+    max_nodes: int | None,
     trace: bool,
-) -> Tuple[Subgraph, Optional[GraphTrace]]:
+) -> tuple[Subgraph, GraphTrace | None]:
     """
     Perform a Breadth-First Search (BFS) traversal starting from seed nodes.
 
@@ -150,8 +151,8 @@ def traverse(
     unique_seeds = tuple(dict.fromkeys(seeds))
 
     visited = set()
-    edges_out: List[EdgeView] = []
-    trace_steps: List[TraceStep] = []
+    edges_out: list[EdgeView] = []
+    trace_steps: list[TraceStep] = []
 
     # Queue stores (concept_id, depth)
     q = deque((s, 0) for s in unique_seeds)
@@ -172,7 +173,7 @@ def traverse(
         if depth >= max_depth:
             continue
 
-        expanded: List[EdgeView] = []
+        expanded: list[EdgeView] = []
 
         # Iterate over outgoing edges
         with kg.session_factory() as session:

@@ -16,10 +16,10 @@ from datetime import date
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm
-from oaklib import get_adapter
-
+from fixtures.mock_cdm import seed_relationship_vocabulary
 from oa_configurator import Resolver, Role
 from oa_configurator.testing import scoped_test_schema
+from oaklib import get_adapter
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cross_database import cdm_sessionmaker
 from orm_loader.backends import staging_schema_claim
@@ -31,7 +31,6 @@ from omop_graph.extensions.omop_alchemy import RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-from fixtures.mock_cdm import seed_relationship_vocabulary
 
 _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001

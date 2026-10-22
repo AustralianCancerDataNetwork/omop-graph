@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
-from typing import Iterator, cast
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
-
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
-from orm_loader.helpers import Base, bulk_load_context
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_class import Concept_Class
@@ -17,6 +15,8 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
+from orm_loader.helpers import Base, bulk_load_context
+from sqlalchemy.orm import Session, sessionmaker
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (

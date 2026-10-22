@@ -12,15 +12,14 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
+from fixtures.mock_cdm import seed_relationship_vocabulary
 from oa_configurator import Role
 from oa_configurator.testing import scoped_test_schema
-
 from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
-from fixtures.mock_cdm import seed_relationship_vocabulary
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):

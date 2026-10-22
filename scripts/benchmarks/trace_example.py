@@ -18,9 +18,10 @@ import json
 import logging
 from html import escape
 from pathlib import Path
-from typing import Annotated, Dict, List, Optional, Tuple
+from typing import Annotated
 
 import typer
+from omop_alchemy.cdm.query import ConceptFilter
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -35,7 +36,6 @@ from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.extensions.emb import get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -95,7 +95,7 @@ ORDERED_RESOLVERS = [
 ]
 
 # Groups synonym + non-synonym resolvers for the SVG column view
-RESOLVER_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+RESOLVER_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Exact", ("Exact", "Exact Synonym")),
     ("Partial", ("Partial", "Partial Synonym")),
     ("Full Text", ("Full Text", "Full Text Synonym")),
@@ -106,7 +106,7 @@ RESOLVER_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _build_kg(metric_type=None, embedding_model: Optional[str] = None) -> KnowledgeGraph:
+def _build_kg(metric_type=None, embedding_model: str | None = None) -> KnowledgeGraph:
     """Build a KG with embedding support, resolved from OmopGraphConfig."""
     cdm_sessions = cdm_session_factory()
     try:
@@ -152,7 +152,7 @@ def _resolver_label(resolver) -> str:
     )
 
 
-def _resolve_embedding_model(embedding_model: Optional[str]) -> str:
+def _resolve_embedding_model(embedding_model: str | None) -> str:
     """Resolve the canonical embedding model name (override or config default).
 
     Mirrors the canonicalisation `_build_kg` does, but without opening a DB
@@ -173,7 +173,7 @@ def _resolve_embedding_model(embedding_model: Optional[str]) -> str:
     return build_model_backend_from_resolved(resolved_model).model
 
 
-def _model_dir_name(embedding_model: Optional[str]) -> str:
+def _model_dir_name(embedding_model: str | None) -> str:
     """Filesystem-safe directory name for a (canonical) embedding model name.
 
     `embedding_model` is None when no embedding is configured for this run
@@ -187,7 +187,7 @@ def _model_dir_name(embedding_model: Optional[str]) -> str:
     return RegistryManager.safe_model_name(embedding_model)
 
 
-def _concept_info(kg: KnowledgeGraph, concept_id: int) -> Dict:
+def _concept_info(kg: KnowledgeGraph, concept_id: int) -> dict:
     try:
         cv = kg.concept_view(concept_id)
         return {
@@ -208,11 +208,11 @@ def _run_trace(
     kg: KnowledgeGraph,
     query: str,
     case_id: str,
-    parent_ids: Tuple[int, ...],
-    search_constraint: Optional[ConceptFilter],
-    expected_concept_id: Optional[int],
+    parent_ids: tuple[int, ...],
+    search_constraint: ConceptFilter | None,
+    expected_concept_id: int | None,
     top_n: int,
-) -> Dict:
+) -> dict:
     # Stage 0: compute query embedding once (shared by individual resolvers + ground_term)
     query_embedding = None
     try:
@@ -230,7 +230,7 @@ def _run_trace(
     # Stage 1: run every resolver individually to capture per-resolver attribution
     resolver_stages = []
     seen: set = set()
-    concept_to_resolvers: Dict[int, List[str]] = {}
+    concept_to_resolvers: dict[int, list[str]] = {}
 
     for resolver in ORDERED_RESOLVERS:
         label = _resolver_label(resolver)
@@ -426,7 +426,7 @@ def _run_trace(
         )
 
     # Stage 3: build output — annotate each result with which resolvers found it
-    target_rank: Optional[int] = None
+    target_rank: int | None = None
     if expected_concept_id is not None:
         for i, sc in enumerate(scored):
             if sc.concept_id == expected_concept_id:
@@ -496,10 +496,10 @@ def _run_trace(
 
 
 def _constraints_dict(
-    sc: Optional[ConceptFilter],
-    parent_ids: Tuple[int, ...],
+    sc: ConceptFilter | None,
+    parent_ids: tuple[int, ...],
     kg: KnowledgeGraph,
-) -> Dict:
+) -> dict:
     parent_name = None
     if parent_ids:
         try:
@@ -518,7 +518,7 @@ def _constraints_dict(
 # ─── SVG generation ───────────────────────────────────────────────────────────
 
 
-def _svg(trace: Dict, title: str) -> str:
+def _svg(trace: dict, title: str) -> str:
     groups = trace.get("resolver_group_scoring", [])
     n = max(len(groups), 1)
 
@@ -562,7 +562,7 @@ def _svg(trace: Dict, title: str) -> str:
     INPUT_BAR_H = 48  # blue bar inside INPUT block
     OUT_BAR_H = 44  # blue bar inside GLOBAL OUTPUT block
 
-    parts: List[str] = []
+    parts: list[str] = []
     y = 12  # small top margin; no title text
 
     def rect(x, yy, w, h, fill, stroke, rx=6, sw=1.5):
@@ -798,7 +798,7 @@ def _svg(trace: Dict, title: str) -> str:
         )
         rank_color = TEXT_OK if target_rank == 1 else (AMBER_BORDER if target_rank else "#b02a37")
         rank_val = str(target_rank) if target_rank else "not grounded"
-        tspans: List[str] = []
+        tspans: list[str] = []
         for lbl, val in [
             ("Vocabulary:", top_out.get("vocabulary_id", "—")),
             ("Code:", top_out.get("concept_code", "—")),
@@ -849,7 +849,7 @@ PREDICATE_KIND_ORDER = (
 )
 
 
-def _relationship_classification(kg: KnowledgeGraph, concept_id: int) -> Dict:
+def _relationship_classification(kg: KnowledgeGraph, concept_id: int) -> dict:
     """Group a concept's outgoing edges by predicate_kind for the Panel A diagram.
 
     One representative edge (relationship + target concept name) per class, plus the total
@@ -857,7 +857,7 @@ def _relationship_classification(kg: KnowledgeGraph, concept_id: int) -> Dict:
     vs. excluded by default (everything else) without enumerating every edge.
     """
     edges = kg.edges(concept_ids=concept_id, direction="out", active_only=True, within_domain=False)
-    by_kind: Dict[PredicateKind, List] = {}
+    by_kind: dict[PredicateKind, list] = {}
     for edge in edges:
         by_kind.setdefault(edge.predicate_kind, []).append(edge)
 
@@ -893,8 +893,8 @@ def _relationship_classification(kg: KnowledgeGraph, concept_id: int) -> Dict:
 
 
 def _pick_hierarchy_examples(
-    hierarchy_validation: List[Dict], passed: bool, limit: int = 3
-) -> List[Dict]:
+    hierarchy_validation: list[dict], passed: bool, limit: int = 3
+) -> list[dict]:
     """Pick up to `limit` distinct-by-name hierarchy_validation entries for Panel B.
 
     For failures, Embedding-only hits are surfaced first: an Embedding candidate that falls
@@ -918,7 +918,7 @@ def _pick_hierarchy_examples(
     return picked
 
 
-def _panel_svg(rel_class: Dict, trace: Dict, title: str) -> str:
+def _panel_svg(rel_class: dict, trace: dict, title: str) -> str:
     """Render the two-panel dashboard: Panel A (relationship classification / edge filtering)
     above Panel B (hierarchy-constrained candidate culling)."""
     MARGIN = 30
@@ -944,7 +944,7 @@ def _panel_svg(rel_class: Dict, trace: Dict, title: str) -> str:
 
     FS_XS, FS_SM, FS_MID, FS_HDR = 10, 12, 14, 13
 
-    parts: List[str] = []
+    parts: list[str] = []
 
     def rect(x, yy, w, h, fill, stroke, rx=6, sw=1.5):
         return f'<rect x="{x}" y="{yy}" width="{w}" height="{h}" rx="{rx}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"/>'
@@ -1141,16 +1141,14 @@ RESOLVER_STRIPE_COLORS = {
 }
 
 
-def _resolver_groups_for(resolvers: List[str]) -> List[str]:
+def _resolver_groups_for(resolvers: list[str]) -> list[str]:
     """Map a candidate's full resolver list to its distinct, canonically-ordered group names
     (e.g. ["Exact", "Exact Synonym"] -> ["Exact"]; preserves RESOLVER_GROUPS order)."""
     resolver_set = set(resolvers)
     return [group_name for group_name, members in RESOLVER_GROUPS if resolver_set & set(members)]
 
 
-def _resolve_identity_hop(
-    kg: KnowledgeGraph, candidate_id: int, standard_id: Optional[int]
-) -> Dict:
+def _resolve_identity_hop(kg: KnowledgeGraph, candidate_id: int, standard_id: int | None) -> dict:
     """Resolve the real Identity edge (if any) a candidate uses to reach a standard concept.
 
     Returns ``{"already_standard": bool, "predicate_name": str|None, "object_id": int|None,
@@ -1205,7 +1203,7 @@ def _resolve_identity_hop(
     }
 
 
-def _select_funnel_candidates(trace: Dict, max_passed: int = 6, max_failed: int = 12) -> List[Dict]:
+def _select_funnel_candidates(trace: dict, max_passed: int = 6, max_failed: int = 12) -> list[dict]:
     """Pick a small, representative set of `hierarchy_validation` entries for the funnel
     diagram's starting (stage 1) column -- enough to show real candidates getting eliminated
     at each stage, without enumerating every candidate the resolvers found.
@@ -1224,7 +1222,7 @@ def _select_funnel_candidates(trace: Dict, max_passed: int = 6, max_failed: int 
     passed = [e for e in hierarchy_validation if e.get("passed")]
     failed = [e for e in hierarchy_validation if not e.get("passed")]
 
-    by_standard: Dict[int, List[Dict]] = {}
+    by_standard: dict[int, list[dict]] = {}
     for e in passed:
         by_standard.setdefault(e["standard_concept_id"], []).append(e)
 
@@ -1267,7 +1265,7 @@ def _select_funnel_candidates(trace: Dict, max_passed: int = 6, max_failed: int 
     return selected_passed + selected_failed
 
 
-def _build_funnel_nodes(kg: KnowledgeGraph, trace: Dict, entries: List[Dict]) -> List[Dict]:
+def _build_funnel_nodes(kg: KnowledgeGraph, trace: dict, entries: list[dict]) -> list[dict]:
     """Resolve each selected candidate's real Identity hop and attach resolver/score metadata,
     ready for the funnel renderer."""
     top_n_results = trace.get("top_n_results", [])
@@ -1326,8 +1324,8 @@ def _build_funnel_nodes(kg: KnowledgeGraph, trace: Dict, entries: List[Dict]) ->
 
 
 def _trim_funnel_nodes(
-    nodes: List[Dict], max_passed: int = 3, max_no_mapping: int = 1, max_hierarchy_fail: int = 1
-) -> List[Dict]:
+    nodes: list[dict], max_passed: int = 3, max_no_mapping: int = 1, max_hierarchy_fail: int = 1
+) -> list[dict]:
     """Cut the built node list down to a small, clean set for the figure: the winner plus a
     couple of other genuinely-scored alternatives, and one example of each failure flavor (no
     Identity mapping at all vs. a real mapping that falls outside the hierarchy anchor) -- so
@@ -1354,7 +1352,7 @@ def _trim_funnel_nodes(
     return selected_passed + no_mapping + hierarchy_fail
 
 
-def _resolve_anchor_concepts(kg: KnowledgeGraph, trace: Dict) -> List[Dict]:
+def _resolve_anchor_concepts(kg: KnowledgeGraph, trace: dict) -> list[dict]:
     """Resolve every hierarchy-anchor parent ID's concept name (not just the first) for the
     funnel diagram's top banner."""
     parent_ids = trace.get("constraints", {}).get("parent_ids") or []
@@ -1368,7 +1366,7 @@ def _resolve_anchor_concepts(kg: KnowledgeGraph, trace: Dict) -> List[Dict]:
     ]
 
 
-def _funnel_svg(nodes: List[Dict], trace: Dict, anchor_concepts: List[Dict]) -> str:
+def _funnel_svg(nodes: list[dict], trace: dict, anchor_concepts: list[dict]) -> str:
     """Render the 4-stage left-to-right funnel: candidates -> standard concepts (Identity hop)
     -> hierarchy-validated -> scored/winner. Candidates are stacked vertically; nodes that
     converge on the same standard concept merge into one box in later stages. Eliminated
@@ -1445,7 +1443,7 @@ def _funnel_svg(nodes: List[Dict], trace: Dict, anchor_concepts: List[Dict]) -> 
     total_h = n * NODE_H + (n - 1) * NODE_GAP
     H = max(420, TOP_Y + total_h + FOOTER_RESERVED)
 
-    parts: List[str] = []
+    parts: list[str] = []
 
     def rect(x, yy, w, h, fill, stroke, rx=6, sw=1.5, dashed=False):
         dash = ' stroke-dasharray="6,4"' if dashed else ""
@@ -1636,8 +1634,8 @@ def _funnel_svg(nodes: List[Dict], trace: Dict, anchor_concepts: List[Dict]) -> 
         )
 
     # ── Stage 1 -> 2: Identity hop (or dead end if no mapping at all) ──
-    std_order: List[int] = []
-    std_indices: Dict[int, List[int]] = {}
+    std_order: list[int] = []
+    std_indices: dict[int, list[int]] = {}
     for i, node in enumerate(nodes):
         sid = node["standard_id"]
         if sid is None:
@@ -1803,7 +1801,7 @@ def _funnel_svg(nodes: List[Dict], trace: Dict, anchor_concepts: List[Dict]) -> 
 @app.command()
 def trace(
     cases_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--cases-file",
             "-c",
@@ -1811,7 +1809,7 @@ def trace(
         ),
     ] = None,
     case_ids: Annotated[
-        Optional[List[str]],
+        list[str] | None,
         typer.Option(
             "--case-id",
             "-i",
@@ -1819,7 +1817,7 @@ def trace(
         ),
     ] = None,
     query: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--query",
             "-q",
@@ -1827,7 +1825,7 @@ def trace(
         ),
     ] = None,
     parent_ids: Annotated[
-        Optional[List[int]],
+        list[int] | None,
         typer.Option(
             "--parent-id",
             "-G",
@@ -1835,7 +1833,7 @@ def trace(
         ),
     ] = None,
     domains: Annotated[
-        Optional[List[str]],
+        list[str] | None,
         typer.Option(
             "--domain",
             "-D",
@@ -1843,7 +1841,7 @@ def trace(
         ),
     ] = None,
     vocabularies: Annotated[
-        Optional[List[str]],
+        list[str] | None,
         typer.Option(
             "--vocabulary",
             "-V",
@@ -1851,7 +1849,7 @@ def trace(
         ),
     ] = None,
     query_expected_concept_id: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--expected-concept-id", "-e", help="Expected concept ID for on-demand evaluation."
         ),
@@ -1860,7 +1858,7 @@ def trace(
         int, typer.Option("--top-n", "-n", help="Number of top results to include per case.")
     ] = 5,
     out_dir: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--out-dir",
             "-o",
@@ -1876,7 +1874,7 @@ def trace(
         ),
     ] = "cosine",
     embedding_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--embedding-model",
             "-E",
@@ -1884,7 +1882,7 @@ def trace(
         ),
     ] = None,
     parent_id_level: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--parent-id-level",
             "-L",
@@ -1896,7 +1894,7 @@ def trace(
 ):
     """Trace grounding cases through every resolver stage. Outputs {\"cases\": [...]}."""
     # Build the list of cases to run
-    cases_to_run: List[Dict] = []
+    cases_to_run: list[dict] = []
 
     if cases_file:
         payload = json.loads(Path(cases_file).read_text())
@@ -2055,7 +2053,7 @@ def pipeline_svg(
         ),
     ],
     embedding_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--embedding-model",
             "-E",
@@ -2064,7 +2062,7 @@ def pipeline_svg(
         ),
     ] = None,
     case_id: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--case-id",
             "-i",
@@ -2075,7 +2073,7 @@ def pipeline_svg(
         str, typer.Option("--title", help="Figure title shown at the top.")
     ] = "omop-graph Concept Grounding",
     parent_id_level: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--parent-id-level",
             "-L",
@@ -2095,7 +2093,7 @@ def pipeline_svg(
     if not json_files:
         typer.echo(f"No JSON trace files found in {trace_dir_pl}.", err=True)
         raise typer.Exit(1)
-    cases: List[Dict] = []
+    cases: list[dict] = []
     for json_file in json_files:
         payload = json.loads(json_file.read_text(encoding="utf-8"))
         cases.extend(payload.get("cases", [payload]))
@@ -2131,7 +2129,7 @@ def panel_svg(
         ),
     ],
     embedding_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--embedding-model",
             "-E",
@@ -2140,7 +2138,7 @@ def panel_svg(
         ),
     ] = None,
     case_id: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--case-id",
             "-i",
@@ -2148,7 +2146,7 @@ def panel_svg(
         ),
     ] = None,
     concept_id: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--concept-id",
             help="Override the concept whose outgoing edges Panel A classifies. Defaults to the "
@@ -2163,7 +2161,7 @@ def panel_svg(
         ),
     ] = "omop-graph Graph Traversal",
     parent_id_level: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--parent-id-level",
             "-L",
@@ -2186,7 +2184,7 @@ def panel_svg(
     if not json_files:
         typer.echo(f"No JSON trace files found in {trace_dir_pl}.", err=True)
         raise typer.Exit(1)
-    cases: List[Dict] = []
+    cases: list[dict] = []
     for json_file in json_files:
         payload = json.loads(json_file.read_text(encoding="utf-8"))
         cases.extend(payload.get("cases", [payload]))
@@ -2200,7 +2198,7 @@ def panel_svg(
         selected = cases
 
     kg = KnowledgeGraph(cdm_session_factory())
-    rel_class_cache: Dict[int, Dict] = {}
+    rel_class_cache: dict[int, dict] = {}
 
     out_dir = trace_dir_pl / "plots" / "panel"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2241,7 +2239,7 @@ def graph_svg(
         ),
     ],
     embedding_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--embedding-model",
             "-E",
@@ -2250,7 +2248,7 @@ def graph_svg(
         ),
     ] = None,
     case_id: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--case-id",
             "-i",
@@ -2258,7 +2256,7 @@ def graph_svg(
         ),
     ] = None,
     parent_id_level: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--parent-id-level",
             "-L",
@@ -2282,7 +2280,7 @@ def graph_svg(
     if not json_files:
         typer.echo(f"No JSON trace files found in {trace_dir_pl}.", err=True)
         raise typer.Exit(1)
-    cases: List[Dict] = []
+    cases: list[dict] = []
     for json_file in json_files:
         payload = json.loads(json_file.read_text(encoding="utf-8"))
         cases.extend(payload.get("cases", [payload]))

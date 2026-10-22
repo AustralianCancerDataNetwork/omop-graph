@@ -17,31 +17,32 @@ from __future__ import annotations
 import functools
 import logging
 import re
-from datetime import date
 from collections import defaultdict
-from typing import Callable, Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
+from datetime import date
+from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import Row
-from sqlalchemy.orm import Session
-from sqlalchemy.engine import Engine
+from oa_configurator import ResolvedModel
 from omop_alchemy.backends import BackendNotSupportedError, FullTextError
 from omop_alchemy.cdm.model.vocabulary import Concept
 from omop_alchemy.cdm.query import ConceptFilter
-from oa_configurator import ResolvedModel
+from sqlalchemy import Row
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
     from omop_emb import (
         EmbeddingBackend,
+        EmbeddingReaderInterface,
         EmbeddingStoreReader,
         EmbeddingWriterInterface,
-        EmbeddingReaderInterface,
     )
 
 # Local Application Imports
 from ..extensions.emb import (
-    MissingExtensionError,
     EmbeddingMetricType,
+    MissingExtensionError,
 )
 from ..extensions.omop_alchemy import (
     PredicateKind,
@@ -58,6 +59,7 @@ from .nodes import (
 )
 from .queries import (
     q_all_predicates_with_ancestry,
+    q_children,
     q_concept_domain_ids,
     q_concept_id_by_code,
     q_concept_name_fulltext,
@@ -71,15 +73,14 @@ from .queries import (
     q_concept_views,
     q_concept_vocabulary_ids,
     q_edges,
+    q_entities,
     q_leaves,
     q_parents,
-    q_children,
     q_predicate_name,
     q_predicate_row_with_ancestry,
+    q_relationships,
     q_roots,
     q_singletons,
-    q_entities,
-    q_relationships,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,11 +128,11 @@ class KnowledgeGraphEmbeddingConfiguration:
     """
 
     metric_type: EmbeddingMetricType
-    backend: "EmbeddingBackend | EmbeddingStoreReader"
+    backend: EmbeddingBackend | EmbeddingStoreReader
     resolved_model: ResolvedModel
     write: bool = False
     compute_missing_embeddings: bool = False
-    faiss_cache_dir: Optional[str] = None
+    faiss_cache_dir: str | None = None
 
     def __post_init__(self) -> None:
         if self.compute_missing_embeddings and not self.write:
@@ -187,7 +188,7 @@ class KnowledgeGraph(GraphBackend):
         self,
         cdm_sessions: Callable[[], Session],
         *,
-        emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
+        emb_config: KnowledgeGraphEmbeddingConfiguration | None = None,
     ):
         if isinstance(cdm_sessions, Engine) or not callable(cdm_sessions):
             raise TypeError(
@@ -218,7 +219,7 @@ class KnowledgeGraph(GraphBackend):
         self._emb = None
 
     @property
-    def emb(self) -> "EmbeddingWriterInterface | EmbeddingReaderInterface":
+    def emb(self) -> EmbeddingWriterInterface | EmbeddingReaderInterface:
         """Namespace for all embedding operations.
 
         Returns an ``EmbeddingWriterInterface`` when ``self._emb_config.write`` is True,
@@ -234,8 +235,8 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             from omop_emb.interface import (
-                EmbeddingWriterInterface,
                 EmbeddingReaderInterface,
+                EmbeddingWriterInterface,
             )
 
             if self._emb_config is None:
@@ -290,7 +291,7 @@ class KnowledgeGraph(GraphBackend):
             raise e
 
     @property
-    def embedding_configuration(self) -> Optional[KnowledgeGraphEmbeddingConfiguration]:
+    def embedding_configuration(self) -> KnowledgeGraphEmbeddingConfiguration | None:
         """Returns the current embedding configuration, if set."""
         return self._emb_config
 
@@ -367,7 +368,7 @@ class KnowledgeGraph(GraphBackend):
         query_term: str,
         match_kind: LabelMatchKind,
         synonym: bool = False,
-        search_constraint: Optional[ConceptFilter] = None,
+        search_constraint: ConceptFilter | None = None,
         sort: bool = True,
     ) -> tuple[LabelMatch, ...]:
         """
@@ -425,7 +426,7 @@ class KnowledgeGraph(GraphBackend):
             )
         return matches
 
-    def concept_ids_by_label(self, label: str) -> Tuple[int, ...]:
+    def concept_ids_by_label(self, label: str) -> tuple[int, ...]:
         """
         Find concept IDs that match the label exactly (case-insensitive).
         """
@@ -474,7 +475,7 @@ class KnowledgeGraph(GraphBackend):
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
         return item
 
-    def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> Tuple[PredicateKind, ...]:
+    def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> tuple[PredicateKind, ...]:
         """
         Classify a batch of predicates.
         """
@@ -486,7 +487,7 @@ class KnowledgeGraph(GraphBackend):
         predicates: tuple[str, ...] | None,
         objects: tuple[int, ...] | None,
         invert: bool = False,
-    ) -> Generator[Tuple[int, str, int], None, None]:
+    ) -> Generator[tuple[int, str, int], None, None]:
         """
         Query relationships between concepts.
 
@@ -526,7 +527,7 @@ class KnowledgeGraph(GraphBackend):
             ):
                 yield s, p, o
 
-    def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
+    def reverse_predicate_id(self, relationship_id: str) -> str | None:
         """
         Get the reverse relationship ID, if it exists.
         """
@@ -540,12 +541,12 @@ class KnowledgeGraph(GraphBackend):
 
     def edges(
         self,
-        concept_ids: Tuple[int, ...] | int,
+        concept_ids: tuple[int, ...] | int,
         direction: Literal["in", "out"],
-        predicate_ids: Optional[frozenset[str]] = None,
-        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
+        predicate_ids: frozenset[str] | None = None,
+        predicate_kinds: frozenset[PredicateKind] | None = None,
         active_only: bool = True,
-        on: Optional[date] = None,
+        on: date | None = None,
         within_domain: bool = False,
     ) -> tuple[EdgeView, ...]:
         """
@@ -592,10 +593,10 @@ class KnowledgeGraph(GraphBackend):
         session: Session,
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
-        predicate_ids: Optional[frozenset[str]] = None,
-        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
+        predicate_ids: frozenset[str] | None = None,
+        predicate_kinds: frozenset[PredicateKind] | None = None,
         active_only: bool = True,
-        on: Optional[date] = None,
+        on: date | None = None,
         within_domain: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
@@ -746,7 +747,7 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_vocabulary_ids()).all()
         return frozenset(row.vocabulary_id for row in rows)
 
-    def get_potential_ancestor(self, child_id: int, parent_id: int) -> Optional[AncestorMatch]:
+    def get_potential_ancestor(self, child_id: int, parent_id: int) -> AncestorMatch | None:
         """
         Check if an ancestry relationship exists between a child and parent.
         """
@@ -764,9 +765,9 @@ class KnowledgeGraph(GraphBackend):
 
     def get_potential_ancestors_batch(
         self,
-        child_ids: Tuple[int, ...],
-        parent_ids: Tuple[int, ...],
-    ) -> Dict[int, Dict[int, AncestorMatch]]:
+        child_ids: tuple[int, ...],
+        parent_ids: tuple[int, ...],
+    ) -> dict[int, dict[int, AncestorMatch]]:
         """Check which candidate parents are ancestors of one or more children.
 
         Parameters
@@ -787,7 +788,7 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             rows = session.execute(q_concept_potential_ancestors_batch(child_ids, parent_ids)).all()
 
-        result: Dict[int, Dict[int, AncestorMatch]] = defaultdict(dict)
+        result: dict[int, dict[int, AncestorMatch]] = defaultdict(dict)
         for row in rows:
             result[row.descendant_concept_id][row.ancestor_concept_id] = AncestorMatch(
                 ancestor_concept_id=row.ancestor_concept_id,
@@ -796,7 +797,7 @@ class KnowledgeGraph(GraphBackend):
             )
         return result
 
-    def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> Dict[int, int]:
+    def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> dict[int, int]:
         """
         Get the count of ancestors for a batch of concepts.
         """

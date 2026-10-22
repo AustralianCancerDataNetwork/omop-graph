@@ -16,6 +16,7 @@ writes is a genuine commit. The Role-tag rows are reset around the test.
 from __future__ import annotations
 
 import pytest
+from fixtures.mock_cdm import seed_relationship_vocabulary
 from oa_configurator import Role, SchemaDriftError
 from oa_configurator.testing import (
     guarded_resolver,
@@ -23,11 +24,9 @@ from oa_configurator.testing import (
     resolve_with_role_schemas,
     scoped_test_schema,
 )
-
 from orm_loader.helpers import Base
 
 from omop_graph import cli as omop_graph_cli
-from fixtures.mock_cdm import seed_relationship_vocabulary
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 

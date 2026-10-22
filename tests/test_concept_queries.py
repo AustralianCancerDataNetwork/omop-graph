@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
-from typing import Iterator
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
-
+from fixtures.helpers import VOCAB_TABLES
 from oa_configurator.testing import scoped_test_schema
-from orm_loader.helpers import Base, bulk_load_context
-
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
+from orm_loader.helpers import Base, bulk_load_context
+from sqlalchemy.orm import Session
 
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import (
@@ -22,8 +21,6 @@ from omop_graph.graph.queries import (
     q_concept_views,
     q_entities,
 )
-
-from fixtures.helpers import VOCAB_TABLES
 
 _META_CONCEPT_ID = 0
 

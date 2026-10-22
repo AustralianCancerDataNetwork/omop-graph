@@ -2,29 +2,27 @@ import logging
 import tempfile
 from importlib import resources
 from pathlib import Path
-from typing import Annotated, Optional, cast
+from typing import Annotated, cast
 
 import pandas as pd
 import sqlalchemy as sa
-import typer
 import sqlalchemy.orm as so
-
+import typer
 from oa_configurator import ResolvedCDMDatabase, open_connection
-
+from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
 from orm_loader.loaders.loader_interface import PandasLoader
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 
+from omop_graph.cli_utils import populate_test_data
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import resolve_cdm_database, open_cdm_sessions
+from omop_graph.db.session import open_cdm_sessions, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
     create_extension_tables,
 )
-from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
@@ -79,9 +77,8 @@ def populate_with_test_data():
             f"Refusing to populate {resolved.name!r} with synthetic test data: "
             "both its primary and vocab connections must be test_only."
         )
-    with open_cdm_sessions(resolved) as cdm_sessions:
-        with cdm_sessions() as session:
-            populate_test_data(session)
+    with open_cdm_sessions(resolved) as cdm_sessions, cdm_sessions() as session:
+        populate_test_data(session)
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -96,7 +93,7 @@ def packaged_predicate_csv_dir() -> Path:
 
 
 def relationship_classification(
-    pred_class_dir: Optional[str] = None,
+    pred_class_dir: str | None = None,
     *,
     resolved: ResolvedCDMDatabase | None = None,
 ) -> None:
@@ -128,7 +125,7 @@ def relationship_classification(
 
 
 def _load_relationship_classification(
-    pred_class_dir: Optional[str],
+    pred_class_dir: str | None,
     *,
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
@@ -252,7 +249,7 @@ def _load_relationship_classification(
 @app.command(name="relationship-classification")
 def relationship_classification_cmd(
     pred_class_dir: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             help=(
                 "Path to the directory containing `predicate_classification.csv` "

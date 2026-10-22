@@ -1,7 +1,8 @@
-from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import Dict, Set, List
+from dataclasses import dataclass, field
+
 from omop_graph.graph.kg import KnowledgeGraph
+
 from ..concept_handlers import standardise_ids
 
 
@@ -118,8 +119,8 @@ def find_common_parents(
 
 
 def greedy_parent_cover(
-    seeds: Set[int],
-    candidates: Dict[int, ParentStatistics],
+    seeds: set[int],
+    candidates: dict[int, ParentStatistics],
     *,
     target_coverage_ratio: float = 1.0,  # e.g. 0.95 for “good enough”
     alpha: float = 1.0,
@@ -127,9 +128,9 @@ def greedy_parent_cover(
     gamma: float = 0.3,
     delta: float = 0.7,
     min_gain: int = 1,
-) -> List[int]:
+) -> list[int]:
     remaining = set(seeds)
-    selected: List[int] = []
+    selected: list[int] = []
 
     def score(c: ParentStatistics, gain: int) -> float:
         if gain <= 0:
@@ -147,7 +148,7 @@ def greedy_parent_cover(
 
         best_id = None
         best_score = -1.0
-        best_gain_set: Set[int] = set()
+        best_gain_set: set[int] = set()
 
         for cid, c in candidates.items():
             gain_set = c.found & remaining

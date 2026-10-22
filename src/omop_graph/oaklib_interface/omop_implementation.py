@@ -1,11 +1,11 @@
 import logging
 from collections import defaultdict
-from typing import ClassVar, Dict, Iterable, Iterator, List, Optional, Tuple
+from collections.abc import Iterable, Iterator
+from typing import ClassVar
 
 import numpy as np
-from omop_alchemy.cdm.query import ConceptFilter
-
 from linkml_runtime.linkml_model.annotations import Annotation
+from oa_configurator import ResolvedCDMDatabase
 from oaklib.datamodels.search import (
     SearchConfiguration,
     SearchProperty,
@@ -27,19 +27,18 @@ from oaklib.interfaces.basic_ontology_interface import (
     BasicOntologyInterface,
 )
 from oaklib.interfaces.text_annotator_interface import nen_annotation
+from oaklib.resource import OntologyResource
 from oaklib.types import CURIE, PRED_CURIE
+from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
+from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
-from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
-from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
-
-from oa_configurator import ResolvedCDMDatabase
-from oaklib.resource import OntologyResource
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ class OMOPBaseInterface:
         super().__init__(**kwargs)
         self.kg = kg
 
-    def prefix_map(self) -> Dict[str, str]:
+    def prefix_map(self) -> dict[str, str]:
         """
         Return the prefix map for OMOP entities.
 
@@ -213,9 +212,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     def annotate_text(
         self,
         text: str,
-        configuration: Optional[TextAnnotationConfiguration] = None,
-        query_embedding: Optional[np.ndarray] = None,
-        annotations: Optional[Dict[str, Annotation]] = None,
+        configuration: TextAnnotationConfiguration | None = None,
+        query_embedding: np.ndarray | None = None,
+        annotations: dict[str, Annotation] | None = None,
         max_depth: int = 6,
     ) -> Iterator[TextAnnotation]:
         """
@@ -331,7 +330,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
     def basic_search(
         self,
         search_term: str,
-        config: Optional[SearchConfiguration] = None,
+        config: SearchConfiguration | None = None,
     ) -> Iterable[CURIE]:
         """
         Perform a basic search over the knowledge graph.
@@ -426,7 +425,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def supports_reasoning(self) -> bool:
         return False
 
-    def entity_aliases(self, curie: CURIE) -> List[str]:
+    def entity_aliases(self, curie: CURIE) -> list[str]:
         """
         Retrieve aliases (synonyms and codes) for a given entity.
 
@@ -451,7 +450,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         # vocabulary-qualified code alias
         aliases.add(f"{cv.vocabulary_id}:{cv.concept_code}")
 
-        return list(sorted(aliases))
+        return sorted(aliases)
 
     def parents(self, curie: CURIE) -> Iterable[CURIE]:
         """
@@ -470,7 +469,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             yield self._concept_curie(child_id)
 
     @property
-    def default_language(self) -> Optional[str]:
+    def default_language(self) -> str | None:
         return "en"
 
     def ontologies(self) -> Iterable[CURIE]:
@@ -547,7 +546,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def leafs(
         self,
-        predicates: Optional[List[PRED_CURIE]] = None,
+        predicates: list[PRED_CURIE] | None = None,
         ignore_owl_nothing=True,
         filter_obsoletes=True,
     ) -> Iterable[CURIE]:
@@ -558,7 +557,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             yield self._concept_curie(cid)
 
     def singletons(
-        self, predicates: Optional[List[PRED_CURIE]] = None, filter_obsoletes=True
+        self, predicates: list[PRED_CURIE] | None = None, filter_obsoletes=True
     ) -> Iterable[CURIE]:
         """
         Retrieve singleton nodes (no parents or children).
@@ -566,14 +565,14 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         for cid in self.kg.singletons():
             yield self._concept_curie(cid)
 
-    def label(self, curie: CURIE, lang: Optional[str] = None) -> Optional[str]:
+    def label(self, curie: CURIE, lang: str | None = None) -> str | None:
         """
         Get the preferred label (concept_name) for a CURIE.
         """
         concept_id = self._parse_concept(curie)
         return self.kg.concept_view(concept_id).concept_name
 
-    def curies_by_label(self, label: str) -> List[CURIE]:
+    def curies_by_label(self, label: str) -> list[CURIE]:
         """
         Retrieve CURIEs that match the exact label.
         """
@@ -591,7 +590,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         objects: Iterable[CURIE] | None = None,
         invert: bool = False,
         **kwargs,
-    ) -> Iterable[Tuple[CURIE, PRED_CURIE, CURIE]]:
+    ) -> Iterable[tuple[CURIE, PRED_CURIE, CURIE]]:
         """
         Query relationships between concepts.
 
@@ -636,7 +635,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
                 self._concept_curie(o),
             )
 
-    def hierarchical_parents(self, curie: CURIE, isa_only: bool = False) -> List[CURIE]:
+    def hierarchical_parents(self, curie: CURIE, isa_only: bool = False) -> list[CURIE]:
         """
         Get hierarchical parents.
         """
@@ -706,7 +705,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         self,
         curie: CURIE,
         predicates: list[PRED_CURIE] | None = None,
-    ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
+    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
         """
         Retrieve outgoing relationships, including those implied by the hierarchy.
 
@@ -739,7 +738,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def entailed_outputgoing_relationships_by_curie(
         self, *args, **kwargs
-    ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
+    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
         # return self.entailed_outgoing_relationships(*args, **kwargs)
         raise NotImplementedError("Not Implemented: use entailed_outgoing_relationships instead")
 
@@ -747,7 +746,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         self,
         curie: CURIE,
         predicates: list[PRED_CURIE] | None = None,
-    ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
+    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
         """
         Retrieve incoming relationships.
         """
@@ -769,7 +768,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def entailed_incoming_relationships_by_curie(
         self, *args, **kwargs
-    ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
+    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
         # return self.entailed_incoming_relationships(*args, **kwargs)
         raise NotImplementedError("Not Implemented: use entailed_incoming_relationships instead")
 
@@ -847,7 +846,7 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
         *,
         resolved: ResolvedCDMDatabase | None = None,
         kg: KnowledgeGraph | None = None,
-        kg_emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
+        kg_emb_config: KnowledgeGraphEmbeddingConfiguration | None = None,
         **kwargs,
     ):
         if resource is None:
@@ -885,13 +884,13 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     def obsoletes(self, include_merged=True) -> Iterable[CURIE]:
         raise NotImplementedError("OMOP does not support OWL-style obsolescence semantics")
 
-    def dangling(self, curies: Optional[Iterable[CURIE]] = None) -> Iterable[CURIE]:
+    def dangling(self, curies: Iterable[CURIE] | None = None) -> Iterable[CURIE]:
         raise NotImplementedError("OMOP does not support dangling term semantics")
 
     def ontology_versions(self, ontology: CURIE) -> Iterable[str]:
         raise NotImplementedError("OMOP does not support ontology version semantics")
 
-    def ontology_metadata_map(self, ontology: CURIE) -> Dict[PRED_CURIE, List[str]]:
+    def ontology_metadata_map(self, ontology: CURIE) -> dict[PRED_CURIE, list[str]]:
         raise NotImplementedError("OMOP does not expose ontology-level metadata")
 
     def subsets(self) -> Iterable[CURIE]:
@@ -928,7 +927,7 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
     def clone(self, resource):
         raise NotImplementedError("Cloning is not supported for OMOP adapters")
 
-    def definition(self, curie: CURIE, lang: Optional[str] = None) -> Optional[str]:
+    def definition(self, curie: CURIE, lang: str | None = None) -> str | None:
         raise NotImplementedError("OMOP does not support term definitions")
 
     def comments(self, curies, allow_none=True, lang=None):

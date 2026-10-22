@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from omop_graph.graph.paths import GraphPath, PathExplanation
-from omop_graph.graph.traverse import Subgraph, GraphTrace
+from omop_graph.graph.traverse import GraphTrace, Subgraph
 
 
 def subgraph_text(kg, sg: Subgraph) -> str:

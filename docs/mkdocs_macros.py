@@ -1,16 +1,17 @@
-import pandas as pd
 import pathlib as pl
-from typing import Optional, List, Mapping
+from collections.abc import Mapping
+
+import pandas as pd
 
 
 def define_env(env):
     @env.macro
     def to_grouped_table(
         file_path: str,
-        group_cols: List[int] = [0],
-        displayed_cols: Optional[List[int]] = None,
-        sort_cols: Optional[List[int]] = None,
-        col_mappings: Optional[Mapping[str, str]] = None,
+        group_cols: list[int] = [0],
+        displayed_cols: list[int] | None = None,
+        sort_cols: list[int] | None = None,
+        col_mappings: Mapping[str, str] | None = None,
     ):
         if group_cols is None:
             group_cols = [0]

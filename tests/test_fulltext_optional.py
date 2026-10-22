@@ -1,9 +1,8 @@
 import pytest
-
 import sqlalchemy as sa
+from omop_alchemy.backends import FullTextError
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
-from omop_alchemy.backends import FullTextError
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind

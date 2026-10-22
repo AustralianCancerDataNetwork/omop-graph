@@ -22,9 +22,8 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
-from pathlib import Path
-from typing import Dict, List
 from dataclasses import dataclass
+from pathlib import Path
 
 import sqlalchemy as sa
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Ancestor
@@ -32,12 +31,12 @@ from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Ancestor
 from omop_graph.db.session import cdm_session_factory
 
 
-def _domain_query(ids: List[int]) -> sa.Select:
+def _domain_query(ids: list[int]) -> sa.Select:
     """Each target concept's domain."""
     return sa.select(Concept.concept_id, Concept.domain_id).where(Concept.concept_id.in_(ids))
 
 
-def _ancestor_query(ids: List[int]) -> sa.Select:
+def _ancestor_query(ids: list[int]) -> sa.Select:
     """Standard strict ancestors of each target, with their name and domain."""
     return (
         sa.select(
@@ -63,7 +62,7 @@ class LevelStats:
     single: int = 0
     multiple: int = 0
 
-    def __iadd__(self, other: "LevelStats") -> "LevelStats":
+    def __iadd__(self, other: LevelStats) -> LevelStats:
         self.empty += other.empty
         self.cross_domain_fallback += other.cross_domain_fallback
         self.single += other.single
@@ -73,14 +72,14 @@ class LevelStats:
 
 @dataclass
 class Stats:
-    levels: Dict[int, LevelStats]
+    levels: dict[int, LevelStats]
     no_target: int = 0
 
     @classmethod
-    def empty_for(cls, levels: List[int]) -> "Stats":
+    def empty_for(cls, levels: list[int]) -> Stats:
         return cls(levels={level: LevelStats() for level in levels})
 
-    def __iadd__(self, other: "Stats") -> "Stats":
+    def __iadd__(self, other: Stats) -> Stats:
         for level, level_stats in other.levels.items():
             self.levels.setdefault(level, LevelStats())
             self.levels[level] += level_stats
@@ -88,7 +87,7 @@ class Stats:
         return self
 
 
-def enrich_cases(cdm_sessions, cases: List[Dict], levels: List[int]) -> Stats:
+def enrich_cases(cdm_sessions, cases: list[dict], levels: list[int]) -> Stats:
     target_ids = sorted({c["expected_concept_id"] for c in cases if c.get("expected_concept_id")})
 
     with cdm_sessions() as session:
@@ -97,7 +96,7 @@ def enrich_cases(cdm_sessions, cases: List[Dict], levels: List[int]) -> Stats:
             for row in session.execute(_domain_query(target_ids)).all()
         }
 
-        ancestors_by_target: Dict[int, List] = defaultdict(list)
+        ancestors_by_target: dict[int, list] = defaultdict(list)
         for row in session.execute(_ancestor_query(target_ids)).all():
             ancestors_by_target[row.descendant_concept_id].append(row)
 
@@ -113,7 +112,7 @@ def enrich_cases(cdm_sessions, cases: List[Dict], levels: List[int]) -> Stats:
         case_["domain"] = target_domain
         all_ancestors = ancestors_by_target.get(target_id, [])
 
-        parent_ids_by_level: Dict[str, List[int]] = {}
+        parent_ids_by_level: dict[str, list[int]] = {}
         for level in levels:
             at_level = [a for a in all_ancestors if a.min_levels_of_separation == level]
             same_domain = [a for a in at_level if a.domain_id == target_domain]

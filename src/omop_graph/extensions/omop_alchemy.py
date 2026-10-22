@@ -1,19 +1,19 @@
 # Extension to omop-alchemy package
+from dataclasses import dataclass
+from enum import Enum
+from typing import cast
+
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from orm_loader.helpers import Base, create_tables
+from oa_configurator import ResolvedCDMDatabase, Role
 from omop_alchemy.cdm.base import (
+    CDMTableBase,
     ReferenceTable,
     cdm_table,
-    CDMTableBase,
     merge_table_args,
     role_fk,
 )
-from oa_configurator import ResolvedCDMDatabase, Role
-
-from enum import Enum
-from dataclasses import dataclass
-from typing import cast
+from orm_loader.helpers import Base, create_tables
 
 
 class PredicateKind(Enum):

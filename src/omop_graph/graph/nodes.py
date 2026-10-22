@@ -14,16 +14,15 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from html import escape
 from itertools import chain
-from typing import Dict, Iterable, List, Optional, Tuple
-
-from sqlalchemy import Row
 
 from omop_alchemy.cdm.model import normalised_flag
+from sqlalchemy import Row
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ class ConceptView:
     standard_concept: bool
     valid_start_date: date
     valid_end_date: date
-    invalid_reason: Optional[str]
+    invalid_reason: str | None
     # Defaulted so rows projected before the classification label was added
     # still construct; the query layer always supplies it.
     classification_concept: bool = False
@@ -186,7 +185,7 @@ class LabelMatchKind(Enum):
     PARTIAL = 2
     EMBEDDING = 3
 
-    def __lt__(self, other: "LabelMatchKind") -> bool:
+    def __lt__(self, other: LabelMatchKind) -> bool:
         return self.value < other.value
 
 
@@ -275,7 +274,7 @@ class LabelMatchGroupView:
         A dictionary mapping Concept ID to a tuple of sorted LabelMatches.
     """
 
-    groups: Dict[int, Tuple[LabelMatch, ...]]
+    groups: dict[int, tuple[LabelMatch, ...]]
 
     @classmethod
     def from_matches(cls, matches: Iterable[LabelMatch]) -> LabelMatchGroupView:
@@ -298,7 +297,7 @@ class LabelMatchGroupView:
         LabelMatchGroupView
             The grouped view.
         """
-        grouped: Dict[int, List[LabelMatch]] = defaultdict(list)
+        grouped: dict[int, list[LabelMatch]] = defaultdict(list)
         for m in matches:
             grouped[m.matched_concept_id].append(m)
 

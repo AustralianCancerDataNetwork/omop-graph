@@ -1,12 +1,12 @@
-from .traverse import traverse
-from .paths import find_shortest_paths, GraphPath, PathStep
 from .kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
+from .paths import GraphPath, PathStep, find_shortest_paths
+from .traverse import traverse
 
 __all__ = [
-    "traverse",
-    "find_shortest_paths",
     "GraphPath",
-    "PathStep",
     "KnowledgeGraph",
     "KnowledgeGraphEmbeddingConfiguration",
+    "PathStep",
+    "find_shortest_paths",
+    "traverse",
 ]

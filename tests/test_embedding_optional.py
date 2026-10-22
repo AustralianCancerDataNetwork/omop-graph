@@ -9,7 +9,6 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
-
 from oa_configurator.resolver import ResolvedModel, ResolvedProvider
 from omop_alchemy.cdm.query import ConceptFilter
 

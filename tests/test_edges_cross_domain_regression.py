@@ -11,17 +11,17 @@ joint".
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterator
 from datetime import date
 from importlib.resources import files
-from typing import Iterator, cast
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
-
-from orm_loader.helpers import Base
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
+from orm_loader.helpers import Base
+from sqlalchemy.orm import sessionmaker
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,

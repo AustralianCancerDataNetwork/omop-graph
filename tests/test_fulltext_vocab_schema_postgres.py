@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import pytest
 import sqlalchemy as sa
+from fixtures.helpers import VOCAB_TABLES
 from oa_configurator import Role
 from oa_configurator.testing import scoped_test_schema
 from omop_alchemy.backends import CONCEPT_NAME_TSVECTOR_COLUMN, FullTextError, resolve_backend
 from orm_loader.helpers import Base
 
 from omop_graph.graph.queries import q_concept_name_fulltext
-
-from fixtures.helpers import VOCAB_TABLES
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 

@@ -9,7 +9,7 @@ the type of the resolver.
 from __future__ import annotations
 
 import logging
-from typing import Generator, Optional, Tuple, Type
+from collections.abc import Generator
 
 from omop_alchemy.cdm.query import ConceptFilter
 
@@ -48,8 +48,8 @@ class ResolverPipeline:
 
     def __init__(
         self,
-        resolvers: Tuple[CandidateResolver, ...],
-        stop_after_resolver: Optional[str | Type[CandidateResolver]] = None,
+        resolvers: tuple[CandidateResolver, ...],
+        stop_after_resolver: str | type[CandidateResolver] | None = None,
     ):
         self._resolver_map = {type(r): r for r in resolvers}
 
@@ -79,11 +79,11 @@ class ResolverPipeline:
         return f"ResolverPipeline(resolvers={resolver_names}, stop_after_resolver={self.stop_at.__name__ if self.stop_at else None})"
 
     @property
-    def resolvers(self) -> Tuple[CandidateResolver, ...]:
+    def resolvers(self) -> tuple[CandidateResolver, ...]:
         return self._resolvers
 
     @property
-    def stop_at(self) -> Optional[Type[CandidateResolver]]:
+    def stop_at(self) -> type[CandidateResolver] | None:
         """
         The class type of the resolver where the pipeline is configured to truncate.
         Returns None if the pipeline is configured to run to completion.
@@ -91,7 +91,7 @@ class ResolverPipeline:
         return self._stop_at
 
     @classmethod
-    def with_all_resolvers(cls) -> "ResolverPipeline":
+    def with_all_resolvers(cls) -> ResolverPipeline:
         """
         Create a pipeline configured with all available resolvers.
 
@@ -107,7 +107,7 @@ class ResolverPipeline:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[ConceptFilter] = None,
+        constraints: ConceptFilter | None = None,
         **kwargs,
     ) -> Generator[CandidateHit, None, None]:
         """

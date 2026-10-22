@@ -14,7 +14,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -23,8 +23,9 @@ from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
 if TYPE_CHECKING:
-    from omop_graph.graph.kg import KnowledgeGraph
     from omop_emb.utils.embedding_utils import NearestConceptMatch
+
+    from omop_graph.graph.kg import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class StandardConceptWithScore(StandardConcept):
     """
 
     total_score: float = field(compare=True, default=0.0)
-    embedding_score: Optional[float] = field(compare=False, default=None)
+    embedding_score: float | None = field(compare=False, default=None)
     relevance: float = field(compare=False, default=0.0)
     parsimony_penalty: float = field(compare=False, default=0.0)
     broadness_bonus: float = field(compare=False, default=0.0)
@@ -67,12 +68,12 @@ class StandardConceptWithScore(StandardConcept):
     def from_standard_concept(
         cls,
         standard_concept: StandardConcept,
-        embedding_score: Optional[float],
+        embedding_score: float | None,
         relevance: float,
         parsimony_penalty: float,
         broadness_bonus: float,
         total_score: float,
-    ) -> "StandardConceptWithScore":
+    ) -> StandardConceptWithScore:
         """
         Factory method to promote a StandardConcept to a scored version.
         """
@@ -89,9 +90,9 @@ class StandardConceptWithScore(StandardConcept):
 def score_standard_concepts(
     text: str,
     standard_concepts: tuple[StandardConcept, ...],
-    kg: "KnowledgeGraph",
-    nearest_concept_matches: Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]] = None,
-) -> List[StandardConceptWithScore]:
+    kg: KnowledgeGraph,
+    nearest_concept_matches: tuple[tuple[NearestConceptMatch, ...], ...] | None = None,
+) -> list[StandardConceptWithScore]:
     """
     Attach scoring metrics to each standard concept.
 
@@ -161,11 +162,11 @@ def score_standard_concepts(
 
 
 def _score_standard_concept(
-    kg: "KnowledgeGraph",
+    kg: KnowledgeGraph,
     text: str,
     standard_concept: StandardConcept,
     num_ancestors: int,
-    similarity_score: Optional[float],
+    similarity_score: float | None,
     alpha: float = 0.05,
     beta: float = 0.01,
 ) -> StandardConceptWithScore:
@@ -259,7 +260,7 @@ def _textual_similarity_score(
     # 1. Tokenize (keep standard normalization)
     stop_words = {"of", "the", "in", "and", "or", "to", "nos", "a", "an"}
 
-    def tokenize(text: str) -> List[str]:
+    def tokenize(text: str) -> list[str]:
         tokens = re.findall(r"\w+", text.lower())
         return [t for t in tokens if t not in stop_words]
 

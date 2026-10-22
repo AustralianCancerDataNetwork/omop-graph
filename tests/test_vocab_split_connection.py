@@ -12,22 +12,20 @@ genuinely separate physical connections.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
-from typing import Iterator, NamedTuple
+from typing import NamedTuple
 
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-
+from fixtures.helpers import VOCAB_TABLES
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role
 from oa_configurator.testing import (
     isolated_test_database,
     resolve_with_role_schemas,
     scoped_test_schema,
 )
-from orm_loader.config import OrmLoaderConfig
-from orm_loader.helpers import Base, bulk_load_context
-
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
     Concept_Class,
@@ -37,6 +35,8 @@ from omop_alchemy.cdm.model.vocabulary import (
     Vocabulary,
 )
 from omop_alchemy.cross_database import cdm_sessionmaker
+from orm_loader.config import OrmLoaderConfig
+from orm_loader.helpers import Base, bulk_load_context
 
 from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
@@ -46,8 +46,6 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
-
-from fixtures.helpers import VOCAB_TABLES
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 

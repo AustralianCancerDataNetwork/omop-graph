@@ -17,13 +17,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
+from omop_graph.extensions.emb import (
+    HAS_OMOP_EMB,
+    semantic_similarity,
+    try_get_embedding_writer_interface,
+)
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import (
     StandardConcept,
     find_standard_paths,
@@ -31,14 +36,8 @@ from omop_graph.graph.paths import (
 from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
     CandidateHit,
-    ResolverPipeline,
     EmbeddingResolver,
-)
-from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.extensions.emb import (
-    try_get_embedding_writer_interface,
-    semantic_similarity,
-    HAS_OMOP_EMB,
+    ResolverPipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,8 +68,8 @@ class GroundingConstraints:
         expanding candidates to unrelated concepts and diluting grounding results.
     """
 
-    parent_ids: Optional[Tuple[int, ...]]
-    search_constraint: Optional[ConceptFilter]
+    parent_ids: tuple[int, ...] | None
+    search_constraint: ConceptFilter | None
     max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
@@ -82,7 +81,7 @@ class GroundingConstraints:
             )
 
 
-def _query_text_with_context(query: str, context: Optional[str]) -> str:
+def _query_text_with_context(query: str, context: str | None) -> str:
     """Fold optional free-form context into the text used for on-demand query embedding.
 
     Notes
@@ -111,11 +110,11 @@ def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
     query: str,
-    query_embedding: Optional[np.ndarray],
+    query_embedding: np.ndarray | None,
     constraints: GroundingConstraints,
-    max_candidates: Optional[int] = None,
-    context: Optional[str] = None,
-) -> List[StandardConceptWithScore]:
+    max_candidates: int | None = None,
+    context: str | None = None,
+) -> list[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
 
@@ -143,7 +142,7 @@ def ground_term(
     list[StandardConceptWithScore]
         A list of standard concepts sorted by their total score (descending).
     """
-    standard_concepts: List[StandardConcept] = []
+    standard_concepts: list[StandardConcept] = []
 
     search_constraints = constraints.search_constraint
     if search_constraints is not None:
@@ -274,11 +273,11 @@ def ground_term(
 def find_standard_concepts(
     kg: KnowledgeGraph,
     candidate: CandidateHit,
-    parent_ids: Optional[Tuple[int, ...]],
+    parent_ids: tuple[int, ...] | None,
     max_depth: int,
-    max_paths: Optional[int] = 3,
+    max_paths: int | None = 3,
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
-) -> List[StandardConcept]:
+) -> list[StandardConcept]:
     """
     Identify standard concepts related to a candidate, optionally satisfying parent
     constraints.
