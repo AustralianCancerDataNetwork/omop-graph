@@ -19,7 +19,7 @@ from typing import NamedTuple
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from fixtures.helpers import VOCAB_TABLES
+from fixtures.helpers import VOCAB_TABLES, require_cdm, table_of
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role
 from oa_configurator.testing import (
     isolated_test_database,
@@ -57,7 +57,7 @@ _FAR_FUTURE = date(2099, 12, 31)
 
 # Relationship/Concept_Relationship aren't in the shared minimal vocab
 # bootstrap, but are exactly what the split-connection merge is testing.
-_VOCAB_TABLES = VOCAB_TABLES + (Relationship.__table__, Concept_Relationship.__table__)
+_VOCAB_TABLES = VOCAB_TABLES + (table_of(Relationship), table_of(Concept_Relationship))
 
 # Postgres has no cross-database inline FK, so RelationshipMapping's FK to
 # relationship.relationship_id can't be created as DDL across genuinely
@@ -116,31 +116,39 @@ def split_engines() -> Iterator[_Engines]:
         isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as primary_db,
         isolated_test_database(OrmLoaderConfig, "test_orm_db_pg") as vocab_db,
     ):
-        name = primary_db.resolved.name
+        vocab_resolved = require_cdm(vocab_db.resolved)
+        name = require_cdm(primary_db.resolved).name
         resolver = Resolver.from_active_config()
         resolver = resolver.with_overrides(
             databases={
                 name: resolver.config.databases[name].model_copy(
-                    update={"vocab_connection": vocab_db.resolved.connection.name}
+                    update={"vocab_connection": vocab_resolved.connection.name}
                 )
             }
         )
-        split = resolver.resolve_database(name)
+        split = require_cdm(resolver.resolve_database(name))
         with scoped_test_schema(split, prefix="vocab_split", resolver=resolver) as scoped:
-            primary_engine, vocab_engine = scoped.resolved.create_engines()
+            scoped_resolved = require_cdm(scoped.resolved)
+            primary_engine, vocab_engine = scoped_resolved.create_engines()
             # Vocab tables are created through the vocab server's own resolved:
             # create_all on the split vocab engine also emits the PRIMARY-tagged
             # predicatekind type, whose schema only exists on the primary server.
             vocab_schema = scoped.schemas[Role.VOCAB]
-            vocab_only = resolve_with_role_schemas(
-                vocab_db.resolved, {role: vocab_schema for role in vocab_db.resolved.schema_tags()}
+            vocab_only = require_cdm(
+                resolve_with_role_schemas(
+                    vocab_resolved, {role: vocab_schema for role in vocab_resolved.schema_tags()}
+                )
             )
             vocab_setup_engine, _ = vocab_only.create_engines()
             try:
                 _shadow_metadata.create_all(primary_engine)
                 Base.metadata.create_all(vocab_setup_engine, tables=_VOCAB_TABLES, checkfirst=True)
                 _seed(primary_engine, vocab_setup_engine)
-                yield _Engines(primary=primary_engine, vocab=vocab_engine, resolved=scoped.resolved)
+                yield _Engines(
+                    primary=primary_engine,
+                    vocab=vocab_engine,
+                    resolved=scoped_resolved,
+                )
             finally:
                 vocab_setup_engine.dispose()
                 primary_engine.dispose()

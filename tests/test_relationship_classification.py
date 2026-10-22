@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
+from fixtures.helpers import require_cdm
 from fixtures.mock_cdm import seed_relationship_vocabulary
 from oa_configurator import Role
 from oa_configurator.testing import scoped_test_schema
@@ -30,7 +31,7 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
-        relationship_classification(resolved=scoped.resolved)
+        relationship_classification(resolved=require_cdm(scoped.resolved))
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -61,8 +62,8 @@ def test_relationship_classification_is_idempotent(pg_db):
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
-        relationship_classification(resolved=scoped.resolved)
-        relationship_classification(resolved=scoped.resolved)
+        relationship_classification(resolved=require_cdm(scoped.resolved))
+        relationship_classification(resolved=require_cdm(scoped.resolved))
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -91,7 +92,7 @@ def test_relationship_classification_warns_and_drops_unknown_ids_colocated(pg_db
         seed_relationship_vocabulary(scoped.engine)
 
         with caplog.at_level(logging.WARNING, logger="omop_graph.cli"):
-            relationship_classification(str(tmp_path), resolved=scoped.resolved)
+            relationship_classification(str(tmp_path), resolved=require_cdm(scoped.resolved))
 
         with scoped.engine.connect() as connection:
             relationship_ids = set(

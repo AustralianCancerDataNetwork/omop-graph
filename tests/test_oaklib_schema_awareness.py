@@ -16,6 +16,7 @@ from datetime import date
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm
+from fixtures.helpers import require_cdm
 from fixtures.mock_cdm import seed_relationship_vocabulary
 from oa_configurator import Resolver, Role
 from oa_configurator.testing import scoped_test_schema
@@ -137,11 +138,13 @@ def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
     ) as scoped:
         _populate(scoped, name="Resolved-path concept")
 
-        adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
+        adapter = OMOPAlchemyImplementation(resolved=require_cdm(scoped.resolved))
 
         assert _one_engine_for_both_roles(adapter.kg)
         with adapter.kg.session_factory() as session:
-            assert session.get_bind(Concept).pool._pre_ping is True
+            bind = session.get_bind(Concept)
+            assert isinstance(bind, sa.Engine)
+            assert bind.pool._pre_ping is True
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Resolved-path concept"
 
 
@@ -168,11 +171,12 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
         resolver=resolver,
         schema_claims=[staging_schema_claim()],
     ) as scoped:
-        assert scoped.resolved.connection.name != scoped.resolved.vocab_connection.name
-        assert scoped.resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
+        resolved = require_cdm(scoped.resolved)
+        assert resolved.connection.name != resolved.vocab_connection.name
+        assert resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
         _populate(scoped, name="Split-wiring concept")
 
-        adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
+        adapter = OMOPAlchemyImplementation(resolved=resolved)
 
         assert _one_engine_for_both_roles(adapter.kg)
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Split-wiring concept"
@@ -184,7 +188,9 @@ def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
     ) as scoped:
         _populate(scoped, name="Injected concept")
         kg = KnowledgeGraph(
-            cdm_sessionmaker(scoped.resolved, primary=scoped.engine, vocab=scoped.engine)
+            cdm_sessionmaker(
+                require_cdm(scoped.resolved), primary=scoped.engine, vocab=scoped.engine
+            )
         )
 
         adapter = OMOPAlchemyImplementation(kg=kg)

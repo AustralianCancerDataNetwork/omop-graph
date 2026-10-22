@@ -34,6 +34,6 @@ def test_knowledge_graph_rejects_engine_instead_of_session_factory():
     engine = sa.create_engine("sqlite+pysqlite:///:memory:")
     try:
         with pytest.raises(TypeError, match="callable session factory.*not an Engine"):
-            KnowledgeGraph(engine)
+            KnowledgeGraph(engine)  # ty: ignore[invalid-argument-type]
     finally:
         engine.dispose()

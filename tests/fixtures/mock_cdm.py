@@ -18,6 +18,7 @@ from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from orm_loader.helpers import Base, bulk_load_context
 from sqlalchemy.orm import Session, sessionmaker
 
+from fixtures.helpers import require_cdm
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -35,7 +36,7 @@ LANGUAGE_CONCEPT_ID = 1
 def mock_cdm_engine() -> Iterator[sa.Engine]:
     with (
         isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db,
-        scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped,
+        scoped_test_schema(require_cdm(db.resolved), prefix="mock_cdm") as scoped,
     ):
         _create_mock_cdm_tables(scoped.engine)
         yield scoped.engine

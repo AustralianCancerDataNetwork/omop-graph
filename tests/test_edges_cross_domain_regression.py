@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 from collections.abc import Iterator
 from datetime import date
-from importlib.resources import files
+from importlib.resources import as_file, files
 from typing import cast
 
 import pytest
@@ -206,7 +206,7 @@ DEFINING_ATTRIBUTES = {
 
 def test_shipped_mapping_classes_snomed_defining_attributes_as_attributes() -> None:
     mapping_file = files("omop_graph") / "data" / "predicate_mapping.csv"
-    with mapping_file.open(newline="") as handle:
+    with as_file(mapping_file) as path, path.open(newline="") as handle:
         classes = {row["r_id"]: (row["class"], row["subclass"]) for row in csv.DictReader(handle)}
 
     assert {r_id: classes.get(r_id) for r_id in DEFINING_ATTRIBUTES} == DEFINING_ATTRIBUTES
