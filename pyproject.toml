@@ -59,11 +59,11 @@ postgres = [
 
 dev = [
     "ipython>=9.8.0",
-    "ty>=0.0.59",
+    "ty==0.0.90",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "rich>=14.2.0",
-    "ruff>=0.14.10",
+    "ruff==0.17.1",
     "omop-graph[emb,faiss-cpu,pgvector,postgres]",
     "mkdocs<2.0",
     "mkdocs-material",
@@ -96,3 +96,6 @@ packages = ["src/omop_graph"]
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.ruff]
+line-length = 100
