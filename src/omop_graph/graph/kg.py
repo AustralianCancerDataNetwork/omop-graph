@@ -284,11 +284,11 @@ class KnowledgeGraph(GraphBackend):
                 )
                 raise MissingExtensionError() from e
             raise
-        except ImportError as e:
+        except ImportError:
             logger.info(
                 "Embedding functionality failed to initialize due to an import error in the optional embedding stack."
             )
-            raise e
+            raise
 
     @property
     def embedding_configuration(self) -> KnowledgeGraphEmbeddingConfiguration | None:

@@ -31,7 +31,7 @@ def _in_notebook() -> bool:
 
         ip = get_ipython()
         return ip is not None and "IPKernelApp" in ip.config
-    except Exception:
+    except ImportError:
         return False
 
 

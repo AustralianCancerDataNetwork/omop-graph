@@ -8,7 +8,7 @@ def define_env(env):
     @env.macro
     def to_grouped_table(
         file_path: str,
-        group_cols: list[int] = [0],
+        group_cols: list[int] | None = None,
         displayed_cols: list[int] | None = None,
         sort_cols: list[int] | None = None,
         col_mappings: Mapping[str, str] | None = None,

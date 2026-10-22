@@ -33,10 +33,12 @@ LANGUAGE_CONCEPT_ID = 1
 
 @pytest.fixture(scope="module")
 def mock_cdm_engine() -> Iterator[sa.Engine]:
-    with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
-        with scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped:
-            _create_mock_cdm_tables(scoped.engine)
-            yield scoped.engine
+    with (
+        isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db,
+        scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped,
+    ):
+        _create_mock_cdm_tables(scoped.engine)
+        yield scoped.engine
 
 
 @pytest.fixture(scope="module")

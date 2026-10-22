@@ -31,6 +31,7 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
+from sqlalchemy.exc import NoResultFound
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
@@ -141,7 +142,9 @@ def _build_kg(metric_type=None, embedding_model: str | None = None) -> Knowledge
         return KnowledgeGraph(cdm_sessions, emb_config=emb_config)
     except Exception as exc:
         logger.warning(
-            "Error occurred while loading embedding config:\n%s.\nRunning without embedding.", exc
+            "Error occurred while loading embedding config:\n%s.\nRunning without embedding.",
+            exc,
+            exc_info=True,
         )
         return KnowledgeGraph(cdm_sessions)
 
@@ -197,7 +200,7 @@ def _concept_info(kg: KnowledgeGraph, concept_id: int) -> dict:
             "concept_code": cv.concept_code,
             "domain_id": cv.domain_id,
         }
-    except Exception:
+    except NoResultFound:
         return {"concept_id": concept_id, "concept_name": f"[concept {concept_id}]"}
 
 
@@ -225,7 +228,7 @@ def _run_trace(
         else:
             logger.info("No embedding writer available; EmbeddingResolver will be skipped.")
     except Exception as exc:
-        logger.warning("Could not compute query embedding: %s", exc)
+        logger.warning("Could not compute query embedding: %s", exc, exc_info=True)
 
     # Stage 1: run every resolver individually to capture per-resolver attribution
     resolver_stages = []
@@ -246,6 +249,7 @@ def _run_trace(
                     seen.add(hit.concept_id)
                 concept_to_resolvers.setdefault(hit.concept_id, []).append(label)
         except Exception as exc:
+            logger.warning("Resolver %s skipped", label, exc_info=True)
             console.print(f"  {label}: skipped ({exc})")
         resolver_stages.append(
             {"resolver": label, "hits": hit_count, "previously_unseen_hits": previously_unseen_hits}
@@ -504,7 +508,7 @@ def _constraints_dict(
     if parent_ids:
         try:
             parent_name = kg.concept_view(parent_ids[0]).concept_name
-        except Exception:
+        except NoResultFound:
             pass
     return {
         "parent_ids": list(parent_ids),

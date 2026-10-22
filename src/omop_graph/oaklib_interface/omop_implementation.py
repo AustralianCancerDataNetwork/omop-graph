@@ -30,6 +30,7 @@ from oaklib.interfaces.text_annotator_interface import nen_annotation
 from oaklib.resource import OntologyResource
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
+from sqlalchemy.exc import NoResultFound
 
 from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import PredicateKind
@@ -255,7 +256,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 [term for term in text.split() if term not in configuration.token_exclusion_list]
             )
         elif isinstance(text, tuple) and configuration.token_exclusion_list:
-            filtered_text = tuple()
+            filtered_text = ()
             # text is a tuple of string(s)
             for token in text:
                 filtered_text = filtered_text + tuple(
@@ -274,12 +275,12 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 parent_ids = split_annotations(annotations.get(ANNOTATIONS_PARENT_ID_KEY, None))
                 vocabs = split_annotations(annotations.get(ANNOTATIONS_VOCABS_KEY, None))
                 domains = split_annotations(annotations.get(ANNOTATIONS_DOMAINS_KEY, None))
-            except Exception as e:
+            except Exception:
                 logger.error(
                     f"Annotations passed in wrong format. Expected key: val, "
                     f"where val is separated by '{ANNOTATIONS_SPLIT_CHAR}' if using multiple values."
                 )
-                raise e
+                raise
         else:
             parent_ids = None
             vocabs = None
@@ -399,16 +400,15 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
         if (
             SearchProperty.IDENTIFIER.text in props
             or SearchProperty.MAPPED_IDENTIFIER.text in props
-        ):
-            if ":" in search_term:
-                vocab, code = search_term.split(":", 1)
-                try:
-                    cid = self.kg.concept_id_by_code(vocab, code)
-                    if cid not in seen:
-                        seen.add(cid)
-                        yield self._concept_curie(cid)
-                except Exception:
-                    pass
+        ) and ":" in search_term:
+            vocab, code = search_term.split(":", 1)
+            try:
+                cid = self.kg.concept_id_by_code(vocab, code)
+                if cid not in seen:
+                    seen.add(cid)
+                    yield self._concept_curie(cid)
+            except NoResultFound:
+                pass
 
 
 class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):

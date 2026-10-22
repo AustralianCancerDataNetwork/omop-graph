@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter as CDMConceptFilter
@@ -22,11 +22,11 @@ if TYPE_CHECKING:
     )
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter, NearestConceptMatch
 
-    EmbeddingBackendType: TypeAlias = BackendType
-    EmbeddingMetricType: TypeAlias = MetricType
-    EmbeddingIndexType: TypeAlias = IndexType
-    EmbeddingProviderType: TypeAlias = str
-    EmbeddingRoleType: TypeAlias = EmbeddingRole
+    type EmbeddingBackendType = BackendType
+    type EmbeddingMetricType = MetricType
+    type EmbeddingIndexType = IndexType
+    type EmbeddingProviderType = str
+    type EmbeddingRoleType = EmbeddingRole
 
     # Circular imports for static type hints
     from omop_graph.graph.kg import KnowledgeGraph

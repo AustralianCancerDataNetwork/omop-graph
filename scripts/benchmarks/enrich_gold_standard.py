@@ -24,6 +24,7 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 import sqlalchemy as sa
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Ancestor
@@ -62,7 +63,7 @@ class LevelStats:
     single: int = 0
     multiple: int = 0
 
-    def __iadd__(self, other: LevelStats) -> LevelStats:
+    def __iadd__(self, other: LevelStats) -> Self:
         self.empty += other.empty
         self.cross_domain_fallback += other.cross_domain_fallback
         self.single += other.single
@@ -79,7 +80,7 @@ class Stats:
     def empty_for(cls, levels: list[int]) -> Stats:
         return cls(levels={level: LevelStats() for level in levels})
 
-    def __iadd__(self, other: Stats) -> Stats:
+    def __iadd__(self, other: Stats) -> Self:
         for level, level_stats in other.levels.items():
             self.levels.setdefault(level, LevelStats())
             self.levels[level] += level_stats
