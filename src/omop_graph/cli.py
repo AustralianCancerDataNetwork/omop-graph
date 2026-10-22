@@ -118,9 +118,7 @@ def relationship_classification(
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
-            relationship_ids = set(
-                session.scalars(sa.select(Relationship.relationship_id)).all()
-            )
+            relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
         _load_relationship_classification(
             pred_class_dir,
             resolved=resolved,
@@ -137,22 +135,16 @@ def _load_relationship_classification(
     relationship_ids: set[str],
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
-    pred_class_dir_pl = (
-        Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
-    )
+    pred_class_dir_pl = Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     if not pred_class_dir_pl.is_dir():
         raise NotADirectoryError(f"{pred_class_dir_pl} is not a valid directory.")
 
     pred_mapping_file = pred_class_dir_pl / "predicate_mapping.csv"
     if not pred_mapping_file.is_file():
-        raise FileNotFoundError(
-            f"`predicate_mapping.csv` not found in {pred_class_dir_pl}"
-        )
+        raise FileNotFoundError(f"`predicate_mapping.csv` not found in {pred_class_dir_pl}")
     pred_class_file = pred_class_dir_pl / "predicate_classification.csv"
     if not pred_class_file.is_file():
-        raise FileNotFoundError(
-            f"`predicate_classification.csv` not found in {pred_class_dir_pl}"
-        )
+        raise FileNotFoundError(f"`predicate_classification.csv` not found in {pred_class_dir_pl}")
 
     df_class = pd.read_csv(pred_class_file)
     df_mapping = pd.read_csv(pred_mapping_file)
@@ -167,9 +159,10 @@ def _load_relationship_classification(
     ].nunique(dropna=True)
     violations = cast(pd.DataFrame, check[(check > 1).any(axis=1)])
     if not violations.empty:
-        conflicting_data = cast(pd.DataFrame, df_rel_cls[
-            df_rel_cls["predicate_subkind"].isin(violations.index.tolist())
-        ]).sort_values("predicate_subkind")
+        conflicting_data = cast(
+            pd.DataFrame,
+            df_rel_cls[df_rel_cls["predicate_subkind"].isin(violations.index.tolist())],
+        ).sort_values("predicate_subkind")
         logger.error(
             f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}"
         )
@@ -189,12 +182,8 @@ def _load_relationship_classification(
     df_rel_mapping = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
     ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")  # type: ignore[call-overload]
-    df_rel_mapping = _filter_unknown_relationship_ids(
-        df_rel_mapping, relationship_ids
-    )
-    invalid_mask = (
-        df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
-    )
+    df_rel_mapping = _filter_unknown_relationship_ids(df_rel_mapping, relationship_ids)
+    invalid_mask = df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
     dropped_ids = df_rel_mapping.loc[invalid_mask, "relationship_id"].unique().tolist()
 
     if dropped_ids:

@@ -28,10 +28,7 @@ from omop_graph.graph.paths import (
     StandardConcept,
     find_standard_paths,
 )
-from omop_graph.graph.scoring import (
-    StandardConceptWithScore, 
-    score_standard_concepts
-)
+from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
     CandidateHit,
     ResolverPipeline,
@@ -154,7 +151,9 @@ def ground_term(
 
     # Only do on demand embedding calculation if available and needed (having a EmbeddingResolver).
     # Falls back to None to disable embedding-based features if not available or not required.
-    require_embedding = HAS_OMOP_EMB and any(isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers)
+    require_embedding = HAS_OMOP_EMB and any(
+        isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers
+    )
 
     if query_embedding is None and require_embedding:
         embedding_writer = try_get_embedding_writer_interface(kg)
@@ -218,11 +217,9 @@ def ground_term(
         standard_concepts.extend(candidate_standard_concepts)
 
     if not standard_concepts:
-        logger.info(
-            f"No standard concepts found for '{query}' after hierarchy validation."
-        )
+        logger.info(f"No standard concepts found for '{query}' after hierarchy validation.")
         return []
-    
+
     # Only calculate nearest concept matches for the embedding resolver matches
     # split is done that semantic similarity has less concepts to search for
     matched_standard_concepts_for_embedding = [
@@ -230,13 +227,13 @@ def ground_term(
     ]
     if matched_standard_concepts_for_embedding:
         if query_embedding is None:
-            raise RuntimeError("Query embedding cannot be None if the EmbeddingResolver is used and returned matches.")
-        nearest_concept_matches_for_standard_embedding_concepts = (
-            semantic_similarity(
-                kg=kg, 
-                standard_concepts=matched_standard_concepts_for_embedding, 
-                query_embedding=query_embedding
+            raise RuntimeError(
+                "Query embedding cannot be None if the EmbeddingResolver is used and returned matches."
             )
+        nearest_concept_matches_for_standard_embedding_concepts = semantic_similarity(
+            kg=kg,
+            standard_concepts=matched_standard_concepts_for_embedding,
+            query_embedding=query_embedding,
         )
         embedding_standard_concepts_with_score = score_standard_concepts(
             text=query,
@@ -247,16 +244,20 @@ def ground_term(
     else:
         embedding_standard_concepts_with_score = []
 
-    # Score the other standard concepts that were not matched via embedding resolver 
+    # Score the other standard concepts that were not matched via embedding resolver
     non_embedding_standard_concepts_with_score = score_standard_concepts(
         text=query,
-        standard_concepts=tuple(sc for sc in standard_concepts if sc.match_kind != LabelMatchKind.EMBEDDING),
+        standard_concepts=tuple(
+            sc for sc in standard_concepts if sc.match_kind != LabelMatchKind.EMBEDDING
+        ),
         kg=kg,
         nearest_concept_matches=None,  # No embedding-based scoring for non-embedding matches
     )
 
     # combine the two different ones
-    standard_concepts_with_score = embedding_standard_concepts_with_score + non_embedding_standard_concepts_with_score
+    standard_concepts_with_score = (
+        embedding_standard_concepts_with_score + non_embedding_standard_concepts_with_score
+    )
 
     best_by_concept_id: dict[int, StandardConceptWithScore] = {}
     for concept in standard_concepts_with_score:
@@ -267,11 +268,7 @@ def ground_term(
     deduped_ranked = sorted(
         best_by_concept_id.values(), key=lambda sc: sc.total_score, reverse=True
     )
-    return (
-        deduped_ranked[:max_candidates]
-        if max_candidates is not None
-        else deduped_ranked
-    )
+    return deduped_ranked[:max_candidates] if max_candidates is not None else deduped_ranked
 
 
 def find_standard_concepts(

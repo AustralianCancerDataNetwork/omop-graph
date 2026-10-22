@@ -267,9 +267,7 @@ class EmbeddingResolver(CandidateResolver):
             kg=kg,
             query_embedding=query_embedding,
             concept_filter=concept_filter,
-            k=constraints.limit
-            if isinstance(constraints, ConceptFilter)
-            else None,
+            k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
         )
         if matches is None:
             return ()

@@ -90,9 +90,7 @@ def score_standard_concepts(
     text: str,
     standard_concepts: tuple[StandardConcept, ...],
     kg: "KnowledgeGraph",
-    nearest_concept_matches: Optional[
-        Tuple[Tuple[NearestConceptMatch, ...], ...]
-    ] = None,
+    nearest_concept_matches: Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]] = None,
 ) -> List[StandardConceptWithScore]:
     """
     Attach scoring metrics to each standard concept.
@@ -118,8 +116,8 @@ def score_standard_concepts(
 
     Notes
     -----
-    Standard concept scoring is ONLY performed for concepts that were matched via the embedding resolver, 
-    and only if nearest_concept_matches are provided. Concepts matched via non-embedding resolvers will still 
+    Standard concept scoring is ONLY performed for concepts that were matched via the embedding resolver,
+    and only if nearest_concept_matches are provided. Concepts matched via non-embedding resolvers will still
     receive parsimony and broadness scoring, but their relevance will be based solely on textual similarity.
 
     Returns

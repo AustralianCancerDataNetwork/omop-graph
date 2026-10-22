@@ -71,8 +71,16 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
                             valid_start_date=valid_from,
                             valid_end_date=valid_until,
                         ),
-                        Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=_META_CONCEPT_ID),
-                        Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=_META_CONCEPT_ID),
+                        Domain(
+                            domain_id="Metadata",
+                            domain_name="Metadata",
+                            domain_concept_id=_META_CONCEPT_ID,
+                        ),
+                        Domain(
+                            domain_id="Condition",
+                            domain_name="Condition",
+                            domain_concept_id=_META_CONCEPT_ID,
+                        ),
                         Vocabulary(
                             vocabulary_id="OMOP",
                             vocabulary_name="OMOP",
@@ -152,9 +160,7 @@ def test_concept_views_use_canonical_standard_and_active_flags(
             view.concept_id: view
             for view in (
                 ConceptView.from_row(row)
-                for row in session.execute(
-                    q_concept_views((1, 2, 3, 4, 5), sort=False)
-                )
+                for row in session.execute(q_concept_views((1, 2, 3, 4, 5), sort=False))
             )
         }
 
@@ -187,9 +193,7 @@ def test_label_query_projects_and_orders_canonical_flags(
         rows = session.execute(q_concept_name_match("Shared label")).all()
 
     assert [row.concept_id for row in rows] == [1, 2, 4, 3, 5]
-    statuses = {
-        row.concept_id: (row.is_standard, row.is_active) for row in rows
-    }
+    statuses = {row.concept_id: (row.is_standard, row.is_active) for row in rows}
     assert statuses == {
         1: (True, True),
         2: (True, True),

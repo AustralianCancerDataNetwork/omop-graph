@@ -55,6 +55,7 @@ def _ancestor_query(ids: List[int]) -> sa.Select:
         )
     )
 
+
 @dataclass
 class LevelStats:
     empty: int = 0
@@ -68,6 +69,7 @@ class LevelStats:
         self.single += other.single
         self.multiple += other.multiple
         return self
+
 
 @dataclass
 class Stats:

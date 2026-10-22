@@ -221,9 +221,7 @@ def populate_conditions_and_modifiers(
             episode_concept_id=32533,  # Episode of care
             episode_object_concept_id=condition.condition_concept_id,
             episode_start_date=condition.condition_start_date,
-            episode_end_date=(
-                death.death_date if death else obs.observation_period_end_date
-            ),
+            episode_end_date=(death.death_date if death else obs.observation_period_end_date),
             episode_type_concept_id=choice(avail_types),  # EHR / registry / derived
         )
         episodes.append(episode)
@@ -288,34 +286,22 @@ def populate_test_data(session):
                         "Type Concept",
                     ]
                 ),
-                sa.and_(
-                    Concept.domain_id == "Condition", Concept.vocabulary_id == "ICDO3"
-                ),
+                sa.and_(Concept.domain_id == "Condition", Concept.vocabulary_id == "ICDO3"),
             )
         )
     )
 
-    avail_gender = list(
-        concept_by_domain[concept_by_domain.domain_id == "Gender"].concept_id
-    )
-    avail_ethnicity = list(
-        concept_by_domain[concept_by_domain.domain_id == "Ethnicity"].concept_id
-    )
-    avail_race = list(
-        concept_by_domain[concept_by_domain.domain_id == "Race"].concept_id
-    )
+    avail_gender = list(concept_by_domain[concept_by_domain.domain_id == "Gender"].concept_id)
+    avail_ethnicity = list(concept_by_domain[concept_by_domain.domain_id == "Ethnicity"].concept_id)
+    avail_race = list(concept_by_domain[concept_by_domain.domain_id == "Race"].concept_id)
     avail_place_of_service = list(
         concept_by_domain[concept_by_domain.domain_id == "Visit"].concept_id
     )
     avail_country = list(
         concept_by_domain[concept_by_domain.concept_class_id == "Location"].concept_id
     )
-    avail_provider = list(
-        concept_by_domain[concept_by_domain.domain_id == "Provider"].concept_id
-    )
-    avail_types = list(
-        concept_by_domain[concept_by_domain.domain_id == "Type Concept"].concept_id
-    )
+    avail_provider = list(concept_by_domain[concept_by_domain.domain_id == "Provider"].concept_id)
+    avail_types = list(concept_by_domain[concept_by_domain.domain_id == "Type Concept"].concept_id)
     cancers = list(
         concept_by_domain[
             (concept_by_domain.domain_id == "Condition")
@@ -337,9 +323,7 @@ def populate_test_data(session):
     staging_sets = {}
 
     for axis in ["T", "N", "M", "Stage"]:
-        parents = list(
-            staging_parents[staging_parents.concept_name.str.contains(axis)].concept_id
-        )
+        parents = list(staging_parents[staging_parents.concept_name.str.contains(axis)].concept_id)
         s = pd.DataFrame(
             session.query(*Concept.__table__.columns)
             .join(

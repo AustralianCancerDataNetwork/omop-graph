@@ -45,9 +45,7 @@ def test_get_embedding_interface_returns_none_for_missing_extension_error():
         def emb(self):
             raise MissingExtensionError()
 
-    assert (
-        emb_ext.get_embedding_reader_interface(cast(KnowledgeGraph, BrokenKG())) is None
-    )
+    assert emb_ext.get_embedding_reader_interface(cast(KnowledgeGraph, BrokenKG())) is None
 
 
 def test_knowledge_graph_emb_raises_missing_extension_error_when_omop_emb_unavailable(
@@ -108,14 +106,10 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
 
     fake_reader = Mock()
     # concept 196653 ("Malignant tumor of kidney") exists in the dummy CDM DB
-    fake_reader.get_concepts_without_embedding.return_value = {
-        196653: "Malignant tumor of kidney"
-    }
+    fake_reader.get_concepts_without_embedding.return_value = {196653: "Malignant tumor of kidney"}
 
     monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
-    monkeypatch.setattr(
-        emb_ext, "get_embedding_reader_interface", lambda _: fake_reader
-    )
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
     # No writer injected: simulates a writer that failed to materialize for some
     # other reason (config says write=True, but the lookup itself returns None).
     monkeypatch.setattr(emb_ext, "try_get_embedding_writer_interface", lambda _: None)
@@ -124,9 +118,7 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
     with caplog.at_level(logging.DEBUG, logger="omop_graph.extensions.emb"):
         emb_ext.semantic_similarity(
             kg=mock_cdm_kg,
-            standard_concepts=[
-                _make_standard_concept(196653, "Malignant tumor of kidney")
-            ],
+            standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
             query_embedding=np.zeros((1, 3), dtype=np.float32),
         )
 
@@ -152,22 +144,16 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
     )
 
     fake_reader = Mock()
-    fake_reader.get_concepts_without_embedding.return_value = {
-        196653: "Malignant tumor of kidney"
-    }
+    fake_reader.get_concepts_without_embedding.return_value = {196653: "Malignant tumor of kidney"}
 
     monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
-    monkeypatch.setattr(
-        emb_ext, "get_embedding_reader_interface", lambda _: fake_reader
-    )
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
     monkeypatch.setattr(emb_ext, "get_neareast_concepts", lambda **_: None)
 
     with caplog.at_level(logging.INFO, logger="omop_graph.extensions.emb"):
         emb_ext.semantic_similarity(
             kg=mock_cdm_kg,
-            standard_concepts=[
-                _make_standard_concept(196653, "Malignant tumor of kidney")
-            ],
+            standard_concepts=[_make_standard_concept(196653, "Malignant tumor of kidney")],
             query_embedding=np.zeros((1, 3), dtype=np.float32),
         )
 
@@ -224,9 +210,7 @@ class TestTryGetEmbeddingWriterInterface:
         monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
 
         with caplog.at_level(logging.DEBUG, logger="omop_graph.extensions.emb"):
-            result = emb_ext.try_get_embedding_writer_interface(
-                cast(KnowledgeGraph, ReadOnlyKG())
-            )
+            result = emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, ReadOnlyKG()))
         assert result is None
         assert "unittest.mock.Mock" in caplog.text
         assert "write=False" not in caplog.text
@@ -242,7 +226,9 @@ class TestTryGetEmbeddingWriterInterface:
             def emb(self):
                 raise ValueError("Embedding configuration is not set.")
 
-        assert emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, NoConfigKG())) is None
+        assert (
+            emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, NoConfigKG())) is None
+        )
 
     def test_returns_none_when_extension_missing(self):
         class MissingExtensionKG:
@@ -250,7 +236,10 @@ class TestTryGetEmbeddingWriterInterface:
             def emb(self):
                 raise MissingExtensionError()
 
-        assert emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, MissingExtensionKG())) is None
+        assert (
+            emb_ext.try_get_embedding_writer_interface(cast(KnowledgeGraph, MissingExtensionKG()))
+            is None
+        )
 
 
 # ── omop-emb#48 split: k threaded explicitly instead of via filter.limit ──
@@ -280,9 +269,7 @@ def test_semantic_similarity_splits_cdm_and_knn_filters(
     fake_reader.get_nearest_concepts.return_value = ()
 
     monkeypatch.setattr(emb_ext, "HAS_OMOP_EMB", True)
-    monkeypatch.setattr(
-        emb_ext, "get_embedding_reader_interface", lambda _: fake_reader
-    )
+    monkeypatch.setattr(emb_ext, "get_embedding_reader_interface", lambda _: fake_reader)
 
     emb_ext.semantic_similarity(
         kg=mock_cdm_kg,
@@ -293,9 +280,7 @@ def test_semantic_similarity_splits_cdm_and_knn_filters(
         query_embedding=np.zeros((1, 3), dtype=np.float32),
     )
 
-    cdm_filter = fake_reader.get_concepts_without_embedding.call_args.kwargs[
-        "concept_filter"
-    ]
+    cdm_filter = fake_reader.get_concepts_without_embedding.call_args.kwargs["concept_filter"]
     assert isinstance(cdm_filter, CDMConceptFilter)
     assert cdm_filter.limit == 2
 

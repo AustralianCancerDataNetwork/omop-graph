@@ -62,11 +62,7 @@ class ResolverPipeline:
             # If they passed a string name, find the matching type
             if isinstance(stop_after_resolver, str):
                 match = next(
-                    (
-                        t
-                        for t in self._resolver_map
-                        if t.__name__ == stop_after_resolver
-                    ),
+                    (t for t in self._resolver_map if t.__name__ == stop_after_resolver),
                     None,
                 )
                 if not match:
@@ -135,9 +131,7 @@ class ResolverPipeline:
         seen = set()
 
         for resolver in self.resolvers:
-            hits = resolver.resolve(
-                kg=kg, query=query, constraints=constraints, **kwargs
-            )
+            hits = resolver.resolve(kg=kg, query=query, constraints=constraints, **kwargs)
 
             for hit in hits:
                 if hit.concept_id not in seen:

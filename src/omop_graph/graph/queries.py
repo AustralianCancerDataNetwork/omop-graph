@@ -249,23 +249,17 @@ def q_concept_name_match(
     Select
         The query statement.
     """
-    name_expr = (
-        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
-    )
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
     if synonym:
         base_stmt = q_concept_synonym().where(
             func.lower(name_expr) == func.lower(query_concept_name)
         )
     else:
-        base_stmt = q_concept_name().where(
-            func.lower(name_expr) == func.lower(query_concept_name)
-        )
+        base_stmt = q_concept_name().where(func.lower(name_expr) == func.lower(query_concept_name))
     if search_constraint:
         if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError(
-                "search_constraint must be an instance of ConceptFilter"
-            )
+            raise TypeError("search_constraint must be an instance of ConceptFilter")
         base_stmt = search_constraint.apply(base_stmt)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
@@ -295,24 +289,18 @@ def q_concept_name_ilike(
     Select
         The query statement.
     """
-    name_expr = (
-        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
-    )
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
     if "%" in query_concept_name:
         raise ValueError("query_concept_name should not contain wildcards like '%'.")
 
     if synonym:
-        base_stmt = q_concept_synonym().where(
-            name_expr.ilike(f"%{query_concept_name}%")
-        )
+        base_stmt = q_concept_synonym().where(name_expr.ilike(f"%{query_concept_name}%"))
     else:
         base_stmt = q_concept_name().where(name_expr.ilike(f"%{query_concept_name}%"))
     if search_constraint:
         if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError(
-                "search_constraint must be an instance of ConceptFilter"
-            )
+            raise TypeError("search_constraint must be an instance of ConceptFilter")
         base_stmt = search_constraint.apply(base_stmt)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
@@ -354,12 +342,12 @@ def q_concept_name_fulltext(
     FullTextError
         If the stored tsvector column is missing.
     """
-    name_expr = (
-        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
-    )
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
     target_table = Concept_Synonym if synonym else Concept
     stmt = q_concept_synonym() if synonym else q_concept_name()
-    vector = resolve_backend(engine).fulltext_vector_column(engine, cast(Table, target_table.__table__))
+    vector = resolve_backend(engine).fulltext_vector_column(
+        engine, cast(Table, target_table.__table__)
+    )
     query = func.plainto_tsquery("english", query_concept_name)
 
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
@@ -369,9 +357,7 @@ def q_concept_name_fulltext(
 
     if sort:
         stmt = stmt.order_by(
-            *_concept_match_order_terms(
-                name_expr, rank_expr=func.ts_rank(vector, query)
-            )
+            *_concept_match_order_terms(name_expr, rank_expr=func.ts_rank(vector, query))
         )
 
     return stmt
@@ -570,9 +556,7 @@ def q_concept_synonym_filtered(concept_id: int) -> Select:
     return stmt.where(Concept_Synonym.concept_id == concept_id)
 
 
-def q_singletons(
-    *, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_singletons(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None) -> Select:
     """
     Query for singleton concepts (no parents, no children).
     Uses NOT EXISTS subqueries on the ancestor table.
@@ -600,9 +584,7 @@ def q_singletons(
     )
 
 
-def q_roots(
-    *, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_roots(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None) -> Select:
     """Query for root concepts (no parents)."""
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
     return stmt.where(
@@ -617,9 +599,7 @@ def q_roots(
     )
 
 
-def q_leaves(
-    *, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_leaves(*, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None) -> Select:
     """Query for leaf concepts (no children)."""
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
     return stmt.where(
@@ -641,11 +621,7 @@ def q_concept_domain_ids() -> Select:
 
 def q_concept_vocabulary_ids() -> Select:
     """Query distinct vocabulary IDs."""
-    return (
-        select(Concept.vocabulary_id)
-        .distinct()
-        .where(Concept.vocabulary_id.is_not(None))
-    )
+    return select(Concept.vocabulary_id).distinct().where(Concept.vocabulary_id.is_not(None))
 
 
 def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
@@ -719,9 +695,7 @@ def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
             Concept.concept_id,
             func.count(Concept_Ancestor.descendant_concept_id).label("num_descendants"),
         )
-        .join(
-            Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id
-        )
+        .join(Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id)
         .where(Concept.concept_id.in_(concept_ids))
         .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)

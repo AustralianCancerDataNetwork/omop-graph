@@ -114,11 +114,7 @@ def find_common_parents(
         stats.purity = stats.coverage / denom if denom else 0.0
         stats.completeness = stats.coverage / max(len(seeds), 1)
 
-    return {
-        parent: stats
-        for parent, stats in final.items()
-        if stats.coverage >= min_coverage
-    }
+    return {parent: stats for parent, stats in final.items() if stats.coverage >= min_coverage}
 
 
 def greedy_parent_cover(

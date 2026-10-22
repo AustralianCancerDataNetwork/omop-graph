@@ -253,20 +253,14 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
         if isinstance(text, str) and configuration.token_exclusion_list:
             text = " ".join(
-                [
-                    term
-                    for term in text.split()
-                    if term not in configuration.token_exclusion_list
-                ]
+                [term for term in text.split() if term not in configuration.token_exclusion_list]
             )
         elif isinstance(text, tuple) and configuration.token_exclusion_list:
             filtered_text = tuple()
             # text is a tuple of string(s)
             for token in text:
                 filtered_text = filtered_text + tuple(
-                    term
-                    for term in token.split()
-                    if term not in configuration.token_exclusion_list
+                    term for term in token.split() if term not in configuration.token_exclusion_list
                 )
             text = " ".join(filtered_text)
 
@@ -274,21 +268,13 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
             def split_annotations(ann):
                 if ann is not None and isinstance(ann.value, str):
-                    return tuple(
-                        val.strip() for val in ann.value.split(ANNOTATIONS_SPLIT_CHAR)
-                    )
+                    return tuple(val.strip() for val in ann.value.split(ANNOTATIONS_SPLIT_CHAR))
                 return None
 
             try:
-                parent_ids = split_annotations(
-                    annotations.get(ANNOTATIONS_PARENT_ID_KEY, None)
-                )
-                vocabs = split_annotations(
-                    annotations.get(ANNOTATIONS_VOCABS_KEY, None)
-                )
-                domains = split_annotations(
-                    annotations.get(ANNOTATIONS_DOMAINS_KEY, None)
-                )
+                parent_ids = split_annotations(annotations.get(ANNOTATIONS_PARENT_ID_KEY, None))
+                vocabs = split_annotations(annotations.get(ANNOTATIONS_VOCABS_KEY, None))
+                domains = split_annotations(annotations.get(ANNOTATIONS_DOMAINS_KEY, None))
             except Exception as e:
                 logger.error(
                     f"Annotations passed in wrong format. Expected key: val, "
@@ -302,9 +288,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
         constraints = GroundingConstraints(
             parent_ids=(
-                tuple(self._parse_concept(pid) for pid in parent_ids)
-                if parent_ids
-                else None
+                tuple(self._parse_concept(pid) for pid in parent_ids) if parent_ids else None
             ),
             search_constraint=ConceptFilter(
                 domains=domains,
@@ -629,15 +613,11 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
 
         subject_ids = (
-            tuple([self._parse_concept(s) for s in subjects])
-            if subjects is not None
-            else None
+            tuple([self._parse_concept(s) for s in subjects]) if subjects is not None else None
         )
         predicate_ids = tuple(predicates) if predicates is not None else None
         object_ids = (
-            tuple([self._parse_concept(o) for o in objects])
-            if objects is not None
-            else None
+            tuple([self._parse_concept(o) for o in objects]) if objects is not None else None
         )
 
         relationships = tuple(
@@ -736,9 +716,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         raise NotImplementedError("Changes to the CDM currently prevents this function")
         concept_id = self._parse_concept(curie)
 
-        pred_filter = (
-            {self._parse_predicate(p) for p in predicates} if predicates else None
-        )
+        pred_filter = {self._parse_predicate(p) for p in predicates} if predicates else None
 
         with self.kg.session_factory() as session:
             for edge in self.kg.iter_edges(
@@ -763,9 +741,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         self, *args, **kwargs
     ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
         # return self.entailed_outgoing_relationships(*args, **kwargs)
-        raise NotImplementedError(
-            "Not Implemented: use entailed_outgoing_relationships instead"
-        )
+        raise NotImplementedError("Not Implemented: use entailed_outgoing_relationships instead")
 
     def entailed_incoming_relationships(
         self,
@@ -777,9 +753,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         concept_id = self._parse_concept(curie)
 
-        pred_filter = (
-            {self._parse_predicate(p) for p in predicates} if predicates else None
-        )
+        pred_filter = {self._parse_predicate(p) for p in predicates} if predicates else None
 
         with self.kg.session_factory() as session:
             for edge in self.kg.iter_edges(
@@ -797,9 +771,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         self, *args, **kwargs
     ) -> Iterable[Tuple[PRED_CURIE, CURIE]]:
         # return self.entailed_incoming_relationships(*args, **kwargs)
-        raise NotImplementedError(
-            "Not Implemented: use entailed_incoming_relationships instead"
-        )
+        raise NotImplementedError("Not Implemented: use entailed_incoming_relationships instead")
 
     def entailed_relationships_between(
         self,
@@ -812,9 +784,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Currently disabled: always raises ``NotImplementedError``, per the
         raise message below, since a CDM change broke the body's assumptions.
         """
-        raise NotImplementedError(
-            "Change in OMOP CDM made this function not work anymore"
-        )
+        raise NotImplementedError("Change in OMOP CDM made this function not work anymore")
 
         subj_id = self._parse_concept(subject)
         obj_id = self._parse_concept(object)
@@ -906,20 +876,14 @@ class OMOPAlchemyImplementation(  # type: ignore[override]
 
     @property
     def edge_index(self):
-        raise NotImplementedError(
-            "edge_index is not supported for OMOP-backed adapters"
-        )
+        raise NotImplementedError("edge_index is not supported for OMOP-backed adapters")
 
     @property
     def entailed_edge_index(self):
-        raise NotImplementedError(
-            "entailed_edge_index is not supported for OMOP-backed adapters"
-        )
+        raise NotImplementedError("entailed_edge_index is not supported for OMOP-backed adapters")
 
     def obsoletes(self, include_merged=True) -> Iterable[CURIE]:
-        raise NotImplementedError(
-            "OMOP does not support OWL-style obsolescence semantics"
-        )
+        raise NotImplementedError("OMOP does not support OWL-style obsolescence semantics")
 
     def dangling(self, curies: Optional[Iterable[CURIE]] = None) -> Iterable[CURIE]:
         raise NotImplementedError("OMOP does not support dangling term semantics")

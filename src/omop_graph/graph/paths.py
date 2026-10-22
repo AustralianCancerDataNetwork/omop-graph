@@ -127,9 +127,7 @@ class GraphPath:
         """
         if not self.steps:
             return ()
-        return (self.steps[0].subject.concept_id,) + tuple(
-            s.object.concept_id for s in self.steps
-        )
+        return (self.steps[0].subject.concept_id,) + tuple(s.object.concept_id for s in self.steps)
 
     def __getitem__(self, index):
         return self.steps[index]
@@ -258,9 +256,7 @@ def find_shortest_paths(
     if source == target:
         path = GraphPath(steps=())
         trace = (
-            GraphTrace(
-                seeds=(source,), steps=[], terminated_reason="source_equals_target"
-            )
+            GraphTrace(seeds=(source,), steps=[], terminated_reason="source_equals_target")
             if traced
             else None
         )
@@ -359,9 +355,7 @@ def find_shortest_paths(
                             meeting_nodes.add(prev)
 
         if traced:
-            trace_steps.append(
-                TraceStep(depth=d, node=cur, expanded_edges=tuple(expanded))
-            )
+            trace_steps.append(TraceStep(depth=d, node=cur, expanded_edges=tuple(expanded)))
 
         # Stop if we found a path and current searches exceed optimal depth
         if best_total_depth is not None:
@@ -397,9 +391,7 @@ def find_shortest_paths(
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
         paths.extend(
-            reconstruct_paths(
-                source, target, meet, parents_fwd, parents_bwd, concept_standard_map
-            )
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
         )
         if len(paths) >= max_paths:
             break
@@ -544,9 +536,7 @@ def find_shortest_paths_batch(
         # 4. Stop Condition check
         if best_total_depth is not None:
             # Shallowest possible node in the NEXT layer we just built
-            min_current = min(
-                (current_depth_map[n] for n in next_frontier), default=999
-            )
+            min_current = min((current_depth_map[n] for n in next_frontier), default=999)
 
             # Shallowest possible node waiting in the OTHER frontier
             min_other = min((other_depth_map[n] for n in other_frontier), default=999)
@@ -572,9 +562,7 @@ def find_shortest_paths_batch(
     paths: List[GraphPath] = []
     for meet in meeting_nodes:
         paths.extend(
-            reconstruct_paths(
-                source, target, meet, parents_fwd, parents_bwd, concept_standard_map
-            )
+            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
         )
         if len(paths) >= max_paths:
             break
@@ -620,7 +608,7 @@ class StandardConcept:
         How far this standard concept is from where it needs to be, with a meaning that
         depends on whether ancestor targets were given to ``find_standard_paths``:
             - Targets given (ancestor-constrained grounding): this is the ancestor-
-            hierarchy distance (via ``concept_ancestor.min_levels_of_separation``) 
+            hierarchy distance (via ``concept_ancestor.min_levels_of_separation``)
             from this concept to the required parent.
             - No targets given (unconstrained grounding): this is the hop count
             from the original found concept to the standard concept.
@@ -714,9 +702,9 @@ def find_standard_paths(
 
     2. When ``targets`` is None or empty, there is no ancestor to verify against: the
     first standard concept reached on each branch is accepted directly and not expanded
-    further. This is a looser, unconstrained form of grounding. It "grounds" a 
-    candidate to its standard form without being able to disambiguate against a known 
-    hierarchy branch. See ``StandardConcept.separation`` for how distance is measured in 
+    further. This is a looser, unconstrained form of grounding. It "grounds" a
+    candidate to its standard form without being able to disambiguate against a known
+    hierarchy branch. See ``StandardConcept.separation`` for how distance is measured in
     this mode.
 
     Parameters
@@ -784,9 +772,7 @@ def find_standard_paths(
     visited_min_iteration: Dict[int, int] = {candidate.concept_id: 0}
 
     found_standard_concepts: Dict[int, List[StandardConcept]] = (
-        {target_id: [] for target_id in targets}
-        if targets
-        else {unconstrained_placeholder: []}
+        {target_id: [] for target_id in targets} if targets else {unconstrained_placeholder: []}
     )
 
     while queue:
@@ -900,17 +886,14 @@ def find_standard_paths(
                     continue
 
                 next_iterations = iterations + 1
-                
+
                 # Early-stop for unconstrained mode:
                 # Number of hops from candidate to standard concept
-                # exceeds max_depth to prevent infinite expansion 
+                # exceeds max_depth to prevent infinite expansion
                 if not targets and next_iterations > max_depth:
                     continue
                 prev_best_iteration = visited_min_iteration.get(object_id)
-                if (
-                    prev_best_iteration is not None
-                    and prev_best_iteration <= next_iterations
-                ):
+                if prev_best_iteration is not None and prev_best_iteration <= next_iterations:
                     continue
                 visited_min_iteration[object_id] = next_iterations
 
@@ -1083,9 +1066,7 @@ class PathExplanation:
             if path.steps
             else (trace.seeds[0] if trace.seeds else None)
         )
-        profile = PathProfile.from_path(
-            kg, path, match_kind=match_kind, source_concept_id=source
-        )
+        profile = PathProfile.from_path(kg, path, match_kind=match_kind, source_concept_id=source)
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)
@@ -1114,9 +1095,6 @@ def trace_contains_step(trace: GraphTrace, step: PathStep) -> Optional[TraceStep
         if ts.node != step.subject.concept_id:
             continue
         for e in ts.expanded_edges:
-            if (
-                e.object_id == step.object.concept_id
-                and e.predicate_id == step.predicate
-            ):
+            if e.object_id == step.object.concept_id and e.predicate_id == step.predicate:
                 return ts
     return None

@@ -5,12 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 import sqlalchemy as sa
-from omop_alchemy.cdm.model.vocabulary import (
-    Concept,
-    Concept_Class,
-    Domain,
-    Vocabulary
-)
+from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 
 VOCAB_TABLES = cast(
     "tuple[sa.Table, ...]",

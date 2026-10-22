@@ -65,9 +65,7 @@ def _create_cdm_sessions(
     resolved: ResolvedCDMDatabase, *, register_claims: bool
 ) -> tuple[sessionmaker[CDMSession], Engine, Engine]:
     """Build routed sessions and their owned engine pair through omop-alchemy."""
-    primary, vocab = create_cdm_engines(
-        resolved, register_claims=register_claims
-    )
+    primary, vocab = create_cdm_engines(resolved, register_claims=register_claims)
     return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab
 
 
@@ -87,9 +85,7 @@ def open_cdm_sessions(
     ------
     sqlalchemy.orm.sessionmaker[CDMSession]
     """
-    cdm_sessions, primary, vocab = _create_cdm_sessions(
-        resolved, register_claims=register_claims
-    )
+    cdm_sessions, primary, vocab = _create_cdm_sessions(resolved, register_claims=register_claims)
     try:
         yield cdm_sessions
     finally:

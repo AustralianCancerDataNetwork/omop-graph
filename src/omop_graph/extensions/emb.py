@@ -74,9 +74,7 @@ def _get_embedding_interface(
     try:
         return kg.emb
     except ValueError:
-        logger.debug(
-            "Embedding interface not available: no EmbeddingConfiguration provided."
-        )
+        logger.debug("Embedding interface not available: no EmbeddingConfiguration provided.")
         return None
     except MissingExtensionError as exc:
         logger.warning(f"Embedding interface not available: {exc}")
@@ -96,9 +94,7 @@ def get_embedding_reader_interface(
         and HAS_OMOP_EMB
         and not isinstance(interface, EmbeddingReaderInterface)
     ):
-        raise TypeError(
-            f"Expected embedding interface to be a reader, but got {type(interface)}."
-        )
+        raise TypeError(f"Expected embedding interface to be a reader, but got {type(interface)}.")
     return interface
 
 
@@ -197,9 +193,7 @@ def semantic_similarity(
 
     embedding_reader = get_embedding_reader_interface(kg)
     if embedding_reader is None:
-        logger.info(
-            "Embedding reader interface not found in KG. Skipping similarity calculation."
-        )
+        logger.info("Embedding reader interface not found in KG. Skipping similarity calculation.")
         return None
 
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
@@ -311,8 +305,6 @@ def get_neareast_concepts(
         k=k,
     )
     if not nearest_concepts:
-        logger.info(
-            "No nearest concepts found for the given query embedding and filter."
-        )
+        logger.info("No nearest concepts found for the given query embedding and filter.")
         return None
     return nearest_concepts

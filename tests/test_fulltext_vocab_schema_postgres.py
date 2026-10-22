@@ -42,7 +42,9 @@ def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):
         # split, not a lucky same-schema coincidence.
         inspector = sa.inspect(engine)
         assert not inspector.has_table("concept", schema=scoped.schemas[Role.PRIMARY])
-        columns = {c["name"] for c in inspector.get_columns("concept", schema=scoped.schemas[Role.VOCAB])}
+        columns = {
+            c["name"] for c in inspector.get_columns("concept", schema=scoped.schemas[Role.VOCAB])
+        }
         assert CONCEPT_NAME_TSVECTOR_COLUMN in columns
 
         stmt = q_concept_name_fulltext("kidney cancer", engine=engine)

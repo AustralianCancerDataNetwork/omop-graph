@@ -13,9 +13,7 @@ from omop_graph.graph.queries import q_concept_name_fulltext
 @pytest.mark.parametrize("synonym", [False, True])
 @pytest.mark.postgresql
 @pytest.mark.db_dialect
-def test_fulltext_query_requires_tsvector_columns(
-    synonym: bool, mock_cdm_engine: Engine
-):
+def test_fulltext_query_requires_tsvector_columns(synonym: bool, mock_cdm_engine: Engine):
     """Full-text query raises FullTextError when tsvector columns are absent from the database.
 
     The mock CDM's own table creation never adds tsvector columns (that's a
@@ -23,9 +21,7 @@ def test_fulltext_query_requires_tsvector_columns(
     q_concept_name_fulltext (which inspects the live DB schema) always fires here.
     """
     with pytest.raises(FullTextError):
-        q_concept_name_fulltext(
-            "kidney cancer", synonym=synonym, engine=mock_cdm_engine
-        )
+        q_concept_name_fulltext("kidney cancer", synonym=synonym, engine=mock_cdm_engine)
 
 
 def test_knowledge_graph_fulltext_lookup_skips_unsupported_sqlite(

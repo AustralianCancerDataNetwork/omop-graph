@@ -24,7 +24,9 @@ from fixtures.mock_cdm import seed_relationship_vocabulary
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
-    with scoped_test_schema(pg_db.resolved, prefix="relclass_routing", schema_claims=[staging_schema_claim()]) as scoped:
+    with scoped_test_schema(
+        pg_db.resolved, prefix="relclass_routing", schema_claims=[staging_schema_claim()]
+    ) as scoped:
         schema = scoped.schemas[Role.PRIMARY]
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
@@ -54,7 +56,9 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
 def test_relationship_classification_is_idempotent(pg_db):
     """Re-running against the same schema, the real-world redeploy case the
     DROP TABLE/enum-drop cleanup exists for, must not fail."""
-    with scoped_test_schema(pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]) as scoped:
+    with scoped_test_schema(
+        pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]
+    ) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
@@ -68,9 +72,7 @@ def test_relationship_classification_is_idempotent(pg_db):
         assert n_class and n_class > 0
 
 
-def test_relationship_classification_warns_and_drops_unknown_ids_colocated(
-    pg_db, tmp_path, caplog
-):
+def test_relationship_classification_warns_and_drops_unknown_ids_colocated(pg_db, tmp_path, caplog):
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
         "Identity,mapping,Identity mapping,identity,none\n"
@@ -94,9 +96,7 @@ def test_relationship_classification_warns_and_drops_unknown_ids_colocated(
 
         with scoped.engine.connect() as connection:
             relationship_ids = set(
-                connection.execute(
-                    sa.select(RelationshipMapping.relationship_id)
-                ).scalars()
+                connection.execute(sa.select(RelationshipMapping.relationship_id)).scalars()
             )
 
     assert relationship_ids == {"Maps to"}

@@ -114,7 +114,9 @@ def procedure_kg() -> Iterator[KnowledgeGraph]:
         session.add_all(
             RelationshipMapping(
                 relationship_id=relationship_id,
-                predicate_kind=PredicateKind.HIERARCHY if relationship_id == "Is a" else PredicateKind.ATTRIBUTE,
+                predicate_kind=PredicateKind.HIERARCHY
+                if relationship_id == "Is a"
+                else PredicateKind.ATTRIBUTE,
                 predicate_subkind=subkind,
             )
             for relationship_id, _, subkind in edges
@@ -127,7 +129,9 @@ def procedure_kg() -> Iterator[KnowledgeGraph]:
 
 
 def _attribute_pairs(edges) -> set[tuple[str, int]]:
-    return {(e.predicate_id, e.object_id) for e in edges if e.predicate_kind == PredicateKind.ATTRIBUTE}
+    return {
+        (e.predicate_id, e.object_id) for e in edges if e.predicate_kind == PredicateKind.ATTRIBUTE
+    }
 
 
 EXPECTED_ATTRIBUTE_PAIRS = {(rel, obj) for rel, obj, _ in ATTRIBUTE_EDGES}
@@ -140,7 +144,9 @@ def test_edges_include_cross_domain_attributes_by_default(procedure_kg: Knowledg
     assert ("Is a", PARENT_PROCEDURE) in {(e.predicate_id, e.object_id) for e in edges}
 
 
-def test_attribute_kind_filter_returns_cross_domain_attributes(procedure_kg: KnowledgeGraph) -> None:
+def test_attribute_kind_filter_returns_cross_domain_attributes(
+    procedure_kg: KnowledgeGraph,
+) -> None:
     edges = procedure_kg.edges(
         KNEE_REPLACEMENT,
         direction="out",

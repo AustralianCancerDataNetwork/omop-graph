@@ -303,8 +303,7 @@ class LabelMatchGroupView:
             grouped[m.matched_concept_id].append(m)
 
         grouped_tuple = {
-            cid: tuple(sorted(ms, key=lambda m: m.match_kind.value))
-            for cid, ms in grouped.items()
+            cid: tuple(sorted(ms, key=lambda m: m.match_kind.value)) for cid, ms in grouped.items()
         }
         return cls(groups=grouped_tuple)
 

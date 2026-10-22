@@ -92,17 +92,13 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
         ),
     ]
 )
-def mock_cdm_kg(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
-) -> KnowledgeGraph:
+def mock_cdm_kg(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> KnowledgeGraph:
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr(
         "omop_graph.reasoning.grounding.try_get_embedding_writer_interface",
         lambda _kg: None,
     )
-    fixture_name = (
-        "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
-    )
+    fixture_name = "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
     engine = request.getfixturevalue(fixture_name)
     return KnowledgeGraph(sessionmaker(bind=engine))
 
@@ -411,7 +407,11 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
                             valid_start_date=date(2020, 1, 1),
                             valid_end_date=date(2099, 12, 31),
                         ),
-                        Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=CONCEPT_META_ID),
+                        Domain(
+                            domain_id="Metadata",
+                            domain_name="Metadata",
+                            domain_concept_id=CONCEPT_META_ID,
+                        ),
                         Vocabulary(
                             vocabulary_id="OMOP",
                             vocabulary_name="OMOP",

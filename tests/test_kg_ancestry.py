@@ -6,6 +6,7 @@ from omop_graph.graph.paths import find_standard_paths
 from omop_graph.reasoning.resolvers.resolvers import CandidateHit
 from fixtures.mock_cdm import PARENT_CANCER_ID, CONCEPT_META_ID
 
+
 def test_get_potential_ancestors_batch_returns_only_real_ancestors(
     mock_cdm_kg: KnowledgeGraph,
 ) -> None:

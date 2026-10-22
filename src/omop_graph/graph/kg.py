@@ -92,7 +92,7 @@ class KnowledgeGraphEmbeddingConfiguration:
 
     A complete configuration: whenever embedding support is used at all
     (read or write), a real backend and a real resolved model are both
-    required. The caller resolves the vector store and the model, 
+    required. The caller resolves the vector store and the model,
     builds the backend, and passes both in here. Used to enhance the
     knowledge graph with embedding-based grounding and similarity scoring.
 
@@ -297,9 +297,7 @@ class KnowledgeGraph(GraphBackend):
     @property
     def compute_missing_embeddings(self) -> bool:
         """Indicates whether on-the-fly computation of missing concept embeddings is enabled."""
-        return (
-            self._emb_config.compute_missing_embeddings if self._emb_config else False
-        )
+        return self._emb_config.compute_missing_embeddings if self._emb_config else False
 
     def concept_view(self, concept_id: int) -> ConceptView:
         """
@@ -360,9 +358,7 @@ class KnowledgeGraph(GraphBackend):
         """
         with self.session_factory() as session:
             concept_id = int(
-                session.execute(
-                    q_concept_id_by_code(vocabulary_id, concept_code)
-                ).scalar_one()
+                session.execute(q_concept_id_by_code(vocabulary_id, concept_code)).scalar_one()
             )
         return concept_id
 
@@ -462,9 +458,7 @@ class KnowledgeGraph(GraphBackend):
         """
         # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
         with self.session_factory() as session:
-            predicate_name = session.execute(
-                q_predicate_name(relationship_id)
-            ).scalar_one()
+            predicate_name = session.execute(q_predicate_name(relationship_id)).scalar_one()
         return predicate_name
 
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
@@ -480,9 +474,7 @@ class KnowledgeGraph(GraphBackend):
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
         return item
 
-    def predicate_kinds(
-        self, relationship_ids: tuple[str, ...]
-    ) -> Tuple[PredicateKind, ...]:
+    def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> Tuple[PredicateKind, ...]:
         """
         Classify a batch of predicates.
         """
@@ -691,9 +683,7 @@ class KnowledgeGraph(GraphBackend):
         """
         with self.session_factory() as session:
             roots = tuple(
-                session.execute(
-                    q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
-                ).scalars()
+                session.execute(q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)).scalars()
             )
         return roots
 
@@ -756,17 +746,13 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_vocabulary_ids()).all()
         return frozenset(row.vocabulary_id for row in rows)
 
-    def get_potential_ancestor(
-        self, child_id: int, parent_id: int
-    ) -> Optional[AncestorMatch]:
+    def get_potential_ancestor(self, child_id: int, parent_id: int) -> Optional[AncestorMatch]:
         """
         Check if an ancestry relationship exists between a child and parent.
         """
 
         with self.session_factory() as session:
-            row = session.execute(
-                q_concept_potential_ancestor(child_id, parent_id)
-            ).first()
+            row = session.execute(q_concept_potential_ancestor(child_id, parent_id)).first()
 
         if row is None:
             return None
@@ -799,9 +785,7 @@ class KnowledgeGraph(GraphBackend):
             return {}
 
         with self.session_factory() as session:
-            rows = session.execute(
-                q_concept_potential_ancestors_batch(child_ids, parent_ids)
-            ).all()
+            rows = session.execute(q_concept_potential_ancestors_batch(child_ids, parent_ids)).all()
 
         result: Dict[int, Dict[int, AncestorMatch]] = defaultdict(dict)
         for row in rows:
@@ -830,9 +814,7 @@ class KnowledgeGraph(GraphBackend):
                 )
 
         if constraints.vocabularies is not None:
-            invalid = [
-                v for v in constraints.vocabularies if v not in self._valid_vocabularies
-            ]
+            invalid = [v for v in constraints.vocabularies if v not in self._valid_vocabularies]
             if invalid:
                 raise ValueError(
                     f"Invalid vocabulary constraint(s): {invalid}. "

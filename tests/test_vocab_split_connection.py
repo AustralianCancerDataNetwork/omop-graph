@@ -20,7 +20,11 @@ import sqlalchemy as sa
 import sqlalchemy.orm as so
 
 from oa_configurator import ResolvedCDMDatabase, Resolver, Role
-from oa_configurator.testing import isolated_test_database, resolve_with_role_schemas, scoped_test_schema
+from oa_configurator.testing import (
+    isolated_test_database,
+    resolve_with_role_schemas,
+    scoped_test_schema,
+)
 from orm_loader.config import OrmLoaderConfig
 from orm_loader.helpers import Base, bulk_load_context
 
@@ -183,8 +187,16 @@ def _seed(primary_engine: sa.Engine, vocab_engine: sa.Engine) -> None:
                         valid_start_date=_TODAY,
                         valid_end_date=_FAR_FUTURE,
                     ),
-                    Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=META_CONCEPT_ID),
-                    Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=META_CONCEPT_ID),
+                    Domain(
+                        domain_id="Metadata",
+                        domain_name="Metadata",
+                        domain_concept_id=META_CONCEPT_ID,
+                    ),
+                    Domain(
+                        domain_id="Condition",
+                        domain_name="Condition",
+                        domain_concept_id=META_CONCEPT_ID,
+                    ),
                     Vocabulary(
                         vocabulary_id="OMOP",
                         vocabulary_name="OMOP",
@@ -333,7 +345,9 @@ def test_concept_id_by_code_resolves_against_the_vocab_connection(split_engines:
     assert kg.concept_id_by_code("SNOMED", "SUBJ") == SUBJECT_CONCEPT_ID
 
 
-def test_concept_ids_by_label_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+def test_concept_ids_by_label_resolves_against_the_vocab_connection(
+    split_engines: _Engines,
+) -> None:
     kg = _split_kg(split_engines)
 
     assert kg.concept_ids_by_label("Subject concept") == (SUBJECT_CONCEPT_ID,)
