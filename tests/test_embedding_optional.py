@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import builtins
 import logging
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
 import numpy as np
@@ -18,6 +18,9 @@ from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfigura
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 from omop_graph.reasoning.resolvers import resolvers as resolvers_ext
+
+if TYPE_CHECKING:
+    from omop_emb import MetricType
 
 
 def _make_resolved_model() -> ResolvedModel:
@@ -100,7 +103,7 @@ def test_fallback_flag_true_logs_attempt_when_concepts_missing(
         write=True,
         backend=Mock(),
         resolved_model=_make_resolved_model(),
-        metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+        metric_type=cast("MetricType", "cosine"),
     )
 
     fake_reader = Mock()
@@ -139,7 +142,7 @@ def test_fallback_flag_false_logs_disabled_when_concepts_missing(
         compute_missing_embeddings=False,
         backend=Mock(),
         resolved_model=_make_resolved_model(),
-        metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+        metric_type=cast("MetricType", "cosine"),
     )
 
     fake_reader = Mock()
@@ -167,7 +170,7 @@ class TestEmbeddingConfigurationValidation:
     def test_compute_missing_embeddings_requires_write(self):
         with pytest.raises(ValueError, match="compute_missing_embeddings=True requires write=True"):
             KnowledgeGraphEmbeddingConfiguration(
-                metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+                metric_type=cast("MetricType", "cosine"),
                 backend=Mock(),
                 resolved_model=_make_resolved_model(),
                 compute_missing_embeddings=True,
@@ -176,7 +179,7 @@ class TestEmbeddingConfigurationValidation:
     def test_model_name_and_provider_type_derive_from_resolved_model(self):
         resolved = _make_resolved_model()
         cfg = KnowledgeGraphEmbeddingConfiguration(
-            metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+            metric_type=cast("MetricType", "cosine"),
             backend=Mock(),
             resolved_model=resolved,
             write=True,
@@ -258,7 +261,7 @@ def test_semantic_similarity_splits_cdm_and_knn_filters(
         compute_missing_embeddings=False,
         backend=Mock(),
         resolved_model=_make_resolved_model(),
-        metric_type=cast(emb_ext.EmbeddingMetricType, "cosine"),
+        metric_type=cast("MetricType", "cosine"),
     )
 
     fake_reader = Mock()

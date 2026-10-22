@@ -37,13 +37,11 @@ if TYPE_CHECKING:
         EmbeddingReaderInterface,
         EmbeddingStoreReader,
         EmbeddingWriterInterface,
+        MetricType,
     )
 
 # Local Application Imports
-from ..extensions.emb import (
-    EmbeddingMetricType,
-    MissingExtensionError,
-)
+from ..extensions.emb import MissingExtensionError
 from ..extensions.omop_alchemy import (
     PredicateKind,
     RelationshipMappingElement,
@@ -99,7 +97,7 @@ class KnowledgeGraphEmbeddingConfiguration:
 
     Parameters
     ----------
-    metric_type : EmbeddingMetricType
+    metric_type : MetricType
         The similarity/distance metric to use for embedding comparisons (e.g., cosine, euclidean).
         This is required to ensure that the correct type of index is used in the backend and that
         similarity computations are consistent.
@@ -127,7 +125,7 @@ class KnowledgeGraphEmbeddingConfiguration:
         straight through to ``EmbeddingReaderInterface``.
     """
 
-    metric_type: EmbeddingMetricType
+    metric_type: MetricType
     backend: EmbeddingBackend | EmbeddingStoreReader
     resolved_model: ResolvedModel
     write: bool = False

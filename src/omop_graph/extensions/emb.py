@@ -15,29 +15,15 @@ if TYPE_CHECKING:
     from omop_emb import (
         BackendType,
         EmbeddingReaderInterface,
-        EmbeddingRole,
         EmbeddingWriterInterface,
-        IndexType,
         MetricType,
     )
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter, NearestConceptMatch
-
-    type EmbeddingBackendType = BackendType
-    type EmbeddingMetricType = MetricType
-    type EmbeddingIndexType = IndexType
-    type EmbeddingProviderType = str
-    type EmbeddingRoleType = EmbeddingRole
 
     # Circular imports for static type hints
     from omop_graph.graph.kg import KnowledgeGraph
     from omop_graph.graph.paths import StandardConcept
 
-else:
-    EmbeddingBackendType = str
-    EmbeddingMetricType = str
-    EmbeddingIndexType = str
-    EmbeddingProviderType = str
-    EmbeddingRoleType = str
 
 SUPPORTED_BACKENDS: tuple[str, ...] = ()
 SUPPORTED_METRICS: tuple[str, ...] = ()
@@ -45,7 +31,6 @@ if HAS_OMOP_EMB:
     from omop_emb import (
         BackendType,
         EmbeddingReaderInterface,
-        EmbeddingRole,
         EmbeddingWriterInterface,
         MetricType,
     )
