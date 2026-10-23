@@ -2,7 +2,7 @@ import logging
 import tempfile
 from importlib import resources
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 
 import pandas as pd
 import sqlalchemy as sa
@@ -154,12 +154,11 @@ def _load_relationship_classification(
     check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[
         ["description", "semantics", "inference"]
     ].nunique(dropna=True)
-    violations = cast(pd.DataFrame, check[(check > 1).any(axis=1)])
+    violations = check[(check > 1).any(axis=1)]
     if not violations.empty:
-        conflicting_data = cast(
-            pd.DataFrame,
-            df_rel_cls[df_rel_cls["predicate_subkind"].isin(violations.index.tolist())],
-        ).sort_values("predicate_subkind")
+        conflicting_data = df_rel_cls[
+            df_rel_cls["predicate_subkind"].isin(violations.index.tolist())
+        ].sort_values("predicate_subkind")
         logger.error(
             f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}"
         )
@@ -178,7 +177,7 @@ def _load_relationship_classification(
     )
     df_rel_mapping = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
-    ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")  # type: ignore[call-overload]
+    ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")
     df_rel_mapping = _filter_unknown_relationship_ids(df_rel_mapping, relationship_ids)
     invalid_mask = df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
     dropped_ids = df_rel_mapping.loc[invalid_mask, "relationship_id"].unique().tolist()
@@ -220,7 +219,7 @@ def _load_relationship_classification(
         RelationshipClass.__table__,
     ]
     with open_connection(engine) as connection:
-        Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
+        Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # ty: ignore[invalid-argument-type]
         create_extension_tables(connection, resolved=resolved)
 
     with tempfile.TemporaryDirectory() as tmp_dir, so.Session(engine) as session:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Callable
+from typing import Any, Literal
 
 from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import GraphTrace, Subgraph
@@ -27,7 +28,7 @@ Format = Literal["auto", "html", "text", "mmd"]
 
 def _in_notebook() -> bool:
     try:
-        from IPython.core.getipython import get_ipython  # type: ignore[import-unresolved]
+        from IPython.core.getipython import get_ipython
 
         ip = get_ipython()
         return ip is not None and "IPKernelApp" in ip.config
@@ -93,9 +94,14 @@ def render_explained_path(
     return explained_path_text(kg, explanation)
 
 
+def _install_repr_html(cls: type[Any], render: Callable[[Any], str]) -> None:
+    """Set render as the IPython rich-display hook ``_repr_html_`` of cls."""
+    cls._repr_html_ = render
+
+
 def bind_default_renderers(kg):
     from omop_graph.render import render_path, render_subgraph, render_trace
 
-    Subgraph._repr_html_ = lambda self: render_subgraph(kg, self, format="html")  # type: ignore
-    GraphTrace._repr_html_ = lambda self: render_trace(kg, self, format="html")  # type: ignore
-    GraphPath._repr_html_ = lambda self: render_path(kg, self, format="html")  # type: ignore
+    _install_repr_html(Subgraph, lambda self: render_subgraph(kg, self, format="html"))
+    _install_repr_html(GraphTrace, lambda self: render_trace(kg, self, format="html"))
+    _install_repr_html(GraphPath, lambda self: render_path(kg, self, format="html"))

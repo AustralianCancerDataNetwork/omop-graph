@@ -110,17 +110,15 @@ def get_embedding_writer_interface(
     instead.
     """
     interface = _get_embedding_interface(kg)
-    if (
-        interface is not None
-        and HAS_OMOP_EMB
-        and not isinstance(interface, EmbeddingWriterInterface)
-    ):
+    if interface is None:
+        return None
+    if not (HAS_OMOP_EMB and isinstance(interface, EmbeddingWriterInterface)):
         raise TypeError(
             f"Expected embedding interface to be a writer, but got {type(interface)}. "
             "Instantiate the KG with an embedding configuration that has write=True "
             "to get a writer interface."
         )
-    return interface  # ty: ignore[invalid-return-type]
+    return interface
 
 
 def try_get_embedding_writer_interface(

@@ -73,10 +73,7 @@ def _normalise_properties(config: SearchConfiguration) -> list[str]:
     list[str]
         A list of property strings.
     """
-    return [
-        getattr(p, "text", None) or str(p)
-        for p in (config.properties or [])  # type: ignore[union-attr]
-    ]
+    return [getattr(p, "text", None) or str(p) for p in (config.properties or [])]
 
 
 class OMOPBaseInterface:
@@ -799,7 +796,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
             yield self._predicate_curie("is_a")
 
 
-class OMOPAlchemyImplementation(  # type: ignore[override]
+class OMOPAlchemyImplementation(
     OMOPRelationGraphInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,

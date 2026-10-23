@@ -253,7 +253,8 @@ def test_semantic_similarity_splits_cdm_and_knn_filters(
     the KNN call gets a plain EmbeddingConceptFilter (no limit) with k passed
     explicitly instead.
     """
-    from omop_emb.utils.embedding_utils import CDMConceptFilter, EmbeddingConceptFilter
+    from omop_alchemy.cdm.query import ConceptFilter as CDMConceptFilter
+    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
     mock_cdm_kg._emb_config = KnowledgeGraphEmbeddingConfiguration(
         compute_missing_embeddings=False,

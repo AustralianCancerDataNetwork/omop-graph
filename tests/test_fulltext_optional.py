@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 import sqlalchemy as sa
 from omop_alchemy.backends import FullTextError
@@ -31,9 +33,9 @@ def test_knowledge_graph_fulltext_lookup_skips_unsupported_sqlite(
 
 
 def test_knowledge_graph_rejects_engine_instead_of_session_factory():
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:")
+    engine: Any = sa.create_engine("sqlite+pysqlite:///:memory:")
     try:
         with pytest.raises(TypeError, match="callable session factory.*not an Engine"):
-            KnowledgeGraph(engine)  # ty: ignore[invalid-argument-type]
+            KnowledgeGraph(engine)
     finally:
         engine.dispose()
