@@ -5,16 +5,14 @@ This module provides utilities for standardizing concept IDs (mapping non-standa
 concepts to their standard counterparts) using the Knowledge Graph.
 """
 
-from typing import Dict, Set
-
 # Local Application Imports
 from omop_graph.graph.kg import KnowledgeGraph
 
 
 def standardise_ids(
-    ids: Set[int],
+    ids: set[int],
     kg: KnowledgeGraph,
-) -> Dict[int, int]:
+) -> dict[int, int]:
     """
     Map a set of concept IDs to their Standard Concept IDs.
 
@@ -40,7 +38,7 @@ def standardise_ids(
     dict[int, int]
         A dictionary mapping the original input ID to its standardized ID.
     """
-    mapping: Dict[int, int] = {}
+    mapping: dict[int, int] = {}
 
     raise NotImplementedError(
         "predicate search has changed. Needs to change here too. Subsumes no longer valid."

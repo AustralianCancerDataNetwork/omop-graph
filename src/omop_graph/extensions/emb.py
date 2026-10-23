@@ -1,44 +1,39 @@
 from __future__ import annotations
 
-import logging
 import importlib.util
-from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias, Tuple
-import numpy as np
+import logging
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
+import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter as CDMConceptFilter
 
 HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
 
 if TYPE_CHECKING:
     # Optional embedding-specific ones
-    from omop_emb import BackendType, MetricType, IndexType
-    from omop_emb import EmbeddingWriterInterface, EmbeddingReaderInterface
-    from omop_emb import EmbeddingRole
-    from omop_emb.utils.embedding_utils import NearestConceptMatch
-    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
-
-    EmbeddingBackendType: TypeAlias = BackendType
-    EmbeddingMetricType: TypeAlias = MetricType
-    EmbeddingIndexType: TypeAlias = IndexType
-    EmbeddingProviderType: TypeAlias = str
-    EmbeddingRoleType: TypeAlias = EmbeddingRole
+    from omop_emb import (
+        BackendType,
+        EmbeddingReaderInterface,
+        EmbeddingWriterInterface,
+        MetricType,
+    )
+    from omop_emb.utils.embedding_utils import EmbeddingConceptFilter, NearestConceptMatch
 
     # Circular imports for static type hints
     from omop_graph.graph.kg import KnowledgeGraph
     from omop_graph.graph.paths import StandardConcept
 
-else:
-    EmbeddingBackendType = str
-    EmbeddingMetricType = str
-    EmbeddingIndexType = str
-    EmbeddingProviderType = str
-    EmbeddingRoleType = str
 
-SUPPORTED_BACKENDS: Tuple[str, ...] = ()
-SUPPORTED_METRICS: Tuple[str, ...] = ()
+SUPPORTED_BACKENDS: tuple[str, ...] = ()
+SUPPORTED_METRICS: tuple[str, ...] = ()
 if HAS_OMOP_EMB:
-    from omop_emb import BackendType, EmbeddingRole, MetricType
-    from omop_emb import EmbeddingReaderInterface, EmbeddingWriterInterface
+    from omop_emb import (
+        BackendType,
+        EmbeddingReaderInterface,
+        EmbeddingWriterInterface,
+        MetricType,
+    )
 
     # Extract the string values from the StrEnums
     SUPPORTED_BACKENDS = tuple(v.value for v in BackendType)
@@ -59,7 +54,7 @@ class MissingExtensionError(ImportError):
 
 def _get_embedding_interface(
     kg: KnowledgeGraph,
-) -> Optional[EmbeddingReaderInterface | EmbeddingWriterInterface]:
+) -> EmbeddingReaderInterface | EmbeddingWriterInterface | None:
     """
     Internal utility to retrieve the embedding interface from the KG, without distinguishing between reader/writer.
     This is only used for internal logic where we don't need to differentiate between reader and writer capabilities.
@@ -74,9 +69,7 @@ def _get_embedding_interface(
     try:
         return kg.emb
     except ValueError:
-        logger.debug(
-            "Embedding interface not available: no EmbeddingConfiguration provided."
-        )
+        logger.debug("Embedding interface not available: no EmbeddingConfiguration provided.")
         return None
     except MissingExtensionError as exc:
         logger.warning(f"Embedding interface not available: {exc}")
@@ -85,7 +78,7 @@ def _get_embedding_interface(
 
 def get_embedding_reader_interface(
     kg: KnowledgeGraph,
-) -> Optional["EmbeddingReaderInterface"]:
+) -> EmbeddingReaderInterface | None:
     """
     Utility to safely retrieve the embedding reader interface from the KG.
     Returns None if the extension is not available or if the interface is not a reader.
@@ -96,15 +89,13 @@ def get_embedding_reader_interface(
         and HAS_OMOP_EMB
         and not isinstance(interface, EmbeddingReaderInterface)
     ):
-        raise TypeError(
-            f"Expected embedding interface to be a reader, but got {type(interface)}."
-        )
+        raise TypeError(f"Expected embedding interface to be a reader, but got {type(interface)}.")
     return interface
 
 
 def get_embedding_writer_interface(
     kg: KnowledgeGraph,
-) -> Optional["EmbeddingWriterInterface"]:
+) -> EmbeddingWriterInterface | None:
     """
     Utility to retrieve the embedding writer interface from the KG when write-capability
     is already guaranteed some other way (e.g. by the caller's own contract). Raises if
@@ -119,22 +110,20 @@ def get_embedding_writer_interface(
     instead.
     """
     interface = _get_embedding_interface(kg)
-    if (
-        interface is not None
-        and HAS_OMOP_EMB
-        and not isinstance(interface, EmbeddingWriterInterface)
-    ):
+    if interface is None:
+        return None
+    if not (HAS_OMOP_EMB and isinstance(interface, EmbeddingWriterInterface)):
         raise TypeError(
             f"Expected embedding interface to be a writer, but got {type(interface)}. "
             "Instantiate the KG with an embedding configuration that has write=True "
             "to get a writer interface."
         )
-    return interface  # ty: ignore[invalid-return-type]
+    return interface
 
 
 def try_get_embedding_writer_interface(
     kg: KnowledgeGraph,
-) -> Optional["EmbeddingWriterInterface"]:
+) -> EmbeddingWriterInterface | None:
     """
     Utility to opportunistically retrieve the embedding writer interface from the KG.
 
@@ -171,7 +160,7 @@ def semantic_similarity(
     kg: KnowledgeGraph,
     standard_concepts: Sequence[StandardConcept],
     query_embedding: np.ndarray,
-) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
+) -> tuple[tuple[NearestConceptMatch, ...], ...] | None:
     """
     Calculates similarity between a query embedding and stored concept embeddings.
 
@@ -197,9 +186,7 @@ def semantic_similarity(
 
     embedding_reader = get_embedding_reader_interface(kg)
     if embedding_reader is None:
-        logger.info(
-            "Embedding reader interface not found in KG. Skipping similarity calculation."
-        )
+        logger.info("Embedding reader interface not found in KG. Skipping similarity calculation.")
         return None
 
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
@@ -267,9 +254,9 @@ def semantic_similarity(
 def get_neareast_concepts(
     kg: KnowledgeGraph,
     query_embedding: np.ndarray,
-    concept_filter: Optional[EmbeddingConceptFilter],
-    k: Optional[int] = None,
-) -> Optional[Tuple[Tuple[NearestConceptMatch, ...], ...]]:
+    concept_filter: EmbeddingConceptFilter | None,
+    k: int | None = None,
+) -> tuple[tuple[NearestConceptMatch, ...], ...] | None:
     """
     RAG retrieval for concept similarity scores. The query_embedding is compared against
     stored embeddings using the metric and model already configured on the KG's embedding
@@ -311,8 +298,6 @@ def get_neareast_concepts(
         k=k,
     )
     if not nearest_concepts:
-        logger.info(
-            "No nearest concepts found for the given query embedding and filter."
-        )
+        logger.info("No nearest concepts found for the given query embedding and filter.")
         return None
     return nearest_concepts

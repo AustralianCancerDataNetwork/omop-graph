@@ -9,9 +9,7 @@ def test_annotate_text_standardizes_non_standard_candidate_without_parent_annota
 ) -> None:
     interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
 
-    annotations = list(
-        interface.annotate_text(text="Kidney carcinoma term", annotations=None)
-    )
+    annotations = list(interface.annotate_text(text="Kidney carcinoma term", annotations=None))
 
     assert len(annotations) == 1
     assert annotations[0].object_id == "OMOP:196653"

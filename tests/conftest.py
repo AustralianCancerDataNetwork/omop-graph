@@ -21,6 +21,7 @@ def pg_db(request):
     convention already used by OMOP_Alchemy/orm-loader/omop-emb.
     """
     from oa_configurator.testing import isolated_test_database
+
     from omop_graph.config import OmopGraphConfig
 
     with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg", request=request) as db:

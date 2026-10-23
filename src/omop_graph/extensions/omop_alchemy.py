@@ -1,19 +1,19 @@
 # Extension to omop-alchemy package
+from dataclasses import dataclass
+from enum import Enum
+from typing import cast
+
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from orm_loader.helpers import Base, create_tables
+from oa_configurator import ResolvedCDMDatabase, Role
 from omop_alchemy.cdm.base import (
+    CDMTableBase,
     ReferenceTable,
     cdm_table,
-    CDMTableBase,
     merge_table_args,
     role_fk,
 )
-from oa_configurator import ResolvedCDMDatabase, Role
-
-from enum import Enum
-from dataclasses import dataclass
-from typing import cast
+from orm_loader.helpers import Base, create_tables
 
 
 class PredicateKind(Enum):
@@ -37,18 +37,14 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
         sa.Enum(
             PredicateKind,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],
+            values_callable=lambda obj: [e.value for e in obj],
             # Must match __table_args__'s schema to ensure that schema_translate_map
             # routes the enum correctly.
             schema=Role.PRIMARY.value,
         ),
         primary_key=True,
     )
-    predicate_subkind: so.Mapped[str] = so.mapped_column(
-        sa.String(20), primary_key=True
-    )
+    predicate_subkind: so.Mapped[str] = so.mapped_column(sa.String(20), primary_key=True)
     description: so.Mapped[str] = so.mapped_column(sa.String(80), nullable=False)
     semantics: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
     inference: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
@@ -70,18 +66,14 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
         sa.Enum(
             PredicateKind,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],
+            values_callable=lambda obj: [e.value for e in obj],
             # Must match __table_args__'s schema to ensure that schema_translate_map
             # routes the enum correctly.
             schema=Role.PRIMARY.value,
         ),
         primary_key=True,
     )
-    predicate_subkind: so.Mapped[str] = so.mapped_column(
-        sa.String(20), primary_key=True
-    )
+    predicate_subkind: so.Mapped[str] = so.mapped_column(sa.String(20), primary_key=True)
 
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
     __table_args__ = merge_table_args(
@@ -147,8 +139,6 @@ def load_relationship_mapping(
     """Load the entire RelationshipMapping table and return it as a dict keyed by relationship_id."""
     results = session.query(RelationshipMapping).all()
     return {
-        row.relationship_id: RelationshipMappingElement.from_relationship_mapping_entry(
-            row
-        )
+        row.relationship_id: RelationshipMappingElement.from_relationship_mapping_entry(row)
         for row in results
     }
