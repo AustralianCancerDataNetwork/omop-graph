@@ -35,8 +35,9 @@ from omop_alchemy.cdm.model.vocabulary import (
     Vocabulary,
 )
 from omop_alchemy.cross_database import cdm_sessionmaker
+from orm_loader.backends import resolve_backend
 from orm_loader.config import OrmLoaderConfig
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
@@ -157,7 +158,7 @@ def split_engines() -> Iterator[_Engines]:
 
 def _seed(primary_engine: sa.Engine, vocab_engine: sa.Engine) -> None:
     with so.Session(vocab_engine) as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).bulk_load_context(session):
             session.add_all(
                 [
                     Concept(

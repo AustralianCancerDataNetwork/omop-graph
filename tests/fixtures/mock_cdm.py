@@ -15,7 +15,8 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.backends import resolve_backend
+from orm_loader.helpers import Base
 from sqlalchemy.orm import Session, sessionmaker
 
 from fixtures.helpers import require_cdm
@@ -78,7 +79,7 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         if engine.dialect.name == "postgresql":
-            with bulk_load_context(session):
+            with resolve_backend(session).bulk_load_context(session):
                 seed_mock_cdm(session)
         else:
             seed_mock_cdm(session)
@@ -395,7 +396,7 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
     """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).bulk_load_context(session):
             if session.get(Concept, CONCEPT_META_ID) is None:
                 session.add_all(
                     [

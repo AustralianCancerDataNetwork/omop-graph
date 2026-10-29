@@ -11,7 +11,8 @@ from fixtures.helpers import VOCAB_TABLES
 from oa_configurator.testing import scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.backends import resolve_backend
+from orm_loader.helpers import Base
 from sqlalchemy.orm import Session
 
 from omop_graph.graph.nodes import ConceptView
@@ -54,7 +55,7 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
             )
 
         with Session(engine) as session:
-            with bulk_load_context(session):
+            with resolve_backend(session).bulk_load_context(session):
                 session.add_all(
                     [
                         Concept(

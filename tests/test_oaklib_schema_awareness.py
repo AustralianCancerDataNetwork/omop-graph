@@ -23,8 +23,8 @@ from oa_configurator.testing import scoped_test_schema
 from oaklib import get_adapter
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cross_database import cdm_sessionmaker
-from orm_loader.backends import staging_schema_claim
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.backends import resolve_backend, staging_schema_claim
+from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.db.session import resolve_cdm_database
@@ -44,7 +44,7 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
     FK insert cycle, so FK checks are disabled around the insert.
     """
     with sa.orm.Session(engine) as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).bulk_load_context(session):
             session.add_all(
                 [
                     Concept(
