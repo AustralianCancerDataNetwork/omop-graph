@@ -55,7 +55,7 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
             )
 
         with Session(engine) as session:
-            with resolve_backend(session).bulk_load_context(session):
+            with resolve_backend(session).relaxed_foreign_keys(session):
                 session.add_all(
                     [
                         Concept(

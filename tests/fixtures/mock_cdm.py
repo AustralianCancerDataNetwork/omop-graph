@@ -79,7 +79,7 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         if engine.dialect.name == "postgresql":
-            with resolve_backend(session).bulk_load_context(session):
+            with resolve_backend(session).relaxed_foreign_keys(session):
                 seed_mock_cdm(session)
         else:
             seed_mock_cdm(session)
@@ -396,7 +396,7 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
     """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
-        with resolve_backend(session).bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             if session.get(Concept, CONCEPT_META_ID) is None:
                 session.add_all(
                     [

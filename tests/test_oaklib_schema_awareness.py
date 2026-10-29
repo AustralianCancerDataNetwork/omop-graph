@@ -44,7 +44,7 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
     FK insert cycle, so FK checks are disabled around the insert.
     """
     with sa.orm.Session(engine) as session:
-        with resolve_backend(session).bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             session.add_all(
                 [
                     Concept(

@@ -158,7 +158,7 @@ def split_engines() -> Iterator[_Engines]:
 
 def _seed(primary_engine: sa.Engine, vocab_engine: sa.Engine) -> None:
     with so.Session(vocab_engine) as session:
-        with resolve_backend(session).bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             session.add_all(
                 [
                     Concept(
