@@ -2,29 +2,25 @@ import logging
 import tempfile
 from importlib import resources
 from pathlib import Path
-from typing import Annotated, Optional, cast
+from typing import Annotated
 
 import pandas as pd
 import sqlalchemy as sa
-import typer
 import sqlalchemy.orm as so
-
+import typer
 from oa_configurator import ResolvedCDMDatabase, open_connection
-
-from orm_loader.backends import STAGING_SCHEMA, resolve_backend
-from orm_loader.helpers import bulk_load_context
-from orm_loader.helpers.metadata import Base
-from orm_loader.loaders.loader_interface import PandasLoader
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
+from orm_loader.backends import STAGING_SCHEMA, resolve_backend
+from orm_loader.helpers.metadata import Base
 
+from omop_graph.cli_utils import populate_test_data
 from omop_graph.config import OmopGraphConfig
-from omop_graph.db.session import resolve_cdm_database, open_cdm_sessions
+from omop_graph.db.session import open_cdm_sessions, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
     create_extension_tables,
 )
-from omop_graph.cli_utils import populate_test_data
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
@@ -79,9 +75,8 @@ def populate_with_test_data():
             f"Refusing to populate {resolved.name!r} with synthetic test data: "
             "both its primary and vocab connections must be test_only."
         )
-    with open_cdm_sessions(resolved) as cdm_sessions:
-        with cdm_sessions() as session:
-            populate_test_data(session)
+    with open_cdm_sessions(resolved) as cdm_sessions, cdm_sessions() as session:
+        populate_test_data(session)
 
 
 def packaged_predicate_csv_dir() -> Path:
@@ -96,7 +91,7 @@ def packaged_predicate_csv_dir() -> Path:
 
 
 def relationship_classification(
-    pred_class_dir: Optional[str] = None,
+    pred_class_dir: str | None = None,
     *,
     resolved: ResolvedCDMDatabase | None = None,
 ) -> None:
@@ -118,9 +113,7 @@ def relationship_classification(
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
-            relationship_ids = set(
-                session.scalars(sa.select(Relationship.relationship_id)).all()
-            )
+            relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
         _load_relationship_classification(
             pred_class_dir,
             resolved=resolved,
@@ -130,29 +123,23 @@ def relationship_classification(
 
 
 def _load_relationship_classification(
-    pred_class_dir: Optional[str],
+    pred_class_dir: str | None,
     *,
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
     relationship_ids: set[str],
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
-    pred_class_dir_pl = (
-        Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
-    )
+    pred_class_dir_pl = Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     if not pred_class_dir_pl.is_dir():
         raise NotADirectoryError(f"{pred_class_dir_pl} is not a valid directory.")
 
     pred_mapping_file = pred_class_dir_pl / "predicate_mapping.csv"
     if not pred_mapping_file.is_file():
-        raise FileNotFoundError(
-            f"`predicate_mapping.csv` not found in {pred_class_dir_pl}"
-        )
+        raise FileNotFoundError(f"`predicate_mapping.csv` not found in {pred_class_dir_pl}")
     pred_class_file = pred_class_dir_pl / "predicate_classification.csv"
     if not pred_class_file.is_file():
-        raise FileNotFoundError(
-            f"`predicate_classification.csv` not found in {pred_class_dir_pl}"
-        )
+        raise FileNotFoundError(f"`predicate_classification.csv` not found in {pred_class_dir_pl}")
 
     df_class = pd.read_csv(pred_class_file)
     df_mapping = pd.read_csv(pred_mapping_file)
@@ -165,11 +152,11 @@ def _load_relationship_classification(
     check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[
         ["description", "semantics", "inference"]
     ].nunique(dropna=True)
-    violations = cast(pd.DataFrame, check[(check > 1).any(axis=1)])
+    violations = check[(check > 1).any(axis=1)]
     if not violations.empty:
-        conflicting_data = cast(pd.DataFrame, df_rel_cls[
+        conflicting_data = df_rel_cls[
             df_rel_cls["predicate_subkind"].isin(violations.index.tolist())
-        ]).sort_values("predicate_subkind")
+        ].sort_values("predicate_subkind")
         logger.error(
             f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}"
         )
@@ -188,13 +175,9 @@ def _load_relationship_classification(
     )
     df_rel_mapping = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
-    ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")  # type: ignore[call-overload]
-    df_rel_mapping = _filter_unknown_relationship_ids(
-        df_rel_mapping, relationship_ids
-    )
-    invalid_mask = (
-        df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
-    )
+    ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")
+    df_rel_mapping = _filter_unknown_relationship_ids(df_rel_mapping, relationship_ids)
+    invalid_mask = df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
     dropped_ids = df_rel_mapping.loc[invalid_mask, "relationship_id"].unique().tolist()
 
     if dropped_ids:
@@ -234,7 +217,7 @@ def _load_relationship_classification(
         RelationshipClass.__table__,
     ]
     with open_connection(engine) as connection:
-        Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
+        Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # ty: ignore[invalid-argument-type]
         create_extension_tables(connection, resolved=resolved)
 
     with tempfile.TemporaryDirectory() as tmp_dir, so.Session(engine) as session:
@@ -248,22 +231,26 @@ def _load_relationship_classification(
                 f"Temporarily saved {len(df)} records to `{csv_path}` for model `{model.__name__}` for loading."
             )
 
-            with bulk_load_context(session):
-                model.load_csv(  # ty: ignore[invalid-argument-type]
-                    session,
-                    csv_path,
-                    dedupe=True,
-                    merge_strategy="replace",
-                    loader=PandasLoader(),
-                    staging_schema_tag=STAGING_SCHEMA,
-                )
-                session.commit()
+            model.load_file(  # ty: ignore[invalid-argument-type]
+                session,
+                csv_path,
+                dedupe=True,
+                merge_strategy="replace",
+                staging_schema_tag=STAGING_SCHEMA,
+                resolved=resolved,
+            )
+            session.commit()
+
+        for model in (RelationshipClass, RelationshipMapping):
+            model.validate_foreign_keys(  # ty: ignore[invalid-argument-type]
+                session, staging_schema_tag=STAGING_SCHEMA, resolved=resolved
+            )
 
 
 @app.command(name="relationship-classification")
 def relationship_classification_cmd(
     pred_class_dir: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             help=(
                 "Path to the directory containing `predicate_classification.csv` "

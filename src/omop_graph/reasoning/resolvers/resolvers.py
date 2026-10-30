@@ -11,20 +11,21 @@ They are designed to be used in a `ResolverPipeline` where high-confidence resol
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 import logging
-import numpy as np
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 from omop_graph.extensions.emb import (
     HAS_OMOP_EMB,
     MissingExtensionError,
     get_neareast_concepts,
 )
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -88,10 +89,10 @@ class CandidateResolver:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[ConceptFilter] = None,
+        constraints: ConceptFilter | None = None,
         sort: bool = False,
         **kwargs,
-    ) -> Tuple[LabelMatch, ...]:
+    ) -> tuple[LabelMatch, ...]:
         """
         Execute the search strategy against the Knowledge Graph.
 
@@ -125,7 +126,7 @@ class CandidateResolver:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[ConceptFilter] = None,
+        constraints: ConceptFilter | None = None,
         **kwargs,
     ) -> Iterable[CandidateHit]:
         """
@@ -236,17 +237,17 @@ class EmbeddingResolver(CandidateResolver):
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: Optional[ConceptFilter] = None,
+        constraints: ConceptFilter | None = None,
         sort: bool = False,
-        query_embedding: Optional[np.ndarray] = None,
+        query_embedding: np.ndarray | None = None,
         **kwargs,
-    ) -> Tuple[LabelMatch, ...]:
+    ) -> tuple[LabelMatch, ...]:
         if not HAS_OMOP_EMB:
             raise MissingExtensionError("EmbeddingResolver")
 
         from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
-        concept_filter: Optional[EmbeddingConceptFilter] = (
+        concept_filter: EmbeddingConceptFilter | None = (
             EmbeddingConceptFilter(
                 concept_ids=constraints.concept_ids,
                 domains=constraints.domains,
@@ -267,9 +268,7 @@ class EmbeddingResolver(CandidateResolver):
             kg=kg,
             query_embedding=query_embedding,
             concept_filter=concept_filter,
-            k=constraints.limit
-            if isinstance(constraints, ConceptFilter)
-            else None,
+            k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
         )
         if matches is None:
             return ()
@@ -300,7 +299,7 @@ class EmbeddingResolver(CandidateResolver):
 
 
 # Default sequence of resolvers to be used in a pipeline
-ALL_RESOLVERS: Tuple[CandidateResolver, ...] = (
+ALL_RESOLVERS: tuple[CandidateResolver, ...] = (
     ExactLabelResolver(),
     ExactSynonymResolver(),
     PartialLabelResolver(),

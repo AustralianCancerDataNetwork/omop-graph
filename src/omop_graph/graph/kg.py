@@ -17,32 +17,31 @@ from __future__ import annotations
 import functools
 import logging
 import re
-from datetime import date
 from collections import defaultdict
-from typing import Callable, Dict, Optional, Tuple, Literal, Generator, TYPE_CHECKING
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
+from datetime import date
+from typing import TYPE_CHECKING, Literal
 
-from sqlalchemy import Row
-from sqlalchemy.orm import Session
-from sqlalchemy.engine import Engine
+from oa_configurator import ResolvedModel
 from omop_alchemy.backends import BackendNotSupportedError, FullTextError
 from omop_alchemy.cdm.model.vocabulary import Concept
 from omop_alchemy.cdm.query import ConceptFilter
-from oa_configurator import ResolvedModel
+from sqlalchemy import Row
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
     from omop_emb import (
         EmbeddingBackend,
+        EmbeddingReaderInterface,
         EmbeddingStoreReader,
         EmbeddingWriterInterface,
-        EmbeddingReaderInterface,
+        MetricType,
     )
 
 # Local Application Imports
-from ..extensions.emb import (
-    MissingExtensionError,
-    EmbeddingMetricType,
-)
+from ..extensions.emb import MissingExtensionError
 from ..extensions.omop_alchemy import (
     PredicateKind,
     RelationshipMappingElement,
@@ -58,6 +57,7 @@ from .nodes import (
 )
 from .queries import (
     q_all_predicates_with_ancestry,
+    q_children,
     q_concept_domain_ids,
     q_concept_id_by_code,
     q_concept_name_fulltext,
@@ -71,15 +71,14 @@ from .queries import (
     q_concept_views,
     q_concept_vocabulary_ids,
     q_edges,
+    q_entities,
     q_leaves,
     q_parents,
-    q_children,
     q_predicate_name,
     q_predicate_row_with_ancestry,
+    q_relationships,
     q_roots,
     q_singletons,
-    q_entities,
-    q_relationships,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,13 +91,13 @@ class KnowledgeGraphEmbeddingConfiguration:
 
     A complete configuration: whenever embedding support is used at all
     (read or write), a real backend and a real resolved model are both
-    required. The caller resolves the vector store and the model, 
+    required. The caller resolves the vector store and the model,
     builds the backend, and passes both in here. Used to enhance the
     knowledge graph with embedding-based grounding and similarity scoring.
 
     Parameters
     ----------
-    metric_type : EmbeddingMetricType
+    metric_type : MetricType
         The similarity/distance metric to use for embedding comparisons (e.g., cosine, euclidean).
         This is required to ensure that the correct type of index is used in the backend and that
         similarity computations are consistent.
@@ -126,12 +125,12 @@ class KnowledgeGraphEmbeddingConfiguration:
         straight through to ``EmbeddingReaderInterface``.
     """
 
-    metric_type: EmbeddingMetricType
-    backend: "EmbeddingBackend | EmbeddingStoreReader"
+    metric_type: MetricType
+    backend: EmbeddingBackend | EmbeddingStoreReader
     resolved_model: ResolvedModel
     write: bool = False
     compute_missing_embeddings: bool = False
-    faiss_cache_dir: Optional[str] = None
+    faiss_cache_dir: str | None = None
 
     def __post_init__(self) -> None:
         if self.compute_missing_embeddings and not self.write:
@@ -187,7 +186,7 @@ class KnowledgeGraph(GraphBackend):
         self,
         cdm_sessions: Callable[[], Session],
         *,
-        emb_config: Optional[KnowledgeGraphEmbeddingConfiguration] = None,
+        emb_config: KnowledgeGraphEmbeddingConfiguration | None = None,
     ):
         if isinstance(cdm_sessions, Engine) or not callable(cdm_sessions):
             raise TypeError(
@@ -218,7 +217,7 @@ class KnowledgeGraph(GraphBackend):
         self._emb = None
 
     @property
-    def emb(self) -> "EmbeddingWriterInterface | EmbeddingReaderInterface":
+    def emb(self) -> EmbeddingWriterInterface | EmbeddingReaderInterface:
         """Namespace for all embedding operations.
 
         Returns an ``EmbeddingWriterInterface`` when ``self._emb_config.write`` is True,
@@ -234,8 +233,8 @@ class KnowledgeGraph(GraphBackend):
 
         try:
             from omop_emb.interface import (
-                EmbeddingWriterInterface,
                 EmbeddingReaderInterface,
+                EmbeddingWriterInterface,
             )
 
             if self._emb_config is None:
@@ -283,23 +282,21 @@ class KnowledgeGraph(GraphBackend):
                 )
                 raise MissingExtensionError() from e
             raise
-        except ImportError as e:
+        except ImportError:
             logger.info(
                 "Embedding functionality failed to initialize due to an import error in the optional embedding stack."
             )
-            raise e
+            raise
 
     @property
-    def embedding_configuration(self) -> Optional[KnowledgeGraphEmbeddingConfiguration]:
+    def embedding_configuration(self) -> KnowledgeGraphEmbeddingConfiguration | None:
         """Returns the current embedding configuration, if set."""
         return self._emb_config
 
     @property
     def compute_missing_embeddings(self) -> bool:
         """Indicates whether on-the-fly computation of missing concept embeddings is enabled."""
-        return (
-            self._emb_config.compute_missing_embeddings if self._emb_config else False
-        )
+        return self._emb_config.compute_missing_embeddings if self._emb_config else False
 
     def concept_view(self, concept_id: int) -> ConceptView:
         """
@@ -360,9 +357,7 @@ class KnowledgeGraph(GraphBackend):
         """
         with self.session_factory() as session:
             concept_id = int(
-                session.execute(
-                    q_concept_id_by_code(vocabulary_id, concept_code)
-                ).scalar_one()
+                session.execute(q_concept_id_by_code(vocabulary_id, concept_code)).scalar_one()
             )
         return concept_id
 
@@ -371,7 +366,7 @@ class KnowledgeGraph(GraphBackend):
         query_term: str,
         match_kind: LabelMatchKind,
         synonym: bool = False,
-        search_constraint: Optional[ConceptFilter] = None,
+        search_constraint: ConceptFilter | None = None,
         sort: bool = True,
     ) -> tuple[LabelMatch, ...]:
         """
@@ -429,7 +424,7 @@ class KnowledgeGraph(GraphBackend):
             )
         return matches
 
-    def concept_ids_by_label(self, label: str) -> Tuple[int, ...]:
+    def concept_ids_by_label(self, label: str) -> tuple[int, ...]:
         """
         Find concept IDs that match the label exactly (case-insensitive).
         """
@@ -462,9 +457,7 @@ class KnowledgeGraph(GraphBackend):
         """
         # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
         with self.session_factory() as session:
-            predicate_name = session.execute(
-                q_predicate_name(relationship_id)
-            ).scalar_one()
+            predicate_name = session.execute(q_predicate_name(relationship_id)).scalar_one()
         return predicate_name
 
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
@@ -480,9 +473,7 @@ class KnowledgeGraph(GraphBackend):
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
         return item
 
-    def predicate_kinds(
-        self, relationship_ids: tuple[str, ...]
-    ) -> Tuple[PredicateKind, ...]:
+    def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> tuple[PredicateKind, ...]:
         """
         Classify a batch of predicates.
         """
@@ -494,7 +485,7 @@ class KnowledgeGraph(GraphBackend):
         predicates: tuple[str, ...] | None,
         objects: tuple[int, ...] | None,
         invert: bool = False,
-    ) -> Generator[Tuple[int, str, int], None, None]:
+    ) -> Generator[tuple[int, str, int], None, None]:
         """
         Query relationships between concepts.
 
@@ -534,7 +525,7 @@ class KnowledgeGraph(GraphBackend):
             ):
                 yield s, p, o
 
-    def reverse_predicate_id(self, relationship_id: str) -> Optional[str]:
+    def reverse_predicate_id(self, relationship_id: str) -> str | None:
         """
         Get the reverse relationship ID, if it exists.
         """
@@ -548,12 +539,12 @@ class KnowledgeGraph(GraphBackend):
 
     def edges(
         self,
-        concept_ids: Tuple[int, ...] | int,
+        concept_ids: tuple[int, ...] | int,
         direction: Literal["in", "out"],
-        predicate_ids: Optional[frozenset[str]] = None,
-        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
+        predicate_ids: frozenset[str] | None = None,
+        predicate_kinds: frozenset[PredicateKind] | None = None,
         active_only: bool = True,
-        on: Optional[date] = None,
+        on: date | None = None,
         within_domain: bool = False,
     ) -> tuple[EdgeView, ...]:
         """
@@ -600,10 +591,10 @@ class KnowledgeGraph(GraphBackend):
         session: Session,
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
-        predicate_ids: Optional[frozenset[str]] = None,
-        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
+        predicate_ids: frozenset[str] | None = None,
+        predicate_kinds: frozenset[PredicateKind] | None = None,
         active_only: bool = True,
-        on: Optional[date] = None,
+        on: date | None = None,
         within_domain: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
@@ -691,9 +682,7 @@ class KnowledgeGraph(GraphBackend):
         """
         with self.session_factory() as session:
             roots = tuple(
-                session.execute(
-                    q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)
-                ).scalars()
+                session.execute(q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)).scalars()
             )
         return roots
 
@@ -756,17 +745,13 @@ class KnowledgeGraph(GraphBackend):
             rows = session.execute(q_concept_vocabulary_ids()).all()
         return frozenset(row.vocabulary_id for row in rows)
 
-    def get_potential_ancestor(
-        self, child_id: int, parent_id: int
-    ) -> Optional[AncestorMatch]:
+    def get_potential_ancestor(self, child_id: int, parent_id: int) -> AncestorMatch | None:
         """
         Check if an ancestry relationship exists between a child and parent.
         """
 
         with self.session_factory() as session:
-            row = session.execute(
-                q_concept_potential_ancestor(child_id, parent_id)
-            ).first()
+            row = session.execute(q_concept_potential_ancestor(child_id, parent_id)).first()
 
         if row is None:
             return None
@@ -778,9 +763,9 @@ class KnowledgeGraph(GraphBackend):
 
     def get_potential_ancestors_batch(
         self,
-        child_ids: Tuple[int, ...],
-        parent_ids: Tuple[int, ...],
-    ) -> Dict[int, Dict[int, AncestorMatch]]:
+        child_ids: tuple[int, ...],
+        parent_ids: tuple[int, ...],
+    ) -> dict[int, dict[int, AncestorMatch]]:
         """Check which candidate parents are ancestors of one or more children.
 
         Parameters
@@ -799,11 +784,9 @@ class KnowledgeGraph(GraphBackend):
             return {}
 
         with self.session_factory() as session:
-            rows = session.execute(
-                q_concept_potential_ancestors_batch(child_ids, parent_ids)
-            ).all()
+            rows = session.execute(q_concept_potential_ancestors_batch(child_ids, parent_ids)).all()
 
-        result: Dict[int, Dict[int, AncestorMatch]] = defaultdict(dict)
+        result: dict[int, dict[int, AncestorMatch]] = defaultdict(dict)
         for row in rows:
             result[row.descendant_concept_id][row.ancestor_concept_id] = AncestorMatch(
                 ancestor_concept_id=row.ancestor_concept_id,
@@ -812,7 +795,7 @@ class KnowledgeGraph(GraphBackend):
             )
         return result
 
-    def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> Dict[int, int]:
+    def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> dict[int, int]:
         """
         Get the count of ancestors for a batch of concepts.
         """
@@ -830,9 +813,7 @@ class KnowledgeGraph(GraphBackend):
                 )
 
         if constraints.vocabularies is not None:
-            invalid = [
-                v for v in constraints.vocabularies if v not in self._valid_vocabularies
-            ]
+            invalid = [v for v in constraints.vocabularies if v not in self._valid_vocabularies]
             if invalid:
                 raise ValueError(
                     f"Invalid vocabulary constraint(s): {invalid}. "

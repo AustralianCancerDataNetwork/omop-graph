@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
-from typing import Iterator, cast
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
-
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
-from orm_loader.helpers import Base, bulk_load_context
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_class import Concept_Class
@@ -17,7 +15,11 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
+from orm_loader.backends import resolve_backend
+from orm_loader.helpers import Base
+from sqlalchemy.orm import Session, sessionmaker
 
+from fixtures.helpers import require_cdm
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -33,10 +35,12 @@ LANGUAGE_CONCEPT_ID = 1
 
 @pytest.fixture(scope="module")
 def mock_cdm_engine() -> Iterator[sa.Engine]:
-    with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db:
-        with scoped_test_schema(db.resolved, prefix="mock_cdm") as scoped:
-            _create_mock_cdm_tables(scoped.engine)
-            yield scoped.engine
+    with (
+        isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as db,
+        scoped_test_schema(require_cdm(db.resolved), prefix="mock_cdm") as scoped,
+    ):
+        _create_mock_cdm_tables(scoped.engine)
+        yield scoped.engine
 
 
 @pytest.fixture(scope="module")
@@ -75,7 +79,7 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         if engine.dialect.name == "postgresql":
-            with bulk_load_context(session):
+            with resolve_backend(session).relaxed_foreign_keys(session):
                 seed_mock_cdm(session)
         else:
             seed_mock_cdm(session)
@@ -92,17 +96,13 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
         ),
     ]
 )
-def mock_cdm_kg(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
-) -> KnowledgeGraph:
+def mock_cdm_kg(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> KnowledgeGraph:
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr(
         "omop_graph.reasoning.grounding.try_get_embedding_writer_interface",
         lambda _kg: None,
     )
-    fixture_name = (
-        "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
-    )
+    fixture_name = "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
     engine = request.getfixturevalue(fixture_name)
     return KnowledgeGraph(sessionmaker(bind=engine))
 
@@ -396,7 +396,7 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
     """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             if session.get(Concept, CONCEPT_META_ID) is None:
                 session.add_all(
                     [
@@ -411,7 +411,11 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
                             valid_start_date=date(2020, 1, 1),
                             valid_end_date=date(2099, 12, 31),
                         ),
-                        Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=CONCEPT_META_ID),
+                        Domain(
+                            domain_id="Metadata",
+                            domain_name="Metadata",
+                            domain_concept_id=CONCEPT_META_ID,
+                        ),
                         Vocabulary(
                             vocabulary_id="OMOP",
                             vocabulary_name="OMOP",

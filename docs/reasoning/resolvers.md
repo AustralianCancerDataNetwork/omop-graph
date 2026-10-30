@@ -28,9 +28,9 @@ constraints = GroundingConstraints(
     search_constraint=ConceptFilter(
         domains=parsed_domains,
         vocabularies=parsed_vocabs,
-        require_standard=True  # We prioritize Standard Concepts
+        require_standard=True,  # We prioritize Standard Concepts
     ),
-    max_depth=6  # How deep to traverse the hierarchy
+    max_depth=6,  # How deep to traverse the hierarchy
 )
 
 # The resolver pipeline stops once it finds a high-confidence match

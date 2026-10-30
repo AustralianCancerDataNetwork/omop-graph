@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from typing import Annotated, ClassVar, Final
 
+from oa_configurator import (
+    CDMDatabaseConfig,
+    ModelConfig,
+    PackageConfigBase,
+    RefTo,
+    VectorStoreConfig,
+)
 from pydantic import Field
-from oa_configurator import CDMDatabaseConfig, ModelConfig, PackageConfigBase, RefTo, VectorStoreConfig
 
 TOOL_NAME: Final[str] = "omop_graph"
 
@@ -37,15 +43,11 @@ class OmopGraphConfig(PackageConfigBase):
     )
 
     cdm_db: Annotated[str, RefTo(CDMDatabaseConfig)] = "cdm_db"
-    test_cdm_db_pg: Annotated[
-        str | None, RefTo(CDMDatabaseConfig, is_test=True)
-    ] = Field(
+    test_cdm_db_pg: Annotated[str | None, RefTo(CDMDatabaseConfig, is_test=True)] = Field(
         default=None,
         description="Real PostgreSQL test CDM database, for Postgres-only integration testing.",
     )
-    test_cdm_db_sqlite: Annotated[
-        str | None, RefTo(CDMDatabaseConfig, is_test=True)
-    ] = Field(
+    test_cdm_db_sqlite: Annotated[str | None, RefTo(CDMDatabaseConfig, is_test=True)] = Field(
         default=None,
         description=(
             "Disposable SQLite test database; left unconfigured by design "

@@ -16,14 +16,15 @@ from datetime import date
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm
-from oaklib import get_adapter
-
+from fixtures.helpers import require_cdm
+from fixtures.mock_cdm import seed_relationship_vocabulary
 from oa_configurator import Resolver, Role
 from oa_configurator.testing import scoped_test_schema
+from oaklib import get_adapter
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cross_database import cdm_sessionmaker
-from orm_loader.backends import staging_schema_claim
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.backends import resolve_backend, staging_schema_claim
+from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.db.session import resolve_cdm_database
@@ -31,7 +32,6 @@ from omop_graph.extensions.omop_alchemy import RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-from fixtures.mock_cdm import seed_relationship_vocabulary
 
 _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
@@ -44,7 +44,7 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
     FK insert cycle, so FK checks are disabled around the insert.
     """
     with sa.orm.Session(engine) as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             session.add_all(
                 [
                     Concept(
@@ -69,7 +69,11 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
                         valid_start_date=_TODAY,
                         valid_end_date=_FAR_FUTURE,
                     ),
-                    Domain(domain_id="Metadata", domain_name="Metadata", domain_concept_id=_META_CONCEPT_ID),
+                    Domain(
+                        domain_id="Metadata",
+                        domain_name="Metadata",
+                        domain_concept_id=_META_CONCEPT_ID,
+                    ),
                     Vocabulary(
                         vocabulary_id="OMOP",
                         vocabulary_name="OMOP",
@@ -95,11 +99,15 @@ def _populate(scoped, *, name: str) -> None:
     relationship_classification(resolved=scoped.resolved)
 
 
-@pytest.mark.parametrize(("descriptor", "expected_name"), [("omop:named_db", "named_db"), ("omop:", None)])
+@pytest.mark.parametrize(
+    ("descriptor", "expected_name"), [("omop:named_db", "named_db"), ("omop:", None)]
+)
 def test_get_adapter_resolves_the_slug_as_the_database_name(
     pg_db, monkeypatch, descriptor, expected_name
 ) -> None:
-    with scoped_test_schema(pg_db.resolved, prefix="oaklib_get_adapter", schema_claims=[staging_schema_claim()]) as scoped:
+    with scoped_test_schema(
+        pg_db.resolved, prefix="oaklib_get_adapter", schema_claims=[staging_schema_claim()]
+    ) as scoped:
         _populate(scoped, name="Adapter concept")
 
         def fake_resolve_cdm_database(name):
@@ -125,14 +133,18 @@ def test_resolve_cdm_database_resolves_a_named_entry(pg_db) -> None:
 
 
 def test_resolved_path_reuses_one_engine_without_a_vocab_split(pg_db) -> None:
-    with scoped_test_schema(pg_db.resolved, prefix="oaklib_resolved", schema_claims=[staging_schema_claim()]) as scoped:
+    with scoped_test_schema(
+        pg_db.resolved, prefix="oaklib_resolved", schema_claims=[staging_schema_claim()]
+    ) as scoped:
         _populate(scoped, name="Resolved-path concept")
 
-        adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
+        adapter = OMOPAlchemyImplementation(resolved=require_cdm(scoped.resolved))
 
         assert _one_engine_for_both_roles(adapter.kg)
         with adapter.kg.session_factory() as session:
-            assert session.get_bind(Concept).pool._pre_ping is True
+            bind = session.get_bind(Concept)
+            assert isinstance(bind, sa.Engine)
+            assert bind.pool._pre_ping is True
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Resolved-path concept"
 
 
@@ -144,25 +156,41 @@ def test_two_connection_entries_for_one_database_collapse_to_one_engine(pg_db) -
     name = pg_db.resolved.name
     resolver = Resolver.from_active_config()
     resolver = resolver.with_overrides(
-        connections={"oaklib_split_vocab": resolver.config.connections[pg_db.resolved.connection.name]},
-        databases={name: resolver.config.databases[name].model_copy(update={"vocab_connection": "oaklib_split_vocab"})},
+        connections={
+            "oaklib_split_vocab": resolver.config.connections[pg_db.resolved.connection.name]
+        },
+        databases={
+            name: resolver.config.databases[name].model_copy(
+                update={"vocab_connection": "oaklib_split_vocab"}
+            )
+        },
     )
-    with scoped_test_schema(resolver.resolve_database(name), prefix="oaklib_split", resolver=resolver, schema_claims=[staging_schema_claim()]) as scoped:
-        assert scoped.resolved.connection.name != scoped.resolved.vocab_connection.name
-        assert scoped.resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
+    with scoped_test_schema(
+        resolver.resolve_database(name),
+        prefix="oaklib_split",
+        resolver=resolver,
+        schema_claims=[staging_schema_claim()],
+    ) as scoped:
+        resolved = require_cdm(scoped.resolved)
+        assert resolved.connection.name != resolved.vocab_connection.name
+        assert resolved.foreign_key_can_span(Role.PRIMARY, Role.VOCAB)
         _populate(scoped, name="Split-wiring concept")
 
-        adapter = OMOPAlchemyImplementation(resolved=scoped.resolved)
+        adapter = OMOPAlchemyImplementation(resolved=resolved)
 
         assert _one_engine_for_both_roles(adapter.kg)
         assert adapter.label(f"OMOP:{_CONCEPT_ID}") == "Split-wiring concept"
 
 
 def test_kg_injection_path_uses_the_injected_knowledge_graph(pg_db) -> None:
-    with scoped_test_schema(pg_db.resolved, prefix="oaklib_kg", schema_claims=[staging_schema_claim()]) as scoped:
+    with scoped_test_schema(
+        pg_db.resolved, prefix="oaklib_kg", schema_claims=[staging_schema_claim()]
+    ) as scoped:
         _populate(scoped, name="Injected concept")
         kg = KnowledgeGraph(
-            cdm_sessionmaker(scoped.resolved, primary=scoped.engine, vocab=scoped.engine)
+            cdm_sessionmaker(
+                require_cdm(scoped.resolved), primary=scoped.engine, vocab=scoped.engine
+            )
         )
 
         adapter = OMOPAlchemyImplementation(kg=kg)

@@ -8,13 +8,17 @@ consistent behavior and report semantics.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, cast, Annotated
-import typer
+from typing import Annotated, Any, cast
 
 import numpy as np
-from oa_configurator import Resolver, ResolvedModel, ResolvedProvider
+import typer
+from oa_configurator import ResolvedModel, ResolvedProvider, Resolver
+from omop_alchemy.cdm.query import ConceptFilter
+from omop_emb.backends import EmbeddingBackend, open_vector_store_writer
+from omop_emb.backends.index_config import index_config_from_index_type
 from omop_emb.config import (
     IndexType,
     MetricType,
@@ -22,12 +26,11 @@ from omop_emb.config import (
     parse_metric_type,
 )
 from omop_emb.interface import EmbeddingRole
-from omop_emb.backends import EmbeddingBackend, open_vector_store_writer
-from omop_emb.backends.index_config import index_config_from_index_type
+
 from omop_graph.config import OmopGraphConfig
-from omop_graph.extensions.emb import get_embedding_writer_interface, MissingExtensionError
+from omop_graph.db.session import cdm_session_factory
+from omop_graph.extensions.emb import MissingExtensionError, get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -42,7 +45,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from omop_graph.db.session import cdm_session_factory
+
 app = typer.Typer()
 
 
@@ -50,13 +53,18 @@ app = typer.Typer()
 def _main(
     verbose: Annotated[
         int,
-        typer.Option("--verbose", "-v", count=True, help="Increase log verbosity (-v INFO, -vv DEBUG). Must come before the subcommand name."),
+        typer.Option(
+            "--verbose",
+            "-v",
+            count=True,
+            help="Increase log verbosity (-v INFO, -vv DEBUG). Must come before the subcommand name.",
+        ),
     ] = 0,
 ) -> None:
     OmopGraphConfig.configure_logging(verbosity=verbose)
 
 
-def _normalize_parent_ids(raw_parent_ids: object) -> Optional[Tuple[int, ...]]:
+def _normalize_parent_ids(raw_parent_ids: object) -> tuple[int, ...] | None:
     """Normalize parent_ids from JSON into an optional tuple of ints."""
 
     if raw_parent_ids is None:
@@ -65,9 +73,7 @@ def _normalize_parent_ids(raw_parent_ids: object) -> Optional[Tuple[int, ...]]:
         return (raw_parent_ids,)
     if isinstance(raw_parent_ids, (list, tuple)):
         return tuple(int(parent_id) for parent_id in raw_parent_ids)
-    raise TypeError(
-        "Invalid parent_ids value. Expected int, list[int], tuple[int, ...], or null."
-    )
+    raise TypeError("Invalid parent_ids value. Expected int, list[int], tuple[int, ...], or null.")
 
 
 @dataclass(frozen=True)
@@ -97,11 +103,11 @@ class BenchmarkCase:
     id: str
     text: str
     bucket: str
-    domain: Optional[str] = None
-    vocabularies: Optional[Tuple[str, ...]] = None
-    expected_concept_id: Optional[int] = None
-    expected_concept_name: Optional[str] = None
-    parent_ids: Optional[Tuple[int, ...]] = None
+    domain: str | None = None
+    vocabularies: tuple[str, ...] | None = None
+    expected_concept_id: int | None = None
+    expected_concept_name: str | None = None
+    parent_ids: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -109,17 +115,17 @@ class GroundedBenchmarkConfig:
     """One ablation configuration for grounded benchmark evaluation."""
 
     name: str
-    resolvers: Tuple[CandidateResolver, ...]
+    resolvers: tuple[CandidateResolver, ...]
     requires_embedding: bool = False
 
 
-def load_cases(path: Path) -> List[BenchmarkCase]:
+def load_cases(path: Path) -> list[BenchmarkCase]:
     """Load benchmark cases from JSON into typed dataclass instances."""
 
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     if isinstance(payload, list):
-        cases: List[BenchmarkCase] = []
+        cases: list[BenchmarkCase] = []
         for row in payload:
             if "parent_ids" in row:
                 row = {**row, "parent_ids": _normalize_parent_ids(row["parent_ids"])}
@@ -138,7 +144,7 @@ def load_cases(path: Path) -> List[BenchmarkCase]:
         return cases
 
     if isinstance(payload, dict):
-        cases: List[BenchmarkCase] = []
+        cases: list[BenchmarkCase] = []
         for bucket, bucket_cases in payload.items():
             for row in bucket_cases:
                 if "parent_ids" in row:
@@ -175,13 +181,10 @@ def build_embedding_knowledge_graph(
         write=True,
         compute_missing_embeddings=True,
     )
-    return KnowledgeGraph(
-        cdm_sessions,
-        emb_config=config
-    )
+    return KnowledgeGraph(cdm_sessions, emb_config=config)
 
 
-def case_constraints(case: BenchmarkCase) -> Optional[ConceptFilter]:
+def case_constraints(case: BenchmarkCase) -> ConceptFilter | None:
     """Translate case metadata into OMOP search constraints when available."""
 
     domains = (case.domain,) if case.domain else None
@@ -194,7 +197,7 @@ def case_constraints(case: BenchmarkCase) -> Optional[ConceptFilter]:
     )
 
 
-def percentile(values: List[float], p: int) -> float:
+def percentile(values: list[float], p: int) -> float:
     """Return a simple nearest-rank percentile for numeric values."""
 
     if not values:
@@ -205,11 +208,11 @@ def percentile(values: List[float], p: int) -> float:
 
 
 def mcnemar(
-    a: Sequence[Dict[str, float | int | bool | str]],
-    b: Sequence[Dict[str, float | int | bool | str]],
+    a: Sequence[dict[str, float | int | bool | str]],
+    b: Sequence[dict[str, float | int | bool | str]],
     *,
     field: str = "top1_correct",
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute continuity-corrected McNemar-style paired comparison."""
 
     paired = [(float(x[field]), float(y[field])) for x, y in zip(a, b, strict=True)]
@@ -226,9 +229,9 @@ def mcnemar(
 
 def ranking_metrics(
     predictions: Sequence[int],
-    expected: Optional[int],
+    expected: int | None,
     k: int,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute top1/MRR/Recall@K for one ranked prediction list."""
 
     if expected is None:
@@ -245,7 +248,7 @@ def ranking_metrics(
     }
 
 
-def build_grounded_configs() -> Tuple[GroundedBenchmarkConfig, ...]:
+def build_grounded_configs() -> tuple[GroundedBenchmarkConfig, ...]:
     """Build resolver ablations for grounded benchmarking."""
 
     basic = (
@@ -281,8 +284,8 @@ def build_grounded_configs() -> Tuple[GroundedBenchmarkConfig, ...]:
 
 def _resolve_parent_ids(
     case: BenchmarkCase,
-    default_parent_ids: Optional[Tuple[int, ...]],
-) -> Optional[Tuple[int, ...]]:
+    default_parent_ids: tuple[int, ...] | None,
+) -> tuple[int, ...] | None:
     """Resolve grounding parent IDs from case-level or CLI-level defaults."""
 
     if case.parent_ids:
@@ -299,13 +302,13 @@ def _bucket_sort_key(bucket: str) -> tuple[int, str]:
     return (1, normalised)
 
 
-def _order_cases_for_report(cases: Sequence[BenchmarkCase]) -> List[BenchmarkCase]:
+def _order_cases_for_report(cases: Sequence[BenchmarkCase]) -> list[BenchmarkCase]:
     """Order cases so the easy bucket is shown first."""
 
     return sorted(cases, key=lambda case: (_bucket_sort_key(case.bucket), case.id))
 
 
-def _summarise_config(rows: Sequence[Dict[str, Any]], label: str) -> Dict[str, Any]:
+def _summarise_config(rows: Sequence[dict[str, Any]], label: str) -> dict[str, Any]:
     """Aggregate case-level ranking metrics into one configuration summary."""
 
     if not rows:
@@ -321,9 +324,9 @@ def _summarise_config(rows: Sequence[Dict[str, Any]], label: str) -> Dict[str, A
 
 
 def _print_summary_report(
-    summaries: Dict[str, Dict[str, Any]],
-    bucket_summaries: Dict[str, Dict[str, Dict[str, Any]]],
-    significance: Dict[str, Dict[str, float]],
+    summaries: dict[str, dict[str, Any]],
+    bucket_summaries: dict[str, dict[str, dict[str, Any]]],
+    significance: dict[str, dict[str, float]],
     k: int,
 ) -> None:
     """Print a formatted benchmark summary table to stdout."""
@@ -333,7 +336,7 @@ def _print_summary_report(
     header = f"{'Config':<{col_w[0]}} {'Top-1':>{col_w[1]}} {'MRR':>{col_w[2]}} {rk_label:>{col_w[3]}} {'N':>{col_w[4]}}"
     sep = "-" * len(header)
 
-    def _row(name: str, s: Dict[str, Any]) -> str:
+    def _row(name: str, s: dict[str, Any]) -> str:
         return (
             f"{name:<{col_w[0]}} "
             f"{float(s.get('top1_accuracy', 0.0)):>{col_w[1]}.3f} "
@@ -381,14 +384,16 @@ def _print_summary_report(
 
 def _grounded_element_to_dict(
     concept: StandardConceptWithScore,
-) -> Dict[str, object]:
-    
+) -> dict[str, object]:
+
     return {
         "concept_id": int(concept.concept_id),
         "concept_name": concept.concept_name,
         "total_score": float(concept.total_score),
         "relevance": float(concept.relevance),
-        "embedding_score": float(concept.embedding_score) if concept.embedding_score is not None else 0.0,
+        "embedding_score": float(concept.embedding_score)
+        if concept.embedding_score is not None
+        else 0.0,
         "separation": int(concept.separation),
         "matched_concept_label": concept.matched_concept_label,
         "match_kind": str(concept.match_kind),
@@ -396,12 +401,12 @@ def _grounded_element_to_dict(
     }
 
 
-def _actual_payload(grounded: Sequence[StandardConceptWithScore]) -> Dict[str, object]:
+def _actual_payload(grounded: Sequence[StandardConceptWithScore]) -> dict[str, object]:
     """Serialize the actual top grounded result for one config."""
     actual_concept = grounded[0] if grounded else None
-    #return {
+    # return {
     #    "actual": _grounded_element_to_dict(actual_concept) if actual_concept else None
-    #}
+    # }
     return {
         "actual": {
             "concept_id": int(actual_concept.concept_id) if actual_concept else None,
@@ -415,9 +420,9 @@ def _evaluate_grounded_case(
     kg: KnowledgeGraph,
     case: BenchmarkCase,
     config: GroundedBenchmarkConfig,
-    default_parent_ids: Optional[Tuple[int, ...]],
-    grounding_kwargs: Optional[Dict[str, object]] = None,
-) -> Dict[str, object]:
+    default_parent_ids: tuple[int, ...] | None,
+    grounding_kwargs: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Evaluate one case using ``ground_term`` and return poster-friendly results."""
 
     search_constraint = case_constraints(case)
@@ -430,7 +435,7 @@ def _evaluate_grounded_case(
     resolver_pipeline = ResolverPipeline(resolvers=config.resolvers)
     grounding_kwargs = grounding_kwargs or {}
 
-    text_embedding = cast(Optional[np.ndarray], grounding_kwargs.get("text_embedding"))
+    text_embedding = cast(np.ndarray | None, grounding_kwargs.get("text_embedding"))
 
     grounded = ground_term(
         resolver_pipeline=resolver_pipeline,
@@ -455,7 +460,11 @@ def _evaluate_grounded_case(
         "target_concept_name": case.expected_concept_name,
         **_actual_payload(grounded),
         "target_idx_in_grounded": next(
-            (i for i, concept in enumerate(grounded) if concept.concept_id == case.expected_concept_id),
+            (
+                i
+                for i, concept in enumerate(grounded)
+                if concept.concept_id == case.expected_concept_id
+            ),
             None,
         ),
         "grounded": [_grounded_element_to_dict(concept) for concept in grounded],
@@ -464,59 +473,98 @@ def _evaluate_grounded_case(
 
 @app.command()
 def run_benchmark(
-    cases_file: Annotated[str, typer.Option(
-        "--cases-file", "-c", 
-        help="Path to the JSON file containing benchmark cases.")
+    cases_file: Annotated[
+        str,
+        typer.Option(
+            "--cases-file", "-c", help="Path to the JSON file containing benchmark cases."
+        ),
     ],
-    embedding_model: Annotated[Optional[str], typer.Option(
-        "--embedding-model", "-m",
-        help="Name of the embedding model to use (e.g., 'text-embedding-3-small'). Falls back to config.toml")
+    embedding_model: Annotated[
+        str | None,
+        typer.Option(
+            "--embedding-model",
+            "-m",
+            help="Name of the embedding model to use (e.g., 'text-embedding-3-small'). Falls back to config.toml",
+        ),
     ] = None,
-    embedding_api_base_url: Annotated[Optional[str], typer.Option(
-        "--embedding-api-base-url", "-u",
-        help="Base URL for the embedding API (e.g., 'http://localhost:8000'). Falls back to config.toml.")
+    embedding_api_base_url: Annotated[
+        str | None,
+        typer.Option(
+            "--embedding-api-base-url",
+            "-u",
+            help="Base URL for the embedding API (e.g., 'http://localhost:8000'). Falls back to config.toml.",
+        ),
     ] = None,
-    embedding_api_key: Annotated[Optional[str], typer.Option(
-        "--embedding-api-key", "-k",
-        help="API key for the embedding service, if required. Falls back to config.toml.")
+    embedding_api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--embedding-api-key",
+            "-k",
+            help="API key for the embedding service, if required. Falls back to config.toml.",
+        ),
     ] = None,
-    embedding_metric_type: Annotated[MetricType, typer.Option(
-        "--embedding-metric-type", "-M",
-        help="Distance metric type for embedding similarity.")
+    embedding_metric_type: Annotated[
+        MetricType,
+        typer.Option(
+            "--embedding-metric-type", "-M", help="Distance metric type for embedding similarity."
+        ),
     ] = MetricType.COSINE,
-    embedding_index_type: Annotated[IndexType, typer.Option(
-        "--embedding-index-type", "-I",
-        help="Index type for embedding retrieval (e.g., 'flat'). Has to match the registered model.")
+    embedding_index_type: Annotated[
+        IndexType,
+        typer.Option(
+            "--embedding-index-type",
+            "-I",
+            help="Index type for embedding retrieval (e.g., 'flat'). Has to match the registered model.",
+        ),
     ] = IndexType.FLAT,
-    out_file: Annotated[Optional[str], typer.Option(
-        "--out-file", "-o",
-        help="Path to the output JSON file where results will be saved. If not provided, results will be printed to stdout.")
+    out_file: Annotated[
+        str | None,
+        typer.Option(
+            "--out-file",
+            "-o",
+            help="Path to the output JSON file where results will be saved. If not provided, results will be printed to stdout.",
+        ),
     ] = None,
-    k: Annotated[int, typer.Option(
-        "--k", "-K",
-        help="Number of nearest neighbors to retrieve for each case.")
+    k: Annotated[
+        int,
+        typer.Option("--k", "-K", help="Number of nearest neighbors to retrieve for each case."),
     ] = 5,
-    domains: Annotated[Optional[List[str]], typer.Option(
-        "--allowed-domains", "-D",
-        help="Used to filter cases within the case file. For multiple domains, repeat the option (e.g., -D Condition -D Procedure).")
+    domains: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--allowed-domains",
+            "-D",
+            help="Used to filter cases within the case file. For multiple domains, repeat the option (e.g., -D Condition -D Procedure).",
+        ),
     ] = None,
-    allowed_vocabularies: Annotated[Optional[List[str]], typer.Option(
-        "--allowed-vocabularies", "-V",
-        help="Used to filter cases within the case file. For multiple vocabularies, repeat the option (e.g., -V SNOMED -V ICDO3).")
+    allowed_vocabularies: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--allowed-vocabularies",
+            "-V",
+            help="Used to filter cases within the case file. For multiple vocabularies, repeat the option (e.g., -V SNOMED -V ICDO3).",
+        ),
     ] = None,
-    parent_ids: Annotated[Optional[List[str]], typer.Option(
-        "--grounding-parent-ids", "-G",
-        help="Overwrites the parent_ids specified in individual cases. For multiple IDs, repeat the option (e.g., -G 443392 -G 413015).")
+    parent_ids: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--grounding-parent-ids",
+            "-G",
+            help="Overwrites the parent_ids specified in individual cases. For multiple IDs, repeat the option (e.g., -G 443392 -G 413015).",
+        ),
     ] = None,
-    vector_store_name: Annotated[Optional[str], typer.Option(
-        "--vector-store", "-e",
-        help="Name of a [vector_stores.*] entry to use for embedding storage. Defaults to the value configured via omop-config.")
+    vector_store_name: Annotated[
+        str | None,
+        typer.Option(
+            "--vector-store",
+            "-e",
+            help="Name of a [vector_stores.*] entry to use for embedding storage. Defaults to the value configured via omop-config.",
+        ),
     ] = None,
 ):
     """Generalised benchmark interface."""
     cases = load_cases(Path(cases_file))
 
-    
     if domains:
         domain_filter = set(domains)
         cases = [c for c in cases if c.domain in domain_filter]
@@ -533,15 +581,13 @@ def run_benchmark(
     else:
         grounding_parent_ids = None
     if grounding_parent_ids is None and all(c.parent_ids is None for c in cases):
-        raise RuntimeError(
-            "No grounding parent IDs provided."
-        )
+        raise RuntimeError("No grounding parent IDs provided.")
 
     embedding_kg = None
-    query_embeddings: Dict[str, np.ndarray] = {}
-    resolved_embedding_index_type: Optional[IndexType] = None
-    resolved_embedding_metric_type: Optional[MetricType] = None
-    canonical_model: Optional[str] = None
+    query_embeddings: dict[str, np.ndarray] = {}
+    resolved_embedding_index_type: IndexType | None = None
+    resolved_embedding_metric_type: MetricType | None = None
+    canonical_model: str | None = None
 
     if embedding_model is not None and embedding_api_base_url is not None:
         resolved_embedding_index_type = parse_index_type(embedding_index_type)
@@ -552,8 +598,10 @@ def run_benchmark(
         resolved_model = ResolvedModel(
             name="benchmark-embedding-model",
             provider=ResolvedProvider(
-                name="benchmark-embedding-provider", provider="ollama",
-                base_url=embedding_api_base_url, api_key=embedding_api_key,
+                name="benchmark-embedding-provider",
+                provider="ollama",
+                base_url=embedding_api_base_url,
+                api_key=embedding_api_key,
             ),
             model=embedding_model,
             embedding_dim=None,
@@ -583,7 +631,9 @@ def run_benchmark(
         )
 
         embedding_writer = get_embedding_writer_interface(embedding_kg)
-        assert embedding_writer is not None, "Embedding backend does not support writing embeddings, which is required for this benchmark configuration."
+        assert embedding_writer is not None, (
+            "Embedding backend does not support writing embeddings, which is required for this benchmark configuration."
+        )
 
         canonical_model = embedding_writer.model_backend.model
 
@@ -601,20 +651,20 @@ def run_benchmark(
     kg = KnowledgeGraph(cdm_session_factory())
     configs = build_grounded_configs()
 
-    errors: Dict[str, str] = {}
-    case_reports: List[Dict[str, Any]] = []
+    errors: dict[str, str] = {}
+    case_reports: list[dict[str, Any]] = []
     active_kg = embedding_kg if embedding_kg is not None else kg
 
     for case in cases:
-        config_results: List[Dict[str, Any]] = []
+        config_results: list[dict[str, Any]] = []
         for config in configs:
-            #try:
+            # try:
             if config.requires_embedding and embedding_kg is None:
                 raise MissingExtensionError(
                     "Embedding config requires omop-emb plus embedding model/api settings."
                 )
 
-            grounding_kwargs: Optional[Dict[str, object]] = None
+            grounding_kwargs: dict[str, object] | None = None
             if embedding_kg is not None and canonical_model is not None:
                 grounding_kwargs = {
                     "text_embedding": query_embeddings.get(case.id),
@@ -629,7 +679,7 @@ def run_benchmark(
             )
             config_results.append(row)
 
-            #except Exception as exc:
+            # except Exception as exc:
             #    errors[f"{case.id}:{config.name}"] = str(exc)
             #    config_results.append(
             #        {
@@ -652,7 +702,7 @@ def run_benchmark(
         )
 
     # Build per-config ranking rows for summary statistics.
-    per_config: Dict[str, List[Dict[str, Any]]] = {}
+    per_config: dict[str, list[dict[str, Any]]] = {}
     for case_report in case_reports:
         for cfg_result in case_report["config_results"]:
             config_name = str(cfg_result.get("config", ""))
@@ -666,32 +716,35 @@ def run_benchmark(
                 top1 = 1.0 if target_idx == 0 else 0.0
                 mrr_val = 1.0 / (int(target_idx) + 1)
                 rak = 1.0 if int(target_idx) < k else 0.0
-            per_config.setdefault(config_name, []).append({
-                "case_id": case_report["case_id"],
-                "bucket": case_report["bucket"],
-                "top1_correct": top1,
-                "mrr": mrr_val,
-                "recall_at_k": rak,
-            })
+            per_config.setdefault(config_name, []).append(
+                {
+                    "case_id": case_report["case_id"],
+                    "bucket": case_report["bucket"],
+                    "top1_correct": top1,
+                    "mrr": mrr_val,
+                    "recall_at_k": rak,
+                }
+            )
 
     summaries = {name: _summarise_config(rows, name) for name, rows in per_config.items()}
 
-    bucket_summaries: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    bucket_summaries: dict[str, dict[str, dict[str, Any]]] = {}
     for config_name, rows in per_config.items():
-        by_bucket: Dict[str, List[Dict[str, Any]]] = {}
+        by_bucket: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
             b = str(row["bucket"])
             by_bucket.setdefault(b, []).append(row)
         bucket_summaries[config_name] = {
-            b: _summarise_config(b_rows, f"{config_name}:{b}")
-            for b, b_rows in by_bucket.items()
+            b: _summarise_config(b_rows, f"{config_name}:{b}") for b, b_rows in by_bucket.items()
         }
 
-    significance: Dict[str, Dict[str, float]] = {}
+    significance: dict[str, dict[str, float]] = {}
     if "basic" in per_config and "extended" in per_config:
         significance["basic_vs_extended"] = mcnemar(per_config["basic"], per_config["extended"])
     if "extended" in per_config and "full_text" in per_config:
-        significance["extended_vs_full_text"] = mcnemar(per_config["extended"], per_config["full_text"])
+        significance["extended_vs_full_text"] = mcnemar(
+            per_config["extended"], per_config["full_text"]
+        )
     if "full_text" in per_config and "full_text_with_embedding" in per_config:
         significance["full_text_vs_full_text_with_embedding"] = mcnemar(
             per_config["full_text"], per_config["full_text_with_embedding"]

@@ -6,10 +6,14 @@ on:
 jobs:
   label-gate:
     uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/label-gate.yml@main
+  ruff:
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/ruff.yml@ruff-ty-workflows
+  ty:
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/ty.yml@ruff-ty-workflows
   build-test-sqlite:
-    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test.yml@main
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test-sqlite.yml@ruff-ty-workflows
   build-test-postgres:
-    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test-postgres-v2.yml@main
+    uses: AustralianCancerDataNetwork/cava-devops/.github/workflows/build-test-postgres-v3.yml@ruff-ty-workflows
     with:
       postgres-db: omop_graph_test
       setup-commands: |
