@@ -637,15 +637,18 @@ class KnowledgeGraph(GraphBackend):
             if stream
             else session.execute(stmt)
         )
-        for row in result:
-            mapping = self._relationship_mapping.get(row.predicate_id)
-            if mapping is None:
-                continue
-            yield EdgeView(
-                **row._mapping,
-                predicate_kind=mapping.predicate_kind,
-                predicate_subkind=mapping.predicate_subkind,
-            )
+        try:
+            for row in result:
+                mapping = self._relationship_mapping.get(row.predicate_id)
+                if mapping is None:
+                    continue
+                yield EdgeView(
+                    **row._mapping,
+                    predicate_kind=mapping.predicate_kind,
+                    predicate_subkind=mapping.predicate_subkind,
+                )
+        finally:
+            result.close()
 
     def specificity(self, concept_id: int) -> float:
         """

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import date
+from types import SimpleNamespace
 
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.omop_alchemy import (
+    PredicateKind,
+    RelationshipMappingElement,
+)
 from omop_graph.graph.edges import EdgeView
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.traverse import traverse
@@ -128,19 +132,54 @@ def test_fanout_traversal_stops_and_closes_edge_iterator_at_node_budget() -> Non
 
 
 def test_iter_edges_streaming_is_opt_in() -> None:
+    class RecordingResult:
+        def __init__(self, rows=()) -> None:
+            self.rows = rows
+            self.closed = False
+
+        def __iter__(self):
+            return iter(self.rows)
+
+        def close(self) -> None:
+            self.closed = True
+
     class RecordingSession:
-        def __init__(self) -> None:
+        def __init__(self, results) -> None:
             self.execution_options: list[object] = []
+            self.results = iter(results)
 
         def execute(self, _statement, **kwargs):
             self.execution_options.append(kwargs.get("execution_options", {}))
-            return iter(())
+            return next(self.results)
 
     kg = KnowledgeGraph.__new__(KnowledgeGraph)
-    kg._relationship_mapping = {}
-    session = RecordingSession()
+    kg._relationship_mapping = {
+        "is a": RelationshipMappingElement(
+            "is a", PredicateKind.HIERARCHY, "test"
+        )
+    }
+    row = SimpleNamespace(
+        predicate_id="is a",
+        _mapping={
+            "subject_id": 1,
+            "predicate_id": "is a",
+            "object_id": 2,
+            "valid_start_date": date(2000, 1, 1),
+            "valid_end_date": date(2099, 12, 31),
+            "invalid_reason": None,
+        },
+    )
+    default_result = RecordingResult()
+    streaming_result = RecordingResult([row, row])
+    session = RecordingSession([default_result, streaming_result])
 
     list(kg.iter_edges(session=session, concept_ids=1, direction="out"))
-    list(kg.iter_edges(session=session, concept_ids=1, direction="out", stream=True))
+    edge_iter = kg.iter_edges(
+        session=session, concept_ids=1, direction="out", stream=True
+    )
+    next(edge_iter)
+    edge_iter.close()
 
     assert session.execution_options == [{}, {"yield_per": 1000}]
+    assert default_result.closed
+    assert streaming_result.closed
