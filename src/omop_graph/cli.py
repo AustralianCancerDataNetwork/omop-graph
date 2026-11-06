@@ -12,9 +12,7 @@ import sqlalchemy.orm as so
 from oa_configurator import ResolvedCDMDatabase, open_connection
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
-from orm_loader.helpers import bulk_load_context
 from orm_loader.helpers.metadata import Base
-from orm_loader.loaders.loader_interface import PandasLoader
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 
 from omop_graph.config import OmopGraphConfig
@@ -248,14 +246,14 @@ def _load_relationship_classification(
                 f"Temporarily saved {len(df)} records to `{csv_path}` for model `{model.__name__}` for loading."
             )
 
-            with bulk_load_context(session):
-                model.load_csv(  # ty: ignore[invalid-argument-type]
+            with resolve_backend(session).relaxed_foreign_keys(session):
+                model.load_file(  # ty: ignore[invalid-argument-type]
                     session,
                     csv_path,
                     dedupe=True,
                     merge_strategy="replace",
-                    loader=PandasLoader(),
                     staging_schema_tag=STAGING_SCHEMA,
+                    resolved=resolved,
                 )
                 session.commit()
 

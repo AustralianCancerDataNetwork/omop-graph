@@ -33,13 +33,13 @@ classifiers = [
 ]
 
 dependencies = [
-  "omop-alchemy>=2.0.0,<3",
-  "orm-loader>=2.0.0,<3",
+  "omop-alchemy>=3.0.0,<4",
+  "orm-loader>=3.0.0,<4",
   "typing-extensions>=4.15.0",
   "typer>=0.12",
   "rich>=13.0",
   "oaklib",
-  "oa-configurator>=2.0.0,<3"
+  "oa-configurator>=2.1.0,<3"
 ]
 
 [project.optional-dependencies]
@@ -53,7 +53,7 @@ pgvector = [
   "omop-emb[pgvector]>=3.0.0,<4",
 ]
 postgres = [
-  "omop-alchemy[postgres]>=2.0.0,<3",
+  "omop-alchemy[postgres]>=3.0.0,<4",
 ]
 
 
@@ -71,7 +71,7 @@ dev = [
     "mkdocs-mermaid2-plugin",
     "mkdocs-table-reader-plugin",
     "mkdocs-macros-plugin",
-    "oa-configurator[postgres]>=2.0.0,<3",
+    "oa-configurator[postgres]>=2.1.0,<3",
 ]
 
 [project.scripts]

@@ -714,20 +714,25 @@ wheels = [
 
 [[package]]
 name = "faiss-cpu"
-version = "1.14.2"
+version = "1.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "packaging" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c8/8b/5d2cd7c9fd60bc4d1ca6e9f5e8b0eb57254a7b301daaa12d5853fdf48afe/faiss_cpu-1.14.2-cp310-abi3-macosx_14_0_arm64.whl", hash = "sha256:a20011b8a97318e6d5e29143a773277ca71f1c33140024aeec91f05ad56cdd04", size = 4621203, upload-time = "2026-05-22T19:58:27.415Z" },
-    { url = "https://files.pythonhosted.org/packages/84/b1/05876aa7ceafd67a8c53667f574c0354e50ebadfdaf0632d7d9f5c80fffe/faiss_cpu-1.14.2-cp310-abi3-macosx_15_0_x86_64.whl", hash = "sha256:6ba528b5803fe5206bbb38e6ea2c537de0d1482a47c5765982af4e4a48c135e2", size = 6681426, upload-time = "2026-05-22T19:58:29.193Z" },
-    { url = "https://files.pythonhosted.org/packages/35/b4/d130a1908ad548671cd5ee9a1b537c7d3753cfdf0b2b134f3c10ccc6b537/faiss_cpu-1.14.2-cp310-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b340c33212351f04d4f167cb7b22c9e756705a634d3b7b58987651f3ba1f6217", size = 9592827, upload-time = "2026-05-22T19:58:30.772Z" },
-    { url = "https://files.pythonhosted.org/packages/7f/66/108f7075591b84852a6b285a81922e773c1c6d3b2c45da8ec4822f1bfab4/faiss_cpu-1.14.2-cp310-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ec4784d9a14973f2eead3a3480e6d14e74253b234e2c12717d4319f21dfadfcd", size = 18234781, upload-time = "2026-05-22T19:58:33.268Z" },
-    { url = "https://files.pythonhosted.org/packages/f2/42/af4df8012e0ed817df2c4094a816b538d99bfbbcbf567cd9f5f36d5fb9b4/faiss_cpu-1.14.2-cp312-cp312-win_amd64.whl", hash = "sha256:292124ba3d2bbeed920ef8519451cfba0f139b77db1607170cffbe68dc72e604", size = 16115701, upload-time = "2026-05-22T19:58:41.85Z" },
-    { url = "https://files.pythonhosted.org/packages/60/04/555551ceec73248e76b758014a6fba702349824270be27d0e5db1f740feb/faiss_cpu-1.14.2-cp313-cp313-win_amd64.whl", hash = "sha256:d81857f1fcf6c5dc76f75b35112158f731aeb7804ca971c51d74edf6e9b1b8c7", size = 16116212, upload-time = "2026-05-22T19:58:45.154Z" },
-    { url = "https://files.pythonhosted.org/packages/9e/59/ff73cb48bd1a98a355ff5a6a2018f3cfe4980ec2196b4938bf8af4fb828b/faiss_cpu-1.14.2-cp314-cp314-win_amd64.whl", hash = "sha256:b736813d853d36693f7b5affdc8788adfa73efa2f45ac6493c8ce2cbb2584f19", size = 16394291, upload-time = "2026-05-22T19:58:48.062Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/ed/d1b8e6720e9947469cab45dbfbf1b82e1d5acf9fe063dc97a6e82db83094/faiss_cpu-1.15.1-cp310-abi3-macosx_14_0_arm64.whl", hash = "sha256:ea9e12d540ca8ac0347b831d034c0f6d7ff5eed20523a247db44b3543ad2aad4", size = 4987669, upload-time = "2026-09-16T18:33:29.409Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/75/eb2f36334a58b343a87a2c1feaa747655fde7efdaad9c5d9eb367da89f15/faiss_cpu-1.15.1-cp310-abi3-macosx_15_0_x86_64.whl", hash = "sha256:f52e727992ce86a783f61657f0c4f3498a235883083b982ba1be49d05f924450", size = 7237206, upload-time = "2026-09-16T18:33:31.404Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/90/695eeab44921bb475611fc71ec0a74af82080f496cb7586c6490e4f322d2/faiss_cpu-1.15.1-cp310-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ffa71b14b3090bc076f8b026554178868fdbfe2f26fe644da629405836369039", size = 9890446, upload-time = "2026-09-16T18:33:33.451Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/f4/098bd9d178ae36fa078c66068d3264e27fff4308d5131655e5e743153d4c/faiss_cpu-1.15.1-cp310-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f2c31b7f2f6647eb76829a5cfe3c398fb9346df9f26b1d4db35269c91eb58c33", size = 18834180, upload-time = "2026-09-16T18:33:36.023Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/a7/d9e88b337f9636e0e80b651bfd27dbff533820d26c250bb60d2122de18a9/faiss_cpu-1.15.1-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:2d0a59d8ee9ffcac34608f591d16b617d9056e12a26a8b8cf0015b6b334e33e1", size = 11447194, upload-time = "2026-09-16T18:33:38.883Z" },
+    { url = "https://files.pythonhosted.org/packages/01/28/0855b161a081556a1df0ff14d5e7e73db23bd24ed85505009387fb61762e/faiss_cpu-1.15.1-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:d4a250000112ac26ae79530e67a18fa986c8b7b0329154aefeb7692b270ed366", size = 19574480, upload-time = "2026-09-16T18:33:42.213Z" },
+    { url = "https://files.pythonhosted.org/packages/69/19/a4bd07c73f17556eff1599e27918b8a97eaab468aea7b143bd49ca0535eb/faiss_cpu-1.15.1-cp312-cp312-win_amd64.whl", hash = "sha256:38d192695210a51ff72449d8802ff62601568fcfc6372222a64a069da0ecdb10", size = 16293368, upload-time = "2026-09-16T18:33:55.001Z" },
+    { url = "https://files.pythonhosted.org/packages/56/35/c79cd7321c6d8af277691e7a7ca1dd362e0fff24a9697aa944781cdb8c75/faiss_cpu-1.15.1-cp312-cp312-win_arm64.whl", hash = "sha256:4fd6623ed931d16256b268ac2984f672cdf1929702e24b3e741798d0bb08804f", size = 9039754, upload-time = "2026-09-16T18:33:57.835Z" },
+    { url = "https://files.pythonhosted.org/packages/98/ae/e31e9c30f686681b78bd089edbefd3675602132612ce5dd187275be8b773/faiss_cpu-1.15.1-cp313-cp313-win_amd64.whl", hash = "sha256:8a577dd6d52f685326570105c3d18feb3776799d080534e329a191740d6362b6", size = 16292975, upload-time = "2026-09-16T18:34:01.226Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/49/96bfac5586cc84bad3dae85dd29595512883327789573e6e81541646b5ef/faiss_cpu-1.15.1-cp313-cp313-win_arm64.whl", hash = "sha256:a26acb421037b030c1e9eea342adff5a0e1b6faab9e626be64b5f598241e5592", size = 9038412, upload-time = "2026-09-16T18:34:04.344Z" },
+    { url = "https://files.pythonhosted.org/packages/98/82/4b1866e93b85247774dbd67afc95fbe5d02097ee125cf4ed11c90515717b/faiss_cpu-1.15.1-cp314-cp314-win_amd64.whl", hash = "sha256:c18b569ec5d5e79f2156f0059fdb3ea79976f365d79291252ab6b45d40523c2c", size = 16574394, upload-time = "2026-09-16T18:34:07.417Z" },
+    { url = "https://files.pythonhosted.org/packages/61/23/8da811ff180c8f4f96f23bed84a1a235fad371f6b21ae5395d3e42d4ca95/faiss_cpu-1.15.1-cp314-cp314-win_arm64.whl", hash = "sha256:dc1cd974cd5477ca5d01d9f9ecba6a7fc555b6ef2eda7b16c97e20903431dc6b", size = 9340275, upload-time = "2026-09-16T18:34:10.2Z" },
 ]
 
 [[package]]
@@ -2029,7 +2034,7 @@ wheels = [
 
 [[package]]
 name = "oa-configurator"
-version = "2.0.0"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2040,9 +2045,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/62/64bf398b8fe381d138446199be69bc437ef93fdb70aab48cebf51467f6ea/oa_configurator-2.0.0.tar.gz", hash = "sha256:26406e90aeadd4c747646763b80f16025c4c6638afec687517788bc537d0d581", size = 278382, upload-time = "2026-10-10T22:48:42.275Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/5a/e1061864a6f9abc9c49e26ab84a51dfc8f40616906c853e01ccbc022b477/oa_configurator-2.1.0.tar.gz", hash = "sha256:89e33ab58bd428081b1c1c8ce1b4ad7d4a7d4b4627bcbc20d8cd6502811f627c", size = 298778, upload-time = "2026-10-26T21:01:07.87Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/06/9b/99f0073d97de3545d48cf28c8f39b724d543baf83e8af8d0ba5c8bffbb01/oa_configurator-2.0.0-py3-none-any.whl", hash = "sha256:2186beb5567850ba5bfe4950c2820b909d3746c6fa233a6074a85396a343af35", size = 118027, upload-time = "2026-10-10T22:48:40.571Z" },
+    { url = "https://files.pythonhosted.org/packages/59/44/38cdd910fe7544b118d7a5fc741417f1be0a4a95fdb754d8d5f3a016b9f9/oa_configurator-2.1.0-py3-none-any.whl", hash = "sha256:44c2fc43cf01398e598fc4d0fd4b17f9a3090cc35b6a378cdaf8e40fbfab0a0a", size = 126679, upload-time = "2026-10-26T21:01:05.893Z" },
 ]
 
 [package.optional-dependencies]
@@ -2121,7 +2126,7 @@ wheels = [
 
 [[package]]
 name = "omop-alchemy"
-version = "2.0.0"
+version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "oa-configurator" },
@@ -2133,9 +2138,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/4b/a925c1db558070a4a807a38456a90dab33ab766e18cd3de890dae94295ca/omop_alchemy-2.0.0.tar.gz", hash = "sha256:403848b2c377ef6200119f4d5280a1b7e1abe0c42e8681fe16a74ee87fa82259", size = 734827, upload-time = "2026-10-10T23:39:29.99Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/a4/330e86e324759626cbb48b6faeaa7bd903a480b4687515e486bdcdfaa3e2/omop_alchemy-3.0.0.tar.gz", hash = "sha256:084a873a84aa378614ad75b7791de6d5fa8dfdc7800484a6c0713d9f36f01c01", size = 757452, upload-time = "2026-11-05T06:16:28.04Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/d2/2c271ce7d09b978bf812b698baf9000f1bc56afa2d1915b58c9b079875db/omop_alchemy-2.0.0-py3-none-any.whl", hash = "sha256:17cdbf3d901f23da339b7e4d4598f22f178499733fa326884de6e0de40c78f02", size = 298023, upload-time = "2026-10-10T23:39:28.182Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/b9/674e2dfac874a5c078f30e2cb63453c3bb40b78bbeea52bfbbaa7e139864/omop_alchemy-3.0.0-py3-none-any.whl", hash = "sha256:d369a452456364b4d679741cd2e6f2151aa4a070274714566ca56df019a9eeae", size = 307688, upload-time = "2026-11-05T06:16:26.131Z" },
 ]
 
 [package.optional-dependencies]
@@ -2145,7 +2150,7 @@ postgres = [
 
 [[package]]
 name = "omop-emb"
-version = "3.0.0"
+version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "h5py" },
@@ -2160,9 +2165,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/68/54b0a9538da687f38e995d16fb335d585cd7dbca423be5874fb3f07217ae/omop_emb-3.0.0.tar.gz", hash = "sha256:6ceabae683e9f36cc9250fb0a62a6074a588b5ff5594e8fd8b06c1dcec5a826e", size = 249683, upload-time = "2026-10-11T00:20:20.468Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/5c/99fd350084bfc4b01ae4a257e8cb9b3c97b637f3ea1bc5000587e4430e63/omop_emb-3.1.0.tar.gz", hash = "sha256:8ebde36de4c269fd0c67d41bfda1b0cfee5ef4ac6fdd8912a42112441a54ebbc", size = 290209, upload-time = "2026-11-05T21:26:40.34Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/a6/e564d7d43b294c592a93f1da737a7e836cb50f592a9127e6b10ef4383471/omop_emb-3.0.0-py3-none-any.whl", hash = "sha256:0e78c7c0ef01a71d1a62498d9fab494aab81d7fa40aa1e712ec097530c5df730", size = 94080, upload-time = "2026-10-11T00:20:18.782Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/ea/ef867376e7ad86acadbca8d23fba244dddbd015847f7578ec47f11cee52d/omop_emb-3.1.0-py3-none-any.whl", hash = "sha256:a0c11f3227d01d86d736c8cc009d79f66997d105189462af10651bbc1735a901", size = 113798, upload-time = "2026-11-05T21:26:39.019Z" },
 ]
 
 [package.optional-dependencies]
@@ -2227,19 +2232,19 @@ requires-dist = [
     { name = "mkdocs-mermaid2-plugin", marker = "extra == 'dev'" },
     { name = "mkdocs-table-reader-plugin", marker = "extra == 'dev'" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'" },
-    { name = "oa-configurator", specifier = ">=2.0.0,<3" },
-    { name = "oa-configurator", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=2.0.0,<3" },
+    { name = "oa-configurator", specifier = ">=2.1.0,<3" },
+    { name = "oa-configurator", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=2.1.0,<3" },
     { name = "oaklib" },
-    { name = "omop-alchemy", specifier = ">=2.0.0,<3" },
-    { name = "omop-alchemy", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=2.0.0,<3" },
-    { name = "omop-alchemy", extras = ["postgres"], marker = "extra == 'postgres'", specifier = ">=2.0.0,<3" },
+    { name = "omop-alchemy", specifier = ">=3.0.0,<4" },
+    { name = "omop-alchemy", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=3.0.0,<4" },
+    { name = "omop-alchemy", extras = ["postgres"], marker = "extra == 'postgres'", specifier = ">=3.0.0,<4" },
     { name = "omop-emb", marker = "extra == 'dev'", specifier = ">=3.0.0,<4" },
     { name = "omop-emb", marker = "extra == 'emb'", specifier = ">=3.0.0,<4" },
     { name = "omop-emb", extras = ["faiss-cpu"], marker = "extra == 'dev'", specifier = ">=3.0.0,<4" },
     { name = "omop-emb", extras = ["faiss-cpu"], marker = "extra == 'faiss-cpu'", specifier = ">=3.0.0,<4" },
     { name = "omop-emb", extras = ["pgvector"], marker = "extra == 'dev'", specifier = ">=3.0.0,<4" },
     { name = "omop-emb", extras = ["pgvector"], marker = "extra == 'pgvector'", specifier = ">=3.0.0,<4" },
-    { name = "orm-loader", specifier = ">=2.0.0,<3" },
+    { name = "orm-loader", specifier = ">=3.0.0,<4" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "rich", specifier = ">=13.0" },
@@ -2329,18 +2334,17 @@ wheels = [
 
 [[package]]
 name = "orm-loader"
-version = "2.0.0"
+version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chardet" },
     { name = "oa-configurator" },
-    { name = "pandas" },
     { name = "pyarrow" },
     { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/cd/b3a29d383b80e1c282a3ee12a28f00b5608802763dd98ed7b3adc637e630/orm_loader-2.0.0.tar.gz", hash = "sha256:73232ecb5f1474738e54f30fae89999620d57cc41456ae799669a74c690a76b3", size = 171586, upload-time = "2026-10-10T23:22:15.966Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/e4/3535ecb78ba058de22308d1b2abd6d143586c22a39e15526486cdabb845b/orm_loader-3.0.0.tar.gz", hash = "sha256:865d14bf853a312acb6f43c6d63825f73436f41d219aae7caae086da915eb5cd", size = 223323, upload-time = "2026-11-05T04:55:59.646Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/61/6687b9c1602deb1c364d4653c641698e3de298b9c4f5dc98c59698455ac7/orm_loader-2.0.0-py3-none-any.whl", hash = "sha256:a118ddc3fcb611d658b7be52f616b641804ae65067efd05753d1bc14a03b52c9", size = 74959, upload-time = "2026-10-10T23:22:14.645Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/96/22b96702ab51b867994839589408509a0e4173d0d5b27d4d7cf1c8d89ed6/orm_loader-3.0.0-py3-none-any.whl", hash = "sha256:0f91ce37c1bc930113d9476130521cb74b755010705173c281cf1d6262a1a4ef", size = 96094, upload-time = "2026-11-05T04:55:57.896Z" },
 ]
 
 [[package]]
