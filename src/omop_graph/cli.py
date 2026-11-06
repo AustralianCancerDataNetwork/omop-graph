@@ -246,16 +246,20 @@ def _load_relationship_classification(
                 f"Temporarily saved {len(df)} records to `{csv_path}` for model `{model.__name__}` for loading."
             )
 
-            with resolve_backend(session).relaxed_foreign_keys(session):
-                model.load_file(  # ty: ignore[invalid-argument-type]
-                    session,
-                    csv_path,
-                    dedupe=True,
-                    merge_strategy="replace",
-                    staging_schema_tag=STAGING_SCHEMA,
-                    resolved=resolved,
-                )
-                session.commit()
+            model.load_file(  # ty: ignore[invalid-argument-type]
+                session,
+                csv_path,
+                dedupe=True,
+                merge_strategy="replace",
+                staging_schema_tag=STAGING_SCHEMA,
+                resolved=resolved,
+            )
+            session.commit()
+
+        for model in (RelationshipClass, RelationshipMapping):
+            model.validate_foreign_keys(  # ty: ignore[invalid-argument-type]
+                session, staging_schema_tag=STAGING_SCHEMA, resolved=resolved
+            )
 
 
 @app.command(name="relationship-classification")
