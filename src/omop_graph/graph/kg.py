@@ -605,12 +605,14 @@ class KnowledgeGraph(GraphBackend):
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = False,
+        stream: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
 
         A *predicate_kinds* filter is applied in SQL as the relationship IDs
         of those kinds. Edges whose relationship has no classification are
-        skipped.
+        skipped. Set ``stream=True`` to fetch rows in batches instead of
+        buffering the full result set.
         """
         if predicate_kinds:
             kind_ids = frozenset(
@@ -630,15 +632,23 @@ class KnowledgeGraph(GraphBackend):
             on=on,
             within_domain=within_domain,
         )
-        for row in session.execute(stmt):
-            mapping = self._relationship_mapping.get(row.predicate_id)
-            if mapping is None:
-                continue
-            yield EdgeView(
-                **row._mapping,
-                predicate_kind=mapping.predicate_kind,
-                predicate_subkind=mapping.predicate_subkind,
-            )
+        result = (
+            session.execute(stmt, execution_options={"yield_per": 1000})
+            if stream
+            else session.execute(stmt)
+        )
+        try:
+            for row in result:
+                mapping = self._relationship_mapping.get(row.predicate_id)
+                if mapping is None:
+                    continue
+                yield EdgeView(
+                    **row._mapping,
+                    predicate_kind=mapping.predicate_kind,
+                    predicate_subkind=mapping.predicate_subkind,
+                )
+        finally:
+            result.close()
 
     def specificity(self, concept_id: int) -> float:
         """

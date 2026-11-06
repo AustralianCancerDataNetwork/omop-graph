@@ -12,6 +12,7 @@ Algorithms that explore the graph structure (e.g., "Find all neighbors within 3 
 from __future__ import annotations
 
 from collections import deque
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple
@@ -111,6 +112,48 @@ class GraphTrace:
         return "\n".join(lines)
 
 
+@dataclass
+class _TraversalState:
+    queue: deque[Tuple[int, int]]
+    discovered: set[int]
+    max_nodes: Optional[int]
+    predicate_kinds: Optional[Set[PredicateKind]]
+    on: Optional[date]
+
+
+def _expand_node(
+    kg: "KnowledgeGraph",
+    node: int,
+    depth: int,
+    state: _TraversalState,
+) -> Tuple[List[EdgeView], bool]:
+    """Collect one node's edges, stopping when a new target fills the budget."""
+    expanded: List[EdgeView] = []
+    with kg.session_factory() as session:
+        edge_iter = kg.iter_edges(
+            session=session,
+            concept_ids=node,
+            direction="out",
+            predicate_kinds=frozenset(state.predicate_kinds)
+            if state.predicate_kinds is not None
+            else None,
+            active_only=True,
+            on=state.on,
+            stream=True,
+        )
+        with closing(edge_iter):
+            for edge in edge_iter:
+                if edge.object_id not in state.discovered:
+                    state.discovered.add(edge.object_id)
+                    state.queue.append((edge.object_id, depth + 1))
+
+                expanded.append(edge)
+                if state.max_nodes and len(state.discovered) >= state.max_nodes:
+                    return expanded, True
+
+    return expanded, False
+
+
 def traverse(
     kg: "KnowledgeGraph",
     seeds: Iterable[int],
@@ -136,7 +179,7 @@ def traverse(
     on : date, optional
         Filter for edges active on this date.
     max_nodes : int, optional
-        Stop after visiting this many unique nodes.
+        Stop after discovering this many unique nodes.
     trace : bool
         If True, return a GraphTrace object.
 
@@ -144,72 +187,58 @@ def traverse(
     -------
     tuple[Subgraph, GraphTrace | None]
         The resulting subgraph and optionally the execution trace.
+
+    When ``max_nodes`` is reached, which nodes fill the budget is unspecified
+    (it depends on database row order). Traversal stops as soon as the node
+    budget is discovered, so queued nodes inside the budget are not expanded;
+    edges those later expansions could have found are absent from the result.
     """
     # Deduplicate seeds while preserving order
     # (Python 3.7+ dict guarantees insertion order)
     unique_seeds = tuple(dict.fromkeys(seeds))
 
-    visited = set()
+    # Seeds precede discovered neighbours in BFS order. Keep only the seeds
+    # that fit the budget, matching the order in which the old visited set
+    # reached its cap.
+    budgeted_seeds = unique_seeds[: max(max_nodes, 1)] if max_nodes else unique_seeds
+    discovered = set(budgeted_seeds)
     edges_out: List[EdgeView] = []
     trace_steps: List[TraceStep] = []
 
     # Queue stores (concept_id, depth)
-    q = deque((s, 0) for s in unique_seeds)
+    q = deque((s, 0) for s in budgeted_seeds)
+    state = _TraversalState(q, discovered, max_nodes, predicate_kinds, on)
     terminated = None
 
     while q:
         node, depth = q.popleft()
 
-        if node in visited:
-            continue
-
-        visited.add(node)
-
-        if max_nodes and len(visited) >= max_nodes:
+        if state.max_nodes and len(state.discovered) >= state.max_nodes:
             terminated = "max_nodes"
             break
 
         if depth >= max_depth:
             continue
 
-        expanded: List[EdgeView] = []
-
-        # Iterate over outgoing edges
-        with kg.session_factory() as session:
-            for e in kg.iter_edges(
-                session=session,
-                concept_ids=node,
-                direction="out",
-                predicate_kinds=frozenset(predicate_kinds)
-                if predicate_kinds is not None
-                else None,
-                active_only=True,
-                on=on,
-            ):
-                # Only add edges to the output; we decide to traverse in the next block
-                expanded.append(e)
-                edges_out.append(e)
-
-                nxt = e.object_id
-                # Optimization: Don't add to queue if already visited
-                if nxt not in visited:
-                    q.append((nxt, depth + 1))
+        # Iterate over outgoing edges until one more node would exceed the budget.
+        expanded, budget_reached = _expand_node(kg, node, depth, state)
+        edges_out.extend(expanded)
 
         if trace:
             trace_steps.append(
                 TraceStep(depth=depth, node=node, expanded_edges=tuple(expanded))
             )
+        if budget_reached:
+            terminated = "max_nodes"
+            break
 
-    # Deduplicate edges and drop any that target an unvisited node.
-    # The latter can happen when max_nodes terminates the loop while neighbour
-    # nodes are still queued but never expanded, which would break the invariant
-    # that every edge in the Subgraph is closed over its node set.
+    # Deduplicate edges and drop any that target a node outside the budget.
     dedup = {
         (e.subject_id, e.predicate_id, e.object_id): e
         for e in edges_out
-        if e.object_id in visited
+        if e.subject_id in state.discovered and e.object_id in state.discovered
     }
-    sg = Subgraph(nodes=frozenset(visited), edges=tuple(dedup.values()))
+    sg = Subgraph(nodes=frozenset(state.discovered), edges=tuple(dedup.values()))
 
     graph_trace = (
         GraphTrace(seeds=unique_seeds, steps=trace_steps, terminated_reason=terminated)
