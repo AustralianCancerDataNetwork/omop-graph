@@ -24,6 +24,27 @@ class PredicateKind(Enum):
     ATTRIBUTE = "Attribute"
 
 
+def _predicate_kind_values(enum_cls: type[PredicateKind]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
+def _predicate_kind_enum() -> sa.Enum:
+    """Use a varchar-backed enum on DuckDB and the native enum elsewhere."""
+    return sa.Enum(
+        PredicateKind,
+        values_callable=_predicate_kind_values,
+        schema=Role.PRIMARY.value,
+    ).with_variant(
+        sa.Enum(
+            PredicateKind,
+            values_callable=_predicate_kind_values,
+            native_enum=False,
+            create_constraint=True,
+        ),
+        "duckdb",
+    )
+
+
 @cdm_table
 class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     """
@@ -35,16 +56,7 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     # Must match RelationshipMapping's schema, or SQLAlchemy silently builds a second, unlinked Table object.
     __table_args__ = merge_table_args({"schema": Role.PRIMARY.value})
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
-        sa.Enum(
-            PredicateKind,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],
-            # Must match __table_args__'s schema to ensure that schema_translate_map
-            # routes the enum correctly.
-            schema=Role.PRIMARY.value,
-        ),
-        primary_key=True,
+        _predicate_kind_enum(), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(
         sa.String(20), primary_key=True
@@ -68,16 +80,7 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
         primary_key=True,
     )
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
-        sa.Enum(
-            PredicateKind,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],
-            # Must match __table_args__'s schema to ensure that schema_translate_map
-            # routes the enum correctly.
-            schema=Role.PRIMARY.value,
-        ),
-        primary_key=True,
+        _predicate_kind_enum(), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(
         sa.String(20), primary_key=True
