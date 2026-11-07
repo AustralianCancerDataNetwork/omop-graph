@@ -26,7 +26,7 @@ from oa_configurator.testing import (
 
 from orm_loader.helpers import Base
 
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
+from omop_alchemy.config import CDM_AUXILIARY_SCHEMA, CDM_AUXILIARY_SCHEMA_OWNER
 from omop_graph import cli as omop_graph_cli
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
@@ -40,22 +40,22 @@ def test_relationship_classification_guard_fires_on_reconfigured_schema(
     resolver = guarded_resolver(pg_db.resolved)
     resolved = resolver.resolve_database(pg_db.resolved.name)
 
-    # Literal CDM_EXTENSION_SCHEMA, not a test-isolated name: relationship_classification()
+    # Literal CDM_AUXILIARY_SCHEMA, not a test-isolated name: relationship_classification()
     # below runs its own resolved-only path, which resolves its engine via
     # create_cdm_engines() and claims the same literal name and owner
     # internally (matching production, like MAINTENANCE_SCHEMA) -- a
     # test-isolated name or owner here would silently diverge from what
     # that path actually uses.
-    extension_claim = SchemaClaim(
-        schema_tag=CDM_EXTENSION_SCHEMA,
-        physical_schema=CDM_EXTENSION_SCHEMA,
+    auxiliary_claim = SchemaClaim(
+        schema_tag=CDM_AUXILIARY_SCHEMA,
+        physical_schema=CDM_AUXILIARY_SCHEMA,
         reserved=True,
-        owner=CDM_EXTENSION_SCHEMA_OWNER,
+        owner=CDM_AUXILIARY_SCHEMA_OWNER,
     )
     with scoped_test_schema(
-        resolved, prefix="graph_guard_a", resolver=resolver, schema_claims=[extension_claim]
+        resolved, prefix="graph_guard_a", resolver=resolver, schema_claims=[auxiliary_claim]
     ) as scoped_a:
-        ensure_schema(scoped_a.engine, CDM_EXTENSION_SCHEMA)
+        ensure_schema(scoped_a.engine, CDM_AUXILIARY_SCHEMA)
         Base.metadata.create_all(bind=scoped_a.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped_a.engine)
         monkeypatch.setattr(omop_graph_cli, "resolve_cdm_database", lambda: scoped_a.resolved)

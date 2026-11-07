@@ -38,7 +38,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
     Vocabulary,
 )
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
+from omop_alchemy.config import CDM_AUXILIARY_SCHEMA, CDM_AUXILIARY_SCHEMA_OWNER
 from omop_alchemy.cross_database import cdm_sessionmaker
 
 from omop_graph.cli import _load_relationship_classification
@@ -50,7 +50,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
-from fixtures.helpers import VOCAB_TABLES, cdm_extension_schema_claim
+from fixtures.helpers import VOCAB_TABLES, cdm_auxiliary_schema_claim
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
@@ -77,7 +77,7 @@ _shadow_relationship_class = sa.Table(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [e.value for e in obj],
-            schema=CDM_EXTENSION_SCHEMA,
+            schema=CDM_AUXILIARY_SCHEMA,
         ),
         primary_key=True,
     ),
@@ -86,7 +86,7 @@ _shadow_relationship_class = sa.Table(
     sa.Column("semantics", sa.String(40), nullable=False),
     sa.Column("inference", sa.String(40), nullable=False),
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
-    schema=CDM_EXTENSION_SCHEMA,
+    schema=CDM_AUXILIARY_SCHEMA,
 )
 _shadow_relationship_mapping = sa.Table(
     "relationship_mapping",
@@ -97,12 +97,12 @@ _shadow_relationship_mapping = sa.Table(
         sa.Enum(
             PredicateKind,
             values_callable=lambda obj: [e.value for e in obj],
-            schema=CDM_EXTENSION_SCHEMA,
+            schema=CDM_AUXILIARY_SCHEMA,
         ),
         primary_key=True,
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
-    schema=CDM_EXTENSION_SCHEMA,
+    schema=CDM_AUXILIARY_SCHEMA,
 )
 
 
@@ -120,9 +120,9 @@ def split_engines() -> Iterator[_Engines]:
     with (
         isolated_test_database(OmopGraphConfig, "test_cdm_db_pg") as primary_db,
         isolated_test_database(OrmLoaderConfig, "test_orm_db_pg") as vocab_db,
-        # RelationshipClass/RelationshipMapping live in the extension schema,
+        # RelationshipClass/RelationshipMapping live in the auxiliary schema,
         # on the same physical connection as primary.
-        cdm_extension_schema_claim(primary_db.committing_engine, prefix="vocab_split") as ext_claim,
+        cdm_auxiliary_schema_claim(primary_db.committing_engine, prefix="vocab_split") as aux_claim,
     ):
         name = primary_db.resolved.name
         resolver = Resolver.from_active_config()
@@ -135,12 +135,12 @@ def split_engines() -> Iterator[_Engines]:
         )
         split = resolver.resolve_database(name)
         with scoped_test_schema(
-            split, prefix="vocab_split", resolver=resolver, schema_claims=[ext_claim], register_claims=False
+            split, prefix="vocab_split", resolver=resolver, schema_claims=[aux_claim], register_claims=False
         ) as scoped:
             primary_engine, vocab_engine = scoped.resolved.create_engines(
-                schema_claims=[staging_schema_claim(), ext_claim], register_claims=False
+                schema_claims=[staging_schema_claim(), aux_claim], register_claims=False
             )
-            # create_all() on the vocab engine also emits the extension-tagged
+            # create_all() on the vocab engine also emits the auxiliary-tagged
             # predicatekind type; co-locate it with vocab_schema since its own
             # schema only exists on the primary server.
             vocab_schema = scoped.schemas[Role.VOCAB]
@@ -150,9 +150,9 @@ def split_engines() -> Iterator[_Engines]:
             vocab_setup_engine, _ = vocab_only.create_engines(
                 schema_claims=[
                     SchemaClaim(
-                        schema_tag=CDM_EXTENSION_SCHEMA,
+                        schema_tag=CDM_AUXILIARY_SCHEMA,
                         physical_schema=vocab_schema,
-                        owner=CDM_EXTENSION_SCHEMA_OWNER,
+                        owner=CDM_AUXILIARY_SCHEMA_OWNER,
                     )
                 ],
                 register_claims=False,

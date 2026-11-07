@@ -14,7 +14,7 @@ from omop_alchemy.cdm.model.vocabulary import (
     Domain,
     Vocabulary
 )
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA, CDM_EXTENSION_SCHEMA_OWNER
+from omop_alchemy.config import CDM_AUXILIARY_SCHEMA, CDM_AUXILIARY_SCHEMA_OWNER
 
 VOCAB_TABLES = cast(
     "tuple[sa.Table, ...]",
@@ -28,8 +28,8 @@ tuple rather than redefining its own copy of the shared core.
 
 
 @contextmanager
-def cdm_extension_schema_claim(engine: sa.Engine, *, prefix: str) -> Generator[SchemaClaim, None, None]:
-    """A SchemaClaim for a fresh, test-isolated physical extension schema.
+def cdm_auxiliary_schema_claim(engine: sa.Engine, *, prefix: str) -> Generator[SchemaClaim, None, None]:
+    """A SchemaClaim for a fresh, test-isolated physical auxiliary schema.
 
     Notes
     -----
@@ -38,12 +38,12 @@ def cdm_extension_schema_claim(engine: sa.Engine, *, prefix: str) -> Generator[S
     RelationshipClass's predicate_kind) is created metadata-wide, not
     scoped to tables=, so it's attempted regardless of which tables the
     call actually asked for. scoped_test_schema() doesn't scope the
-    extension tag on its own (only Role tags), so this must be claimed
+    auxiliary tag on its own (only Role tags), so this must be claimed
     and physically created separately.
     """
     with isolated_test_schema(engine, prefix=f"{prefix}_ext") as physical_schema:
         yield SchemaClaim(
-            schema_tag=CDM_EXTENSION_SCHEMA,
+            schema_tag=CDM_AUXILIARY_SCHEMA,
             physical_schema=physical_schema,
-            owner=CDM_EXTENSION_SCHEMA_OWNER,
+            owner=CDM_AUXILIARY_SCHEMA_OWNER,
         )

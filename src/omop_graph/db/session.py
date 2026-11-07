@@ -8,7 +8,7 @@ from contextlib import contextmanager
 import sqlalchemy.orm as so
 from sqlalchemy.engine import Engine
 from oa_configurator import ResolvedCDMDatabase, Resolver
-from omop_alchemy.config import CDM_EXTENSION_SCHEMA_CLAIM
+from omop_alchemy.config import CDM_AUXILIARY_SCHEMA_CLAIM
 from omop_alchemy.cross_database import CDMSession, cdm_sessionmaker
 from orm_loader.backends import staging_schema_claim
 from sqlalchemy.orm import sessionmaker
@@ -73,11 +73,11 @@ def _create_cdm_sessions(
     -----
     Claims the following additional schemas:
     - staging schema: for CSV bulk-loading of RelationshipClass/RelationshipMapping
-    - CDM_EXTENSION_SCHEMA: for the tables those two live in
+    - CDM_AUXILIARY_SCHEMA: for the tables those two live in
     """
 
     primary, vocab = resolved.create_engines(
-        schema_claims=[staging_schema_claim(), CDM_EXTENSION_SCHEMA_CLAIM],
+        schema_claims=[staging_schema_claim(), CDM_AUXILIARY_SCHEMA_CLAIM],
         register_claims=register_claims,
     )
     return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab

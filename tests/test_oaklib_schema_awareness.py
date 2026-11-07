@@ -120,7 +120,7 @@ def test_get_adapter_resolves_the_slug_as_the_database_name(
 
 
 def _one_engine_for_both_roles(kg: KnowledgeGraph) -> bool:
-    """Do the graph's sessions send vocabulary and extension tables to one engine?"""
+    """Do the graph's sessions send vocabulary and auxiliary tables to one engine?"""
     with kg.session_factory() as session:
         return session.get_bind(Concept) is session.get_bind(RelationshipMapping)
 

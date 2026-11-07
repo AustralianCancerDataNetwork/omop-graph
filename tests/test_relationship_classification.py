@@ -23,24 +23,24 @@ from omop_graph.cli import _load_relationship_classification, relationship_class
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 from fixtures.mock_cdm import seed_relationship_vocabulary
 
-from fixtures.helpers import cdm_extension_schema_claim
+from fixtures.helpers import cdm_auxiliary_schema_claim
 
 
 def test_relationship_classification_respects_the_configured_schema(pg_db):
     """The loading body creates RelationshipClass/RelationshipMapping (and the
-    predicatekind enum) wherever its engine resolves CDM_EXTENSION_SCHEMA to,
+    predicatekind enum) wherever its engine resolves CDM_AUXILIARY_SCHEMA to,
     not a hardcoded literal schema name.
     """
     with (
-        cdm_extension_schema_claim(pg_db.committing_engine, prefix="relclass_routing") as ext_claim,
+        cdm_auxiliary_schema_claim(pg_db.committing_engine, prefix="relclass_routing") as aux_claim,
         scoped_test_schema(
             pg_db.resolved,
             prefix="relclass_routing",
-            schema_claims=[staging_schema_claim(), ext_claim],
+            schema_claims=[staging_schema_claim(), aux_claim],
             register_claims=False,
         ) as scoped,
     ):
-        extension_schema = ext_claim.physical_schema
+        auxiliary_schema = aux_claim.physical_schema
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
 
@@ -62,12 +62,12 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
                     "SELECT n.nspname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace "
                     "WHERE t.typname = 'predicatekind' AND n.nspname = :schema"
                 ),
-                {"schema": extension_schema},
+                {"schema": auxiliary_schema},
             ).scalar()
         assert n_class and n_class > 0
         assert n_mapping and n_mapping > 0
-        assert sa.inspect(scoped.engine).has_table("relationship_class", schema=extension_schema)
-        assert enum_schema == extension_schema
+        assert sa.inspect(scoped.engine).has_table("relationship_class", schema=auxiliary_schema)
+        assert enum_schema == auxiliary_schema
 
 
 def test_relationship_classification_is_idempotent(pg_db):
