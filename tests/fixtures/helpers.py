@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any
 
 import sqlalchemy as sa
-from omop_alchemy.cdm.model.vocabulary import (
-    Concept,
-    Concept_Class,
-    Domain,
-    Vocabulary
-)
+from oa_configurator import ResolvedCDMDatabase, ResolvedDatabase
+from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 
-VOCAB_TABLES = cast(
-    "tuple[sa.Table, ...]",
-    (Domain.__table__, Vocabulary.__table__, Concept_Class.__table__, Concept.__table__),
-)
-"""Domain/Vocabulary/Concept_Class/Concept: the minimal vocab bootstrap set
-every split/non-split fixture needs, in FK dependency order. A consumer
-needing more tables (e.g. Relationship, Concept_Relationship) extends this
-tuple rather than redefining its own copy of the shared core.
-"""
+
+def require_cdm(resolved: ResolvedDatabase | None) -> ResolvedCDMDatabase:
+    """Narrow a resolved database to the CDM kind that the CDM session factory requires."""
+    assert isinstance(resolved, ResolvedCDMDatabase)
+    return resolved
+
+
+def table_of(model: Any) -> sa.Table:
+    """The Table a mapped class is bound to, narrowed from the declarative base's FromClause."""
+    table = model.__table__
+    assert isinstance(table, sa.Table)
+    return table
+
+
+# The minimal vocab bootstrap set every split/non-split fixture needs, in FK dependency order.
+VOCAB_TABLES = tuple(table_of(model) for model in (Domain, Vocabulary, Concept_Class, Concept))

@@ -20,8 +20,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING, Optional
-
+from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
@@ -61,9 +60,9 @@ class EdgeView:
     subject_id: int
     predicate_id: str
     object_id: int
-    valid_start_date: Optional[date]
-    valid_end_date: Optional[date]
-    invalid_reason: Optional[str]
+    valid_start_date: date | None
+    valid_end_date: date | None
+    invalid_reason: str | None
     predicate_kind: PredicateKind
     predicate_subkind: str
 
@@ -118,7 +117,7 @@ class Predicate:
 
     relationship_id: str
     name: str
-    reverse_id: Optional[str]
+    reverse_id: str | None
     is_hierarchical: bool
     anc_up: bool
     anc_down: bool
@@ -147,11 +146,11 @@ class Predicate:
 
 
 def is_active(
-    start: Optional[date],
-    end: Optional[date],
-    invalid_reason: Optional[str],
+    start: date | None,
+    end: date | None,
+    invalid_reason: str | None,
     *,
-    on: Optional[date] = None,
+    on: date | None = None,
 ) -> bool:
     """
     Check if a relationship is active on a given date.

@@ -7,11 +7,10 @@ pytest_plugins = ("fixtures.mock_cdm",)
 
 def _isolated_cdm_test_database(request, field_name, *, dialect=None):
     from oa_configurator.testing import isolated_test_database
+
     from omop_graph.config import OmopGraphConfig
 
-    return isolated_test_database(
-        OmopGraphConfig, field_name, dialect=dialect, request=request
-    )
+    return isolated_test_database(OmopGraphConfig, field_name, dialect=dialect, request=request)
 
 
 @pytest.fixture

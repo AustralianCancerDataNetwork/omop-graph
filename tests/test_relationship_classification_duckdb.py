@@ -32,9 +32,7 @@ def _seed_duckdb_vocabulary(engine, mapping_rows: list[dict[str, str]]) -> set[s
         sa.Column("relationship_id", sa.String(20), primary_key=True),
         schema=Role.VOCAB.value,
     )
-    relationship_ids = {
-        row["r_id"].strip() for row in mapping_rows if row.get("r_id", "").strip()
-    }
+    relationship_ids = {row["r_id"].strip() for row in mapping_rows if row.get("r_id", "").strip()}
     with engine.begin() as connection:
         relationship_table.create(connection)
         connection.execute(
@@ -70,15 +68,18 @@ def test_relationship_classification_runs_and_is_idempotent_on_duckdb(
     cli.relationship_classification(resolved=resolved)
 
     with duckdb_db.committing_engine.connect() as connection:
-        checks = connection.execute(
-            sa.text(
-                "SELECT constraint_text FROM duckdb_constraints() "
-                "WHERE table_name = 'relationship_class' AND constraint_type = 'CHECK'"
+        checks = (
+            connection.execute(
+                sa.text(
+                    "SELECT constraint_text FROM duckdb_constraints() "
+                    "WHERE table_name = 'relationship_class' AND constraint_type = 'CHECK'"
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert any(
-            "predicate_kind" in check
-            and all(f"'{kind.value}'" in check for kind in PredicateKind)
+            "predicate_kind" in check and all(f"'{kind.value}'" in check for kind in PredicateKind)
             for check in checks
         )
         actual_classes = {

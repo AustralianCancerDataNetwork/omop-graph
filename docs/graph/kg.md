@@ -66,8 +66,10 @@ from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfigura
 from omop_emb.config import MetricType
 
 resolver = Resolver.from_active_config()
-resolved_vector_store = resolver.resolve_vector_store("vector_store")   # a [vector_stores.*] entry name
-resolved_model = resolver.resolve_model("embedding-model")              # a [models.*] entry name
+resolved_vector_store = resolver.resolve_vector_store(
+    "vector_store"
+)  # a [vector_stores.*] entry name
+resolved_model = resolver.resolve_model("embedding-model")  # a [models.*] entry name
 backend = open_vector_store_writer(resolved_vector_store)
 
 emb_config = KnowledgeGraphEmbeddingConfiguration(
