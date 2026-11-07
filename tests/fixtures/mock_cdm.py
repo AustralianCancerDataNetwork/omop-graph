@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from oa_configurator import Dialect
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.helpers import Base
+from orm_loader.backends import resolve_backend
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_class import Concept_Class
@@ -80,7 +81,7 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         if engine.dialect.name == "postgresql":
-            with bulk_load_context(session):
+            with resolve_backend(session).relaxed_foreign_keys(session):
                 seed_mock_cdm(session)
         else:
             seed_mock_cdm(session)
@@ -401,7 +402,7 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
     """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             if session.get(Concept, CONCEPT_META_ID) is None:
                 session.add_all(
                     [

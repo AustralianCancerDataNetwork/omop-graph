@@ -52,6 +52,15 @@ class OmopGraphConfig(PackageConfigBase):
             "(isolated_test_database(..., dialect='sqlite') provisions one automatically)."
         ),
     )
+    test_cdm_db_duckdb: Annotated[
+        str | None, RefTo(CDMDatabaseConfig, is_test=True)
+    ] = Field(
+        default=None,
+        description=(
+            "Disposable DuckDB test CDM database; left unconfigured by design "
+            "(isolated_test_database(..., dialect='duckdb') provisions a fresh local file automatically)."
+        ),
+    )
     embedding_model_name: Annotated[str | None, RefTo(ModelConfig)] = Field(
         default=None,
         description=(

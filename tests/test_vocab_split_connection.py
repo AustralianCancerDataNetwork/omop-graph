@@ -27,7 +27,8 @@ from oa_configurator.testing import (
 )
 from orm_loader.backends import staging_schema_claim
 from orm_loader.config import OrmLoaderConfig
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.helpers import Base
+from orm_loader.backends import resolve_backend
 
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
@@ -173,7 +174,7 @@ def split_engines() -> Iterator[_Engines]:
 
 def _seed(primary_engine: sa.Engine, vocab_engine: sa.Engine) -> None:
     with so.Session(vocab_engine) as session:
-        with bulk_load_context(session):
+        with resolve_backend(session).relaxed_foreign_keys(session):
             session.add_all(
                 [
                     Concept(

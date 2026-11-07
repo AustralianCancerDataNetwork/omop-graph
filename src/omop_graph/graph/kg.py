@@ -554,7 +554,7 @@ class KnowledgeGraph(GraphBackend):
         predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
-        within_domain: bool = True,
+        within_domain: bool = False,
     ) -> tuple[EdgeView, ...]:
         """
         Convenience method to retrieve all edges from one or multiple concepts.
@@ -575,6 +575,10 @@ class KnowledgeGraph(GraphBackend):
             Check validity on a specific date.
         within_domain : bool
             If True, only return edges where source/target domains match.
+            Defaults to False: most attribute edges cross domains (e.g. a
+            Procedure's ``Has method`` -> Observation, ``Has dir proc site``
+            -> Spec Anatomic Site), so filtering here would hide them. Path
+            search keeps its own ``within_domain=True`` default to limit noise.
         """
         with self.session_factory() as session:
             edges = tuple(
@@ -600,7 +604,7 @@ class KnowledgeGraph(GraphBackend):
         predicate_kinds: Optional[frozenset[PredicateKind]] = None,
         active_only: bool = True,
         on: Optional[date] = None,
-        within_domain: bool = True,
+        within_domain: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
 

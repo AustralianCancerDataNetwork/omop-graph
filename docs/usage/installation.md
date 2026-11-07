@@ -8,6 +8,16 @@ pip install omop-graph
 uv pip install omop-graph
 ```
 
+## DuckDB support (optional)
+
+Install the `[duckdb]` extra for relationship classification and graph use against a DuckDB CDM:
+
+```bash
+pip install "omop-graph[duckdb]"
+# or
+uv pip install "omop-graph[duckdb]"
+```
+
 ## Embedding and RAG support (optional, recommended) {:#embedding-rag}
 
 !!! tip

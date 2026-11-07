@@ -10,7 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from oa_configurator.testing import scoped_test_schema
-from orm_loader.helpers import Base, bulk_load_context
+from orm_loader.helpers import Base
+from orm_loader.backends import resolve_backend
 
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
@@ -62,7 +63,7 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
             )
 
         with Session(engine) as session:
-            with bulk_load_context(session):
+            with resolve_backend(session).relaxed_foreign_keys(session):
                 session.add_all(
                     [
                         Concept(

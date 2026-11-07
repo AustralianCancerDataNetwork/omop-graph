@@ -5,6 +5,15 @@ import pytest
 pytest_plugins = ("fixtures.mock_cdm",)
 
 
+def _isolated_cdm_test_database(request, field_name, *, dialect=None):
+    from oa_configurator.testing import isolated_test_database
+    from omop_graph.config import OmopGraphConfig
+
+    return isolated_test_database(
+        OmopGraphConfig, field_name, dialect=dialect, request=request
+    )
+
+
 @pytest.fixture
 def pg_db(request):
     """Canonical isolated PostgreSQL test database (Phase 0 of the
@@ -20,10 +29,21 @@ def pg_db(request):
     existing Postgres test fixture; built from scratch here, matching the
     convention already used by OMOP_Alchemy/orm-loader/omop-emb.
     """
-    from oa_configurator.testing import isolated_test_database
-    from omop_graph.config import OmopGraphConfig
+    with _isolated_cdm_test_database(request, "test_cdm_db_pg") as db:
+        yield db
 
-    with isolated_test_database(OmopGraphConfig, "test_cdm_db_pg", request=request) as db:
+
+@pytest.fixture
+def duckdb_db():
+    """Disposable local DuckDB CDM; no service or config is needed."""
+    # The DuckDB integration test creates only minimal test tables, avoiding
+    # shared cyclic ORM metadata; don't apply isolated_test_database's broad
+    # db_dialect guard, which would exclude it from the default suite.
+    with _isolated_cdm_test_database(
+        None,
+        "test_cdm_db_duckdb",
+        dialect="duckdb",
+    ) as db:
         yield db
 
 

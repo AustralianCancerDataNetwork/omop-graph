@@ -24,6 +24,27 @@ class PredicateKind(Enum):
     ATTRIBUTE = "Attribute"
 
 
+def _predicate_kind_values(enum_cls: type[PredicateKind]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
+def _predicate_kind_enum(*, schema: str) -> sa.Enum:
+    """Use a varchar-backed enum on DuckDB and the native enum elsewhere."""
+    return sa.Enum(
+        PredicateKind,
+        values_callable=_predicate_kind_values,
+        schema=schema,
+    ).with_variant(
+        sa.Enum(
+            PredicateKind,
+            values_callable=_predicate_kind_values,
+            native_enum=False,
+            create_constraint=True,
+        ),
+        "duckdb",
+    )
+
+
 class RelationshipClass(ReferenceTable, CDMExtensionTableBase):
     """
     Extensions table: Defines the semantic categories (Parent)
@@ -32,16 +53,9 @@ class RelationshipClass(ReferenceTable, CDMExtensionTableBase):
 
     __tablename__ = "relationship_class"
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
-        sa.Enum(
-            PredicateKind,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],
-            # Must match CDMExtensionTableBase's own schema to ensure that
-            # schema_translate_map routes the enum correctly.
-            schema=CDM_EXTENSION_SCHEMA,
-        ),
-        primary_key=True,
+        # Must match CDMExtensionTableBase's own schema to ensure that
+        # schema_translate_map routes the enum correctly.
+        _predicate_kind_enum(schema=CDM_EXTENSION_SCHEMA), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(
         sa.String(20), primary_key=True
@@ -64,16 +78,9 @@ class RelationshipMapping(ReferenceTable, CDMExtensionTableBase):
         primary_key=True,
     )
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
-        sa.Enum(
-            PredicateKind,
-            values_callable=lambda obj: [
-                e.value for e in obj
-            ],
-            # Must match CDMExtensionTableBase's own schema to ensure that
-            # schema_translate_map routes the enum correctly.
-            schema=CDM_EXTENSION_SCHEMA,
-        ),
-        primary_key=True,
+        # Must match CDMExtensionTableBase's own schema to ensure that
+        # schema_translate_map routes the enum correctly.
+        _predicate_kind_enum(schema=CDM_EXTENSION_SCHEMA), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(
         sa.String(20), primary_key=True
