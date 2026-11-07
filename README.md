@@ -22,6 +22,12 @@ The library is designed for:
 pip install omop-graph
 ```
 
+For relationship classification and graph use against a DuckDB CDM:
+
+```bash
+pip install "omop-graph[duckdb]"
+```
+
 With embedding support:
 
 ```bash
