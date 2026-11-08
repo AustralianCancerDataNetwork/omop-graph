@@ -102,3 +102,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 
 [tool.ruff]
 line-length = 100
+
+[tool.ty.rules]
+# raises on stale suppressions
+unused-ignore-comment = "error"
