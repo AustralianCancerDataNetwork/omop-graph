@@ -33,7 +33,9 @@ def test_edges_are_classified_from_the_relationship_mapping(
     assert edge.predicate_subkind == "mapping"
 
 
-@pytest.mark.parametrize(("kinds", "expected"), [({PredicateKind.IDENTITY}, 1), ({PredicateKind.HIERARCHY}, 0)])
+@pytest.mark.parametrize(
+    ("kinds", "expected"), [({PredicateKind.IDENTITY}, 1), ({PredicateKind.HIERARCHY}, 0)]
+)
 def test_predicate_kinds_filter_edges(mock_cdm_kg: KnowledgeGraph, kinds, expected) -> None:
     edges = mock_cdm_kg.edges(
         concept_ids=900001,

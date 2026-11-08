@@ -14,24 +14,8 @@ The queries cover:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Literal, Union, cast
 from datetime import date
-
-from sqlalchemy import (
-    and_,
-    case,
-    exists,
-    func,
-    literal,
-    or_,
-    select,
-    Connection,
-    Engine,
-    Table,
-)
-from sqlalchemy.orm import aliased
-from sqlalchemy.sql import Select
-
+from typing import Literal, cast
 
 from omop_alchemy.backends import (
     resolve_backend,
@@ -44,6 +28,20 @@ from omop_alchemy.cdm.model.vocabulary import (
     Relationship,
 )
 from omop_alchemy.cdm.query import ConceptFilter
+from sqlalchemy import (
+    Connection,
+    Engine,
+    Table,
+    and_,
+    case,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+)
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql import Select
 
 from ..extensions.omop_alchemy import RelationshipMapping
 
@@ -135,7 +133,7 @@ def q_concept_view(concept_id: int) -> Select:
     ).where(Concept.concept_id == concept_id)
 
 
-def q_concept_views(concept_ids: Tuple[int, ...], sort: bool = True) -> Select:
+def q_concept_views(concept_ids: tuple[int, ...], sort: bool = True) -> Select:
     """
     Query for multiple concepts by their IDs.
 
@@ -228,7 +226,7 @@ def q_concept_synonym() -> Select:
 
 def q_concept_name_match(
     query_concept_name: str,
-    search_constraint: Optional[ConceptFilter] = None,
+    search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -249,23 +247,17 @@ def q_concept_name_match(
     Select
         The query statement.
     """
-    name_expr = (
-        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
-    )
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
     if synonym:
         base_stmt = q_concept_synonym().where(
             func.lower(name_expr) == func.lower(query_concept_name)
         )
     else:
-        base_stmt = q_concept_name().where(
-            func.lower(name_expr) == func.lower(query_concept_name)
-        )
+        base_stmt = q_concept_name().where(func.lower(name_expr) == func.lower(query_concept_name))
     if search_constraint:
         if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError(
-                "search_constraint must be an instance of ConceptFilter"
-            )
+            raise TypeError("search_constraint must be an instance of ConceptFilter")
         base_stmt = search_constraint.apply(base_stmt)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
@@ -274,7 +266,7 @@ def q_concept_name_match(
 
 def q_concept_name_ilike(
     query_concept_name: str,
-    search_constraint: Optional[ConceptFilter] = None,
+    search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -295,24 +287,18 @@ def q_concept_name_ilike(
     Select
         The query statement.
     """
-    name_expr = (
-        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
-    )
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
     if "%" in query_concept_name:
         raise ValueError("query_concept_name should not contain wildcards like '%'.")
 
     if synonym:
-        base_stmt = q_concept_synonym().where(
-            name_expr.ilike(f"%{query_concept_name}%")
-        )
+        base_stmt = q_concept_synonym().where(name_expr.ilike(f"%{query_concept_name}%"))
     else:
         base_stmt = q_concept_name().where(name_expr.ilike(f"%{query_concept_name}%"))
     if search_constraint:
         if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError(
-                "search_constraint must be an instance of ConceptFilter"
-            )
+            raise TypeError("search_constraint must be an instance of ConceptFilter")
         base_stmt = search_constraint.apply(base_stmt)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
@@ -323,7 +309,7 @@ def q_concept_name_fulltext(
     query_concept_name: str,
     *,
     engine: Engine | Connection,
-    search_constraint: Optional[ConceptFilter] = None,
+    search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -354,12 +340,12 @@ def q_concept_name_fulltext(
     FullTextError
         If the stored tsvector column is missing.
     """
-    name_expr = (
-        Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
-    )
+    name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
     target_table = Concept_Synonym if synonym else Concept
     stmt = q_concept_synonym() if synonym else q_concept_name()
-    vector = resolve_backend(engine).fulltext_vector_column(engine, cast(Table, target_table.__table__))
+    vector = resolve_backend(engine).fulltext_vector_column(
+        engine, cast(Table, target_table.__table__)
+    )
     query = func.plainto_tsquery("english", query_concept_name)
 
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
@@ -369,9 +355,7 @@ def q_concept_name_fulltext(
 
     if sort:
         stmt = stmt.order_by(
-            *_concept_match_order_terms(
-                name_expr, rank_expr=func.ts_rank(vector, query)
-            )
+            *_concept_match_order_terms(name_expr, rank_expr=func.ts_rank(vector, query))
         )
 
     return stmt
@@ -438,11 +422,11 @@ def q_all_predicates_with_ancestry() -> Select:
 
 
 def q_edges(
-    concept_ids: Union[Tuple[int, ...], int],
+    concept_ids: tuple[int, ...] | int,
     direction: Literal["in", "out"],
-    predicate_ids: Optional[frozenset[str]] = None,
+    predicate_ids: frozenset[str] | None = None,
     active_only: bool = False,
-    on: Optional[date] = None,
+    on: date | None = None,
     within_domain: bool = False,
 ) -> Select:
     """Query edges for a batch of concept IDs, in either direction.
@@ -517,9 +501,9 @@ def q_ancestors(concept_id: int) -> Select:
 
 
 def q_relationships(
-    subjects: Optional[tuple[int, ...]],
-    predicates: Optional[tuple[str, ...]],
-    objects: Optional[tuple[int, ...]],
+    subjects: tuple[int, ...] | None,
+    predicates: tuple[str, ...] | None,
+    objects: tuple[int, ...] | None,
 ) -> Select:
 
     stmt = select(
@@ -552,9 +536,7 @@ def q_entities(
     ).apply(select(Concept.concept_id))
 
 
-def q_concept_filtered(
-    vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_concept_filtered(vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """Helper query for selecting standard concepts filtered by vocab/domain."""
     return ConceptFilter(
         domains=(domain_id,) if domain_id else None,
@@ -570,9 +552,7 @@ def q_concept_synonym_filtered(concept_id: int) -> Select:
     return stmt.where(Concept_Synonym.concept_id == concept_id)
 
 
-def q_singletons(
-    *, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_singletons(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """
     Query for singleton concepts (no parents, no children).
     Uses NOT EXISTS subqueries on the ancestor table.
@@ -600,9 +580,7 @@ def q_singletons(
     )
 
 
-def q_roots(
-    *, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_roots(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """Query for root concepts (no parents)."""
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
     return stmt.where(
@@ -617,9 +595,7 @@ def q_roots(
     )
 
 
-def q_leaves(
-    *, vocabulary_id: Optional[str] = None, domain_id: Optional[str] = None
-) -> Select:
+def q_leaves(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
     """Query for leaf concepts (no children)."""
     stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
     return stmt.where(
@@ -641,11 +617,7 @@ def q_concept_domain_ids() -> Select:
 
 def q_concept_vocabulary_ids() -> Select:
     """Query distinct vocabulary IDs."""
-    return (
-        select(Concept.vocabulary_id)
-        .distinct()
-        .where(Concept.vocabulary_id.is_not(None))
-    )
+    return select(Concept.vocabulary_id).distinct().where(Concept.vocabulary_id.is_not(None))
 
 
 def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
@@ -666,7 +638,7 @@ def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:
 
 
 def q_concept_potential_ancestors_batch(
-    child_ids: Tuple[int, ...], parent_ids: Tuple[int, ...]
+    child_ids: tuple[int, ...], parent_ids: tuple[int, ...]
 ) -> Select:
     """
     Check which of several candidate parents are ancestors of one or more children.
@@ -691,7 +663,7 @@ def q_concept_potential_ancestors_batch(
     )
 
 
-def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
+def q_concept_num_ancestors(concept_ids: tuple[int, ...]) -> Select:
     """
     Count the number of ancestors for each concept in the batch.
     """
@@ -710,7 +682,7 @@ def q_concept_num_ancestors(concept_ids: Tuple[int, ...]) -> Select:
     )
 
 
-def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
+def q_concept_num_descendants(concept_ids: tuple[int, ...]) -> Select:
     """
     Count the number of descendants for each concept in the batch.
     """
@@ -719,9 +691,7 @@ def q_concept_num_descendants(concept_ids: Tuple[int, ...]) -> Select:
             Concept.concept_id,
             func.count(Concept_Ancestor.descendant_concept_id).label("num_descendants"),
         )
-        .join(
-            Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id
-        )
+        .join(Concept_Ancestor, Concept.concept_id == Concept_Ancestor.ancestor_concept_id)
         .where(Concept.concept_id.in_(concept_ids))
         .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)

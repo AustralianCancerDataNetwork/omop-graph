@@ -11,17 +11,17 @@ Renderers auto-select HTML / text / Mermaid depending on environment.
 """
 
 from .auto import (
+    bind_default_renderers,
+    render_explained_path,
+    render_path,
     render_subgraph,
     render_trace,
-    render_path,
-    render_explained_path,
-    bind_default_renderers,
 )
 
 __all__ = [
+    "bind_default_renderers",
+    "render_explained_path",
+    "render_path",
     "render_subgraph",
     "render_trace",
-    "render_path",
-    "render_explained_path",
-    "bind_default_renderers",
 ]
