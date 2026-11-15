@@ -30,7 +30,7 @@ from oaklib.interfaces.text_annotator_interface import nen_annotation
 from oaklib.resource import OntologyResource
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 
 from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import PredicateKind
@@ -406,6 +406,10 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                     yield self._concept_curie(cid)
             except NoResultFound:
                 pass
+            except MultipleResultsFound:
+                logger.warning(
+                    "Skipping ambiguous identifier %r: several concepts match", search_term
+                )
 
 
 class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
