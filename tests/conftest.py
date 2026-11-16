@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from oa_configurator import Dialect
 
 pytest_plugins = ("fixtures.mock_cdm",)
 
@@ -33,15 +34,12 @@ def pg_db(request):
 
 
 @pytest.fixture
-def duckdb_db():
+def duckdb_db(request):
     """Disposable local DuckDB CDM; no service or config is needed."""
-    # The DuckDB integration test creates only minimal test tables, avoiding
-    # shared cyclic ORM metadata; don't apply isolated_test_database's broad
-    # db_dialect guard, which would exclude it from the default suite.
     with _isolated_cdm_test_database(
-        None,
+        request,
         "test_cdm_db_duckdb",
-        dialect="duckdb",
+        dialect=Dialect.DUCKDB,
     ) as db:
         yield db
 
