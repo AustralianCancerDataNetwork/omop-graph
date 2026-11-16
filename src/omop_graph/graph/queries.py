@@ -453,7 +453,9 @@ def q_edges(
     direction : {"in", "out"}
         Whether to query incoming or outgoing edges for ``concept_ids``.
     ordered : bool, default=False
-        Order by source concept, target concept, and relationship ID.
+        If True, order by source concept, target concept, and relationship ID
+        to make results reproducible. If False, row order is unspecified and
+        may differ between runs and backends.
     """
     if isinstance(concept_ids, int):
         concept_ids = (concept_ids,)

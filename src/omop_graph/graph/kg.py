@@ -611,8 +611,10 @@ class KnowledgeGraph(GraphBackend):
 
         A *predicate_kinds* filter is applied in SQL as the relationship IDs
         of those kinds. Edges whose relationship has no classification are
-        skipped. Set ``ordered=True`` to order by source concept, target
-        concept, and relationship ID.
+        skipped. If ``ordered=True``, edges are ordered by source concept,
+        target concept, and relationship ID, making results reproducible. If
+        ``ordered=False``, row order is unspecified and may differ between
+        runs and backends.
         """
         if predicate_kinds:
             kind_ids = frozenset(
