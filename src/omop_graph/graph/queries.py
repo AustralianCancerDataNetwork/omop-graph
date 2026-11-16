@@ -428,6 +428,7 @@ def q_edges(
     active_only: bool = False,
     on: date | None = None,
     within_domain: bool = False,
+    ordered: bool = False,
 ) -> Select:
     """Query edges for a batch of concept IDs, in either direction.
 
@@ -435,6 +436,10 @@ def q_edges(
     ----------
     direction : {"in", "out"}
         Whether to query incoming or outgoing edges for ``concept_ids``.
+    ordered : bool, default=False
+        If True, order by source concept, target concept, and relationship ID
+        to make results reproducible. If False, row order is unspecified and
+        may differ between runs and backends.
     """
     if isinstance(concept_ids, int):
         concept_ids = (concept_ids,)
@@ -473,6 +478,13 @@ def q_edges(
 
     if predicate_ids:  # Exact ID's
         stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
+
+    if ordered:
+        stmt = stmt.order_by(
+            Concept_Relationship.concept_id_1,
+            Concept_Relationship.concept_id_2,
+            Concept_Relationship.relationship_id,
+        )
 
     return stmt
 
