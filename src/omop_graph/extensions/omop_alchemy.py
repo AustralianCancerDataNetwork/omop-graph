@@ -1,14 +1,14 @@
 # Extension to omop-alchemy package
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from orm_loader.helpers import Base, create_tables
+from orm_loader.helpers import create_tables
 from omop_alchemy.cdm.base import (
     ReferenceTable,
-    cdm_table,
-    CDMTableBase,
+    CDMAuxiliaryTableBase,
     merge_table_args,
     role_fk,
 )
+from omop_alchemy.config import CDM_AUXILIARY_SCHEMA
 from oa_configurator import ResolvedCDMDatabase, Role
 
 from enum import Enum
@@ -28,12 +28,12 @@ def _predicate_kind_values(enum_cls: type[PredicateKind]) -> list[str]:
     return [member.value for member in enum_cls]
 
 
-def _predicate_kind_enum() -> sa.Enum:
+def _predicate_kind_enum(*, schema: str) -> sa.Enum:
     """Use a varchar-backed enum on DuckDB and the native enum elsewhere."""
     return sa.Enum(
         PredicateKind,
         values_callable=_predicate_kind_values,
-        schema=Role.PRIMARY.value,
+        schema=schema,
     ).with_variant(
         sa.Enum(
             PredicateKind,
@@ -45,18 +45,17 @@ def _predicate_kind_enum() -> sa.Enum:
     )
 
 
-@cdm_table
-class RelationshipClass(ReferenceTable, CDMTableBase, Base):
+class RelationshipClass(ReferenceTable, CDMAuxiliaryTableBase):
     """
-    Extensions table: Defines the semantic categories (Parent)
+    Auxiliary table: Defines the semantic categories (Parent)
     and entity types (Child).
     """
 
     __tablename__ = "relationship_class"
-    # Must match RelationshipMapping's schema, or SQLAlchemy silently builds a second, unlinked Table object.
-    __table_args__ = merge_table_args({"schema": Role.PRIMARY.value})
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
-        _predicate_kind_enum(), primary_key=True
+        # Must match CDMAuxiliaryTableBase's own schema to ensure that
+        # schema_translate_map routes the enum correctly.
+        _predicate_kind_enum(schema=CDM_AUXILIARY_SCHEMA), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(
         sa.String(20), primary_key=True
@@ -66,10 +65,9 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     inference: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
 
 
-@cdm_table
-class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
+class RelationshipMapping(ReferenceTable, CDMAuxiliaryTableBase):
     """
-    Extensions table: Maps standard OMOP relationship_ids to
+    Auxiliary table: Maps standard OMOP relationship_ids to
     their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses  .
     """
 
@@ -80,32 +78,35 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
         primary_key=True,
     )
     predicate_kind: so.Mapped[PredicateKind] = so.mapped_column(
-        _predicate_kind_enum(), primary_key=True
+        # Must match CDMAuxiliaryTableBase's own schema to ensure that
+        # schema_translate_map routes the enum correctly.
+        _predicate_kind_enum(schema=CDM_AUXILIARY_SCHEMA), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(
         sa.String(20), primary_key=True
     )
 
-    # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
+    # Qualified string to RelationshipClass as it lives in the same 
+    # fixed auxiliary schema (CDMAuxiliaryTableBase's default).
     __table_args__ = merge_table_args(
         sa.ForeignKeyConstraint(
             ["predicate_kind", "predicate_subkind"],
             [
-                role_fk(Role.PRIMARY, "relationship_class.predicate_kind"),
-                role_fk(Role.PRIMARY, "relationship_class.predicate_subkind"),
+                f"{CDM_AUXILIARY_SCHEMA}.relationship_class.predicate_kind",
+                f"{CDM_AUXILIARY_SCHEMA}.relationship_class.predicate_subkind",
             ],
             name="fk_rel_mapping_to_rel_class",
         ),
-        {"schema": Role.PRIMARY.value},
+        {"schema": CDM_AUXILIARY_SCHEMA},
     )
 
 
-def create_extension_tables(
+def create_auxiliary_tables(
     connection: sa.Connection,
     *,
     resolved: ResolvedCDMDatabase,
 ) -> None:
-    """Create the extension tables as they can physically exist on *resolved*.
+    """Create the auxiliary tables as they can physically exist on *resolved*.
 
     Goes through ``orm_loader``'s ``create_tables``: on a split deployment the
     foreign key to the vocabulary is left out, since no dialect can express a

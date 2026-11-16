@@ -22,6 +22,7 @@ from sqlalchemy.orm import sessionmaker
 from orm_loader.helpers import Base
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
+from omop_alchemy.config import CDM_AUXILIARY_SCHEMA_CLAIM
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -54,7 +55,11 @@ ATTRIBUTE_EDGES = {
 @pytest.fixture(scope="module")
 def procedure_kg() -> Iterator[KnowledgeGraph]:
     engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
+        schema_translate_map={
+            "primary": None,
+            "vocab": None,
+            CDM_AUXILIARY_SCHEMA_CLAIM.schema_tag: None,
+        }
     )
     tables = cast(
         list[sa.Table],

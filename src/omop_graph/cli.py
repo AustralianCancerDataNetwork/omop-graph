@@ -9,7 +9,12 @@ import sqlalchemy as sa
 import typer
 import sqlalchemy.orm as so
 
-from oa_configurator import ResolvedCDMDatabase, open_connection
+from oa_configurator import (
+    ResolvedCDMDatabase,
+    claimed_schema_tags,
+    open_connection,
+    physical_schema_of,
+)
 
 from orm_loader.backends import STAGING_SCHEMA, resolve_backend
 from orm_loader.helpers.metadata import Base
@@ -20,7 +25,7 @@ from omop_graph.db.session import resolve_cdm_database, open_cdm_sessions
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
-    create_extension_tables,
+    create_auxiliary_tables,
 )
 from omop_graph.cli_utils import populate_test_data
 
@@ -134,7 +139,7 @@ def _load_relationship_classification(
     engine: sa.Engine,
     relationship_ids: set[str],
 ) -> None:
-    """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
+    """Body of :func:`relationship_classification`, on *engine*, which hosts the auxiliary tables."""
     pred_class_dir_pl = (
         Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     )
@@ -206,7 +211,19 @@ def _load_relationship_classification(
         subset=["relationship_id", "predicate_kind", "predicate_subkind"]
     )
 
-    loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)
+    # The auxiliary schema is a caller-claimed tag, not one of resolved's own
+    # configured Role tags, so a dialect that cannot cross schemas (DuckDB)
+    # needs its physical name explicitly to classify the FK to vocab as
+    # feasible or deferred. Same pattern as
+    # MaintenanceContext._foreign_keys_creatable()/create_tables(): derive it
+    # from every tag claimed on the engine, not just the one in play here.
+    physical_schemas = {
+        tag: physical_schema_of(engine, schema_tag=tag) for tag in claimed_schema_tags(engine)
+    }
+
+    loader_backend = resolve_backend(
+        engine, staging_schema_tag=STAGING_SCHEMA, physical_schemas=physical_schemas
+    )
 
     drop_staging_sql = (
         sa.text(
@@ -233,7 +250,7 @@ def _load_relationship_classification(
     ]
     with open_connection(engine) as connection:
         Base.metadata.drop_all(bind=connection, tables=tables_to_drop, checkfirst=True)  # type: ignore
-        create_extension_tables(connection, resolved=resolved)
+        create_auxiliary_tables(connection, resolved=resolved)
 
     with tempfile.TemporaryDirectory() as tmp_dir, so.Session(engine) as session:
         for model, df in zip(
@@ -253,12 +270,16 @@ def _load_relationship_classification(
                 merge_strategy="replace",
                 staging_schema_tag=STAGING_SCHEMA,
                 resolved=resolved,
+                physical_schemas=physical_schemas,
             )
             session.commit()
 
         for model in (RelationshipClass, RelationshipMapping):
             model.validate_foreign_keys(  # ty: ignore[invalid-argument-type]
-                session, staging_schema_tag=STAGING_SCHEMA, resolved=resolved
+                session,
+                staging_schema_tag=STAGING_SCHEMA,
+                resolved=resolved,
+                physical_schemas=physical_schemas,
             )
 
 
