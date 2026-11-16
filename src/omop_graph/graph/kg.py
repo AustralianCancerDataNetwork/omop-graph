@@ -605,14 +605,14 @@ class KnowledgeGraph(GraphBackend):
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = False,
-        stream: bool = False,
+        ordered: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
 
         A *predicate_kinds* filter is applied in SQL as the relationship IDs
         of those kinds. Edges whose relationship has no classification are
-        skipped. Set ``stream=True`` to fetch rows in batches instead of
-        buffering the full result set.
+        skipped. Set ``ordered=True`` to order by source concept, target
+        concept, and relationship ID.
         """
         if predicate_kinds:
             kind_ids = frozenset(
@@ -631,24 +631,17 @@ class KnowledgeGraph(GraphBackend):
             active_only=active_only,
             on=on,
             within_domain=within_domain,
+            ordered=ordered,
         )
-        result = (
-            session.execute(stmt, execution_options={"yield_per": 1000})
-            if stream
-            else session.execute(stmt)
-        )
-        try:
-            for row in result:
-                mapping = self._relationship_mapping.get(row.predicate_id)
-                if mapping is None:
-                    continue
-                yield EdgeView(
-                    **row._mapping,
-                    predicate_kind=mapping.predicate_kind,
-                    predicate_subkind=mapping.predicate_subkind,
-                )
-        finally:
-            result.close()
+        for row in session.execute(stmt):
+            mapping = self._relationship_mapping.get(row.predicate_id)
+            if mapping is None:
+                continue
+            yield EdgeView(
+                **row._mapping,
+                predicate_kind=mapping.predicate_kind,
+                predicate_subkind=mapping.predicate_subkind,
+            )
 
     def specificity(self, concept_id: int) -> float:
         """
