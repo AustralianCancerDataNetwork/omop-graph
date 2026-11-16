@@ -12,6 +12,7 @@ Algorithms that explore the graph structure (e.g., "Find all neighbors within 3 
 from __future__ import annotations
 
 from collections import deque
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple
@@ -123,6 +124,12 @@ def traverse(
     """
     Perform a Breadth-First Search (BFS) traversal starting from seed nodes.
 
+    When ``max_nodes`` is reached, which nodes fill the budget is deterministic
+    because edges are read in key order. Queued nodes inside the budget are not
+    expanded, so edges those later expansions could have found can be absent.
+    When the seeds alone reach the budget, no seed is expanded and the result
+    has no edges.
+
     Parameters
     ----------
     kg : KnowledgeGraph
@@ -136,7 +143,7 @@ def traverse(
     on : date, optional
         Filter for edges active on this date.
     max_nodes : int, optional
-        Stop after visiting this many unique nodes.
+        Stop after discovering this many unique nodes.
     trace : bool
         If True, return a GraphTrace object.
 
@@ -149,23 +156,22 @@ def traverse(
     # (Python 3.7+ dict guarantees insertion order)
     unique_seeds = tuple(dict.fromkeys(seeds))
 
-    visited = set()
+    # Seeds precede discovered neighbours in BFS order. Keep only the seeds
+    # that fit the budget, matching the order in which the old visited set
+    # reached its cap.
+    budgeted_seeds = unique_seeds[: max(max_nodes, 1)] if max_nodes else unique_seeds
+    discovered = set(budgeted_seeds)
     edges_out: List[EdgeView] = []
     trace_steps: List[TraceStep] = []
 
     # Queue stores (concept_id, depth)
-    q = deque((s, 0) for s in unique_seeds)
+    q = deque((s, 0) for s in budgeted_seeds)
     terminated = None
 
     while q:
         node, depth = q.popleft()
 
-        if node in visited:
-            continue
-
-        visited.add(node)
-
-        if max_nodes and len(visited) >= max_nodes:
+        if max_nodes and len(discovered) >= max_nodes:
             terminated = "max_nodes"
             break
 
@@ -173,10 +179,8 @@ def traverse(
             continue
 
         expanded: List[EdgeView] = []
-
-        # Iterate over outgoing edges
         with kg.session_factory() as session:
-            for e in kg.iter_edges(
+            edge_iter = kg.iter_edges(
                 session=session,
                 concept_ids=node,
                 direction="out",
@@ -185,31 +189,32 @@ def traverse(
                 else None,
                 active_only=True,
                 on=on,
-            ):
-                # Only add edges to the output; we decide to traverse in the next block
-                expanded.append(e)
-                edges_out.append(e)
+                ordered=True,
+            )
+            with closing(edge_iter):
+                for edge in edge_iter:
+                    if edge.object_id not in discovered:
+                        discovered.add(edge.object_id)
+                        q.append((edge.object_id, depth + 1))
 
-                nxt = e.object_id
-                # Optimization: Don't add to queue if already visited
-                if nxt not in visited:
-                    q.append((nxt, depth + 1))
+                    expanded.append(edge)
+                    edges_out.append(edge)
+                    if max_nodes and len(discovered) >= max_nodes:
+                        terminated = "max_nodes"
+                        break
 
         if trace:
             trace_steps.append(
                 TraceStep(depth=depth, node=node, expanded_edges=tuple(expanded))
             )
+        if terminated == "max_nodes":
+            break
 
-    # Deduplicate edges and drop any that target an unvisited node.
-    # The latter can happen when max_nodes terminates the loop while neighbour
-    # nodes are still queued but never expanded, which would break the invariant
-    # that every edge in the Subgraph is closed over its node set.
     dedup = {
         (e.subject_id, e.predicate_id, e.object_id): e
         for e in edges_out
-        if e.object_id in visited
     }
-    sg = Subgraph(nodes=frozenset(visited), edges=tuple(dedup.values()))
+    sg = Subgraph(nodes=frozenset(discovered), edges=tuple(dedup.values()))
 
     graph_trace = (
         GraphTrace(seeds=unique_seeds, steps=trace_steps, terminated_reason=terminated)

@@ -605,12 +605,16 @@ class KnowledgeGraph(GraphBackend):
         active_only: bool = True,
         on: Optional[date] = None,
         within_domain: bool = False,
+        ordered: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
 
         A *predicate_kinds* filter is applied in SQL as the relationship IDs
         of those kinds. Edges whose relationship has no classification are
-        skipped.
+        skipped. If ``ordered=True``, edges are ordered by source concept,
+        target concept, and relationship ID, making results reproducible. If
+        ``ordered=False``, row order is unspecified and may differ between
+        runs and backends.
         """
         if predicate_kinds:
             kind_ids = frozenset(
@@ -629,6 +633,7 @@ class KnowledgeGraph(GraphBackend):
             active_only=active_only,
             on=on,
             within_domain=within_domain,
+            ordered=ordered,
         )
         for row in session.execute(stmt):
             mapping = self._relationship_mapping.get(row.predicate_id)
