@@ -1,19 +1,19 @@
+from .resolver_pipeline import ResolverPipeline
 from .resolvers import (
     CandidateHit,
+    CandidateResolver,
+    EmbeddingResolver,
     ExactLabelResolver,
     ExactSynonymResolver,
     PartialLabelResolver,
-    CandidateResolver,
-    EmbeddingResolver,
 )
-from .resolver_pipeline import ResolverPipeline
 
 __all__ = [
     "CandidateHit",
+    "CandidateResolver",
+    "EmbeddingResolver",
     "ExactLabelResolver",
     "ExactSynonymResolver",
     "PartialLabelResolver",
-    "CandidateResolver",
     "ResolverPipeline",
-    "EmbeddingResolver",
 ]

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from fixtures.mock_cdm import CONCEPT_META_ID, PARENT_CANCER_ID
+
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import find_standard_paths
 from omop_graph.reasoning.resolvers.resolvers import CandidateHit
-from fixtures.mock_cdm import PARENT_CANCER_ID, CONCEPT_META_ID
+
 
 def test_get_potential_ancestors_batch_returns_only_real_ancestors(
     mock_cdm_kg: KnowledgeGraph,

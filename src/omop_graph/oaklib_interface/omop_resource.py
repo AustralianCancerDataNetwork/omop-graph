@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from oaklib.resource import OntologyResource
 
@@ -22,9 +21,8 @@ class OMOPOntologyResource(OntologyResource):
         Whether the resource is read-only. Defaults to True.
     """
 
-    slug: Optional[str] = None  # type: ignore[assignment]
-    scheme: str = "omop"  # type: ignore[assignment]
-    readonly: bool = True  # type: ignore[assignment]
+    scheme: str | None = "omop"
+    readonly: bool | None = True
 
     def valid(self) -> bool:
         """

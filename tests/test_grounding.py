@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from fixtures.mock_cdm import PARENT_CANCER_ID
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.grounding import (
     GroundingConstraints,
@@ -17,7 +18,6 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
-from fixtures.mock_cdm import PARENT_CANCER_ID
 
 
 class TestQueryTextWithContext:

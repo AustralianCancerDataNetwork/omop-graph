@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import date
+from typing import cast
+
 from sqlalchemy.dialects import postgresql
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeView
+from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.queries import q_edges
 from omop_graph.graph.traverse import traverse
 
@@ -42,10 +45,7 @@ class FakeKnowledgeGraph:
 
 
 def _edge_keys(subgraph) -> set[tuple[int, str, int]]:
-    return {
-        (edge.subject_id, edge.predicate_id, edge.object_id)
-        for edge in subgraph.edges
-    }
+    return {(edge.subject_id, edge.predicate_id, edge.object_id) for edge in subgraph.edges}
 
 
 def _distances(adjacency: dict[int, tuple[int, ...]], seed: int) -> dict[int, int]:
@@ -63,7 +63,7 @@ def test_uncapped_traversal_keeps_existing_nodes_and_edges() -> None:
     kg = FakeKnowledgeGraph({1: (2, 3), 2: (4,), 3: (5,), 4: (6,), 5: ()})
 
     subgraph, trace = traverse(
-        kg,
+        cast(KnowledgeGraph, kg),
         seeds=(1,),
         predicate_kinds={PredicateKind.HIERARCHY},
         max_depth=2,
@@ -88,7 +88,7 @@ def test_capped_traversal_respects_node_depth_and_edge_closure() -> None:
     kg = FakeKnowledgeGraph(adjacency)
 
     subgraph, trace = traverse(
-        kg,
+        cast(KnowledgeGraph, kg),
         seeds=(1,),
         predicate_kinds={PredicateKind.HIERARCHY},
         max_depth=2,
@@ -114,7 +114,7 @@ def test_fanout_traversal_stops_and_closes_edge_iterator_at_node_budget() -> Non
     kg = FakeKnowledgeGraph({1: tuple(range(2, fanout + 2))})
 
     subgraph, _ = traverse(
-        kg,
+        cast(KnowledgeGraph, kg),
         seeds=(1,),
         predicate_kinds={PredicateKind.HIERARCHY},
         max_depth=2,
@@ -132,7 +132,7 @@ def test_capped_traversal_omits_edges_from_unexpanded_nodes() -> None:
     kg = FakeKnowledgeGraph({1: (2, 3), 2: (3,)})
 
     subgraph, _ = traverse(
-        kg,
+        cast(KnowledgeGraph, kg),
         seeds=(1,),
         predicate_kinds={PredicateKind.HIERARCHY},
         max_depth=2,
@@ -149,7 +149,7 @@ def test_capped_traversal_orders_edges_before_filling_node_budget() -> None:
     kg = FakeKnowledgeGraph({1: (9, 2, 5)})
 
     subgraph, _ = traverse(
-        kg,
+        cast(KnowledgeGraph, kg),
         seeds=(1,),
         predicate_kinds={PredicateKind.HIERARCHY},
         max_depth=2,
@@ -165,7 +165,7 @@ def test_seeds_at_node_budget_are_not_expanded() -> None:
     kg = FakeKnowledgeGraph({1: (2,), 2: (1,)})
 
     subgraph, _ = traverse(
-        kg,
+        cast(KnowledgeGraph, kg),
         seeds=(1, 2),
         predicate_kinds={PredicateKind.HIERARCHY},
         max_depth=2,
@@ -188,8 +188,7 @@ def test_q_edges_ordering_is_opt_in_and_total() -> None:
     )
 
     ordered_columns = [
-        column.rsplit(".", 1)[-1]
-        for column in ordered_sql.partition("ORDER BY ")[2].split(", ")
+        column.rsplit(".", 1)[-1] for column in ordered_sql.partition("ORDER BY ")[2].split(", ")
     ]
     assert ordered_columns == ["concept_id_1", "concept_id_2", "relationship_id"]
     assert "ORDER BY" not in unordered_sql

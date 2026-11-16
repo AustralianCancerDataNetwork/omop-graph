@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, cast
+from typing import cast
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
@@ -17,7 +17,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
 @dataclass
 class _Case:
     text: str
-    hits: Dict[str, List[int]]
+    hits: dict[str, list[int]]
 
 
 class _KG:

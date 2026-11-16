@@ -17,31 +17,27 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
+from omop_graph.extensions.emb import (
+    HAS_OMOP_EMB,
+    semantic_similarity,
+    try_get_embedding_writer_interface,
+)
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import (
     StandardConcept,
     find_standard_paths,
 )
-from omop_graph.graph.scoring import (
-    StandardConceptWithScore, 
-    score_standard_concepts
-)
+from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
     CandidateHit,
-    ResolverPipeline,
     EmbeddingResolver,
-)
-from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.extensions.emb import (
-    try_get_embedding_writer_interface,
-    semantic_similarity,
-    HAS_OMOP_EMB,
+    ResolverPipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,8 +68,8 @@ class GroundingConstraints:
         expanding candidates to unrelated concepts and diluting grounding results.
     """
 
-    parent_ids: Optional[Tuple[int, ...]]
-    search_constraint: Optional[ConceptFilter]
+    parent_ids: tuple[int, ...] | None
+    search_constraint: ConceptFilter | None
     max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
@@ -85,7 +81,7 @@ class GroundingConstraints:
             )
 
 
-def _query_text_with_context(query: str, context: Optional[str]) -> str:
+def _query_text_with_context(query: str, context: str | None) -> str:
     """Fold optional free-form context into the text used for on-demand query embedding.
 
     Notes
@@ -114,11 +110,11 @@ def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
     query: str,
-    query_embedding: Optional[np.ndarray],
+    query_embedding: np.ndarray | None,
     constraints: GroundingConstraints,
-    max_candidates: Optional[int] = None,
-    context: Optional[str] = None,
-) -> List[StandardConceptWithScore]:
+    max_candidates: int | None = None,
+    context: str | None = None,
+) -> list[StandardConceptWithScore]:
     """
     Ground a text string to a ranked list of standard OMOP concepts.
 
@@ -146,7 +142,7 @@ def ground_term(
     list[StandardConceptWithScore]
         A list of standard concepts sorted by their total score (descending).
     """
-    standard_concepts: List[StandardConcept] = []
+    standard_concepts: list[StandardConcept] = []
 
     search_constraints = constraints.search_constraint
     if search_constraints is not None:
@@ -154,7 +150,9 @@ def ground_term(
 
     # Only do on demand embedding calculation if available and needed (having a EmbeddingResolver).
     # Falls back to None to disable embedding-based features if not available or not required.
-    require_embedding = HAS_OMOP_EMB and any(isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers)
+    require_embedding = HAS_OMOP_EMB and any(
+        isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers
+    )
 
     if query_embedding is None and require_embedding:
         embedding_writer = try_get_embedding_writer_interface(kg)
@@ -218,11 +216,9 @@ def ground_term(
         standard_concepts.extend(candidate_standard_concepts)
 
     if not standard_concepts:
-        logger.info(
-            f"No standard concepts found for '{query}' after hierarchy validation."
-        )
+        logger.info(f"No standard concepts found for '{query}' after hierarchy validation.")
         return []
-    
+
     # Only calculate nearest concept matches for the embedding resolver matches
     # split is done that semantic similarity has less concepts to search for
     matched_standard_concepts_for_embedding = [
@@ -230,13 +226,13 @@ def ground_term(
     ]
     if matched_standard_concepts_for_embedding:
         if query_embedding is None:
-            raise RuntimeError("Query embedding cannot be None if the EmbeddingResolver is used and returned matches.")
-        nearest_concept_matches_for_standard_embedding_concepts = (
-            semantic_similarity(
-                kg=kg, 
-                standard_concepts=matched_standard_concepts_for_embedding, 
-                query_embedding=query_embedding
+            raise RuntimeError(
+                "Query embedding cannot be None if the EmbeddingResolver is used and returned matches."
             )
+        nearest_concept_matches_for_standard_embedding_concepts = semantic_similarity(
+            kg=kg,
+            standard_concepts=matched_standard_concepts_for_embedding,
+            query_embedding=query_embedding,
         )
         embedding_standard_concepts_with_score = score_standard_concepts(
             text=query,
@@ -247,16 +243,20 @@ def ground_term(
     else:
         embedding_standard_concepts_with_score = []
 
-    # Score the other standard concepts that were not matched via embedding resolver 
+    # Score the other standard concepts that were not matched via embedding resolver
     non_embedding_standard_concepts_with_score = score_standard_concepts(
         text=query,
-        standard_concepts=tuple(sc for sc in standard_concepts if sc.match_kind != LabelMatchKind.EMBEDDING),
+        standard_concepts=tuple(
+            sc for sc in standard_concepts if sc.match_kind != LabelMatchKind.EMBEDDING
+        ),
         kg=kg,
         nearest_concept_matches=None,  # No embedding-based scoring for non-embedding matches
     )
 
     # combine the two different ones
-    standard_concepts_with_score = embedding_standard_concepts_with_score + non_embedding_standard_concepts_with_score
+    standard_concepts_with_score = (
+        embedding_standard_concepts_with_score + non_embedding_standard_concepts_with_score
+    )
 
     best_by_concept_id: dict[int, StandardConceptWithScore] = {}
     for concept in standard_concepts_with_score:
@@ -267,21 +267,17 @@ def ground_term(
     deduped_ranked = sorted(
         best_by_concept_id.values(), key=lambda sc: sc.total_score, reverse=True
     )
-    return (
-        deduped_ranked[:max_candidates]
-        if max_candidates is not None
-        else deduped_ranked
-    )
+    return deduped_ranked[:max_candidates] if max_candidates is not None else deduped_ranked
 
 
 def find_standard_concepts(
     kg: KnowledgeGraph,
     candidate: CandidateHit,
-    parent_ids: Optional[Tuple[int, ...]],
+    parent_ids: tuple[int, ...] | None,
     max_depth: int,
-    max_paths: Optional[int] = 3,
+    max_paths: int | None = 3,
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
-) -> List[StandardConcept]:
+) -> list[StandardConcept]:
     """
     Identify standard concepts related to a candidate, optionally satisfying parent
     constraints.

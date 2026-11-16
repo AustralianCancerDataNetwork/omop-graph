@@ -66,7 +66,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.extensions.omop_alchemy import PredicateKind
 
 constraints = GroundingConstraints(
-    parent_ids=(441484,),   # 'Clinical Finding' — only accept descendants of this ancestor
+    parent_ids=(441484,),  # 'Clinical Finding' — only accept descendants of this ancestor
     search_constraint=ConceptFilter(
         domains=("Condition",),
         vocabularies=("SNOMED",),
@@ -80,7 +80,7 @@ results = ground_term(
     resolver_pipeline=pipeline,
     kg=kg,
     query="chest pain",
-    query_embedding=None,   # pass a precomputed vector, or None to skip embedding-based scoring
+    query_embedding=None,  # pass a precomputed vector, or None to skip embedding-based scoring
     constraints=constraints,
 )
 ```

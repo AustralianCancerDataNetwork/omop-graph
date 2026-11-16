@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Optional
 from collections.abc import Generator
 from contextlib import contextmanager
+
 import sqlalchemy.orm as so
-from sqlalchemy.engine import Engine
 from oa_configurator import ResolvedCDMDatabase, Resolver
 from omop_alchemy.config import create_cdm_engines
 from omop_alchemy.cross_database import CDMSession, cdm_sessionmaker
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from omop_graph.config import OmopGraphConfig
 
 
-def resolve_cdm_database(name: Optional[str] = None) -> ResolvedCDMDatabase:
+def resolve_cdm_database(name: str | None = None) -> ResolvedCDMDatabase:
     """Resolve a CDM database from the active oa-configurator config.
 
     Parameters
@@ -44,7 +44,7 @@ def resolve_cdm_database(name: Optional[str] = None) -> ResolvedCDMDatabase:
 
 
 def cdm_session_factory(
-    name: Optional[str] = None, *, resolved: ResolvedCDMDatabase | None = None
+    name: str | None = None, *, resolved: ResolvedCDMDatabase | None = None
 ) -> sessionmaker[CDMSession]:
     """Read-only routed session factory on a CDM database from the active config.
 
@@ -65,9 +65,7 @@ def _create_cdm_sessions(
     resolved: ResolvedCDMDatabase, *, register_claims: bool
 ) -> tuple[sessionmaker[CDMSession], Engine, Engine]:
     """Build routed sessions and their owned engine pair through omop-alchemy."""
-    primary, vocab = create_cdm_engines(
-        resolved, register_claims=register_claims
-    )
+    primary, vocab = create_cdm_engines(resolved, register_claims=register_claims)
     return cdm_sessionmaker(resolved, primary=primary, vocab=vocab), primary, vocab
 
 
@@ -87,9 +85,7 @@ def open_cdm_sessions(
     ------
     sqlalchemy.orm.sessionmaker[CDMSession]
     """
-    cdm_sessions, primary, vocab = _create_cdm_sessions(
-        resolved, register_claims=register_claims
-    )
+    cdm_sessions, primary, vocab = _create_cdm_sessions(resolved, register_claims=register_claims)
     try:
         yield cdm_sessions
     finally:

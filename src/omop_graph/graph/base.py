@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from datetime import date
-from typing import Iterable, Optional, Literal
+from typing import Literal
+
 from sqlalchemy.orm import Session
 
 from ..extensions.omop_alchemy import PredicateKind
@@ -26,7 +29,7 @@ class GraphBackend(ABC):
     def predicate_name(self, relationship_id: str) -> str: ...
 
     @abstractmethod
-    def reverse_predicate_id(self, relationship_id: str) -> Optional[str]: ...
+    def reverse_predicate_id(self, relationship_id: str) -> str | None: ...
 
     @abstractmethod
     def iter_edges(
@@ -35,9 +38,9 @@ class GraphBackend(ABC):
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
         predicate_ids: frozenset[str] | None,
-        predicate_kinds: Optional[frozenset[PredicateKind]] = None,
+        predicate_kinds: frozenset[PredicateKind] | None = None,
         active_only: bool = True,
-        on: Optional[date] = None,
+        on: date | None = None,
         within_domain: bool = False,
     ) -> Iterable[EdgeView]:
         """

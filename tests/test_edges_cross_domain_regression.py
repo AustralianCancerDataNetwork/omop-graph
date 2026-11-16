@@ -11,17 +11,17 @@ joint".
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterator
 from datetime import date
-from importlib.resources import files
-from typing import Iterator, cast
+from importlib.resources import as_file, files
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
-
-from orm_loader.helpers import Base
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
+from orm_loader.helpers import Base
+from sqlalchemy.orm import sessionmaker
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -114,7 +114,9 @@ def procedure_kg() -> Iterator[KnowledgeGraph]:
         session.add_all(
             RelationshipMapping(
                 relationship_id=relationship_id,
-                predicate_kind=PredicateKind.HIERARCHY if relationship_id == "Is a" else PredicateKind.ATTRIBUTE,
+                predicate_kind=PredicateKind.HIERARCHY
+                if relationship_id == "Is a"
+                else PredicateKind.ATTRIBUTE,
                 predicate_subkind=subkind,
             )
             for relationship_id, _, subkind in edges
@@ -127,7 +129,9 @@ def procedure_kg() -> Iterator[KnowledgeGraph]:
 
 
 def _attribute_pairs(edges) -> set[tuple[str, int]]:
-    return {(e.predicate_id, e.object_id) for e in edges if e.predicate_kind == PredicateKind.ATTRIBUTE}
+    return {
+        (e.predicate_id, e.object_id) for e in edges if e.predicate_kind == PredicateKind.ATTRIBUTE
+    }
 
 
 EXPECTED_ATTRIBUTE_PAIRS = {(rel, obj) for rel, obj, _ in ATTRIBUTE_EDGES}
@@ -140,7 +144,9 @@ def test_edges_include_cross_domain_attributes_by_default(procedure_kg: Knowledg
     assert ("Is a", PARENT_PROCEDURE) in {(e.predicate_id, e.object_id) for e in edges}
 
 
-def test_attribute_kind_filter_returns_cross_domain_attributes(procedure_kg: KnowledgeGraph) -> None:
+def test_attribute_kind_filter_returns_cross_domain_attributes(
+    procedure_kg: KnowledgeGraph,
+) -> None:
     edges = procedure_kg.edges(
         KNEE_REPLACEMENT,
         direction="out",
@@ -200,7 +206,7 @@ DEFINING_ATTRIBUTES = {
 
 def test_shipped_mapping_classes_snomed_defining_attributes_as_attributes() -> None:
     mapping_file = files("omop_graph") / "data" / "predicate_mapping.csv"
-    with mapping_file.open(newline="") as handle:
+    with as_file(mapping_file) as path, path.open(newline="") as handle:
         classes = {row["r_id"]: (row["class"], row["subclass"]) for row in csv.DictReader(handle)}
 
     assert {r_id: classes.get(r_id) for r_id in DEFINING_ATTRIBUTES} == DEFINING_ATTRIBUTES

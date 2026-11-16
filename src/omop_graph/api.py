@@ -11,26 +11,26 @@ Structural plausibility
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.paths import GraphPath, PathExplanation, PathProfile
-from omop_graph.graph.traverse import Subgraph, GraphTrace
+from omop_graph.graph.traverse import GraphTrace, Subgraph
+
+from .reasoning.grounding import (
+    GroundingConstraints,
+)
 from .reasoning.resolvers import (
     CandidateResolver,
     ExactLabelResolver,
     ResolverPipeline,
 )
 
-from .reasoning.grounding import (
-    GroundingConstraints,
-)
-
 __all__ = [
-    "KnowledgeGraph",
-    "GraphPath",
-    "Subgraph",
-    "GraphTrace",
     "CandidateResolver",
     "ExactLabelResolver",
+    "GraphPath",
+    "GraphTrace",
     "GroundingConstraints",
-    "ResolverPipeline",
+    "KnowledgeGraph",
     "PathExplanation",
     "PathProfile",
+    "ResolverPipeline",
+    "Subgraph",
 ]
