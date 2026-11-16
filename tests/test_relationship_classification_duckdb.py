@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 
+import pytest
 import sqlalchemy as sa
 from oa_configurator import Role
 
@@ -13,6 +14,8 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
+
+pytestmark = [pytest.mark.duckdb, pytest.mark.db_dialect]
 
 
 def _read_csv(filename: str) -> list[dict[str, str]]:
