@@ -18,11 +18,14 @@ from typing import cast
 
 import pytest
 import sqlalchemy as sa
+from oa_configurator import Dialect
+from oa_configurator.testing import isolated_test_database
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
 from orm_loader.helpers import Base
 from sqlalchemy.orm import sessionmaker
 
+from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
     RelationshipClass,
@@ -53,9 +56,13 @@ ATTRIBUTE_EDGES = {
 
 @pytest.fixture(scope="module")
 def procedure_kg() -> Iterator[KnowledgeGraph]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
+    with isolated_test_database(
+        OmopGraphConfig, "test_cdm_db_sqlite", dialect=Dialect.SQLITE
+    ) as db:
+        yield _procedure_kg(db.connection.engine)
+
+
+def _procedure_kg(engine: sa.Engine) -> KnowledgeGraph:
     tables = cast(
         list[sa.Table],
         [
@@ -122,10 +129,7 @@ def procedure_kg() -> Iterator[KnowledgeGraph]:
             for relationship_id, _, subkind in edges
         )
         session.commit()
-    try:
-        yield KnowledgeGraph(session_factory)
-    finally:
-        engine.dispose()
+    return KnowledgeGraph(session_factory)
 
 
 def _attribute_pairs(edges) -> set[tuple[str, int]]:
@@ -137,6 +141,7 @@ def _attribute_pairs(edges) -> set[tuple[str, int]]:
 EXPECTED_ATTRIBUTE_PAIRS = {(rel, obj) for rel, obj, _ in ATTRIBUTE_EDGES}
 
 
+@pytest.mark.sqlite
 def test_edges_include_cross_domain_attributes_by_default(procedure_kg: KnowledgeGraph) -> None:
     edges = procedure_kg.edges(KNEE_REPLACEMENT, direction="out")
 
@@ -144,6 +149,7 @@ def test_edges_include_cross_domain_attributes_by_default(procedure_kg: Knowledg
     assert ("Is a", PARENT_PROCEDURE) in {(e.predicate_id, e.object_id) for e in edges}
 
 
+@pytest.mark.sqlite
 def test_attribute_kind_filter_returns_cross_domain_attributes(
     procedure_kg: KnowledgeGraph,
 ) -> None:
@@ -156,12 +162,14 @@ def test_attribute_kind_filter_returns_cross_domain_attributes(
     assert {(e.predicate_id, e.object_id) for e in edges} == EXPECTED_ATTRIBUTE_PAIRS
 
 
+@pytest.mark.sqlite
 def test_within_domain_opt_in_still_filters(procedure_kg: KnowledgeGraph) -> None:
     edges = procedure_kg.edges(KNEE_REPLACEMENT, direction="out", within_domain=True)
 
     assert {(e.predicate_id, e.object_id) for e in edges} == {("Is a", PARENT_PROCEDURE)}
 
 
+@pytest.mark.sqlite
 def test_traverse_reaches_cross_domain_attributes(procedure_kg: KnowledgeGraph) -> None:
     subgraph, _ = traverse(
         procedure_kg,

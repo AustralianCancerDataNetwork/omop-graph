@@ -6,7 +6,8 @@ from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from oa_configurator.testing import isolated_test_database, scoped_test_schema
+from oa_configurator import Dialect
+from oa_configurator.testing import DIALECT_PARAMS, isolated_test_database, scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_class import Concept_Class
@@ -45,14 +46,20 @@ def mock_cdm_engine() -> Iterator[sa.Engine]:
 
 @pytest.fixture(scope="module")
 def mock_cdm_engine_sqlite() -> Iterator[sa.Engine]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
-    _create_mock_cdm_tables(engine)
-    try:
-        yield engine
-    finally:
-        engine.dispose()
+    with isolated_test_database(
+        OmopGraphConfig, "test_cdm_db_sqlite", dialect=Dialect.SQLITE
+    ) as db:
+        _create_mock_cdm_tables(db.connection.engine)
+        yield db.connection.engine
+
+
+@pytest.fixture(scope="module")
+def mock_cdm_engine_duckdb() -> Iterator[sa.Engine]:
+    with isolated_test_database(
+        OmopGraphConfig, "test_cdm_db_duckdb", dialect=Dialect.DUCKDB
+    ) as db:
+        _create_mock_cdm_tables(db.connection.engine)
+        yield db.connection.engine
 
 
 def _create_mock_cdm_tables(engine: sa.Engine) -> None:
@@ -86,29 +93,69 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
         session.commit()
 
 
-@pytest.fixture(
-    params=[
-        pytest.param("sqlite", id="sqlite"),
-        pytest.param(
-            "postgresql",
-            id="postgresql",
-            marks=[pytest.mark.postgresql, pytest.mark.db_dialect],
-        ),
-    ]
+_ENGINE_FIXTURE_BY_DIALECT = {
+    Dialect.SQLITE: "mock_cdm_engine_sqlite",
+    Dialect.POSTGRESQL: "mock_cdm_engine",
+    Dialect.DUCKDB: "mock_cdm_engine_duckdb",
+}
+assert set(_ENGINE_FIXTURE_BY_DIALECT) == {param.values[0] for param in DIALECT_PARAMS}, (
+    "_ENGINE_FIXTURE_BY_DIALECT is missing an entry for a dialect DIALECT_PARAMS now covers."
 )
+
+
+@pytest.fixture(params=DIALECT_PARAMS)
 def mock_cdm_kg(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> KnowledgeGraph:
     # Grounding tests here focus on SQL + resolver + path pipeline.
     monkeypatch.setattr(
         "omop_graph.reasoning.grounding.try_get_embedding_writer_interface",
         lambda _kg: None,
     )
-    fixture_name = "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
-    engine = request.getfixturevalue(fixture_name)
+    engine = request.getfixturevalue(_ENGINE_FIXTURE_BY_DIALECT[request.param])
     return KnowledgeGraph(sessionmaker(bind=engine))
 
 
 def seed_mock_cdm(session: Session) -> None:
     today = date(2020, 1, 1)
+
+    session.add_all(
+        [
+            Domain(
+                domain_id="Metadata",
+                domain_name="Metadata",
+                domain_concept_id=CONCEPT_META_ID,
+            ),
+            Domain(
+                domain_id="Condition",
+                domain_name="Condition",
+                domain_concept_id=CONCEPT_META_ID,
+            ),
+            Vocabulary(
+                vocabulary_id="OMOP",
+                vocabulary_name="OMOP",
+                vocabulary_reference="local",
+                vocabulary_version="test",
+                vocabulary_concept_id=CONCEPT_META_ID,
+            ),
+            Vocabulary(
+                vocabulary_id="SNOMED",
+                vocabulary_name="SNOMED",
+                vocabulary_reference="local",
+                vocabulary_version="test",
+                vocabulary_concept_id=CONCEPT_META_ID,
+            ),
+            Concept_Class(
+                concept_class_id="Metadata",
+                concept_class_name="Metadata",
+                concept_class_concept_id=CONCEPT_META_ID,
+            ),
+            Concept_Class(
+                concept_class_id="Clinical Finding",
+                concept_class_name="Clinical Finding",
+                concept_class_concept_id=CONCEPT_META_ID,
+            ),
+        ]
+    )
+    session.flush()
 
     session.add_all(
         [
@@ -234,45 +281,7 @@ def seed_mock_cdm(session: Session) -> None:
             ),
         ]
     )
-
-    session.add_all(
-        [
-            Domain(
-                domain_id="Metadata",
-                domain_name="Metadata",
-                domain_concept_id=CONCEPT_META_ID,
-            ),
-            Domain(
-                domain_id="Condition",
-                domain_name="Condition",
-                domain_concept_id=CONCEPT_META_ID,
-            ),
-            Vocabulary(
-                vocabulary_id="OMOP",
-                vocabulary_name="OMOP",
-                vocabulary_reference="local",
-                vocabulary_version="test",
-                vocabulary_concept_id=CONCEPT_META_ID,
-            ),
-            Vocabulary(
-                vocabulary_id="SNOMED",
-                vocabulary_name="SNOMED",
-                vocabulary_reference="local",
-                vocabulary_version="test",
-                vocabulary_concept_id=CONCEPT_META_ID,
-            ),
-            Concept_Class(
-                concept_class_id="Metadata",
-                concept_class_name="Metadata",
-                concept_class_concept_id=CONCEPT_META_ID,
-            ),
-            Concept_Class(
-                concept_class_id="Clinical Finding",
-                concept_class_name="Clinical Finding",
-                concept_class_concept_id=CONCEPT_META_ID,
-            ),
-        ]
-    )
+    session.flush()
 
     session.add_all(
         [
@@ -295,6 +304,8 @@ def seed_mock_cdm(session: Session) -> None:
         ]
     )
 
+    session.flush()
+
     session.add_all(
         [
             RelationshipClass(
@@ -316,6 +327,8 @@ def seed_mock_cdm(session: Session) -> None:
             ),
         ]
     )
+
+    session.flush()
 
     session.add_all(
         [
@@ -358,6 +371,8 @@ def seed_mock_cdm(session: Session) -> None:
         ]
     )
 
+    session.flush()
+
     session.add_all(
         [
             Concept_Synonym(
@@ -377,6 +392,8 @@ def seed_mock_cdm(session: Session) -> None:
             ),
         ]
     )
+
+    session.flush()
 
     session.add(
         Concept_Relationship(

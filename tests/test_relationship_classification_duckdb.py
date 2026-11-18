@@ -15,7 +15,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipMapping,
 )
 
-pytestmark = [pytest.mark.duckdb, pytest.mark.db_dialect]
+pytestmark = pytest.mark.duckdb
 
 
 def _read_csv(filename: str) -> list[dict[str, str]]:

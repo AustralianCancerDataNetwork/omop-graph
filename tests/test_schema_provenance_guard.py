@@ -29,7 +29,7 @@ from orm_loader.helpers import Base
 
 from omop_graph import cli as omop_graph_cli
 
-pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
+pytestmark = pytest.mark.postgresql
 
 
 def test_relationship_classification_guard_fires_on_reconfigured_schema(
