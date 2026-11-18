@@ -116,6 +116,7 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
         yield engine
 
 
+@pytest.mark.postgresql
 def test_concept_filter_applies_canonical_graph_constraints(
     concept_engine: sa.Engine,
 ) -> None:
@@ -150,6 +151,7 @@ def test_concept_filter_rejects_non_positive_limit() -> None:
         ConceptFilter(limit=0)
 
 
+@pytest.mark.postgresql
 def test_concept_views_use_canonical_standard_and_active_flags(
     concept_engine: sa.Engine,
 ) -> None:
@@ -184,6 +186,7 @@ def test_concept_views_use_canonical_standard_and_active_flags(
     assert views[5].is_active is False
 
 
+@pytest.mark.postgresql
 def test_label_query_projects_and_orders_canonical_flags(
     concept_engine: sa.Engine,
 ) -> None:
@@ -201,6 +204,7 @@ def test_label_query_projects_and_orders_canonical_flags(
     }
 
 
+@pytest.mark.postgresql
 def test_graph_listing_queries_delegate_to_shared_filter(
     concept_engine: sa.Engine,
 ) -> None:

@@ -1,7 +1,6 @@
 from typing import Any
 
 import pytest
-import sqlalchemy as sa
 from omop_alchemy.backends import FullTextError
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
@@ -13,7 +12,6 @@ from omop_graph.graph.queries import q_concept_name_fulltext
 
 @pytest.mark.parametrize("synonym", [False, True])
 @pytest.mark.postgresql
-@pytest.mark.db_dialect
 def test_fulltext_query_requires_tsvector_columns(synonym: bool, mock_cdm_engine: Engine):
     """Full-text query raises FullTextError when tsvector columns are absent from the database.
 
@@ -25,6 +23,7 @@ def test_fulltext_query_requires_tsvector_columns(synonym: bool, mock_cdm_engine
         q_concept_name_fulltext("kidney cancer", synonym=synonym, engine=mock_cdm_engine)
 
 
+@pytest.mark.sqlite
 def test_knowledge_graph_fulltext_lookup_skips_unsupported_sqlite(
     mock_cdm_engine_sqlite: Engine,
 ):
@@ -32,10 +31,10 @@ def test_knowledge_graph_fulltext_lookup_skips_unsupported_sqlite(
     assert kg.concept_lookup("kidney cancer", LabelMatchKind.FTS) == ()
 
 
-def test_knowledge_graph_rejects_engine_instead_of_session_factory():
-    engine: Any = sa.create_engine("sqlite+pysqlite:///:memory:")
-    try:
-        with pytest.raises(TypeError, match="callable session factory.*not an Engine"):
-            KnowledgeGraph(engine)
-    finally:
-        engine.dispose()
+@pytest.mark.sqlite
+def test_knowledge_graph_rejects_engine_instead_of_session_factory(
+    mock_cdm_engine_sqlite: Engine,
+):
+    engine: Any = mock_cdm_engine_sqlite
+    with pytest.raises(TypeError, match="callable session factory.*not an Engine"):
+        KnowledgeGraph(engine)

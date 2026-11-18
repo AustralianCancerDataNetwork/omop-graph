@@ -33,6 +33,8 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
+pytestmark = pytest.mark.postgresql
+
 _META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
 _TODAY = date(2020, 1, 1)

@@ -48,7 +48,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
-pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
+pytestmark = pytest.mark.postgresql
 
 META_CONCEPT_ID = 0
 SUBJECT_CONCEPT_ID = 1

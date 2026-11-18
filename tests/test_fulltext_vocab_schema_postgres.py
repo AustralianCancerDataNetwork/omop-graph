@@ -18,7 +18,7 @@ from orm_loader.helpers import Base
 
 from omop_graph.graph.queries import q_concept_name_fulltext
 
-pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
+pytestmark = pytest.mark.postgresql
 
 
 def test_fulltext_query_finds_the_tsvector_column_in_the_vocab_schema(pg_db):

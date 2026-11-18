@@ -4,15 +4,15 @@ This page summarizes how tests are configured in `omop-graph` and what is curren
 
 ## Test Configuration
 
-The test runner configuration lives in `pytest.toml` at the repository root:
+The test runner configuration lives in `[tool.pytest.ini_options]` in `pyproject.toml`:
 
 - `testpaths = ["tests"]`
-- `addopts = ["-rf", "-rx", "--disable-pytest-warnings"]`
+- `addopts = "-rf -rx --strict-markers"`
 - CLI logging enabled at `DEBUG`, filtered to `omop_graph`/`orm_loader`/`omop_spires`/`tests` namespaces (an autouse session fixture in `tests/conftest.py`)
 
 ## What Is Currently Tested
 
-The default suite runs graph queries against an **in-memory SQLite mock CDM** (`tests/fixtures/mock_cdm.py`'s `mock_cdm_engine_sqlite` fixture, used by `mock_cdm_kg`). PostgreSQL-only integration tests use the separate `mock_cdm_engine` fixture and oa-configurator's isolated test database fixture. Current SQLite coverage includes:
+Graph queries run against a mock CDM on every dialect: `tests/fixtures/mock_cdm.py`'s `mock_cdm_kg` is parametrized with oa-configurator's `DIALECT_PARAMS` over the `mock_cdm_engine_sqlite`, `mock_cdm_engine` (PostgreSQL) and `mock_cdm_engine_duckdb` fixtures. Each param carries its dialect's routing mark (`sqlite`, `postgresql`, `duckdb`), which selects the CI job that runs it. A test without a routing mark needs no database. Current coverage includes:
 
 - Grounding behavior from text inputs to expected OMOP concept IDs
 - Rendering behavior for text and Mermaid output under `tests/render`
@@ -21,28 +21,23 @@ The default suite runs graph queries against an **in-memory SQLite mock CDM** (`
 
 The grounding test suite is structured with parametrized cases so each clinical term is a separate pytest case for easier isolation and debugging.
 
-### PostgreSQL-only integration suite
+### Dialect-specific suites
 
-A separate suite, tagged with the `db_dialect` marker and excluded from the
-default run (`pytest.toml`'s `-m "not db_dialect"`), runs against a real
-PostgreSQL database via oa-configurator's test infrastructure. This is where
-schema-drift protection and split-connection behavior are covered:
-`test_schema_provenance_guard.py`, `test_vocab_split_connection.py`,
-`test_oaklib_schema_awareness.py`, `test_fulltext_vocab_schema_postgres.py`,
-`test_predicate_flags.py`, `test_relationship_classification.py`.
+Tests tagged `postgresql` or `duckdb` run against a real database via oa-configurator's test infrastructure. This is where schema-drift protection and split-connection behavior are covered: `test_schema_provenance_guard.py`, `test_vocab_split_connection.py`, `test_oaklib_schema_awareness.py`, `test_fulltext_vocab_schema_postgres.py`, `test_predicate_flags.py`, `test_relationship_classification.py` and `test_relationship_classification_duckdb.py`.
 
 ## Running Tests
 
-Run all tests (SQLite suite only, the default):
+Run all tests. This needs the test databases configured. A test whose database is not configured fails, and the message names it:
 
 ```bash
 pytest
 ```
 
-Include the PostgreSQL-only suite:
+Run the tests of one routing mark, or the tests that need no database:
 
 ```bash
-pytest -m db_dialect
+pytest -m postgresql
+pytest -m "not (sqlite or duckdb or postgresql)"
 ```
 
 Run one file:

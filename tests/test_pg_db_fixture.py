@@ -4,7 +4,10 @@ omop-graph had no Postgres test fixture at all before this -- this proves
 the newly-added one actually works, not just that it's wired up.
 """
 
+import pytest
 import sqlalchemy as sa
+
+pytestmark = pytest.mark.postgresql
 
 
 def test_pg_db_yields_a_working_connection_and_session(pg_db):
