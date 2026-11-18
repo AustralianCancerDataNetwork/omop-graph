@@ -4,10 +4,10 @@ This page summarizes how tests are configured in `omop-graph` and what is curren
 
 ## Test Configuration
 
-The test runner configuration lives in `pytest.toml` at the repository root:
+The test runner configuration lives in `[tool.pytest.ini_options]` in `pyproject.toml`:
 
 - `testpaths = ["tests"]`
-- `addopts = ["-rf", "-rx", "--strict-markers"]`
+- `addopts = "-rf -rx --strict-markers"`
 - CLI logging enabled at `DEBUG`, filtered to `omop_graph`/`orm_loader`/`omop_spires`/`tests` namespaces (an autouse session fixture in `tests/conftest.py`)
 
 ## What Is Currently Tested

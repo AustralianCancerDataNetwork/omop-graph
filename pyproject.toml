@@ -117,6 +117,15 @@ extend-select = ["TID251"]
 "src/**" = ["TID251"]
 "tests/conftest.py" = ["TID251"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-rf -rx --strict-markers"
+log_cli = true
+log_cli_level = "DEBUG"
+log_cli_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+log_level = "INFO"
+log_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+
 [tool.ty.rules]
 # raises on stale suppressions
 unused-ignore-comment = "error"

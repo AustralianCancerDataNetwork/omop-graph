@@ -1,8 +1,0 @@
-[pytest]
-testpaths = ["tests"]
-addopts = ["-rf", "-rx", "--strict-markers"]
-log_cli = true
-log_cli_level = "DEBUG"
-log_cli_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
-log_level = "INFO"
-log_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
