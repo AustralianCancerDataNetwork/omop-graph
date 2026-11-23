@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from dataclasses import replace
 from typing import ClassVar
 
 import numpy as np
@@ -19,6 +20,9 @@ from oaklib.datamodels.vocabulary import (
     HAS_DBXREF,
     HAS_EXACT_SYNONYM,
     LABEL_PREDICATE,
+    OWL_CLASS,
+    OWL_META_CLASSES,
+    OWL_OBJECT_PROPERTY,
 )
 from oaklib.interfaces import SearchInterface, TextAnnotatorInterface
 from oaklib.interfaces.basic_ontology_interface import (
@@ -37,6 +41,7 @@ from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.codec import OMOPCodec
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError, ReadOnlyMixin
@@ -314,16 +319,36 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 )
 
 
-class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
+class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     """
-    Mixin providing relation graph capabilities over an OMOP knowledge graph.
+    Mixin implementing the basic ontology interface over an OMOP knowledge graph.
 
-    This adapter does not perform OWL reasoning. Entailment is computed via
-    graph traversal over hierarchical predicates only.
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The OMOP Knowledge Graph instance.
+    concept_filter : ConceptFilter
+        The concepts the adapter enumerates. Defaults to active standard and
+        classification concepts. ``limit`` and ``concept_ids`` are rejected because they
+        would silently truncate every enumeration.
+
+    Raises
+    ------
+    ValueError
+        If ``concept_filter`` sets ``limit`` or ``concept_ids``.
     """
 
-    def __init__(self, *args, kg: KnowledgeGraph, **kwargs):
+    def __init__(
+        self,
+        *args,
+        kg: KnowledgeGraph,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        **kwargs,
+    ):
+        if concept_filter.limit is not None or concept_filter.concept_ids is not None:
+            raise ValueError("The adapter's concept_filter must not set limit or concept_ids.")
         super().__init__(*args, kg=kg, **kwargs)
+        self.concept_filter = concept_filter
 
     def supports_reasoning(self) -> bool:
         return False
@@ -391,49 +416,52 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
     def multilingual(self, value: bool) -> None:
         pass  # OMOP is always monolingual; setter required by base interface contract
 
-    # Base: entities(self, filter_obsoletes=True, owl_type=None) -> Iterable[CURIE]
-    # Override narrows to OMOP domain/standard_only filtering; LSP intentionally broken.
-    def entities(  # ty: ignore[invalid-method-override]
+    def entities(
         self,
-        domain: str | None = None,
-        standard_only: bool = True,
         filter_obsoletes: bool = True,
+        owl_type: str | None = None,
+        *,
+        concept_filter: ConceptFilter | None = None,
     ) -> Iterable[CURIE]:
         """
-        Iterate over entities in the graph, optionally filtered.
-
-        Notes
-        -----
-        We are consuming the entire session object to not have an open connection
-        that isn't closed.
+        Iterate over the concepts, or the relationships, of the graph.
 
         Parameters
         ----------
-        domain : str | None
-            Filter by OMOP Domain ID.
-        standard_only : bool
-            If True, return only standard concepts.
         filter_obsoletes : bool
-            If True, exclude concepts with an `invalid_reason`.
+            If True, exclude deprecated concepts. Applied on top of the adapter's
+            ``concept_filter``.
+        owl_type : str | None
+            ``owl:Class`` or None for concepts, ``owl:ObjectProperty`` for relationships
+            as predicate CURIEs. The other OWL types have no entities here and yield nothing.
+        concept_filter : ConceptFilter | None
+            Replaces the adapter's ``concept_filter`` for this call and is used as given,
+            so ``filter_obsoletes`` does not apply.
 
         Yields
         -------
         CURIE
-            Concept identifiers.
+            Concept or predicate identifiers.
+
+        Raises
+        ------
+        ValueError
+            If ``owl_type`` is not an OWL type.
         """
-
-        cids = tuple(
-            self.kg.entities(
-                ConceptFilter(
-                    domains=(domain,) if domain else None,
-                    require_standard=standard_only,
-                    include_classification=True,
-                    require_active=filter_obsoletes,
-                )
+        if owl_type is not None and owl_type not in OWL_META_CLASSES:
+            raise ValueError(
+                f"{owl_type!r} is not an OWL type; expected one of {OWL_META_CLASSES}."
             )
-        )
+        if owl_type == OWL_OBJECT_PROPERTY:
+            for predicate in self.kg.predicates():
+                yield self.codec.predicate_curie(predicate.relationship_id)
+            return
+        if owl_type not in (None, OWL_CLASS):
+            return
 
-        for cid in cids:
+        scope = concept_filter or replace(self.concept_filter, require_active=filter_obsoletes)
+        # Consume the generator so no session stays open.
+        for cid in tuple(self.kg.entities(scope)):
             yield self.codec.concept_curie(cid)
 
     def roots(
@@ -486,28 +514,40 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         cids = self.kg.concept_ids_by_label(label.strip())
         return [self.codec.concept_curie(cid) for cid in cids]
 
-    # Base: relationships(self, subjects, predicates, objects, include_tbox, include_abox,
-    #       include_entailed, exclude_blank, invert) -> Iterator[RELATIONSHIP]
-    # Override drops include_* params; OMOP graph has no TBox/ABox distinction.
-    def relationships(  # ty: ignore[invalid-method-override]
+    def relationships(
         self,
         subjects: Iterable[CURIE] | None = None,
-        predicates: Iterable[str] | None = None,
+        predicates: Iterable[PRED_CURIE] | None = None,
         objects: Iterable[CURIE] | None = None,
+        include_tbox: bool = True,
+        include_abox: bool = True,
+        include_entailed: bool = False,
+        exclude_blank: bool = True,
         invert: bool = False,
-        **kwargs,
-    ) -> Iterable[tuple[CURIE, PRED_CURIE, CURIE]]:
+    ) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """
         Query relationships between concepts.
+
+        Every OMOP relationship links two concepts, so it is a TBox statement and
+        ``include_tbox=False`` yields nothing. There are no individuals and no blank
+        nodes, so ``include_abox`` and ``exclude_blank`` have no effect.
 
         Parameters
         ----------
         subjects : Iterable[CURIE] | None
             Subject CURIEs to filter on.
-        predicates : Iterable[str] | None
+        predicates : Iterable[PRED_CURIE] | None
             Predicate (relationship) IDs to filter on.
         objects : Iterable[CURIE] | None
             Object CURIEs to filter on.
+        include_tbox : bool
+            If False, yield nothing.
+        include_abox : bool
+            Ignored.
+        include_entailed : bool
+            Not implemented yet.
+        exclude_blank : bool
+            Ignored.
         invert : bool
             If True, swaps subjects and objects in the query and result.
 
@@ -515,7 +555,16 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         -------
         Tuple[CURIE, PRED_CURIE, CURIE]
             Triples (subject, predicate, object).
+
+        Raises
+        ------
+        NotImplementedError
+            If ``include_entailed`` is True.
         """
+        if include_entailed:
+            raise NotImplementedError("include_entailed is not implemented yet")
+        if not include_tbox:
+            return
 
         subject_ids = (
             tuple([self.codec.parse_concept(s) for s in subjects]) if subjects is not None else None
@@ -709,9 +758,12 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
 class OMOPAlchemyImplementation(
     ReadOnlyMixin,
-    OMOPRelationGraphInterface,
+    OMOPBasicOntologyInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,
+    SearchInterface,
+    TextAnnotatorInterface,
+    BasicOntologyInterface,
 ):
     """
     A :class:`OntologyInterface` implementation wrapping a SQL Relational Database
@@ -744,6 +796,9 @@ class OMOPAlchemyImplementation(
     kg_emb_config : KnowledgeGraphEmbeddingConfiguration | None, optional
         Embedding configuration forwarded to the ``KnowledgeGraph`` constructor.
         Ignored when ``kg`` is given.
+    concept_filter : ConceptFilter, optional
+        The concepts the adapter enumerates. Defaults to active standard and
+        classification concepts.
     """
 
     # oaklib's class_resolver keys plugins by class name; this adds the "omop:" scheme.
@@ -756,6 +811,7 @@ class OMOPAlchemyImplementation(
         resolved: ResolvedCDMDatabase | None = None,
         kg: KnowledgeGraph | None = None,
         kg_emb_config: KnowledgeGraphEmbeddingConfiguration | None = None,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         **kwargs,
     ):
         if resource is None:
@@ -769,7 +825,7 @@ class OMOPAlchemyImplementation(
             )
             bind_default_renderers(kg)
 
-        super().__init__(resource=resource, kg=kg, **kwargs)
+        super().__init__(resource=resource, kg=kg, concept_filter=concept_filter, **kwargs)
 
     # TODO: Implement if necessary!
     def _all_relationships(self):
