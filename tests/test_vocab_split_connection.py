@@ -81,6 +81,7 @@ _shadow_relationship_class = sa.Table(
     sa.Column("description", sa.String(80), nullable=False),
     sa.Column("semantics", sa.String(40), nullable=False),
     sa.Column("inference", sa.String(40), nullable=False),
+    sa.Column("direction", sa.String(4), nullable=True),
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
     schema=Role.PRIMARY.value,
 )

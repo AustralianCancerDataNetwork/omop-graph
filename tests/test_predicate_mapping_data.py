@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from omop_graph.extensions.classification_data import check_mapping_against_cdm
+from omop_graph.extensions.classification_data import (
+    check_classification,
+    check_mapping_against_cdm,
+)
 
 ATHENA_RELATIONSHIPS = Path(__file__).parent / "fixtures" / "athena_relationships.csv"
 """Relationship id, name and reverse id of the Athena release v5.0 30-AUG-24."""
@@ -36,12 +39,23 @@ def test_predicate_classes_and_subclasses_are_ascii():
 def test_packaged_mapping_matches_the_athena_relationship_table():
     with ATHENA_RELATIONSHIPS.open(encoding="utf-8", newline="") as source:
         athena = list(csv.DictReader(source))
-    mapping = pd.DataFrame(_read_csv("predicate_mapping.csv")).rename(
-        columns={
-            "class": "predicate_kind",
-            "subclass": "predicate_subkind",
-            "r_id": "relationship_id",
-        }
+    classification = pd.DataFrame(_read_csv("predicate_classification.csv")).rename(
+        columns={"class": "predicate_kind", "subclass": "predicate_subkind"}
+    )
+    classification["direction"] = classification["direction"].mask(
+        classification["direction"] == ""
+    )
+    check_classification(classification)
+    mapping = (
+        pd.DataFrame(_read_csv("predicate_mapping.csv"))
+        .rename(
+            columns={
+                "class": "predicate_kind",
+                "subclass": "predicate_subkind",
+                "r_id": "relationship_id",
+            }
+        )
+        .merge(classification, on=["predicate_kind", "predicate_subkind"], how="left")
     )
 
     check_mapping_against_cdm(

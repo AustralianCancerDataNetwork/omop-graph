@@ -66,4 +66,4 @@ Before any existing classification table is dropped, the load fails, listing eve
 
 - a mapping row's `r_id` is not a CDM `relationship_id`, its `r_name` differs from that relationship's `relationship_name`, or a `relationship_id` is mapped more than once
 - a CDM relationship has no classification, since the `KnowledgeGraph` skips the edges of unclassified relationships
-- a `Hierarchy` subkind is not `Taxonomic` or `Categorical` followed by ` - up` or ` - down` (hyphen, not en dash), or a `Hierarchy` relationship and its CDM reverse are not both `Hierarchy` with opposite directions
+- a `Hierarchy` row of `predicate_classification.csv` has no `up` or `down` `direction`, another row has one, or a `Hierarchy` relationship and its CDM reverse are not both `Hierarchy` with opposite directions

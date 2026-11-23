@@ -7,6 +7,7 @@ from oa_configurator import Role
 
 from omop_graph import cli
 from omop_graph.extensions.omop_alchemy import (
+    HierarchyDirection,
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,
@@ -20,10 +21,13 @@ RELATIONSHIPS = [
         "reverse_relationship_id": "Is a",
     },
 ]
-EXPECTED_CLASSES = {("Hierarchy", "Taxonomic - up"), ("Hierarchy", "Taxonomic - down")}
+EXPECTED_CLASSES = {
+    (PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
+    (PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
+}
 EXPECTED_MAPPINGS = {
-    ("Is a", "Hierarchy", "Taxonomic - up"),
-    ("Subsumes", "Hierarchy", "Taxonomic - down"),
+    ("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+    ("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
 }
 
 
@@ -46,9 +50,9 @@ def test_relationship_classification_runs_and_is_idempotent_on_duckdb(duckdb_db,
     assert resolved is not None
 
     (tmp_path / "predicate_classification.csv").write_text(
-        "class,subclass,description,semantics,inference\n"
-        "Hierarchy,Taxonomic - up,Parent,Inheritance,Up\n"
-        "Hierarchy,Taxonomic - down,Child,Refinement,Down\n"
+        "class,subclass,description,semantics,inference,direction\n"
+        "Hierarchy,Taxonomic - up,Parent,Inheritance,Up,up\n"
+        "Hierarchy,Taxonomic - down,Child,Refinement,Down,down\n"
     )
     (tmp_path / "predicate_mapping.csv").write_text(
         "class,subclass,r_id,r_name\n"
@@ -74,16 +78,17 @@ def test_relationship_classification_runs_and_is_idempotent_on_duckdb(duckdb_db,
             for check in checks
         )
         actual_classes = {
-            (kind.value, subkind)
-            for kind, subkind in connection.execute(
+            (kind, subkind, direction)
+            for kind, subkind, direction in connection.execute(
                 sa.select(
                     RelationshipClass.predicate_kind,
                     RelationshipClass.predicate_subkind,
+                    RelationshipClass.direction,
                 )
             )
         }
         actual_mappings = {
-            (relationship_id, kind.value, subkind)
+            (relationship_id, kind, subkind)
             for relationship_id, kind, subkind in connection.execute(
                 sa.select(
                     RelationshipMapping.relationship_id,

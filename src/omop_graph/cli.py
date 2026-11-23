@@ -16,7 +16,10 @@ from orm_loader.helpers.metadata import Base
 from omop_graph.cli_utils import populate_test_data
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import open_cdm_sessions, resolve_cdm_database
-from omop_graph.extensions.classification_data import check_mapping_against_cdm
+from omop_graph.extensions.classification_data import (
+    check_classification,
+    check_mapping_against_cdm,
+)
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
@@ -141,6 +144,9 @@ def _load_relationship_classification(
         columns={"class": "predicate_kind", "subclass": "predicate_subkind"}
     )
 
+    df_rel_cls = df_rel_cls.assign(direction=df_rel_cls.get("direction"))
+    check_classification(df_rel_cls)
+
     check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[
         ["description", "semantics", "inference"]
     ].nunique(dropna=True)
@@ -164,6 +170,11 @@ def _load_relationship_classification(
             "subclass": "predicate_subkind",
             "r_id": "relationship_id",
         }
+    )
+    df_rel_mapping = df_rel_mapping.merge(
+        df_rel_cls_to_export[["predicate_kind", "predicate_subkind", "direction"]],
+        on=["predicate_kind", "predicate_subkind"],
+        how="left",
     )
     check_mapping_against_cdm(df_rel_mapping, cdm_relationships, reverse_ids)
     df_rel_mapping_to_export = df_rel_mapping[

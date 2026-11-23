@@ -24,7 +24,17 @@ class PredicateKind(Enum):
     ATTRIBUTE = "Attribute"
 
 
-def _predicate_kind_values(enum_cls: type[PredicateKind]) -> list[str]:
+class HierarchyDirection(Enum):
+    """Direction of a Hierarchy relationship, read from the stored edge ``concept_id_1 -> concept_id_2``.
+
+    ``UP`` means ``concept_id_2`` is the parent or group of ``concept_id_1``.
+    """
+
+    UP = "up"
+    DOWN = "down"
+
+
+def _predicate_kind_values(enum_cls: type[Enum]) -> list[str]:
     return [member.value for member in enum_cls]
 
 
@@ -62,6 +72,15 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     description: so.Mapped[str] = so.mapped_column(sa.String(80), nullable=False)
     semantics: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
     inference: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
+    direction: so.Mapped[HierarchyDirection | None] = so.mapped_column(
+        sa.Enum(
+            HierarchyDirection,
+            values_callable=_predicate_kind_values,
+            native_enum=False,
+            create_constraint=True,
+        ),
+        nullable=True,
+    )
 
 
 @cdm_table

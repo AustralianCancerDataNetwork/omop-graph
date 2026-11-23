@@ -3,25 +3,28 @@ import pytest
 
 from omop_graph.extensions.classification_data import (
     ClassificationDataError,
+    check_classification,
     check_mapping_against_cdm,
-    hierarchy_direction,
 )
+from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 
 NAMES = {"Maps to": "Maps to", "Is a": "Is a", "Subsumes": "Subsumes"}
 REVERSE = {"Maps to": "Maps to", "Is a": "Subsumes", "Subsumes": "Is a"}
+HIERARCHY, IDENTITY_KIND = PredicateKind.HIERARCHY.value, PredicateKind.IDENTITY.value
 UP, DOWN, IDENTITY = (
-    ("Hierarchy", "Taxonomic - up"),
-    ("Hierarchy", "Taxonomic - down"),
-    ("Identity", "x"),
+    (HIERARCHY, "Taxonomic - up", HierarchyDirection.UP.value),
+    (HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN.value),
+    (IDENTITY_KIND, "x", None),
 )
 
 
-def _mapping(**kinds: tuple[str | None, str | None]) -> pd.DataFrame:
+def _mapping(**kinds: tuple[str | None, str | None, str | None]) -> pd.DataFrame:
     rows = [
         (rid.replace("_", " "), NAMES[rid.replace("_", " ")], *kind) for rid, kind in kinds.items()
     ]
     return pd.DataFrame(
-        rows, columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind"]
+        rows,
+        columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind", "direction"],
     )
 
 
@@ -60,7 +63,7 @@ def test_a_relationship_mapped_twice_is_rejected():
 
 
 @pytest.mark.parametrize(
-    "missing", [GOOD.iloc[:2], _mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=(None, None))]
+    "missing", [GOOD.iloc[:2], _mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=(None, None, None))]
 )
 def test_a_cdm_relationship_without_a_classification_is_rejected(missing):
     with pytest.raises(ClassificationDataError, match="no classification.*'Subsumes'"):
@@ -78,10 +81,21 @@ def test_the_reverse_of_a_hierarchy_relationship_must_be_hierarchy_with_the_oppo
         _check(_mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=IDENTITY))
 
 
-def test_hierarchy_direction_accepts_only_the_canonical_spelling():
-    assert hierarchy_direction("Categorical - down") == "down"
-    with pytest.raises(ClassificationDataError):
-        hierarchy_direction("Taxonomic \u2013 up")
+@pytest.mark.parametrize(
+    ("kind", "direction", "message"),
+    [
+        (HIERARCHY, None, "without an up or down direction.*'x'"),
+        (HIERARCHY, "sideways", "without an up or down direction.*'x'"),
+        (IDENTITY_KIND, HierarchyDirection.UP.value, "not Hierarchy but have a direction.*'x'"),
+    ],
+)
+def test_only_hierarchy_classifications_have_a_direction(kind, direction, message):
+    classification = pd.DataFrame(
+        [(kind, "x", direction)], columns=["predicate_kind", "predicate_subkind", "direction"]
+    )
+
+    with pytest.raises(ClassificationDataError, match=message):
+        check_classification(classification)
 
 
 def test_an_empty_relationship_vocabulary_fails_clearly():

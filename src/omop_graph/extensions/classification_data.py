@@ -2,35 +2,49 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 
 import pandas as pd
 
-_HIERARCHY_SUBKIND = re.compile(r"(Taxonomic|Categorical) - (up|down)")
+from .omop_alchemy import HierarchyDirection, PredicateKind
 
 
 class ClassificationDataError(ValueError):
     """The predicate classification mapping does not match the CDM relationship table."""
 
 
-def hierarchy_direction(subkind: str) -> str:
-    """Return ``"up"`` or ``"down"`` for a Hierarchy subkind such as ``Taxonomic - up``.
+def check_classification(classification: pd.DataFrame) -> None:
+    """Check that exactly the Hierarchy rows of the classification have a direction.
 
-    "up" means ``concept_id_2`` is the parent or group of ``concept_id_1``.
+    Parameters
+    ----------
+    classification : pd.DataFrame
+        Rows of ``predicate_classification.csv`` with ``predicate_kind``, ``predicate_subkind``
+        and ``direction`` columns.
 
     Raises
     ------
     ClassificationDataError
-        If ``subkind`` is not of the form ``<Taxonomic|Categorical> - <up|down>``.
+        If a Hierarchy row has no ``up`` or ``down`` direction, or another row has one.
     """
-    match = _HIERARCHY_SUBKIND.fullmatch(subkind)
-    if match is None:
-        raise ClassificationDataError(
-            f"Hierarchy subkind {subkind!r} must be 'Taxonomic' or 'Categorical' followed by "
-            "' - up' or ' - down'."
+    directions = classification.get(
+        "direction", pd.Series(index=classification.index, dtype=object)
+    )
+    is_hierarchy = classification["predicate_kind"] == PredicateKind.HIERARCHY.value
+    valid = [direction.value for direction in HierarchyDirection]
+    missing = classification.loc[is_hierarchy & ~directions.isin(valid), "predicate_subkind"]
+    unexpected = classification.loc[~is_hierarchy & directions.notna(), "predicate_subkind"]
+    problems = []
+    if not missing.empty:
+        problems.append(f"Hierarchy subkinds without an up or down direction: {missing.tolist()}")
+    if not unexpected.empty:
+        problems.append(
+            f"subkinds that are not Hierarchy but have a direction: {unexpected.tolist()}"
         )
-    return match.group(2)
+    if problems:
+        raise ClassificationDataError(
+            "predicate_classification.csv is invalid:\n" + "\n".join(problems)
+        )
 
 
 def check_mapping_against_cdm(
@@ -49,7 +63,7 @@ def check_mapping_against_cdm(
     ----------
     mapping : pd.DataFrame
         Rows of ``predicate_mapping.csv`` with ``relationship_id``, ``predicate_kind``,
-        ``predicate_subkind`` and, optionally, ``r_name`` columns.
+        ``predicate_subkind``, ``direction`` and, optionally, ``r_name`` columns.
     cdm_relationships : Mapping[str, str]
         CDM ``relationship_id`` to ``relationship_name``.
     reverse_ids : Mapping[str, str]
@@ -104,24 +118,27 @@ def check_mapping_against_cdm(
     kinds = dict(
         zip(
             classified["relationship_id"],
-            zip(classified["predicate_kind"], classified["predicate_subkind"], strict=True),
+            zip(classified["predicate_kind"], classified["direction"], strict=True),
             strict=True,
         )
     )
-    for relationship_id, (kind, subkind) in kinds.items():
+    for relationship_id, (kind, direction) in kinds.items():
         reverse_id = reverse_ids.get(relationship_id)
-        if kind != "Hierarchy" or reverse_id is None or relationship_id > reverse_id:
+        if (
+            kind != PredicateKind.HIERARCHY.value
+            or reverse_id is None
+            or relationship_id > reverse_id
+        ):
             continue
-        reverse_kind, reverse_subkind = kinds.get(reverse_id, (None, None))
-        if reverse_kind != "Hierarchy":
+        reverse_kind, reverse_direction = kinds.get(reverse_id, (None, None))
+        if reverse_kind != PredicateKind.HIERARCHY.value:
             problems.append(
                 f"{relationship_id!r} is Hierarchy but its reverse {reverse_id!r} is "
                 f"{reverse_kind or 'unclassified'}"
             )
-        elif hierarchy_direction(subkind) == hierarchy_direction(reverse_subkind):
+        elif direction == reverse_direction:
             problems.append(
-                f"{relationship_id!r} and its reverse {reverse_id!r} are both "
-                f"{hierarchy_direction(subkind)!r}"
+                f"{relationship_id!r} and its reverse {reverse_id!r} are both {direction!r}"
             )
 
     if problems:
