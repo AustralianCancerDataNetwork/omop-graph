@@ -8,8 +8,11 @@ from omop_graph.extensions.classification_data import (
 )
 from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 
-NAMES = {"Maps to": "Maps to", "Is a": "Is a", "Subsumes": "Subsumes"}
-REVERSE = {"Maps to": "Maps to", "Is a": "Subsumes", "Subsumes": "Is a"}
+RELATIONSHIPS = {
+    "Maps to": ("Maps to", "Maps to"),
+    "Is a": ("Is a", "Subsumes"),
+    "Subsumes": ("Subsumes", "Is a"),
+}
 HIERARCHY, IDENTITY_KIND = PredicateKind.HIERARCHY.value, PredicateKind.IDENTITY.value
 UP, DOWN, IDENTITY = (
     (HIERARCHY, "Taxonomic - up", HierarchyDirection.UP.value),
@@ -18,10 +21,8 @@ UP, DOWN, IDENTITY = (
 )
 
 
-def _mapping(**kinds: tuple[str | None, str | None, str | None]) -> pd.DataFrame:
-    rows = [
-        (rid.replace("_", " "), NAMES[rid.replace("_", " ")], *kind) for rid, kind in kinds.items()
-    ]
+def _mapping(*rows: tuple[str, tuple[str | None, str | None, str | None]]) -> pd.DataFrame:
+    rows = [(rid, RELATIONSHIPS[rid][0], *kind) for rid, kind in rows]
     return pd.DataFrame(
         rows,
         columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind", "direction"],
@@ -29,10 +30,10 @@ def _mapping(**kinds: tuple[str | None, str | None, str | None]) -> pd.DataFrame
 
 
 def _check(mapping: pd.DataFrame) -> None:
-    check_mapping_against_cdm(mapping, NAMES, REVERSE)
+    check_mapping_against_cdm(mapping, RELATIONSHIPS)
 
 
-GOOD = _mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=DOWN)
+GOOD = _mapping(("Maps to", IDENTITY), ("Is a", UP), ("Subsumes", DOWN))
 
 
 def test_a_consistent_mapping_passes():
@@ -63,7 +64,11 @@ def test_a_relationship_mapped_twice_is_rejected():
 
 
 @pytest.mark.parametrize(
-    "missing", [GOOD.iloc[:2], _mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=(None, None, None))]
+    "missing",
+    [
+        GOOD.iloc[:2],
+        _mapping(("Maps to", IDENTITY), ("Is a", UP), ("Subsumes", (None, None, None))),
+    ],
 )
 def test_a_cdm_relationship_without_a_classification_is_rejected(missing):
     with pytest.raises(ClassificationDataError, match="no classification.*'Subsumes'"):
@@ -74,11 +79,11 @@ def test_the_reverse_of_a_hierarchy_relationship_must_be_hierarchy_with_the_oppo
     with pytest.raises(
         ClassificationDataError, match="'Is a' and its reverse 'Subsumes' are both 'up'"
     ):
-        _check(_mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=UP))
+        _check(_mapping(("Maps to", IDENTITY), ("Is a", UP), ("Subsumes", UP)))
     with pytest.raises(
         ClassificationDataError, match="'Is a' is Hierarchy but its reverse 'Subsumes' is Identity"
     ):
-        _check(_mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=IDENTITY))
+        _check(_mapping(("Maps to", IDENTITY), ("Is a", UP), ("Subsumes", IDENTITY)))
 
 
 @pytest.mark.parametrize(
@@ -100,4 +105,4 @@ def test_only_hierarchy_classifications_have_a_direction(kind, direction, messag
 
 def test_an_empty_relationship_vocabulary_fails_clearly():
     with pytest.raises(RuntimeError, match="relationship vocabulary is empty"):
-        check_mapping_against_cdm(GOOD, {}, {})
+        check_mapping_against_cdm(GOOD, {})

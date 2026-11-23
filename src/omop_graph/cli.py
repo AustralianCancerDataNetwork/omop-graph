@@ -105,14 +105,12 @@ def relationship_classification(
                     Relationship.reverse_relationship_id,
                 )
             ).all()
-        cdm_relationships = {rid: name for rid, name, _ in relationships}
-        reverse_ids = {rid: reverse for rid, _, reverse in relationships}
+        cdm_relationships = {rid: (name, reverse) for rid, name, reverse in relationships}
         _load_relationship_classification(
             pred_class_dir,
             resolved=resolved,
             engine=engine,
-            cdm_relationships=cdm_relationships,
-            reverse_ids=reverse_ids,
+            relationships=cdm_relationships,
         )
 
 
@@ -121,8 +119,7 @@ def _load_relationship_classification(
     *,
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
-    cdm_relationships: dict[str, str],
-    reverse_ids: dict[str, str],
+    relationships: dict[str, tuple[str, str]],
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
     pred_class_dir_pl = Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
@@ -176,7 +173,7 @@ def _load_relationship_classification(
         on=["predicate_kind", "predicate_subkind"],
         how="left",
     )
-    check_mapping_against_cdm(df_rel_mapping, cdm_relationships, reverse_ids)
+    check_mapping_against_cdm(df_rel_mapping, relationships)
     df_rel_mapping_to_export = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
     ]

@@ -49,8 +49,7 @@ def check_classification(classification: pd.DataFrame) -> None:
 
 def check_mapping_against_cdm(
     mapping: pd.DataFrame,
-    cdm_relationships: Mapping[str, str],
-    reverse_ids: Mapping[str, str],
+    relationships: Mapping[str, tuple[str, str]],
 ) -> None:
     """Check the mapping against the CDM ``relationship`` table, raising on every problem found.
 
@@ -64,10 +63,8 @@ def check_mapping_against_cdm(
     mapping : pd.DataFrame
         Rows of ``predicate_mapping.csv`` with ``relationship_id``, ``predicate_kind``,
         ``predicate_subkind``, ``direction`` and, optionally, ``r_name`` columns.
-    cdm_relationships : Mapping[str, str]
-        CDM ``relationship_id`` to ``relationship_name``.
-    reverse_ids : Mapping[str, str]
-        CDM ``relationship_id`` to ``reverse_relationship_id``.
+    relationships : Mapping[str, tuple[str, str]]
+        CDM ``relationship_id`` to ``(relationship_name, reverse_relationship_id)``.
 
     Raises
     ------
@@ -76,14 +73,14 @@ def check_mapping_against_cdm(
     ClassificationDataError
         If the mapping does not match the CDM.
     """
-    if not cdm_relationships:
+    if not relationships:
         raise RuntimeError(
             "The CDM relationship vocabulary is empty; load vocabulary data "
             "before running `relationship-classification`."
         )
 
     id_by_name: dict[str, str | None] = {}
-    for relationship_id, name in cdm_relationships.items():
+    for relationship_id, (name, _) in relationships.items():
         id_by_name[name] = None if name in id_by_name else relationship_id
 
     ids = mapping["relationship_id"].tolist()
@@ -91,16 +88,16 @@ def check_mapping_against_cdm(
     problems: list[str] = []
     for relationship_id, raw_name in zip(ids, names, strict=True):
         name = raw_name if isinstance(raw_name, str) else None
-        if relationship_id not in cdm_relationships:
+        if relationship_id not in relationships:
             owner = id_by_name.get(name) if name is not None else None
             hint = f"; that name belongs to relationship_id {owner!r}" if owner else ""
             problems.append(
                 f"relationship_id {relationship_id!r} (r_name {name!r}) is not in the CDM{hint}"
             )
-        elif name is not None and name != cdm_relationships[relationship_id]:
+        elif name is not None and name != relationships[relationship_id][0]:
             problems.append(
                 f"relationship_id {relationship_id!r} has r_name {name!r} but the CDM "
-                f"relationship_name is {cdm_relationships[relationship_id]!r}"
+                f"relationship_name is {relationships[relationship_id][0]!r}"
             )
 
     duplicated = sorted({i for i in ids if ids.count(i) > 1})
@@ -108,7 +105,7 @@ def check_mapping_against_cdm(
         problems.append(f"relationship ids mapped more than once: {duplicated}")
 
     classified = mapping.dropna(subset=["predicate_kind", "predicate_subkind"])
-    unclassified = sorted(set(cdm_relationships) - set(classified["relationship_id"]))
+    unclassified = sorted(set(relationships) - set(classified["relationship_id"]))
     if unclassified:
         problems.append(
             f"{len(unclassified)} CDM relationships have no classification, so the knowledge "
@@ -123,12 +120,10 @@ def check_mapping_against_cdm(
         )
     )
     for relationship_id, (kind, direction) in kinds.items():
-        reverse_id = reverse_ids.get(relationship_id)
-        if (
-            kind != PredicateKind.HIERARCHY.value
-            or reverse_id is None
-            or relationship_id > reverse_id
-        ):
+        if kind != PredicateKind.HIERARCHY.value or relationship_id not in relationships:
+            continue
+        reverse_id = relationships[relationship_id][1]
+        if relationship_id > reverse_id:
             continue
         reverse_kind, reverse_direction = kinds.get(reverse_id, (None, None))
         if reverse_kind != PredicateKind.HIERARCHY.value:

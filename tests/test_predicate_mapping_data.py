@@ -60,6 +60,8 @@ def test_packaged_mapping_matches_the_athena_relationship_table():
 
     check_mapping_against_cdm(
         mapping,
-        {row["relationship_id"]: row["relationship_name"] for row in athena},
-        {row["relationship_id"]: row["reverse_relationship_id"] for row in athena},
+        {
+            row["relationship_id"]: (row["relationship_name"], row["reverse_relationship_id"])
+            for row in athena
+        },
     )
