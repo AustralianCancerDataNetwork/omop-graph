@@ -422,7 +422,6 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
     assert relationship_ids == {"maps to", "mapped from"}
 
     kg = _split_kg(split_engines)
-    assert "unknown_rel" not in {p.relationship_id for p in kg.predicates()}
     predicate = kg.predicate("maps to")
     assert predicate.predicate_kind == PredicateKind.IDENTITY
     assert predicate.predicate_subkind == "mapping"

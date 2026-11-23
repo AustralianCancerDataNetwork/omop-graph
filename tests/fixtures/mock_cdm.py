@@ -458,8 +458,11 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
         session.commit()
 
 
-def load_seeded_relationship_classification(resolved: ResolvedCDMDatabase) -> None:
-    """Classify the two relationships of :func:`seed_relationship_vocabulary` as Identity."""
+def load_seeded_relationship_classification(resolved: ResolvedCDMDatabase | None = None) -> None:
+    """Classify the two relationships of :func:`seed_relationship_vocabulary` as Identity.
+
+    With ``resolved=None`` the active CDM database is resolved as the CLI does.
+    """
     with tempfile.TemporaryDirectory() as directory:
         (Path(directory) / "predicate_classification.csv").write_text(
             "class,subclass,description,semantics,inference\n"

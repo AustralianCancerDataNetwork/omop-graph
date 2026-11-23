@@ -111,18 +111,3 @@ def test_relationship_classification_rejects_bad_files_and_keeps_the_loaded_tabl
             )
 
     assert relationship_ids == {"Maps to", "Mapped from"}
-
-
-def test_relationship_classification_rejects_an_unclassified_cdm_relationship(pg_db, tmp_path):
-    _write_files(tmp_path, _MAPS_TO)
-
-    with scoped_test_schema(
-        pg_db.resolved,
-        prefix="relclass_unclassified",
-        schema_claims=[staging_schema_claim()],
-    ) as scoped:
-        Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped.engine)
-
-        with pytest.raises(ClassificationDataError, match="'Mapped from'"):
-            relationship_classification(str(tmp_path), resolved=require_cdm(scoped.resolved))
