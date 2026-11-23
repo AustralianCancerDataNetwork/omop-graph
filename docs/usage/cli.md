@@ -59,3 +59,12 @@ omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 | :--- | :--- | :--- | :--- | :--- |
 | **`--pred-class-dir`** | | `String` | `None` (bundled CSVs) | Path to a directory of classification CSVs, overriding the bundled defaults. |
 | **`--verbose`**{: title="Global option, not specific to this subcommand — see the note above." } | `-v` | `Count` | `0` | Increase logging verbosity (use `-v` or `-vv`). Global option; must precede the subcommand name (see note above). |
+
+### Validation
+
+Before any existing classification table is dropped, the load fails, listing every offending row, if:
+
+- a mapping row's `r_id` is not a CDM `relationship_id`, or its `r_name` differs from that relationship's `relationship_name`
+- a CDM relationship has no classification, since the `KnowledgeGraph` skips the edges of unclassified relationships
+- a `relationship_id` is mapped more than once, or a mapped `class` and `subclass` is missing from `predicate_classification.csv`
+- a class or subclass is not ASCII (use a hyphen, as in `Taxonomic - up`)

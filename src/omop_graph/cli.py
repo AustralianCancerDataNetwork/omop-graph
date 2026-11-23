@@ -16,6 +16,10 @@ from orm_loader.helpers.metadata import Base
 from omop_graph.cli_utils import populate_test_data
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import open_cdm_sessions, resolve_cdm_database
+from omop_graph.extensions.classification_data import (
+    check_classification_files,
+    check_mapping_against_cdm,
+)
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
@@ -24,31 +28,6 @@ from omop_graph.extensions.omop_alchemy import (
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
-
-
-def _filter_unknown_relationship_ids(
-    mapping: pd.DataFrame, vocabulary_ids: set[str]
-) -> pd.DataFrame:
-    """Drop and report relationship mappings absent from the CDM vocabulary."""
-    if not vocabulary_ids:
-        raise RuntimeError(
-            "The CDM relationship vocabulary is empty; load vocabulary data "
-            "before running `relationship-classification`."
-        )
-    unknown_ids = sorted(set(mapping["relationship_id"].dropna()) - vocabulary_ids)
-    if unknown_ids:
-        logger.warning(
-            "Dropping %d relationships not found in the CDM vocabulary: %s",
-            len(unknown_ids),
-            unknown_ids,
-        )
-        mapping = mapping[mapping["relationship_id"].isin(vocabulary_ids)]
-    if mapping.empty:
-        raise RuntimeError(
-            "None of the relationship mappings match IDs in the CDM vocabulary; "
-            "no relationship classifications were loaded."
-        )
-    return mapping
 
 
 @app.callback()
@@ -107,18 +86,29 @@ def relationship_classification(
         Database to load into. Defaults to the active config's CDM database.
         When the vocabulary has its own database, ``RelationshipMapping`` is
         created without its FK to ``relationship.relationship_id``.
+
+    Raises
+    ------
+    ClassificationDataError
+        If the files are inconsistent or do not match the CDM ``relationship`` table.
+        The checks run before the existing tables are dropped.
     """
     if resolved is None:
         resolved = resolve_cdm_database()
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
-            relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
+            cdm_relationships = {
+                relationship_id: relationship_name
+                for relationship_id, relationship_name in session.execute(
+                    sa.select(Relationship.relationship_id, Relationship.relationship_name)
+                )
+            }
         _load_relationship_classification(
             pred_class_dir,
             resolved=resolved,
             engine=engine,
-            relationship_ids=relationship_ids,
+            cdm_relationships=cdm_relationships,
         )
 
 
@@ -127,7 +117,7 @@ def _load_relationship_classification(
     *,
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
-    relationship_ids: set[str],
+    cdm_relationships: dict[str, str],
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
     pred_class_dir_pl = Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
@@ -173,23 +163,11 @@ def _load_relationship_classification(
             "r_id": "relationship_id",
         }
     )
-    df_rel_mapping = df_rel_mapping[
+    check_classification_files(df_rel_cls, df_rel_mapping)
+    check_mapping_against_cdm(df_rel_mapping, cdm_relationships)
+    df_rel_mapping_to_export = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
-    ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")
-    df_rel_mapping = _filter_unknown_relationship_ids(df_rel_mapping, relationship_ids)
-    invalid_mask = df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
-    dropped_ids = df_rel_mapping.loc[invalid_mask, "relationship_id"].unique().tolist()
-
-    if dropped_ids:
-        logger.warning(
-            f"Dropping {len(dropped_ids)} relationships due to missing parent or child class: {dropped_ids}"
-        )
-    df_rel_mapping = df_rel_mapping.dropna(
-        subset=["predicate_kind", "predicate_subkind"], how="any"
-    )
-    df_rel_mapping_to_export = df_rel_mapping.drop_duplicates(
-        subset=["relationship_id", "predicate_kind", "predicate_subkind"]
-    )
+    ]
 
     loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)
 

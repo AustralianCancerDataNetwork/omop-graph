@@ -1,6 +1,16 @@
 import csv
 import io
 from importlib import resources
+from pathlib import Path
+
+import pandas as pd
+
+from omop_graph.extensions.classification_data import (
+    check_classification_files,
+    check_mapping_against_cdm,
+)
+
+ATHENA_RELATIONSHIPS = Path(__file__).parent / "fixtures" / "athena_relationships.csv"
 
 
 def _read_csv(filename: str) -> list[dict[str, str]]:
@@ -18,6 +28,30 @@ def test_every_mapping_class_subclass_has_a_classification():
     assert mapping_pairs <= classification_pairs
 
 
-def test_predicate_subclasses_use_hyphen_minus():
+def test_predicate_classes_and_subclasses_are_ascii():
     for filename in ("predicate_mapping.csv", "predicate_classification.csv"):
-        assert all("–" not in row["subclass"] for row in _read_csv(filename))
+        assert all(
+            row["class"].isascii() and row["subclass"].isascii() for row in _read_csv(filename)
+        )
+
+
+def _athena_relationships() -> dict[str, str]:
+    """relationship_id to relationship_name of the Athena release v5.0 30-AUG-24."""
+    with ATHENA_RELATIONSHIPS.open(encoding="utf-8", newline="") as source:
+        return {row["relationship_id"]: row["relationship_name"] for row in csv.DictReader(source)}
+
+
+def test_packaged_files_are_consistent_and_match_the_athena_relationship_table():
+    classification = pd.DataFrame(_read_csv("predicate_classification.csv")).rename(
+        columns={"class": "predicate_kind", "subclass": "predicate_subkind"}
+    )
+    mapping = pd.DataFrame(_read_csv("predicate_mapping.csv")).rename(
+        columns={
+            "class": "predicate_kind",
+            "subclass": "predicate_subkind",
+            "r_id": "relationship_id",
+        }
+    )
+
+    check_classification_files(classification, mapping)
+    check_mapping_against_cdm(mapping, _athena_relationships())

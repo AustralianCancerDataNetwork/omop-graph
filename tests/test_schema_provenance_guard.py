@@ -41,7 +41,7 @@ def test_relationship_classification_guard_fires_on_reconfigured_schema(
 
     with scoped_test_schema(resolved, prefix="graph_guard_a", resolver=resolver) as scoped_a:
         Base.metadata.create_all(bind=scoped_a.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped_a.engine)
+        seed_relationship_vocabulary(scoped_a.engine, athena=True)
         monkeypatch.setattr(omop_graph_cli, "resolve_cdm_database", lambda: scoped_a.resolved)
         omop_graph_cli.relationship_classification()
 

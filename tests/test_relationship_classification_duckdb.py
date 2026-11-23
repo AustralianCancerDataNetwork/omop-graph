@@ -30,14 +30,24 @@ def _seed_duckdb_vocabulary(engine, mapping_rows: list[dict[str, str]]) -> set[s
         "relationship",
         sa.MetaData(),
         sa.Column("relationship_id", sa.String(20), primary_key=True),
+        sa.Column("relationship_name", sa.String(255), nullable=False),
         schema=Role.VOCAB.value,
     )
-    relationship_ids = {row["r_id"].strip() for row in mapping_rows if row.get("r_id", "").strip()}
+    relationship_names = {
+        row["r_id"].strip(): row["r_name"] for row in mapping_rows if row.get("r_id", "").strip()
+    }
+    relationship_ids = set(relationship_names)
     with engine.begin() as connection:
         relationship_table.create(connection)
         connection.execute(
             relationship_table.insert(),
-            [{"relationship_id": relationship_id} for relationship_id in sorted(relationship_ids)],
+            [
+                {
+                    "relationship_id": relationship_id,
+                    "relationship_name": relationship_names[relationship_id],
+                }
+                for relationship_id in sorted(relationship_ids)
+            ],
         )
     return relationship_ids
 

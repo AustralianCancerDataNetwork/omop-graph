@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -392,8 +394,12 @@ def seed_mock_cdm(session: Session) -> None:
     session.flush()
 
 
-def seed_relationship_vocabulary(engine: sa.Engine) -> None:
-    """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
+def seed_relationship_vocabulary(engine: sa.Engine, *, athena: bool = False) -> None:
+    """Seed the two package-mapped relationship IDs used by PG graph fixtures.
+
+    With ``athena`` the whole Athena relationship table of ``athena_relationships.csv``
+    is seeded, as a full vocabulary load has it.
+    """
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         with resolve_backend(session).relaxed_foreign_keys(session):
@@ -434,7 +440,7 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
                 [
                     Relationship(
                         relationship_id="Maps to",
-                        relationship_name="Maps to",
+                        relationship_name="Non-standard to Standard map (OMOP)",
                         is_hierarchical="0",
                         defines_ancestry="0",
                         reverse_relationship_id="Mapped from",
@@ -442,7 +448,7 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
                     ),
                     Relationship(
                         relationship_id="Mapped from",
-                        relationship_name="Mapped from",
+                        relationship_name="Standard to Non-standard map (OMOP)",
                         is_hierarchical="0",
                         defines_ancestry="0",
                         reverse_relationship_id="Maps to",
@@ -452,3 +458,22 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
             )
             session.flush()
         session.commit()
+        if athena:
+            present = set(session.scalars(sa.select(Relationship.relationship_id)))
+            with (Path(__file__).parent / "athena_relationships.csv").open(
+                encoding="utf-8", newline=""
+            ) as source:
+                session.add_all(
+                    Relationship(
+                        relationship_id=row["relationship_id"],
+                        relationship_name=row["relationship_name"],
+                        is_hierarchical="0",
+                        defines_ancestry="0",
+                        reverse_relationship_id=row["relationship_id"],
+                        relationship_concept_id=CONCEPT_META_ID,
+                    )
+                    for row in csv.DictReader(source)
+                    if row["relationship_id"] not in present
+                )
+            session.flush()
+            session.commit()

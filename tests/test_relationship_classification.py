@@ -9,8 +9,7 @@ column never set an explicit ``name=``, so the real generated type is
 
 from __future__ import annotations
 
-import logging
-
+import pytest
 import sqlalchemy as sa
 from fixtures.helpers import require_cdm
 from fixtures.mock_cdm import seed_relationship_vocabulary
@@ -20,6 +19,7 @@ from orm_loader.backends import staging_schema_claim
 from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
+from omop_graph.extensions.classification_data import ClassificationDataError
 from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
 
 
@@ -29,7 +29,7 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
     ) as scoped:
         schema = scoped.schemas[Role.PRIMARY]
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped.engine)
+        seed_relationship_vocabulary(scoped.engine, athena=True)
 
         relationship_classification(resolved=require_cdm(scoped.resolved))
 
@@ -60,7 +60,7 @@ def test_relationship_classification_is_idempotent(pg_db):
         pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]
     ) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped.engine)
+        seed_relationship_vocabulary(scoped.engine, athena=True)
 
         relationship_classification(resolved=require_cdm(scoped.resolved))
         relationship_classification(resolved=require_cdm(scoped.resolved))
@@ -72,16 +72,26 @@ def test_relationship_classification_is_idempotent(pg_db):
         assert n_class and n_class > 0
 
 
-def test_relationship_classification_warns_and_drops_unknown_ids_colocated(pg_db, tmp_path, caplog):
-    (tmp_path / "predicate_classification.csv").write_text(
-        "class,subclass,description,semantics,inference\n"
-        "Identity,mapping,Identity mapping,identity,none\n"
-    )
-    (tmp_path / "predicate_mapping.csv").write_text(
-        "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
-        "Identity,mapping,Maps to,Maps to,,,\n"
-        "Identity,mapping,unknown_rel,Unknown,,,\n"
-    )
+_CLASSIFICATION_CSV = (
+    "class,subclass,description,semantics,inference\n"
+    "Identity,mapping,Identity mapping,identity,none\n"
+)
+_MAPPING_HEADER = "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
+_MAPS_TO = "Identity,mapping,Maps to,Non-standard to Standard map (OMOP),,,\n"
+_MAPPED_FROM = "Identity,mapping,Mapped from,Standard to Non-standard map (OMOP),,,\n"
+
+
+def _write_files(directory, *mapping_rows: str) -> None:
+    (directory / "predicate_classification.csv").write_text(_CLASSIFICATION_CSV)
+    (directory / "predicate_mapping.csv").write_text(_MAPPING_HEADER + "".join(mapping_rows))
+
+
+def test_relationship_classification_rejects_bad_files_and_keeps_the_loaded_tables(pg_db, tmp_path):
+    good, bad = tmp_path / "good", tmp_path / "bad"
+    good.mkdir()
+    bad.mkdir()
+    _write_files(good, _MAPS_TO, _MAPPED_FROM)
+    _write_files(bad, _MAPS_TO, _MAPPED_FROM, "Identity,mapping,unknown_rel,Unknown,,,\n")
 
     with scoped_test_schema(
         pg_db.resolved,
@@ -90,14 +100,29 @@ def test_relationship_classification_warns_and_drops_unknown_ids_colocated(pg_db
     ) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
         seed_relationship_vocabulary(scoped.engine)
+        relationship_classification(str(good), resolved=require_cdm(scoped.resolved))
 
-        with caplog.at_level(logging.WARNING, logger="omop_graph.cli"):
-            relationship_classification(str(tmp_path), resolved=require_cdm(scoped.resolved))
+        with pytest.raises(ClassificationDataError, match="'unknown_rel'"):
+            relationship_classification(str(bad), resolved=require_cdm(scoped.resolved))
 
         with scoped.engine.connect() as connection:
             relationship_ids = set(
                 connection.execute(sa.select(RelationshipMapping.relationship_id)).scalars()
             )
 
-    assert relationship_ids == {"Maps to"}
-    assert "unknown_rel" in caplog.text
+    assert relationship_ids == {"Maps to", "Mapped from"}
+
+
+def test_relationship_classification_rejects_an_unclassified_cdm_relationship(pg_db, tmp_path):
+    _write_files(tmp_path, _MAPS_TO)
+
+    with scoped_test_schema(
+        pg_db.resolved,
+        prefix="relclass_unclassified",
+        schema_claims=[staging_schema_claim()],
+    ) as scoped:
+        Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
+        seed_relationship_vocabulary(scoped.engine)
+
+        with pytest.raises(ClassificationDataError, match="'Mapped from'"):
+            relationship_classification(str(tmp_path), resolved=require_cdm(scoped.resolved))

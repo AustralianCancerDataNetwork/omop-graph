@@ -95,7 +95,7 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
 def _populate(scoped, *, name: str) -> None:
     Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
     _seed_one_concept(scoped.engine, concept_id=_CONCEPT_ID, name=name)
-    seed_relationship_vocabulary(scoped.engine)
+    seed_relationship_vocabulary(scoped.engine, athena=True)
     relationship_classification(resolved=scoped.resolved)
 
 
