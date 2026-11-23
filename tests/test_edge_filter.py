@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
@@ -107,7 +108,7 @@ def test_on_selects_edges_by_validity_period_independently_of_active_only(
     engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
         schema_translate_map={"vocab": None}
     )
-    Concept_Relationship.__table__.create(engine)
+    cast(sa.Table, Concept_Relationship.__table__).create(engine)
     with Session(engine) as session:
         session.add_all(
             [

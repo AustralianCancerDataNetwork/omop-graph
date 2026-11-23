@@ -12,6 +12,7 @@ import ast
 import inspect
 import textwrap
 from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 from oaklib.interfaces import BasicOntologyInterface, SearchInterface, TextAnnotatorInterface
@@ -70,7 +71,7 @@ def _claimed_methods() -> Iterator[tuple[type, str, Callable]]:
                 yield interface, name, member
 
 
-def _unimplemented_cases() -> Iterator[pytest.ParameterSet]:
+def _unimplemented_cases() -> Iterator[Any]:
     for interface, name, member in _claimed_methods():
         if not _raises_not_implemented(member):
             continue
