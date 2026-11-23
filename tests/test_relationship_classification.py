@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 from fixtures.helpers import require_cdm
-from fixtures.mock_cdm import seed_relationship_vocabulary
+from fixtures.mock_cdm import load_seeded_relationship_classification, seed_relationship_vocabulary
 from oa_configurator import Role
 from oa_configurator.testing import scoped_test_schema
 from orm_loader.backends import staging_schema_claim
@@ -29,9 +29,9 @@ def test_relationship_classification_respects_the_configured_schema(pg_db):
     ) as scoped:
         schema = scoped.schemas[Role.PRIMARY]
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped.engine, athena=True)
+        seed_relationship_vocabulary(scoped.engine)
 
-        relationship_classification(resolved=require_cdm(scoped.resolved))
+        load_seeded_relationship_classification(require_cdm(scoped.resolved))
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -60,10 +60,10 @@ def test_relationship_classification_is_idempotent(pg_db):
         pg_db.resolved, prefix="relclass_idempotent", schema_claims=[staging_schema_claim()]
     ) as scoped:
         Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped.engine, athena=True)
+        seed_relationship_vocabulary(scoped.engine)
 
-        relationship_classification(resolved=require_cdm(scoped.resolved))
-        relationship_classification(resolved=require_cdm(scoped.resolved))
+        load_seeded_relationship_classification(require_cdm(scoped.resolved))
+        load_seeded_relationship_classification(require_cdm(scoped.resolved))
 
         with scoped.engine.connect() as conn:
             n_class = conn.execute(
@@ -77,8 +77,8 @@ _CLASSIFICATION_CSV = (
     "Identity,mapping,Identity mapping,identity,none\n"
 )
 _MAPPING_HEADER = "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
-_MAPS_TO = "Identity,mapping,Maps to,Non-standard to Standard map (OMOP),,,\n"
-_MAPPED_FROM = "Identity,mapping,Mapped from,Standard to Non-standard map (OMOP),,,\n"
+_MAPS_TO = "Identity,mapping,Maps to,Maps to,,,\n"
+_MAPPED_FROM = "Identity,mapping,Mapped from,Mapped from,,,\n"
 
 
 def _write_files(directory, *mapping_rows: str) -> None:

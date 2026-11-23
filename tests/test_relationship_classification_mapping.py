@@ -3,131 +3,87 @@ import pytest
 
 from omop_graph.extensions.classification_data import (
     ClassificationDataError,
-    check_classification_files,
     check_mapping_against_cdm,
+    hierarchy_direction,
 )
 
-CDM = {
-    "Maps to": "Non-standard to Standard map (OMOP)",
-    "Is a": "Is a",
-    "Has Category": "Has Category",
-}
+NAMES = {"Maps to": "Maps to", "Is a": "Is a", "Subsumes": "Subsumes"}
+REVERSE = {"Maps to": "Maps to", "Is a": "Subsumes", "Subsumes": "Is a"}
+UP, DOWN, IDENTITY = (
+    ("Hierarchy", "Taxonomic - up"),
+    ("Hierarchy", "Taxonomic - down"),
+    ("Identity", "x"),
+)
 
 
-def _classification(*pairs: tuple[str, str]) -> pd.DataFrame:
-    return pd.DataFrame(pairs, columns=["predicate_kind", "predicate_subkind"])
-
-
-def _mapping(*rows: tuple[str, str, str | None, str | None]) -> pd.DataFrame:
+def _mapping(**kinds: tuple[str | None, str | None]) -> pd.DataFrame:
+    rows = [
+        (rid.replace("_", " "), NAMES[rid.replace("_", " ")], *kind) for rid, kind in kinds.items()
+    ]
     return pd.DataFrame(
         rows, columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind"]
     )
 
 
-COMPLETE = _mapping(
-    ("Maps to", "Non-standard to Standard map (OMOP)", "Identity", "Exact equivalence"),
-    ("Is a", "Is a", "Hierarchy", "Taxonomic - up"),
-    ("Has Category", "Has Category", "Hierarchy", "Categorical - up"),
-)
+def _check(mapping: pd.DataFrame) -> None:
+    check_mapping_against_cdm(mapping, NAMES, REVERSE)
 
 
-def test_consistent_files_and_mapping_pass():
-    classification = _classification(
-        ("Identity", "Exact equivalence"),
-        ("Hierarchy", "Taxonomic - up"),
-        ("Hierarchy", "Categorical - up"),
-    )
-
-    check_classification_files(classification, COMPLETE)
-    check_mapping_against_cdm(COMPLETE, CDM)
+GOOD = _mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=DOWN)
 
 
-def test_files_reject_non_ascii_subkinds():
-    classification = _classification(("Hierarchy", "Taxonomic \u2013 up"))
-    mapping = _mapping(("Is a", "Is a", "Hierarchy", "Taxonomic \u2013 up"))
-
-    with pytest.raises(ClassificationDataError, match="non-ASCII"):
-        check_classification_files(classification, mapping)
+def test_a_consistent_mapping_passes():
+    _check(GOOD)
 
 
-def test_files_reject_a_relationship_mapped_twice():
-    classification = _classification(("Hierarchy", "Taxonomic - up"), ("Identity", "mapping"))
-    mapping = _mapping(
-        ("Is a", "Is a", "Hierarchy", "Taxonomic - up"),
-        ("Is a", "Is a", "Identity", "mapping"),
-    )
-
-    with pytest.raises(ClassificationDataError, match="more than once.*Is a"):
-        check_classification_files(classification, mapping)
-
-
-def test_files_reject_a_subkind_missing_from_the_class_file():
-    classification = _classification(("Hierarchy", "Taxonomic - up"))
-    mapping = _mapping(("Is a", "Is a", "Hierarchy", "Taxonomic - down"))
-
-    with pytest.raises(ClassificationDataError, match="missing from predicate_classification"):
-        check_classification_files(classification, mapping)
-
-
-def test_files_report_every_problem_at_once():
-    classification = _classification(("Hierarchy", "Taxonomic \u2013 up"))
-    mapping = _mapping(
-        ("Is a", "Is a", "Hierarchy", "Taxonomic \u2013 up"),
-        ("Is a", "Is a", "Hierarchy", "Taxonomic \u2013 up"),
-    )
-
-    with pytest.raises(ClassificationDataError) as error:
-        check_classification_files(classification, mapping)
-
-    assert "non-ASCII" in str(error.value)
-    assert "more than once" in str(error.value)
-
-
-def test_mapping_with_an_id_unknown_to_the_cdm_names_the_owner_of_its_name():
-    mapping = pd.concat(
-        [
-            COMPLETE.iloc[:2],
-            _mapping(("membership inference", "Has Category", "Hierarchy", "Categorical - up")),
-        ]
-    )
+def test_an_id_unknown_to_the_cdm_names_the_owner_of_its_name():
+    mapping = GOOD.copy()
+    mapping.loc[1, "relationship_id"] = "membership inference"
 
     with pytest.raises(
-        ClassificationDataError,
-        match="'membership inference'.*belongs to relationship_id 'Has Category'",
+        ClassificationDataError, match="'membership inference'.*belongs to relationship_id 'Is a'"
     ):
-        check_mapping_against_cdm(mapping, CDM)
+        _check(mapping)
 
 
-def test_mapping_with_a_name_differing_from_the_cdm_is_rejected():
-    mapping = COMPLETE.copy()
+def test_a_name_differing_from_the_cdm_is_rejected():
+    mapping = GOOD.copy()
     mapping.loc[1, "r_name"] = "Is a (SNOMED)"
 
     with pytest.raises(ClassificationDataError, match="relationship_name is 'Is a'"):
-        check_mapping_against_cdm(mapping, CDM)
+        _check(mapping)
 
 
-def test_mapping_without_a_name_column_is_checked_by_id_only():
-    check_mapping_against_cdm(COMPLETE.drop(columns="r_name"), CDM)
-
-    with pytest.raises(ClassificationDataError, match="'Nope'"):
-        check_mapping_against_cdm(
-            pd.concat([COMPLETE, _mapping(("Nope", "x", "Identity", "x"))]), CDM
-        )
+def test_a_relationship_mapped_twice_is_rejected():
+    with pytest.raises(ClassificationDataError, match="more than once.*Is a"):
+        _check(pd.concat([GOOD, GOOD.iloc[[1]]]))
 
 
-def test_a_cdm_relationship_without_a_classification_is_rejected():
-    with pytest.raises(ClassificationDataError, match="1 CDM relationships.*'Has Category'"):
-        check_mapping_against_cdm(COMPLETE.iloc[:2], CDM)
+@pytest.mark.parametrize(
+    "missing", [GOOD.iloc[:2], _mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=(None, None))]
+)
+def test_a_cdm_relationship_without_a_classification_is_rejected(missing):
+    with pytest.raises(ClassificationDataError, match="no classification.*'Subsumes'"):
+        _check(missing)
 
 
-def test_a_mapping_row_without_a_class_does_not_classify_its_relationship():
-    mapping = COMPLETE.copy()
-    mapping.loc[2, ["predicate_kind", "predicate_subkind"]] = None
+def test_the_reverse_of_a_hierarchy_relationship_must_be_hierarchy_with_the_opposite_direction():
+    with pytest.raises(
+        ClassificationDataError, match="'Is a' and its reverse 'Subsumes' are both 'up'"
+    ):
+        _check(_mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=UP))
+    with pytest.raises(
+        ClassificationDataError, match="'Is a' is Hierarchy but its reverse 'Subsumes' is Identity"
+    ):
+        _check(_mapping(Maps_to=IDENTITY, Is_a=UP, Subsumes=IDENTITY))
 
-    with pytest.raises(ClassificationDataError, match="'Has Category'"):
-        check_mapping_against_cdm(mapping, CDM)
+
+def test_hierarchy_direction_accepts_only_the_canonical_spelling():
+    assert hierarchy_direction("Categorical - down") == "down"
+    with pytest.raises(ClassificationDataError):
+        hierarchy_direction("Taxonomic \u2013 up")
 
 
-def test_empty_relationship_vocabulary_fails_clearly():
+def test_an_empty_relationship_vocabulary_fails_clearly():
     with pytest.raises(RuntimeError, match="relationship vocabulary is empty"):
-        check_mapping_against_cdm(COMPLETE, {})
+        check_mapping_against_cdm(GOOD, {}, {})

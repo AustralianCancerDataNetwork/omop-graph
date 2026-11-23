@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import csv
+import tempfile
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -8,6 +8,7 @@ from typing import cast
 
 import pytest
 import sqlalchemy as sa
+from oa_configurator import ResolvedCDMDatabase
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
@@ -22,6 +23,7 @@ from orm_loader.helpers import Base
 from sqlalchemy.orm import Session, sessionmaker
 
 from fixtures.helpers import require_cdm
+from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -394,12 +396,8 @@ def seed_mock_cdm(session: Session) -> None:
     session.flush()
 
 
-def seed_relationship_vocabulary(engine: sa.Engine, *, athena: bool = False) -> None:
-    """Seed the two package-mapped relationship IDs used by PG graph fixtures.
-
-    With ``athena`` the whole Athena relationship table of ``athena_relationships.csv``
-    is seeded, as a full vocabulary load has it.
-    """
+def seed_relationship_vocabulary(engine: sa.Engine) -> None:
+    """Seed the two package-mapped relationship IDs used by PG graph fixtures."""
     session_local = sessionmaker(bind=engine, future=True)
     with session_local() as session:
         with resolve_backend(session).relaxed_foreign_keys(session):
@@ -440,7 +438,7 @@ def seed_relationship_vocabulary(engine: sa.Engine, *, athena: bool = False) -> 
                 [
                     Relationship(
                         relationship_id="Maps to",
-                        relationship_name="Non-standard to Standard map (OMOP)",
+                        relationship_name="Maps to",
                         is_hierarchical="0",
                         defines_ancestry="0",
                         reverse_relationship_id="Mapped from",
@@ -448,7 +446,7 @@ def seed_relationship_vocabulary(engine: sa.Engine, *, athena: bool = False) -> 
                     ),
                     Relationship(
                         relationship_id="Mapped from",
-                        relationship_name="Standard to Non-standard map (OMOP)",
+                        relationship_name="Mapped from",
                         is_hierarchical="0",
                         defines_ancestry="0",
                         reverse_relationship_id="Maps to",
@@ -458,22 +456,18 @@ def seed_relationship_vocabulary(engine: sa.Engine, *, athena: bool = False) -> 
             )
             session.flush()
         session.commit()
-        if athena:
-            present = set(session.scalars(sa.select(Relationship.relationship_id)))
-            with (Path(__file__).parent / "athena_relationships.csv").open(
-                encoding="utf-8", newline=""
-            ) as source:
-                session.add_all(
-                    Relationship(
-                        relationship_id=row["relationship_id"],
-                        relationship_name=row["relationship_name"],
-                        is_hierarchical="0",
-                        defines_ancestry="0",
-                        reverse_relationship_id=row["relationship_id"],
-                        relationship_concept_id=CONCEPT_META_ID,
-                    )
-                    for row in csv.DictReader(source)
-                    if row["relationship_id"] not in present
-                )
-            session.flush()
-            session.commit()
+
+
+def load_seeded_relationship_classification(resolved: ResolvedCDMDatabase) -> None:
+    """Classify the two relationships of :func:`seed_relationship_vocabulary` as Identity."""
+    with tempfile.TemporaryDirectory() as directory:
+        (Path(directory) / "predicate_classification.csv").write_text(
+            "class,subclass,description,semantics,inference\n"
+            "Identity,Exact equivalence,Identity mapping,identity,none\n"
+        )
+        (Path(directory) / "predicate_mapping.csv").write_text(
+            "class,subclass,r_id,r_name\n"
+            "Identity,Exact equivalence,Maps to,Maps to\n"
+            "Identity,Exact equivalence,Mapped from,Mapped from\n"
+        )
+        relationship_classification(directory, resolved=resolved)

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 from fixtures.helpers import require_cdm
-from fixtures.mock_cdm import seed_relationship_vocabulary
+from fixtures.mock_cdm import load_seeded_relationship_classification, seed_relationship_vocabulary
 from oa_configurator import Role, SchemaDriftError
 from oa_configurator.testing import (
     guarded_resolver,
@@ -41,9 +41,9 @@ def test_relationship_classification_guard_fires_on_reconfigured_schema(
 
     with scoped_test_schema(resolved, prefix="graph_guard_a", resolver=resolver) as scoped_a:
         Base.metadata.create_all(bind=scoped_a.engine, checkfirst=True)
-        seed_relationship_vocabulary(scoped_a.engine, athena=True)
+        seed_relationship_vocabulary(scoped_a.engine)
         monkeypatch.setattr(omop_graph_cli, "resolve_cdm_database", lambda: scoped_a.resolved)
-        omop_graph_cli.relationship_classification()
+        load_seeded_relationship_classification(require_cdm(scoped_a.resolved))
 
     drifted = resolve_with_role_schemas(
         scoped_a.resolved,

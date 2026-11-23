@@ -10,6 +10,8 @@ To provide further reasoning capabilities beyond the conventional OMOP CDM, we d
     - `Identity`.
 - `subclass`: Subclass to further differentiate between edges of the same class. Fine-grained reasoning capabilities including description for the LLM regarding semantics and inference. These are not as limited as the parent `class`.
 
+The `Hierarchy` subclasses end in a direction, read from the stored edge `concept_id_1 -> concept_id_2`. `up` means `concept_id_2` is the parent or group of `concept_id_1`, `down` means the reverse. A relationship and its OMOP reverse therefore always have opposite directions.
+
 ## Predicate Classification
 
 To allow reproduction and evaluation of this approach, we provide clear guidelines how we classified edge predicates of the OMOP CDM into the aforementioned groups. The following table provides exact descriptions about each `class` and `subclass`.

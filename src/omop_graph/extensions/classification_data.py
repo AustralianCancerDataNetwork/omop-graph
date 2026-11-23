@@ -1,70 +1,49 @@
-"""Validation of the predicate classification files against each other and the CDM."""
+"""Validation of the predicate classification mapping against the CDM relationship table."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
 import pandas as pd
 
+_HIERARCHY_SUBKIND = re.compile(r"(Taxonomic|Categorical) - (up|down)")
+
 
 class ClassificationDataError(ValueError):
-    """The predicate classification data is inconsistent or does not match the CDM."""
+    """The predicate classification mapping does not match the CDM relationship table."""
 
 
-def check_classification_files(classification: pd.DataFrame, mapping: pd.DataFrame) -> None:
-    """Check the two classification files for consistency, raising on every problem found.
+def hierarchy_direction(subkind: str) -> str:
+    """Return ``"up"`` or ``"down"`` for a Hierarchy subkind such as ``Taxonomic - up``.
 
-    Parameters
-    ----------
-    classification : pd.DataFrame
-        Rows of ``predicate_classification.csv`` with ``predicate_kind`` and
-        ``predicate_subkind`` columns.
-    mapping : pd.DataFrame
-        Rows of ``predicate_mapping.csv`` with ``relationship_id``,
-        ``predicate_kind`` and ``predicate_subkind`` columns.
+    "up" means ``concept_id_2`` is the parent or group of ``concept_id_1``.
 
     Raises
     ------
     ClassificationDataError
-        If a kind or subkind contains non-ASCII text, a relationship id is mapped
-        more than once, or a mapped kind and subkind is missing from the
-        classification file.
+        If ``subkind`` is not of the form ``<Taxonomic|Categorical> - <up|down>``.
     """
-    problems: list[str] = []
-    for label, frame in (
-        ("predicate_classification.csv", classification),
-        ("predicate_mapping.csv", mapping),
-    ):
-        for column in ("predicate_kind", "predicate_subkind"):
-            values = frame[column].dropna().astype(str)
-            bad = sorted(set(values[~values.map(str.isascii)]))
-            if bad:
-                problems.append(f"{label} has non-ASCII text in {column}: {bad}")
-
-    mapped_ids = mapping["relationship_id"].dropna()
-    duplicated = sorted(set(mapped_ids[mapped_ids.duplicated(keep=False)]))
-    if duplicated:
-        problems.append(f"predicate_mapping.csv maps relationship ids more than once: {duplicated}")
-
-    known = set(zip(classification["predicate_kind"], classification["predicate_subkind"]))
-    pairs = mapping[["predicate_kind", "predicate_subkind"]].dropna()
-    unknown = sorted(set(zip(pairs["predicate_kind"], pairs["predicate_subkind"])) - known)
-    if unknown:
-        problems.append(
-            "predicate_mapping.csv uses kind and subkind pairs missing from "
-            f"predicate_classification.csv: {unknown}"
+    match = _HIERARCHY_SUBKIND.fullmatch(subkind)
+    if match is None:
+        raise ClassificationDataError(
+            f"Hierarchy subkind {subkind!r} must be 'Taxonomic' or 'Categorical' followed by "
+            "' - up' or ' - down'."
         )
-
-    if problems:
-        raise ClassificationDataError("\n".join(problems))
+    return match.group(2)
 
 
-def check_mapping_against_cdm(mapping: pd.DataFrame, cdm_relationships: Mapping[str, str]) -> None:
+def check_mapping_against_cdm(
+    mapping: pd.DataFrame,
+    cdm_relationships: Mapping[str, str],
+    reverse_ids: Mapping[str, str],
+) -> None:
     """Check the mapping against the CDM ``relationship`` table, raising on every problem found.
 
-    Every mapped ``relationship_id`` must be in the CDM, a row's ``r_name``, when present,
-    must equal the CDM ``relationship_name``, and every CDM relationship must have a
-    classified row.
+    Every mapped ``relationship_id`` must be in the CDM and mapped once, a row's ``r_name``,
+    when present, must equal the CDM ``relationship_name``, every CDM relationship must have
+    a classified row, and a Hierarchy relationship and its CDM reverse must both be Hierarchy
+    with opposite directions.
 
     Parameters
     ----------
@@ -73,14 +52,15 @@ def check_mapping_against_cdm(mapping: pd.DataFrame, cdm_relationships: Mapping[
         ``predicate_subkind`` and, optionally, ``r_name`` columns.
     cdm_relationships : Mapping[str, str]
         CDM ``relationship_id`` to ``relationship_name``.
+    reverse_ids : Mapping[str, str]
+        CDM ``relationship_id`` to ``reverse_relationship_id``.
 
     Raises
     ------
     RuntimeError
         If the CDM has no relationships.
     ClassificationDataError
-        If a mapped relationship does not match the CDM or a CDM relationship has no
-        classification.
+        If the mapping does not match the CDM.
     """
     if not cdm_relationships:
         raise RuntimeError(
@@ -109,6 +89,10 @@ def check_mapping_against_cdm(mapping: pd.DataFrame, cdm_relationships: Mapping[
                 f"relationship_name is {cdm_relationships[relationship_id]!r}"
             )
 
+    duplicated = sorted({i for i in ids if ids.count(i) > 1})
+    if duplicated:
+        problems.append(f"relationship ids mapped more than once: {duplicated}")
+
     classified = mapping.dropna(subset=["predicate_kind", "predicate_subkind"])
     unclassified = sorted(set(cdm_relationships) - set(classified["relationship_id"]))
     if unclassified:
@@ -116,6 +100,29 @@ def check_mapping_against_cdm(mapping: pd.DataFrame, cdm_relationships: Mapping[
             f"{len(unclassified)} CDM relationships have no classification, so the knowledge "
             f"graph would skip their edges: {unclassified}"
         )
+
+    kinds = dict(
+        zip(
+            classified["relationship_id"],
+            zip(classified["predicate_kind"], classified["predicate_subkind"], strict=True),
+            strict=True,
+        )
+    )
+    for relationship_id, (kind, subkind) in kinds.items():
+        reverse_id = reverse_ids.get(relationship_id)
+        if kind != "Hierarchy" or reverse_id is None or relationship_id > reverse_id:
+            continue
+        reverse_kind, reverse_subkind = kinds.get(reverse_id, (None, None))
+        if reverse_kind != "Hierarchy":
+            problems.append(
+                f"{relationship_id!r} is Hierarchy but its reverse {reverse_id!r} is "
+                f"{reverse_kind or 'unclassified'}"
+            )
+        elif hierarchy_direction(subkind) == hierarchy_direction(reverse_subkind):
+            problems.append(
+                f"{relationship_id!r} and its reverse {reverse_id!r} are both "
+                f"{hierarchy_direction(subkind)!r}"
+            )
 
     if problems:
         raise ClassificationDataError(

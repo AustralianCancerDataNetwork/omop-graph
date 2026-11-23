@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import csv
-
 import sqlalchemy as sa
 from oa_configurator import Role
 
@@ -14,68 +12,51 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipMapping,
 )
 
+RELATIONSHIPS = [
+    {"relationship_id": "Is a", "relationship_name": "Is a", "reverse_relationship_id": "Subsumes"},
+    {
+        "relationship_id": "Subsumes",
+        "relationship_name": "Subsumes",
+        "reverse_relationship_id": "Is a",
+    },
+]
+EXPECTED_CLASSES = {("Hierarchy", "Taxonomic - up"), ("Hierarchy", "Taxonomic - down")}
+EXPECTED_MAPPINGS = {
+    ("Is a", "Hierarchy", "Taxonomic - up"),
+    ("Subsumes", "Hierarchy", "Taxonomic - down"),
+}
 
-def _read_csv(filename: str) -> list[dict[str, str]]:
-    with (cli.packaged_predicate_csv_dir() / filename).open(
-        encoding="utf-8", newline=""
-    ) as csv_file:
-        return [
-            {key: value or "" for key, value in row.items() if key is not None}
-            for row in csv.DictReader(csv_file)
-        ]
 
-
-def _seed_duckdb_vocabulary(engine, mapping_rows: list[dict[str, str]]) -> set[str]:
+def _seed_duckdb_vocabulary(engine) -> None:
     relationship_table = sa.Table(
         "relationship",
         sa.MetaData(),
         sa.Column("relationship_id", sa.String(20), primary_key=True),
         sa.Column("relationship_name", sa.String(255), nullable=False),
+        sa.Column("reverse_relationship_id", sa.String(20), nullable=False),
         schema=Role.VOCAB.value,
     )
-    relationship_names = {
-        row["r_id"].strip(): row["r_name"] for row in mapping_rows if row.get("r_id", "").strip()
-    }
-    relationship_ids = set(relationship_names)
     with engine.begin() as connection:
         relationship_table.create(connection)
-        connection.execute(
-            relationship_table.insert(),
-            [
-                {
-                    "relationship_id": relationship_id,
-                    "relationship_name": relationship_names[relationship_id],
-                }
-                for relationship_id in sorted(relationship_ids)
-            ],
-        )
-    return relationship_ids
+        connection.execute(relationship_table.insert(), RELATIONSHIPS)
 
 
-def test_relationship_classification_runs_and_is_idempotent_on_duckdb(
-    duckdb_db,
-):
+def test_relationship_classification_runs_and_is_idempotent_on_duckdb(duckdb_db, tmp_path):
     resolved = duckdb_db.resolved
     assert resolved is not None
 
-    classification_rows = _read_csv("predicate_classification.csv")
-    mapping_rows = _read_csv("predicate_mapping.csv")
-    relationship_ids = _seed_duckdb_vocabulary(duckdb_db.committing_engine, mapping_rows)
-
-    expected_classes = {
-        (row["class"], row["subclass"])
-        for row in classification_rows
-        if row.get("class") and row.get("subclass")
-    }
-    expected_mappings = {
-        (row["r_id"].strip(), row["class"], row["subclass"])
-        for row in mapping_rows
-        if row.get("r_id", "").strip()
-        and row.get("r_id", "").strip() in relationship_ids
-        and row.get("class")
-        and row.get("subclass")
-    }
-    cli.relationship_classification(resolved=resolved)
+    (tmp_path / "predicate_classification.csv").write_text(
+        "class,subclass,description,semantics,inference\n"
+        "Hierarchy,Taxonomic - up,Parent,Inheritance,Up\n"
+        "Hierarchy,Taxonomic - down,Child,Refinement,Down\n"
+    )
+    (tmp_path / "predicate_mapping.csv").write_text(
+        "class,subclass,r_id,r_name\n"
+        "Hierarchy,Taxonomic - up,Is a,Is a\n"
+        "Hierarchy,Taxonomic - down,Subsumes,Subsumes\n"
+    )
+    _seed_duckdb_vocabulary(duckdb_db.committing_engine)
+    cli.relationship_classification(str(tmp_path), resolved=resolved)
 
     with duckdb_db.committing_engine.connect() as connection:
         checks = (
@@ -112,20 +93,15 @@ def test_relationship_classification_runs_and_is_idempotent_on_duckdb(
             )
         }
 
-    assert actual_classes == expected_classes
-    assert actual_mappings == expected_mappings
-    assert (
-        "Category of",
-        PredicateKind.HIERARCHY.value,
-        "Categorical - up",
-    ) in actual_mappings
+    assert actual_classes == EXPECTED_CLASSES
+    assert actual_mappings == EXPECTED_MAPPINGS
 
-    cli.relationship_classification(resolved=resolved)
+    cli.relationship_classification(str(tmp_path), resolved=resolved)
 
     with duckdb_db.committing_engine.connect() as connection:
         assert connection.scalar(
             sa.select(sa.func.count()).select_from(RelationshipClass.__table__)
-        ) == len(expected_classes)
+        ) == len(EXPECTED_CLASSES)
         assert connection.scalar(
             sa.select(sa.func.count()).select_from(RelationshipMapping.__table__)
-        ) == len(expected_mappings)
+        ) == len(EXPECTED_MAPPINGS)

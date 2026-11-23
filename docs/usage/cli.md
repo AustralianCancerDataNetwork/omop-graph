@@ -64,7 +64,6 @@ omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 
 Before any existing classification table is dropped, the load fails, listing every offending row, if:
 
-- a mapping row's `r_id` is not a CDM `relationship_id`, or its `r_name` differs from that relationship's `relationship_name`
+- a mapping row's `r_id` is not a CDM `relationship_id`, its `r_name` differs from that relationship's `relationship_name`, or a `relationship_id` is mapped more than once
 - a CDM relationship has no classification, since the `KnowledgeGraph` skips the edges of unclassified relationships
-- a `relationship_id` is mapped more than once, or a mapped `class` and `subclass` is missing from `predicate_classification.csv`
-- a class or subclass is not ASCII (use a hyphen, as in `Taxonomic - up`)
+- a `Hierarchy` subkind is not `Taxonomic` or `Categorical` followed by ` - up` or ` - down` (hyphen, not en dash), or a `Hierarchy` relationship and its CDM reverse are not both `Hierarchy` with opposite directions

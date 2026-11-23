@@ -16,10 +16,7 @@ from orm_loader.helpers.metadata import Base
 from omop_graph.cli_utils import populate_test_data
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import open_cdm_sessions, resolve_cdm_database
-from omop_graph.extensions.classification_data import (
-    check_classification_files,
-    check_mapping_against_cdm,
-)
+from omop_graph.extensions.classification_data import check_mapping_against_cdm
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
@@ -98,17 +95,21 @@ def relationship_classification(
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
-            cdm_relationships = {
-                relationship_id: relationship_name
-                for relationship_id, relationship_name in session.execute(
-                    sa.select(Relationship.relationship_id, Relationship.relationship_name)
+            relationships = session.execute(
+                sa.select(
+                    Relationship.relationship_id,
+                    Relationship.relationship_name,
+                    Relationship.reverse_relationship_id,
                 )
-            }
+            ).all()
+        cdm_relationships = {rid: name for rid, name, _ in relationships}
+        reverse_ids = {rid: reverse for rid, _, reverse in relationships}
         _load_relationship_classification(
             pred_class_dir,
             resolved=resolved,
             engine=engine,
             cdm_relationships=cdm_relationships,
+            reverse_ids=reverse_ids,
         )
 
 
@@ -118,6 +119,7 @@ def _load_relationship_classification(
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
     cdm_relationships: dict[str, str],
+    reverse_ids: dict[str, str],
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
     pred_class_dir_pl = Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
@@ -163,8 +165,7 @@ def _load_relationship_classification(
             "r_id": "relationship_id",
         }
     )
-    check_classification_files(df_rel_cls, df_rel_mapping)
-    check_mapping_against_cdm(df_rel_mapping, cdm_relationships)
+    check_mapping_against_cdm(df_rel_mapping, cdm_relationships, reverse_ids)
     df_rel_mapping_to_export = df_rel_mapping[
         ["relationship_id", "predicate_kind", "predicate_subkind"]
     ]
