@@ -22,9 +22,9 @@ UP, DOWN, IDENTITY = (
 
 
 def _mapping(*rows: tuple[str, tuple[str | None, str | None, str | None]]) -> pd.DataFrame:
-    rows = [(rid, RELATIONSHIPS[rid][0], *kind) for rid, kind in rows]
+    records = [(rid, RELATIONSHIPS[rid][0], *kind) for rid, kind in rows]
     return pd.DataFrame(
-        rows,
+        records,
         columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind", "direction"],
     )
 
