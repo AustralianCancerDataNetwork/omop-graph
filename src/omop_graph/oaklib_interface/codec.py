@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote, unquote
+
+from oaklib.datamodels.vocabulary import IS_A
 from oaklib.types import CURIE, PRED_CURIE
 
 from omop_graph.graph import KnowledgeGraph
 
 OMOP_PREFIX = "OMOP"
 OMOP_REL_PREFIX = "OMOP_REL"
+IS_A_RELATIONSHIP_ID = "Is a"
 
 
 class OMOPCodec:
@@ -85,6 +89,9 @@ class OMOPCodec:
         """
         Convert a relationship id to a predicate CURIE.
 
+        ``Is a`` is ``rdfs:subClassOf``, the predicate oaklib recognises as the hierarchy.
+        Every other relationship is ``OMOP_REL`` followed by the percent-encoded id.
+
         Parameters
         ----------
         relationship_id : str | int
@@ -93,13 +100,18 @@ class OMOPCodec:
         Returns
         -------
         PRED_CURIE
-            The CURIE, for example ``OMOP_REL:Is a``.
+            The CURIE, for example ``OMOP_REL:Has%20dir%20proc%20site``.
         """
-        return ":".join((OMOP_REL_PREFIX, str(relationship_id)))
+        if relationship_id == IS_A_RELATIONSHIP_ID:
+            return IS_A
+        return ":".join((OMOP_REL_PREFIX, quote(str(relationship_id), safe="")))
 
     def parse_predicate(self, pred: PRED_CURIE) -> str:
         """
         Parse a predicate CURIE into an OMOP relationship id.
+
+        Accepts ``rdfs:subClassOf`` for ``Is a`` and ``OMOP_REL`` with a percent-encoded id,
+        which also covers ``Is a``.
 
         Parameters
         ----------
@@ -114,9 +126,11 @@ class OMOPCodec:
         Raises
         ------
         ValueError
-            If the prefix is not ``OMOP_REL``.
+            If the CURIE is neither ``rdfs:subClassOf`` nor an ``OMOP_REL`` CURIE.
         """
+        if pred == IS_A:
+            return IS_A_RELATIONSHIP_ID
         prefix, _, local = pred.partition(":")
         if prefix != OMOP_REL_PREFIX:
             raise ValueError(f"Unsupported predicate CURIE: {pred}")
-        return local
+        return unquote(local)

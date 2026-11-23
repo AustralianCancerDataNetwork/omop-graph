@@ -39,7 +39,7 @@ def test_entities_lists_concepts_or_relationships_by_owl_type(mock_cdm_kg: Knowl
 
     assert concepts == set(adapter.entities(owl_type=OWL_CLASS))
     assert concepts
-    assert predicates == {"OMOP_REL:maps to", "OMOP_REL:mapped from"}
+    assert predicates == {"OMOP_REL:maps%20to", "OMOP_REL:mapped%20from"}
     assert all(
         list(adapter.entities(owl_type=owl_type)) == []
         for owl_type in (OWL_NAMED_INDIVIDUAL, OWL_DATATYPE_PROPERTY, OWL_ANNOTATION_PROPERTY)
@@ -99,6 +99,9 @@ def test_a_standing_scope_must_not_truncate_enumeration(
 def test_relationships_follow_the_oaklib_flags(mock_cdm_kg: KnowledgeGraph) -> None:
     adapter = OMOPAlchemyImplementation(kg=mock_cdm_kg)
 
+    assert list(adapter.relationships(subjects=["OMOP:900001"])) == [
+        ("OMOP:900001", "OMOP_REL:maps%20to", "OMOP:196653")
+    ]
     assert list(adapter.relationships(include_tbox=False)) == []
     assert list(adapter.relationships(include_abox=False)) == list(adapter.relationships())
     with pytest.raises(NotImplementedError, match="include_entailed"):

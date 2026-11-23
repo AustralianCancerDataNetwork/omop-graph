@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
-from ..extensions.omop_alchemy import PredicateKind, PredicateSubkind
+from ..extensions.omop_alchemy import HierarchyDirection, PredicateKind, PredicateSubkind
 
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
@@ -146,46 +146,25 @@ class Predicate:
         The human-readable label (e.g. `Non-standard to Standard Mapping`).
     reverse_id : str, optional
         The relationship_id of the inverse relationship (e.g. `mapped from`).
-    is_hierarchical : bool
-        Whether OMOP defines this as a hierarchical relationship.
-    anc_up : bool
-        Whether this relationship defines 'defines_ancestry' upwards (deprecated logic).
-    anc_down : bool
-        Whether this relationship defines 'defines_ancestry' downwards (deprecated logic).
     predicate_kind : PredicateKind
         The high-level category of this predicate (Hierarchy, Identity, Composition, Association, or Attribute).
     predicate_subkind : str
         The more fine-grained subclass of this predicate (e.g. for Identity: 'standard to non-standard', 'source to standard', etc.)
+    direction : HierarchyDirection, optional
+        For a Hierarchy predicate, whether the stored edge points up to the parent or
+        group, or down to a child or member. None for every other kind.
     """
 
     relationship_id: str
     name: str
     reverse_id: str | None
-    is_hierarchical: bool
-    anc_up: bool
-    anc_down: bool
     predicate_kind: PredicateKind
     predicate_subkind: str
-
-    @property
-    def defines_ancestry(self) -> bool:
-        """
-        Check if this predicate is involved in defining ancestry.
-        """
-        return self.anc_up or self.anc_down
+    direction: HierarchyDirection | None
 
     def __repr__(self) -> str:
-        flags = []
-        if self.is_hierarchical:
-            flags.append("hierarchical")
-        if self.defines_ancestry:
-            flags.append("ancestry")
-        if self.reverse_id:
-            flags.append(f"reverse={self.reverse_id}")
-
-        flag_str = f" | {', '.join(flags)}" if flags else ""
-
-        return f"Predicate({self.relationship_id!r}: {self.name!r}{flag_str})"
+        reverse = f" | reverse={self.reverse_id}" if self.reverse_id else ""
+        return f"Predicate({self.relationship_id!r}: {self.name!r}{reverse})"
 
 
 def is_active(

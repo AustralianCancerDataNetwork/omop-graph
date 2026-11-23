@@ -2,6 +2,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import replace
+from functools import cached_property
 from typing import ClassVar
 
 import numpy as np
@@ -37,7 +38,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 
 from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.nodes import LabelMatchKind
@@ -350,6 +351,24 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         super().__init__(*args, kg=kg, **kwargs)
         self.concept_filter = concept_filter
 
+    @cached_property
+    def default_relationship_ids(self) -> frozenset[str]:
+        """
+        The classified relationships exposed when no predicate is named.
+
+        A Hierarchy relationship is exposed in its up direction only, so each hierarchical
+        edge appears once, from the child to the parent. The down direction is available
+        by naming it.
+        """
+        return frozenset(
+            predicate.relationship_id
+            for predicate in self.kg.predicates()
+            if not (
+                predicate.predicate_kind is PredicateKind.HIERARCHY
+                and predicate.direction is HierarchyDirection.DOWN
+            )
+        )
+
     def supports_reasoning(self) -> bool:
         return False
 
@@ -569,7 +588,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         subject_ids = (
             tuple([self.codec.parse_concept(s) for s in subjects]) if subjects is not None else None
         )
-        predicate_ids = frozenset(predicates) if predicates is not None else None
+        predicate_ids = (
+            frozenset(self.codec.parse_predicate(p) for p in predicates)
+            if predicates
+            else self.default_relationship_ids
+        )
         object_ids = (
             tuple([self.codec.parse_concept(o) for o in objects]) if objects is not None else None
         )
@@ -586,7 +609,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         for s, p, o in relationships:
             yield (
                 self.codec.concept_curie(s),
-                p,
+                self.codec.predicate_curie(p),
                 self.codec.concept_curie(o),
             )
 

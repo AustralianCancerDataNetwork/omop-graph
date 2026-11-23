@@ -369,56 +369,17 @@ def q_predicate_name(relationship_id: str) -> Select:
 
 
 def q_all_predicates() -> Select:
-    """Query for all defined relationships."""
+    """Query all defined relationships."""
     return select(
         Relationship.relationship_id,
         Relationship.relationship_name,
         Relationship.reverse_relationship_id,
-        Relationship.is_hierarchical_relationship_expr().label("is_hierarchical"),
-        Relationship.is_ancestry_defining_expr().label("defines_ancestry"),
     )
 
 
 def q_predicate_row(relationship_id: str) -> Select:
     """Query for a specific relationship definition."""
-    return select(
-        Relationship.relationship_id,
-        Relationship.relationship_name,
-        Relationship.reverse_relationship_id,
-        Relationship.is_hierarchical_relationship_expr().label("is_hierarchical"),
-        Relationship.is_ancestry_defining_expr().label("defines_ancestry"),
-    ).where(Relationship.relationship_id == relationship_id)
-
-
-def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
-    """
-    Query a predicate and its reverse to determine directionality.
-
-    This joins the Relationship table with itself to determine if the relationship
-    points 'up' (towards ancestors) or 'down' (towards descendants).
-
-    Returns
-    -------
-    Select
-        Columns: relationship_id, relationship_name, reverse_relationship_id,
-        is_hierarchical, anc_down, anc_up.
-    """
-    return q_all_predicates_with_ancestry().where(Relationship.relationship_id == relationship_id)
-
-
-def q_all_predicates_with_ancestry() -> Select:
-    """Query all predicates with derived ancestry direction flags."""
-    Rel = Relationship
-    Rev = aliased(Relationship)
-
-    return select(
-        Rel.relationship_id,
-        Rel.relationship_name,
-        Rel.reverse_relationship_id,
-        Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
-        Rel.is_ancestry_defining_expr().label("anc_down"),
-        Rev.is_ancestry_defining_expr().label("anc_up"),
-    ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
+    return q_all_predicates().where(Relationship.relationship_id == relationship_id)
 
 
 def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Select:

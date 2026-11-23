@@ -57,7 +57,7 @@ from .nodes import (
 )
 from .queries import (
     DEFAULT_CONCEPT_FILTER,
-    q_all_predicates_with_ancestry,
+    q_all_predicates,
     q_children,
     q_concept_domain_ids,
     q_concept_id_by_code,
@@ -76,7 +76,7 @@ from .queries import (
     q_leaves,
     q_parents,
     q_predicate_name,
-    q_predicate_row_with_ancestry,
+    q_predicate_row,
     q_relationships,
     q_roots,
     q_singletons,
@@ -151,17 +151,15 @@ class KnowledgeGraphEmbeddingConfiguration:
         return self.resolved_model.provider.provider
 
 
-def _predicate_from_rows(ancestry_row: Row, mapping: RelationshipMappingElement) -> Predicate:
-    """Build a Predicate from a Relationship-ancestry row and its classification."""
+def _predicate_from_rows(row: Row, mapping: RelationshipMappingElement) -> Predicate:
+    """Build a Predicate from a relationship row and its classification."""
     return Predicate(
-        relationship_id=ancestry_row.relationship_id,
-        name=ancestry_row.relationship_name,
-        reverse_id=ancestry_row.reverse_relationship_id,
-        is_hierarchical=bool(ancestry_row.is_hierarchical),
-        anc_up=bool(ancestry_row.anc_up),
-        anc_down=bool(ancestry_row.anc_down),
+        relationship_id=row.relationship_id,
+        name=row.relationship_name,
+        reverse_id=row.reverse_relationship_id,
         predicate_kind=mapping.predicate_kind,
         predicate_subkind=mapping.predicate_subkind,
+        direction=mapping.direction,
     )
 
 
@@ -442,7 +440,7 @@ class KnowledgeGraph(GraphBackend):
             The predicate definition.
         """
         with self.session_factory() as session:
-            row = session.execute(q_predicate_row_with_ancestry(relationship_id)).one()
+            row = session.execute(q_predicate_row(relationship_id)).one()
         return _predicate_from_rows(row, self._mapping_for(relationship_id))
 
     def predicate_name(self, relationship_id: str) -> str:
@@ -713,7 +711,7 @@ class KnowledgeGraph(GraphBackend):
         Return all predicates known to the knowledge graph.
         """
         with self.session_factory() as session:
-            rows = session.execute(q_all_predicates_with_ancestry()).all()
+            rows = session.execute(q_all_predicates()).all()
         return tuple(
             _predicate_from_rows(row, self._relationship_mapping[row.relationship_id])
             for row in rows
