@@ -36,15 +36,14 @@ from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.oaklib_interface.codec import OMOPCodec
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
+from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError, ReadOnlyMixin
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.render import bind_default_renderers
 
 logger = logging.getLogger(__name__)
-
-OMOP_PREFIX = "OMOP"
-OMOP_REL_PREFIX = "OMOP_REL"
 
 ANNOTATIONS_SPLIT_CHAR = ","
 ANNOTATIONS_PARENT_ID_KEY = "parent_ids"
@@ -78,7 +77,7 @@ def _normalise_properties(config: SearchConfiguration) -> list[str]:
 
 class OMOPBaseInterface:
     """
-    Base class for OMOP interfaces providing CURIE parsing and Prefix Mapping.
+    Base class for OMOP interfaces holding the Knowledge Graph and the CURIE codec.
 
     Parameters
     ----------
@@ -89,109 +88,11 @@ class OMOPBaseInterface:
     def __init__(self, kg: KnowledgeGraph, **kwargs):
         super().__init__(**kwargs)
         self.kg = kg
+        self.codec = OMOPCodec(kg)
 
     def prefix_map(self) -> dict[str, str]:
-        """
-        Return the prefix map for OMOP entities.
-
-        Returns
-        -------
-        Dict[str, str]
-            A dictionary mapping prefixes to URI bases.
-        """
-        return {
-            OMOP_PREFIX: "https://athena.ohdsi.org/concept/",
-            OMOP_REL_PREFIX: "https://athena.ohdsi.org/relationship/",
-        }
-
-    def _concept_curie(self, concept_id: int) -> CURIE:
-        """
-        Convert a raw OMOP concept ID to a CURIE.
-
-        Parameters
-        ----------
-        concept_id : int
-            The OMOP Concept ID.
-
-        Returns
-        -------
-        str
-            The formatted CURIE (e.g., 'OMOP:12345').
-
-        Raises
-        ------
-        AssertionError
-            If `concept_id` is not an integer.
-        """
-        assert isinstance(concept_id, int), "Expected concept_id to be an integer"
-        return ":".join((OMOP_PREFIX, str(concept_id)))
-
-    def _parse_concept(self, curie: CURIE) -> int:
-        """
-        Parse a CURIE into an OMOP concept ID.
-
-        If the CURIE uses the `OMOP` prefix, the local part is parsed as an integer.
-        Otherwise, it is treated as `vocab:code` and looked up in the Knowledge Graph.
-
-        Parameters
-        ----------
-        curie : CURIE
-            The compact URI string.
-
-        Returns
-        -------
-        int
-            The resolved OMOP concept ID.
-        """
-        prefix, _, local = curie.partition(":")
-
-        if prefix == OMOP_PREFIX:
-            return int(local)
-
-        # treat everything else as vocab:code
-        vocab = prefix
-        code = local
-        return self.kg.concept_id_by_code(vocab, code)
-
-    def _predicate_curie(self, relationship_id: str | int) -> PRED_CURIE:
-        """
-        Convert a relationship ID to a predicate CURIE.
-
-        Parameters
-        ----------
-        relationship_id : str | int
-            The OMOP relationship ID.
-
-        Returns
-        -------
-        PRED_CURIE
-            The formatted predicate CURIE.
-        """
-        return ":".join((OMOP_REL_PREFIX, str(relationship_id)))
-
-    def _parse_predicate(self, pred: PRED_CURIE) -> str:
-        """
-        Parse a predicate CURIE into a raw relationship ID.
-
-        Parameters
-        ----------
-        pred : PRED_CURIE
-            The predicate CURIE.
-
-        Returns
-        -------
-        str
-            The local part of the CURIE (relationship ID).
-
-        Raises
-        ------
-        ValueError
-            If the prefix does not match `OMOP_REL_PREFIX`.
-        """
-        prefix, _, local = pred.partition(":")
-        if prefix != OMOP_REL_PREFIX:
-            raise ValueError(f"Unsupported predicate CURIE: {pred}")
-        return local
+        """Return the prefix map for OMOP entities."""
+        return self.codec.prefix_map()
 
 
 class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
@@ -285,7 +186,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
         constraints = GroundingConstraints(
             parent_ids=(
-                tuple(self._parse_concept(pid) for pid in parent_ids) if parent_ids else None
+                tuple(self.codec.parse_concept(pid) for pid in parent_ids) if parent_ids else None
             ),
             search_constraint=ConceptFilter(
                 domains=domains,
@@ -312,7 +213,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         for ground in grounded:
             yield nen_annotation(
                 text=text,
-                object_id=self._concept_curie(ground.concept_id),
+                object_id=self.codec.concept_curie(ground.concept_id),
                 object_label=ground.concept_name,
             )
 
@@ -380,7 +281,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._concept_curie(cid)
+                    yield self.codec.concept_curie(cid)
 
         if SearchProperty.ALIAS.text in props:
             matches = self.kg.concept_lookup(
@@ -392,7 +293,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 cid = lm.matched_concept_id
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._concept_curie(cid)
+                    yield self.codec.concept_curie(cid)
 
         if (
             SearchProperty.IDENTIFIER.text in props
@@ -403,7 +304,7 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 cid = self.kg.concept_id_by_code(vocab, code)
                 if cid not in seen:
                     seen.add(cid)
-                    yield self._concept_curie(cid)
+                    yield self.codec.concept_curie(cid)
             except NoResultFound:
                 pass
             except MultipleResultsFound:
@@ -440,7 +341,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         List[str]
             A sorted list of aliases.
         """
-        cid = self._parse_concept(curie)
+        cid = self.codec.parse_concept(curie)
         cv = self.kg.concept_view(cid)
         aliases = set()
 
@@ -457,17 +358,17 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Retrieve direct parents of the concept.
         """
-        concept_id = self._parse_concept(curie)
+        concept_id = self.codec.parse_concept(curie)
         for parent_id in self.kg.parents(concept_id):
-            yield self._concept_curie(parent_id)
+            yield self.codec.concept_curie(parent_id)
 
     def children(self, curie: CURIE) -> Iterable[CURIE]:
         """
         Retrieve direct children of the concept.
         """
-        concept_id = self._parse_concept(curie)
+        concept_id = self.codec.parse_concept(curie)
         for child_id in self.kg.children(concept_id):
-            yield self._concept_curie(child_id)
+            yield self.codec.concept_curie(child_id)
 
     @property
     def default_language(self) -> str | None:
@@ -529,7 +430,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         )
 
         for cid in cids:
-            yield self._concept_curie(cid)
+            yield self.codec.concept_curie(cid)
 
     def roots(
         self,
@@ -543,7 +444,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Retrieve root nodes of the graph.
         """
         for cid in self.kg.roots():
-            yield self._concept_curie(cid)
+            yield self.codec.concept_curie(cid)
 
     def leafs(
         self,
@@ -555,7 +456,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Retrieve leaf nodes of the graph.
         """
         for cid in self.kg.leaves():
-            yield self._concept_curie(cid)
+            yield self.codec.concept_curie(cid)
 
     def singletons(
         self, predicates: list[PRED_CURIE] | None = None, filter_obsoletes=True
@@ -564,13 +465,13 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         Retrieve singleton nodes (no parents or children).
         """
         for cid in self.kg.singletons():
-            yield self._concept_curie(cid)
+            yield self.codec.concept_curie(cid)
 
     def label(self, curie: CURIE, lang: str | None = None) -> str | None:
         """
         Get the preferred label (concept_name) for a CURIE.
         """
-        concept_id = self._parse_concept(curie)
+        concept_id = self.codec.parse_concept(curie)
         return self.kg.concept_view(concept_id).concept_name
 
     def curies_by_label(self, label: str) -> list[CURIE]:
@@ -579,7 +480,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         # Prefer exact concept_name matches
         cids = self.kg.concept_ids_by_label(label.strip())
-        return [self._concept_curie(cid) for cid in cids]
+        return [self.codec.concept_curie(cid) for cid in cids]
 
     # Base: relationships(self, subjects, predicates, objects, include_tbox, include_abox,
     #       include_entailed, exclude_blank, invert) -> Iterator[RELATIONSHIP]
@@ -613,11 +514,11 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
 
         subject_ids = (
-            tuple([self._parse_concept(s) for s in subjects]) if subjects is not None else None
+            tuple([self.codec.parse_concept(s) for s in subjects]) if subjects is not None else None
         )
         predicate_ids = tuple(predicates) if predicates is not None else None
         object_ids = (
-            tuple([self._parse_concept(o) for o in objects]) if objects is not None else None
+            tuple([self.codec.parse_concept(o) for o in objects]) if objects is not None else None
         )
 
         relationships = tuple(
@@ -631,18 +532,18 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         for s, p, o in relationships:
             yield (
-                self._concept_curie(s),
+                self.codec.concept_curie(s),
                 p,
-                self._concept_curie(o),
+                self.codec.concept_curie(o),
             )
 
     def hierarchical_parents(self, curie: CURIE, isa_only: bool = False) -> list[CURIE]:
         """
         Get hierarchical parents.
         """
-        cid = self._parse_concept(curie)
+        cid = self.codec.parse_concept(curie)
         parents = self.kg.parents(cid)
-        return [self._concept_curie(p) for p in parents]
+        return [self.codec.concept_curie(p) for p in parents]
 
     def simple_mappings_by_curie(self, curie: CURIE):
         raise NotImplementedError(
@@ -653,7 +554,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Get a map of alias types to alias values.
         """
-        cid = self._parse_concept(curie)
+        cid = self.codec.parse_concept(curie)
         cv = self.kg.concept_view(cid)
 
         m = defaultdict(list)
@@ -671,7 +572,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Retrieve metadata (OMOP fields) for a concept.
         """
-        cid = self._parse_concept(curie)
+        cid = self.codec.parse_concept(curie)
         cv = self.kg.concept_view(cid)
 
         m: METADATA_MAP = defaultdict(list)
@@ -714,9 +615,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         raise message below, since a CDM change broke the body's assumptions.
         """
         raise NotImplementedError("Changes to the CDM currently prevents this function")
-        concept_id = self._parse_concept(curie)
+        concept_id = self.codec.parse_concept(curie)
 
-        pred_filter = {self._parse_predicate(p) for p in predicates} if predicates else None
+        pred_filter = {self.codec.parse_predicate(p) for p in predicates} if predicates else None
 
         with self.kg.session_factory() as session:
             for edge in self.kg.iter_edges(
@@ -725,17 +626,17 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
                 if pred_filter and edge.predicate_id not in pred_filter:
                     continue
 
-                pred_curie = self._predicate_curie(edge.predicate_id)
+                pred_curie = self.codec.predicate_curie(edge.predicate_id)
 
                 # hierarchical entailment
                 if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
-                    yield pred_curie, self._concept_curie(edge.object_id)
+                    yield pred_curie, self.codec.concept_curie(edge.object_id)
 
                     for parent in self.kg.parents(edge.object_id):
-                        yield pred_curie, self._concept_curie(parent)
+                        yield pred_curie, self.codec.concept_curie(parent)
 
                 else:
-                    yield pred_curie, self._concept_curie(edge.object_id)
+                    yield pred_curie, self.codec.concept_curie(edge.object_id)
 
     def entailed_outputgoing_relationships_by_curie(
         self, *args, **kwargs
@@ -751,9 +652,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Retrieve incoming relationships.
         """
-        concept_id = self._parse_concept(curie)
+        concept_id = self.codec.parse_concept(curie)
 
-        pred_filter = {self._parse_predicate(p) for p in predicates} if predicates else None
+        pred_filter = {self.codec.parse_predicate(p) for p in predicates} if predicates else None
 
         with self.kg.session_factory() as session:
             for edge in self.kg.iter_edges(
@@ -763,8 +664,8 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
                 predicate_ids=frozenset(pred_filter) if pred_filter else None,
             ):
                 yield (
-                    self._predicate_curie(edge.predicate_id),
-                    self._concept_curie(edge.subject_id),
+                    self.codec.predicate_curie(edge.predicate_id),
+                    self.codec.concept_curie(edge.subject_id),
                 )
 
     def entailed_incoming_relationships_by_curie(
@@ -786,21 +687,22 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         raise NotImplementedError("Change in OMOP CDM made this function not work anymore")
 
-        subj_id = self._parse_concept(subject)
-        obj_id = self._parse_concept(object)
+        subj_id = self.codec.parse_concept(subject)
+        obj_id = self.codec.parse_concept(object)
 
         # direct relationships
         with self.kg.session_factory() as session:
             for edge in self.kg.iter_edges(session=session, concept_ids=subj_id, direction="out"):
                 if edge.object_id == obj_id:
-                    yield self._predicate_curie(edge.predicate_id)
+                    yield self.codec.predicate_curie(edge.predicate_id)
 
         # hierarchical entailment
         if obj_id in self.kg.parents(subj_id):
-            yield self._predicate_curie("is_a")
+            yield self.codec.predicate_curie("is_a")
 
 
 class OMOPAlchemyImplementation(
+    ReadOnlyMixin,
     OMOPRelationGraphInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,
@@ -876,11 +778,11 @@ class OMOPAlchemyImplementation(
 
     @property
     def edge_index(self):
-        raise NotImplementedError("edge_index is not supported for OMOP-backed adapters")
+        raise OMOPUnsupportedError("BasicOntologyInterface.edge_index")
 
     @property
     def entailed_edge_index(self):
-        raise NotImplementedError("entailed_edge_index is not supported for OMOP-backed adapters")
+        raise OMOPUnsupportedError("BasicOntologyInterface.entailed_edge_index")
 
     def obsoletes(self, include_merged=True) -> Iterable[CURIE]:
         raise NotImplementedError("OMOP does not support OWL-style obsolescence semantics")
@@ -906,27 +808,8 @@ class OMOPAlchemyImplementation(
     def multilingual_labels(self, curies, allow_none=True, langs=None):
         raise NotImplementedError("OMOP adapter does not support multilingual labels")
 
-    def set_label(self, curie: CURIE, label: str, lang: str | None = None) -> bool:
-        raise NotImplementedError("OMOP adapter is read-only")
-
     def relationships_metadata(self, relationships, **kwargs):
         raise NotImplementedError("OMOP does not support relationship metadata")
-
-    def create_entity(
-        self,
-        *args,
-        **kwargs,
-    ) -> CURIE:
-        raise NotImplementedError("OMOP adapter is read-only")
-
-    def delete_entity(self, curie: CURIE, label: str | None = None, **kwargs) -> CURIE:
-        raise NotImplementedError("OMOP adapter is read-only")
-
-    def save(self):
-        raise NotImplementedError("OMOP adapter is read-only")
-
-    def clone(self, resource):
-        raise NotImplementedError("Cloning is not supported for OMOP adapters")
 
     def definition(self, curie: CURIE, lang: str | None = None) -> str | None:
         raise NotImplementedError("OMOP does not support term definitions")
