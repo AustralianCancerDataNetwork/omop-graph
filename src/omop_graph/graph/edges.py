@@ -24,12 +24,55 @@ from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
-from ..extensions.omop_alchemy import PredicateKind
+from ..extensions.omop_alchemy import PredicateKind, PredicateSubkind
 
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EdgeFilter:
+    """
+    Selects edges. Every field is optional and the fields combine with AND.
+
+    Parameters
+    ----------
+    predicate_ids : frozenset[str], optional
+        Only these relationship ids.
+    predicate_kinds : frozenset[PredicateKind], optional
+        Only relationships of these kinds.
+    predicate_subkinds : frozenset[PredicateSubkind], optional
+        Only relationships of these subkinds. The knowledge graph rejects a subkind
+        that no relationship is classified under, listing the valid ones.
+    active_only : bool
+        If True, only edges that are not deprecated (``invalid_reason`` is unset).
+    on : date, optional
+        Only edges whose validity period covers this date. Independent of
+        ``active_only``: set ``active_only=False`` to include edges deprecated since.
+    within_domain : bool
+        If True, only edges whose two concepts share a domain. Defaults to False because
+        most attribute edges cross domains (a Procedure's ``Has method`` to an
+        Observation, ``Has dir proc site`` to a Spec Anatomic Site).
+    """
+
+    predicate_ids: frozenset[str] | None = None
+    predicate_kinds: frozenset[PredicateKind] | None = None
+    predicate_subkinds: frozenset[PredicateSubkind] | None = None
+    active_only: bool = True
+    on: date | None = None
+    within_domain: bool = False
+
+    def __post_init__(self) -> None:
+        for kind in self.predicate_kinds or ():
+            if not isinstance(kind, PredicateKind):
+                raise TypeError(f"predicate_kinds must hold PredicateKind members, got {kind!r}")
+        for subkind in self.predicate_subkinds or ():
+            if not isinstance(subkind, PredicateSubkind):
+                raise TypeError(
+                    f"predicate_subkinds must hold PredicateSubkind members, got {subkind!r}"
+                )
 
 
 @dataclass(frozen=True)

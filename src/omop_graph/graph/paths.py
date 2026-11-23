@@ -19,12 +19,11 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
-    Any,
 )
 
 # Local Application Imports
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeView
+from omop_graph.graph.edges import EdgeFilter, EdgeView
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.reasoning.resolvers import CandidateHit
@@ -33,6 +32,9 @@ if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_PATH_FILTER = EdgeFilter(within_domain=True)
+"""Edges path search follows by default: active, within one domain to limit noise."""
 
 
 @dataclass(frozen=True)
@@ -209,12 +211,10 @@ def find_shortest_paths(
     kg: KnowledgeGraph,
     source: int,
     target: int,
-    predicate_kinds: frozenset[PredicateKind] | None = None,
+    edge_filter: EdgeFilter = DEFAULT_PATH_FILTER,
     max_depth: int = 6,
-    on: Any | None = None,
     max_paths: int = 20,
     traced: bool = False,
-    within_domain: bool = True,
 ) -> tuple[list[GraphPath], GraphTrace | None]:
     """
     Find shortest paths between source and target using bidirectional BFS.
@@ -227,20 +227,16 @@ def find_shortest_paths(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[PredicateKind], optional
-        Restrict traversal to specific edge types.
+    edge_filter : EdgeFilter
+        Which edges to traverse. Defaults to active edges within a domain; set
+        ``within_domain=False`` to allow cross-domain edges such as SNOMED
+        attribute relationships (Has asso morph, Has finding site, etc.).
     max_depth : int
         Maximum path length. Defaults to ``6``.
-    on : date, optional
-        Date for validity checks.
     max_paths : int
         Maximum number of paths to return. Defaults to ``20``.
     traced : bool
         If True, returns a GraphTrace object recording the search process.
-    within_domain : bool
-        If True (default), only traverse edges where both concepts share the
-        same domain_id.  Set to False to allow cross-domain edges such as
-        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -285,9 +281,7 @@ def find_shortest_paths(
                     session=session,
                     concept_ids=cur,
                     direction="out",
-                    predicate_kinds=predicate_kinds,
-                    on=on,
-                    within_domain=within_domain,
+                    edge_filter=edge_filter,
                 ):
                     nxt = e.object_id
                     nd = d + 1
@@ -323,9 +317,7 @@ def find_shortest_paths(
                     session=session,
                     concept_ids=cur,
                     direction="in",
-                    predicate_kinds=predicate_kinds,
-                    on=on,
-                    within_domain=within_domain,
+                    edge_filter=edge_filter,
                 ):
                     expanded.append(e)
                     prev = e.subject_id
@@ -407,11 +399,9 @@ def find_shortest_paths_batch(
     kg: KnowledgeGraph,
     source: int,
     target: int,
-    predicate_kinds: set[PredicateKind] | frozenset[PredicateKind] | None = None,
+    edge_filter: EdgeFilter = DEFAULT_PATH_FILTER,
     max_depth: int = 6,
-    on: Any | None = None,
     max_paths: int = 20,
-    within_domain: bool = True,
 ) -> list[GraphPath]:
     """
     Find shortest paths using an optimized batch-BFS approach.
@@ -427,18 +417,14 @@ def find_shortest_paths_batch(
         Start concept ID.
     target : int
         End concept ID.
-    predicate_kinds : set[PredicateKind], frozenset[PredicateKind] optional
-        Restrict traversal to specific edge types.
+    edge_filter : EdgeFilter
+        Which edges to traverse. Defaults to active edges within a domain; set
+        ``within_domain=False`` to allow cross-domain edges such as SNOMED
+        attribute relationships (Has asso morph, Has finding site, etc.).
     max_depth : int
         Maximum path length. Defaults to ``6``.
-    on : date, optional
-        Date for validity checks.
     max_paths : int
         Maximum number of paths to return. Defaults to ``20``.
-    within_domain : bool
-        If True (default), only traverse edges where both concepts share the
-        same domain_id.  Set to False to allow cross-domain edges such as
-        SNOMED attribute relationships (Has asso morph, Has finding site, etc.).
 
     Returns
     -------
@@ -490,9 +476,7 @@ def find_shortest_paths_batch(
                 session=session,
                 concept_ids=current_layer_nodes,
                 direction=direction,
-                predicate_kinds=frozenset(predicate_kinds) if predicate_kinds else None,
-                on=on,
-                within_domain=within_domain,
+                edge_filter=edge_filter,
             )
 
             next_frontier = set()
@@ -670,10 +654,9 @@ def find_standard_paths(
     kg: KnowledgeGraph,
     targets: tuple[int, ...] | None,
     candidate: CandidateHit,
-    predicate_kinds: frozenset[Any] | None = None,
+    edge_filter: EdgeFilter = DEFAULT_PATH_FILTER,
     max_depth: int = 6,
     max_concepts: int | None = None,
-    within_domain: bool = True,
 ) -> list[StandardConcept]:
     """
     Search for standard concepts reachable from a candidate, optionally verified against
@@ -711,9 +694,9 @@ def find_standard_paths(
         None or empty, no ancestor verification is performed (see above).
     candidate : CandidateHit
         The initial search hit to start traversal from.
-    predicate_kinds : frozenset, optional
-        Allowed edge types for traversal. Defaults to all kinds when None. Callers
-        in the grounding pipeline pass PredicateKind.IDENTITY exclusively, limiting
+    edge_filter : EdgeFilter
+        Which edges to traverse. Defaults to active edges within a domain. Callers
+        in the grounding pipeline restrict it to ``PredicateKind.IDENTITY``, limiting
         traversal to Maps-to relationships between non-standard and standard concepts.
     max_depth : int
         Maximum min_levels_of_separation permitted in the concept_ancestor check when
@@ -723,10 +706,6 @@ def find_standard_paths(
         Per-target cap on unique standard concepts collected (or an overall cap when
         ``targets`` is None). Once every bucket has reached this count the search
         stops early.
-    within_domain : bool
-        When True (default), only traverse edges where both concepts share the same
-        domain_id. Set to False to allow cross-domain edges such as SNOMED attribute
-        relationships.
 
     Returns
     -------
@@ -860,8 +839,7 @@ def find_standard_paths(
                         session=session,
                         concept_ids=subject_node.concept_id,
                         direction="out",
-                        predicate_kinds=predicate_kinds,
-                        within_domain=within_domain,
+                        edge_filter=edge_filter,
                     )
                 )
             if not edges:

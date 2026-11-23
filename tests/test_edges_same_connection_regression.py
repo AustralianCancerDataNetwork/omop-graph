@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 
 
@@ -20,8 +21,7 @@ def test_edges_are_classified_from_the_relationship_mapping(
     edges = mock_cdm_kg.edges(
         concept_ids=900001,
         direction="out",
-        active_only=False,
-        within_domain=False,
+        edge_filter=EdgeFilter(active_only=False),
     )
 
     assert len(edges) == 1
@@ -40,9 +40,7 @@ def test_predicate_kinds_filter_edges(mock_cdm_kg: KnowledgeGraph, kinds, expect
     edges = mock_cdm_kg.edges(
         concept_ids=900001,
         direction="out",
-        predicate_kinds=frozenset(kinds),
-        active_only=False,
-        within_domain=False,
+        edge_filter=EdgeFilter(predicate_kinds=frozenset(kinds), active_only=False),
     )
 
     assert len(edges) == expected

@@ -35,6 +35,7 @@ from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.oaklib_interface.codec import OMOPCodec
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
@@ -423,9 +424,12 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         cids = tuple(
             self.kg.entities(
-                domain=domain,
-                standard_only=standard_only,
-                filter_obsoletes=filter_obsoletes,
+                ConceptFilter(
+                    domains=(domain,) if domain else None,
+                    require_standard=standard_only,
+                    include_classification=True,
+                    require_active=filter_obsoletes,
+                )
             )
         )
 
@@ -516,7 +520,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         subject_ids = (
             tuple([self.codec.parse_concept(s) for s in subjects]) if subjects is not None else None
         )
-        predicate_ids = tuple(predicates) if predicates is not None else None
+        predicate_ids = frozenset(predicates) if predicates is not None else None
         object_ids = (
             tuple([self.codec.parse_concept(o) for o in objects]) if objects is not None else None
         )
@@ -524,8 +528,8 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
         relationships = tuple(
             self.kg.relationships(
                 subjects=subject_ids,
-                predicates=predicate_ids,
                 objects=object_ids,
+                edge_filter=EdgeFilter(predicate_ids=predicate_ids),
                 invert=invert,
             )
         )
@@ -621,7 +625,7 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         with self.kg.session_factory() as session:
             for edge in self.kg.iter_edges(
-                session=session, concept_ids=concept_id, direction="out", predicate_kinds=None
+                session=session, concept_ids=concept_id, direction="out"
             ):
                 if pred_filter and edge.predicate_id not in pred_filter:
                     continue
@@ -661,7 +665,9 @@ class OMOPRelationGraphInterface(OMOPBaseInterface, BasicOntologyInterface):
                 session=session,
                 concept_ids=concept_id,
                 direction="in",
-                predicate_ids=frozenset(pred_filter) if pred_filter else None,
+                edge_filter=EdgeFilter(
+                    predicate_ids=frozenset(pred_filter) if pred_filter else None
+                ),
             ):
                 yield (
                     self.codec.predicate_curie(edge.predicate_id),

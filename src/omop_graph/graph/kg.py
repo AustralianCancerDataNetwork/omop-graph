@@ -19,8 +19,7 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import Callable, Generator
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
 from oa_configurator import ResolvedModel
@@ -44,11 +43,12 @@ if TYPE_CHECKING:
 from ..extensions.emb import MissingExtensionError
 from ..extensions.omop_alchemy import (
     PredicateKind,
+    PredicateSubkind,
     RelationshipMappingElement,
     load_relationship_mapping,
 )
 from .base import GraphBackend
-from .edges import EdgeView, Predicate
+from .edges import EdgeFilter, EdgeView, Predicate
 from .nodes import (
     AncestorMatch,
     ConceptView,
@@ -56,6 +56,7 @@ from .nodes import (
     LabelMatchKind,
 )
 from .queries import (
+    DEFAULT_CONCEPT_FILTER,
     q_all_predicates_with_ancestry,
     q_children,
     q_concept_domain_ids,
@@ -475,8 +476,8 @@ class KnowledgeGraph(GraphBackend):
     def relationships(
         self,
         subjects: tuple[int, ...] | None,
-        predicates: tuple[str, ...] | None,
         objects: tuple[int, ...] | None,
+        edge_filter: EdgeFilter | None = None,
         invert: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
@@ -484,12 +485,13 @@ class KnowledgeGraph(GraphBackend):
 
         Parameters
         ----------
-        subjects : list[CURIE] | None
-            List of subject CURIEs.
-        predicates : list[str] | None
-            List of predicate (relationship) IDs.
-        objects : list[CURIE] | None
-            List of object CURIEs.
+        subjects : tuple[int, ...] | None
+            Subject concept ids.
+        objects : tuple[int, ...] | None
+            Object concept ids.
+        edge_filter : EdgeFilter, optional
+            Which relationships to return. Defaults to ``EdgeFilter()``. Relationships
+            without a classification are skipped, as in :meth:`iter_edges`.
         invert : bool
             If True, swaps subjects and objects in the query and result.
 
@@ -502,21 +504,22 @@ class KnowledgeGraph(GraphBackend):
         if invert:
             for s, p, o in self.relationships(
                 subjects=objects,
-                predicates=predicates,
                 objects=subjects,
+                edge_filter=edge_filter,
             ):
                 yield o, p, s
             return
 
+        resolved = self._resolve_edge_filter(edge_filter)
+        if resolved is None:
+            return
+
         with self.session_factory() as session:
             for s, p, o in session.execute(
-                q_relationships(
-                    subjects=subjects,
-                    predicates=predicates,
-                    objects=objects,
-                )
+                q_relationships(subjects=subjects, objects=objects, edge_filter=resolved)
             ):
-                yield s, p, o
+                if p in self._relationship_mapping:
+                    yield s, p, o
 
     def reverse_predicate_id(self, relationship_id: str) -> str | None:
         """
@@ -534,11 +537,7 @@ class KnowledgeGraph(GraphBackend):
         self,
         concept_ids: tuple[int, ...] | int,
         direction: Literal["in", "out"],
-        predicate_ids: frozenset[str] | None = None,
-        predicate_kinds: frozenset[PredicateKind] | None = None,
-        active_only: bool = True,
-        on: date | None = None,
-        within_domain: bool = False,
+        edge_filter: EdgeFilter | None = None,
     ) -> tuple[EdgeView, ...]:
         """
         Convenience method to retrieve all edges from one or multiple concepts.
@@ -549,32 +548,16 @@ class KnowledgeGraph(GraphBackend):
             The source/target concept ID(s).
         direction : str
             'out' for outgoing, 'in' for incoming.
-        predicate_ids : frozenset[str], optional
-            Filter by specific relationship IDs.
-        predicate_kinds : Set[PredicateKind], optional
-            Filter by semantic kind of relationship.
-        active_only : bool
-            If True, return only valid/active edges.
-        on : date, optional
-            Check validity on a specific date.
-        within_domain : bool
-            If True, only return edges where source/target domains match.
-            Defaults to False: most attribute edges cross domains (e.g. a
-            Procedure's ``Has method`` -> Observation, ``Has dir proc site``
-            -> Spec Anatomic Site), so filtering here would hide them. Path
-            search keeps its own ``within_domain=True`` default to limit noise.
+        edge_filter : EdgeFilter, optional
+            Which edges to return. Defaults to ``EdgeFilter()``.
         """
         with self.session_factory() as session:
             edges = tuple(
                 self.iter_edges(
                     session=session,
                     concept_ids=concept_ids,
-                    predicate_ids=predicate_ids,
                     direction=direction,
-                    predicate_kinds=predicate_kinds,
-                    active_only=active_only,
-                    on=on,
-                    within_domain=within_domain,
+                    edge_filter=edge_filter,
                 )
             )
         return edges
@@ -584,39 +567,24 @@ class KnowledgeGraph(GraphBackend):
         session: Session,
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
-        predicate_ids: frozenset[str] | None = None,
-        predicate_kinds: frozenset[PredicateKind] | None = None,
-        active_only: bool = True,
-        on: date | None = None,
-        within_domain: bool = False,
+        edge_filter: EdgeFilter | None = None,
         ordered: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
 
-        A *predicate_kinds* filter is applied in SQL as the relationship IDs
-        of those kinds. Edges whose relationship has no classification are
-        skipped. If ``ordered=True``, edges are ordered by source concept,
-        target concept, and relationship ID, making results reproducible. If
-        ``ordered=False``, row order is unspecified and may differ between
-        runs and backends.
+        Edges whose relationship has no classification are skipped. If
+        ``ordered=True``, edges are ordered by source concept, target concept,
+        and relationship ID, making results reproducible. If ``ordered=False``,
+        row order is unspecified and may differ between runs and backends.
         """
-        if predicate_kinds:
-            kind_ids = frozenset(
-                relationship_id
-                for relationship_id, mapping in self._relationship_mapping.items()
-                if mapping.predicate_kind in predicate_kinds
-            )
-            predicate_ids = kind_ids & predicate_ids if predicate_ids else kind_ids
-            if not predicate_ids:
-                return
+        resolved = self._resolve_edge_filter(edge_filter)
+        if resolved is None:
+            return
 
         stmt = q_edges(
             concept_ids=concept_ids,
-            predicate_ids=predicate_ids,
             direction=direction,
-            active_only=active_only,
-            on=on,
-            within_domain=within_domain,
+            edge_filter=resolved,
             ordered=ordered,
         )
         for row in session.execute(stmt):
@@ -628,6 +596,49 @@ class KnowledgeGraph(GraphBackend):
                 predicate_kind=mapping.predicate_kind,
                 predicate_subkind=mapping.predicate_subkind,
             )
+
+    def _resolve_edge_filter(self, edge_filter: EdgeFilter | None) -> EdgeFilter | None:
+        """Fold the kind and subkind fields of *edge_filter* into ``predicate_ids``.
+
+        Returns None when they select no relationship, so the caller has nothing
+        to query.
+
+        Raises
+        ------
+        ValueError
+            If ``predicate_subkinds`` names a subkind no relationship is classified under.
+        """
+        edge_filter = edge_filter or EdgeFilter()
+        kinds, subkinds = edge_filter.predicate_kinds, edge_filter.predicate_subkinds
+        if not kinds and not subkinds:
+            return edge_filter
+
+        if subkinds:
+            known = {
+                PredicateSubkind(m.predicate_kind, m.predicate_subkind)
+                for m in self._relationship_mapping.values()
+            }
+            if unknown := subkinds - known:
+                raise ValueError(
+                    f"Unknown predicate subkinds {sorted(map(str, unknown))}; "
+                    f"valid subkinds are {sorted(map(str, known))}."
+                )
+
+        selected = frozenset(
+            relationship_id
+            for relationship_id, m in self._relationship_mapping.items()
+            if (not kinds or m.predicate_kind in kinds)
+            and (
+                not subkinds or PredicateSubkind(m.predicate_kind, m.predicate_subkind) in subkinds
+            )
+        )
+        if edge_filter.predicate_ids:
+            selected &= edge_filter.predicate_ids
+        if not selected:
+            return None
+        return replace(
+            edge_filter, predicate_ids=selected, predicate_kinds=None, predicate_subkinds=None
+        )
 
     def specificity(self, concept_id: int) -> float:
         """
@@ -656,60 +667,38 @@ class KnowledgeGraph(GraphBackend):
         return children
 
     def entities(
-        self,
-        domain: str | None = None,
-        standard_only: bool = True,
-        filter_obsoletes: bool = True,
+        self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER
     ) -> Generator[int, None, None]:
+        """
+        Yield the ids of the concepts selected by *concept_filter*.
 
-        query = q_entities(
-            domain=domain,
-            standard_only=standard_only,
-            filter_obsoletes=filter_obsoletes,
-        )
-
+        Defaults to active standard and classification concepts.
+        """
         with self.session_factory() as session:
-            for row in session.execute(query):
+            for row in session.execute(q_entities(concept_filter)):
                 yield int(row.concept_id)
 
-    def roots(
-        self, domain_id: str | None = None, vocabulary_id: str | None = None
-    ) -> tuple[int, ...]:
+    def roots(self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> tuple[int, ...]:
         """
-        Retrieve root concepts (no parents).
+        Retrieve root concepts (no parents) among those selected by *concept_filter*.
         """
         with self.session_factory() as session:
-            roots = tuple(
-                session.execute(q_roots(domain_id=domain_id, vocabulary_id=vocabulary_id)).scalars()
-            )
-        return roots
+            return tuple(session.execute(q_roots(concept_filter)).scalars())
 
-    def leaves(
-        self, domain_id: str | None = None, vocabulary_id: str | None = None
-    ) -> tuple[int, ...]:
+    def leaves(self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> tuple[int, ...]:
         """
-        Retrieve leaf concepts (no children).
+        Retrieve leaf concepts (no children) among those selected by *concept_filter*.
         """
         with self.session_factory() as session:
-            leaves = tuple(
-                session.execute(
-                    q_leaves(domain_id=domain_id, vocabulary_id=vocabulary_id)
-                ).scalars()
-            )
-        return leaves
+            return tuple(session.execute(q_leaves(concept_filter)).scalars())
 
-    def singletons(
-        self, domain_id: str | None = None, vocabulary_id: str | None = None
-    ) -> tuple[int, ...]:
+    def singletons(self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> tuple[int, ...]:
         """
-        Retrieve singleton concepts (no parents and no children).
+        Retrieve singleton concepts (no parents and no children) among those selected by
+        *concept_filter*.
         """
         with self.session_factory() as session:
-            return tuple(
-                session.execute(
-                    q_singletons(domain_id=domain_id, vocabulary_id=vocabulary_id)
-                ).scalars()
-            )
+            return tuple(session.execute(q_singletons(concept_filter)).scalars())
 
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
         """

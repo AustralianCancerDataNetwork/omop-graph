@@ -27,6 +27,7 @@ from omop_graph.extensions.emb import (
     try_get_embedding_writer_interface,
 )
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.paths import (
@@ -313,7 +314,7 @@ def find_standard_concepts(
         kg=kg,
         candidate=candidate,
         targets=parent_ids,
-        predicate_kinds=predicate_kinds,
+        edge_filter=EdgeFilter(predicate_kinds=predicate_kinds, within_domain=True),
         max_depth=max_depth,
         max_concepts=max_paths,
     )

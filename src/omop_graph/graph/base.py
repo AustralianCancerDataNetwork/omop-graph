@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from datetime import date
 from typing import Literal
 
 from sqlalchemy.orm import Session
 
 from ..extensions.omop_alchemy import PredicateKind
-from .edges import EdgeView
+from .edges import EdgeFilter, EdgeView
 from .nodes import ConceptView
 
 
@@ -37,11 +36,7 @@ class GraphBackend(ABC):
         session: Session,
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
-        predicate_ids: frozenset[str] | None,
-        predicate_kinds: frozenset[PredicateKind] | None = None,
-        active_only: bool = True,
-        on: date | None = None,
-        within_domain: bool = False,
+        edge_filter: EdgeFilter | None = None,
     ) -> Iterable[EdgeView]:
         """
         Iterate over edges for a concept with filtering.
@@ -56,20 +51,9 @@ class GraphBackend(ABC):
             The source/target concept ID(s).
         direction : str
             'out' for outgoing, 'in' for incoming.
-        predicate_ids : frozenset[str], optional
-            Filter by specific relationship IDs.
-        predicate_kinds : Set[PredicateKind], optional
-            Filter by semantic kind of relationship.
-        active_only : bool
-            If True, return only valid/active edges.
-        on : date, optional
-            Check validity on a specific date.
-        within_domain : bool
-            If True, only return edges where source/target domains match.
-            Defaults to False: most attribute edges cross domains (e.g. a
-            Procedure's ``Has method`` -> Observation, ``Has dir proc site``
-            -> Spec Anatomic Site), so filtering here would hide them. Path
-            search keeps its own ``within_domain=True`` default to limit noise.
+        edge_filter : EdgeFilter, optional
+            Which edges to return. Defaults to ``EdgeFilter()``: active edges of any
+            relationship, across domains.
 
         Yields
         -------

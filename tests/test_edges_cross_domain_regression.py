@@ -28,6 +28,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.traverse import traverse
 
@@ -150,14 +151,16 @@ def test_attribute_kind_filter_returns_cross_domain_attributes(
     edges = procedure_kg.edges(
         KNEE_REPLACEMENT,
         direction="out",
-        predicate_kinds=frozenset({PredicateKind.ATTRIBUTE}),
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.ATTRIBUTE})),
     )
 
     assert {(e.predicate_id, e.object_id) for e in edges} == EXPECTED_ATTRIBUTE_PAIRS
 
 
 def test_within_domain_opt_in_still_filters(procedure_kg: KnowledgeGraph) -> None:
-    edges = procedure_kg.edges(KNEE_REPLACEMENT, direction="out", within_domain=True)
+    edges = procedure_kg.edges(
+        KNEE_REPLACEMENT, direction="out", edge_filter=EdgeFilter(within_domain=True)
+    )
 
     assert {(e.predicate_id, e.object_id) for e in edges} == {("Is a", PARENT_PROCEDURE)}
 
@@ -166,9 +169,8 @@ def test_traverse_reaches_cross_domain_attributes(procedure_kg: KnowledgeGraph) 
     subgraph, _ = traverse(
         procedure_kg,
         seeds=(KNEE_REPLACEMENT,),
-        predicate_kinds={PredicateKind.ATTRIBUTE},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.ATTRIBUTE})),
         max_depth=1,
-        on=None,
         max_nodes=None,
         trace=False,
     )

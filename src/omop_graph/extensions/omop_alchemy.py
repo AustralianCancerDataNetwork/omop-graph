@@ -25,6 +25,14 @@ class PredicateKind(Enum):
     METADATA = "Metadata"
 
 
+@dataclass(frozen=True, slots=True)
+class PredicateSubkind:
+    """A subkind name within its kind. The name alone is not unique across kinds."""
+
+    kind: PredicateKind
+    name: str
+
+
 class HierarchyDirection(Enum):
     """Direction of a Hierarchy relationship, read from the stored edge ``concept_id_1 -> concept_id_2``.
 

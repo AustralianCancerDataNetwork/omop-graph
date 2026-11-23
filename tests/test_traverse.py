@@ -7,7 +7,7 @@ from typing import cast
 from sqlalchemy.dialects import postgresql
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeView
+from omop_graph.graph.edges import EdgeFilter, EdgeView
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.queries import q_edges
 from omop_graph.graph.traverse import traverse
@@ -65,9 +65,8 @@ def test_uncapped_traversal_keeps_existing_nodes_and_edges() -> None:
     subgraph, trace = traverse(
         cast(KnowledgeGraph, kg),
         seeds=(1,),
-        predicate_kinds={PredicateKind.HIERARCHY},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY})),
         max_depth=2,
-        on=None,
         max_nodes=20,
         trace=True,
     )
@@ -90,9 +89,8 @@ def test_capped_traversal_respects_node_depth_and_edge_closure() -> None:
     subgraph, trace = traverse(
         cast(KnowledgeGraph, kg),
         seeds=(1,),
-        predicate_kinds={PredicateKind.HIERARCHY},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY})),
         max_depth=2,
-        on=None,
         max_nodes=4,
         trace=True,
     )
@@ -116,9 +114,8 @@ def test_fanout_traversal_stops_and_closes_edge_iterator_at_node_budget() -> Non
     subgraph, _ = traverse(
         cast(KnowledgeGraph, kg),
         seeds=(1,),
-        predicate_kinds={PredicateKind.HIERARCHY},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY})),
         max_depth=2,
-        on=None,
         max_nodes=32,
         trace=False,
     )
@@ -134,9 +131,8 @@ def test_capped_traversal_omits_edges_from_unexpanded_nodes() -> None:
     subgraph, _ = traverse(
         cast(KnowledgeGraph, kg),
         seeds=(1,),
-        predicate_kinds={PredicateKind.HIERARCHY},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY})),
         max_depth=2,
-        on=None,
         max_nodes=3,
         trace=False,
     )
@@ -151,9 +147,8 @@ def test_capped_traversal_orders_edges_before_filling_node_budget() -> None:
     subgraph, _ = traverse(
         cast(KnowledgeGraph, kg),
         seeds=(1,),
-        predicate_kinds={PredicateKind.HIERARCHY},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY})),
         max_depth=2,
-        on=None,
         max_nodes=2,
         trace=False,
     )
@@ -167,9 +162,8 @@ def test_seeds_at_node_budget_are_not_expanded() -> None:
     subgraph, _ = traverse(
         cast(KnowledgeGraph, kg),
         seeds=(1, 2),
-        predicate_kinds={PredicateKind.HIERARCHY},
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY})),
         max_depth=2,
-        on=None,
         max_nodes=2,
         trace=False,
     )
@@ -181,10 +175,14 @@ def test_seeds_at_node_budget_are_not_expanded() -> None:
 
 def test_q_edges_ordering_is_opt_in_and_total() -> None:
     ordered_sql = str(
-        q_edges(1, direction="out", ordered=True).compile(dialect=postgresql.dialect())
+        q_edges(1, direction="out", edge_filter=EdgeFilter(), ordered=True).compile(
+            dialect=postgresql.dialect()
+        )
     )
     unordered_sql = str(
-        q_edges(1, direction="out", ordered=False).compile(dialect=postgresql.dialect())
+        q_edges(1, direction="out", edge_filter=EdgeFilter(), ordered=False).compile(
+            dialect=postgresql.dialect()
+        )
     )
 
     ordered_columns = [

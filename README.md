@@ -77,6 +77,7 @@ This classification drives traversal filtering and scoring.
 ### Traversal and Paths
 
 ```python
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.paths import find_shortest_paths
 from omop_graph.extensions.omop_alchemy import PredicateKind
 
@@ -87,7 +88,10 @@ paths, trace = find_shortest_paths(
     kg,
     source=drug,
     target=ingredient,
-    predicate_kinds=frozenset({PredicateKind.HIERARCHY, PredicateKind.IDENTITY}),
+    edge_filter=EdgeFilter(
+        predicate_kinds=frozenset({PredicateKind.HIERARCHY, PredicateKind.IDENTITY}),
+        within_domain=True,
+    ),
     max_depth=6,
     traced=True,
 )

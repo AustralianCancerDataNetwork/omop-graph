@@ -14,7 +14,6 @@ The queries cover:
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Literal, cast
 
 from omop_alchemy.backends import (
@@ -44,6 +43,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from ..extensions.omop_alchemy import RelationshipMapping
+from .edges import EdgeFilter
 
 
 def _concept_has_standardness_expr():
@@ -421,13 +421,40 @@ def q_all_predicates_with_ancestry() -> Select:
     ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
 
 
+def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Select:
+    """Apply the validity, date, domain and relationship id conditions of *edge_filter*.
+
+    The kind and subkind fields are not applied here: the caller resolves them to
+    ``predicate_ids`` first, since the classification is not in the SQL tables.
+    """
+    if edge_filter.active_only:
+        stmt = stmt.where(Concept_Relationship.is_valid_expr())
+
+    if edge_filter.on is not None:
+        stmt = stmt.where(
+            and_(
+                Concept_Relationship.valid_start_date <= edge_filter.on,
+                Concept_Relationship.valid_end_date >= edge_filter.on,
+            )
+        )
+
+    if edge_filter.within_domain:
+        Subj = aliased(Concept)
+        Obj = aliased(Concept)
+        stmt = stmt.join(Subj, Concept_Relationship.concept_id_1 == Subj.concept_id)
+        stmt = stmt.join(Obj, Concept_Relationship.concept_id_2 == Obj.concept_id)
+        stmt = stmt.where(Subj.domain_id == Obj.domain_id)
+
+    if edge_filter.predicate_ids:
+        stmt = stmt.where(Concept_Relationship.relationship_id.in_(edge_filter.predicate_ids))
+
+    return stmt
+
+
 def q_edges(
     concept_ids: tuple[int, ...] | int,
     direction: Literal["in", "out"],
-    predicate_ids: frozenset[str] | None = None,
-    active_only: bool = False,
-    on: date | None = None,
-    within_domain: bool = False,
+    edge_filter: EdgeFilter,
     ordered: bool = False,
 ) -> Select:
     """Query edges for a batch of concept IDs, in either direction.
@@ -436,6 +463,9 @@ def q_edges(
     ----------
     direction : {"in", "out"}
         Whether to query incoming or outgoing edges for ``concept_ids``.
+    edge_filter : EdgeFilter
+        Conditions on the edges. Its kind and subkind fields are ignored, see
+        :func:`_filter_concept_relationships`.
     ordered : bool, default=False
         If True, order by source concept, target concept, and relationship ID
         to make results reproducible. If False, row order is unspecified and
@@ -443,9 +473,6 @@ def q_edges(
     """
     if isinstance(concept_ids, int):
         concept_ids = (concept_ids,)
-
-    Subj = aliased(Concept)
-    Obj = aliased(Concept)
 
     stmt = select(
         Concept_Relationship.concept_id_1.label("subject_id"),
@@ -455,29 +482,12 @@ def q_edges(
         Concept_Relationship.valid_end_date,
         Concept_Relationship.invalid_reason,
     )
-
-    if active_only:
-        stmt = stmt.where(Concept_Relationship.is_valid_expr())
-        if on is not None:
-            stmt = stmt.where(
-                and_(
-                    Concept_Relationship.valid_start_date <= on,
-                    Concept_Relationship.valid_end_date >= on,
-                )
-            )
-
-    if within_domain:
-        stmt = stmt.join(Subj, Concept_Relationship.concept_id_1 == Subj.concept_id)
-        stmt = stmt.join(Obj, Concept_Relationship.concept_id_2 == Obj.concept_id)
-        stmt = stmt.where(Subj.domain_id == Obj.domain_id)
+    stmt = _filter_concept_relationships(stmt, edge_filter)
 
     if direction == "in":
         stmt = stmt.where(Concept_Relationship.concept_id_2.in_(concept_ids))
     elif direction == "out":
         stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
-
-    if predicate_ids:  # Exact ID's
-        stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
 
     if ordered:
         stmt = stmt.order_by(
@@ -514,21 +524,19 @@ def q_ancestors(concept_id: int) -> Select:
 
 def q_relationships(
     subjects: tuple[int, ...] | None,
-    predicates: tuple[str, ...] | None,
     objects: tuple[int, ...] | None,
+    edge_filter: EdgeFilter,
 ) -> Select:
-
+    """Query (subject, relationship_id, object) triples. See :func:`q_edges` for *edge_filter*."""
     stmt = select(
         Concept_Relationship.concept_id_1,
         Concept_Relationship.relationship_id,
         Concept_Relationship.concept_id_2,
     )
+    stmt = _filter_concept_relationships(stmt, edge_filter)
 
     if subjects:
         stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
-
-    if predicates:
-        stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicates))
 
     if objects:
         stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
@@ -536,26 +544,15 @@ def q_relationships(
     return stmt
 
 
-def q_entities(
-    domain: str | None, standard_only: bool = True, filter_obsoletes: bool = True
-) -> Select:
+DEFAULT_CONCEPT_FILTER = ConceptFilter(
+    require_standard=True, include_classification=True, require_active=True
+)
+"""Concepts the graph enumerators list by default: active, standard or classification."""
+
+
+def q_entities(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
     """Query concept IDs using OMOP Alchemy's canonical concept semantics."""
-    return ConceptFilter(
-        domains=(domain,) if domain else None,
-        require_standard=standard_only,
-        include_classification=True,
-        require_active=filter_obsoletes,
-    ).apply(select(Concept.concept_id))
-
-
-def q_concept_filtered(vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
-    """Helper query for selecting standard concepts filtered by vocab/domain."""
-    return ConceptFilter(
-        domains=(domain_id,) if domain_id else None,
-        vocabularies=(vocabulary_id,) if vocabulary_id else None,
-        require_standard=True,
-        include_classification=True,
-    ).apply(select(Concept.concept_id))
+    return concept_filter.apply(select(Concept.concept_id))
 
 
 def q_concept_synonym_filtered(concept_id: int) -> Select:
@@ -564,23 +561,12 @@ def q_concept_synonym_filtered(concept_id: int) -> Select:
     return stmt.where(Concept_Synonym.concept_id == concept_id)
 
 
-def q_singletons(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+def q_singletons(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
     """
     Query for singleton concepts (no parents, no children).
     Uses NOT EXISTS subqueries on the ancestor table.
     """
-    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
-
-    return stmt.where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.descendant_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
-        )
-    ).where(
+    return q_roots(concept_filter).where(
         ~exists(
             select(1).where(
                 and_(
@@ -592,10 +578,9 @@ def q_singletons(*, vocabulary_id: str | None = None, domain_id: str | None = No
     )
 
 
-def q_roots(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+def q_roots(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
     """Query for root concepts (no parents)."""
-    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
-    return stmt.where(
+    return q_entities(concept_filter).where(
         ~exists(
             select(1).where(
                 and_(
@@ -607,10 +592,9 @@ def q_roots(*, vocabulary_id: str | None = None, domain_id: str | None = None) -
     )
 
 
-def q_leaves(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+def q_leaves(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
     """Query for leaf concepts (no children)."""
-    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
-    return stmt.where(
+    return q_entities(concept_filter).where(
         ~exists(
             select(1).where(
                 and_(

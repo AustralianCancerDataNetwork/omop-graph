@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import (
-    q_concept_filtered,
+    DEFAULT_CONCEPT_FILTER,
     q_concept_name_match,
     q_concept_views,
     q_entities,
@@ -205,12 +206,18 @@ def test_graph_listing_queries_delegate_to_shared_filter(
     concept_engine: sa.Engine,
 ) -> None:
     with Session(concept_engine) as session:
-        active_standard_ids = tuple(session.scalars(q_entities(domain="Condition")))
+        active_standard_ids = tuple(
+            session.scalars(q_entities(replace(DEFAULT_CONCEPT_FILTER, domains=("Condition",))))
+        )
         all_standard_ids = tuple(
             session.scalars(
-                q_concept_filtered(
-                    domain_id="Condition",
-                    vocabulary_id="SNOMED",
+                q_entities(
+                    replace(
+                        DEFAULT_CONCEPT_FILTER,
+                        domains=("Condition",),
+                        vocabularies=("SNOMED",),
+                        require_active=False,
+                    )
                 )
             )
         )

@@ -37,6 +37,7 @@ from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.extensions.emb import get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -860,7 +861,7 @@ def _relationship_classification(kg: KnowledgeGraph, concept_id: int) -> dict:
     count in that class, is enough to show which classes are walkable for grounding (Identity)
     vs. excluded by default (everything else) without enumerating every edge.
     """
-    edges = kg.edges(concept_ids=concept_id, direction="out", active_only=True, within_domain=False)
+    edges = kg.edges(concept_ids=concept_id, direction="out")
     by_kind: dict[PredicateKind, list] = {}
     for edge in edges:
         by_kind.setdefault(edge.predicate_kind, []).append(edge)
@@ -1179,9 +1180,7 @@ def _resolve_identity_hop(kg: KnowledgeGraph, candidate_id: int, standard_id: in
     edges = kg.edges(
         concept_ids=candidate_id,
         direction="out",
-        predicate_kinds=frozenset({PredicateKind.IDENTITY}),
-        active_only=True,
-        within_domain=False,
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.IDENTITY})),
     )
     target_edge = None
     if standard_id is not None:

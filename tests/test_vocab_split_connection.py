@@ -13,6 +13,7 @@ genuinely separate physical connections.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import date
 from typing import NamedTuple
 
@@ -46,7 +47,9 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 
@@ -314,8 +317,7 @@ def test_edges_merges_across_split_connections(split_engines: _Engines) -> None:
     edges = kg.edges(
         concept_ids=SUBJECT_CONCEPT_ID,
         direction="out",
-        active_only=False,
-        within_domain=False,
+        edge_filter=EdgeFilter(active_only=False),
     )
 
     assert len(edges) == 1
@@ -332,9 +334,9 @@ def test_edges_predicate_kinds_filter_applies_after_merge(split_engines: _Engine
     edges = kg.edges(
         concept_ids=SUBJECT_CONCEPT_ID,
         direction="out",
-        active_only=False,
-        within_domain=False,
-        predicate_kinds=frozenset({PredicateKind.HIERARCHY}),
+        edge_filter=EdgeFilter(
+            active_only=False, predicate_kinds=frozenset({PredicateKind.HIERARCHY})
+        ),
     )
 
     assert edges == ()
@@ -379,23 +381,21 @@ def test_valid_domains_and_vocabularies_resolve_against_the_vocab_connection(
 
 def test_entities_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
     kg = _split_kg(split_engines)
-    ids = tuple(kg.entities(domain="Condition"))
+    ids = tuple(kg.entities(replace(DEFAULT_CONCEPT_FILTER, domains=("Condition",))))
 
     assert set(ids) == {SUBJECT_CONCEPT_ID, OBJECT_CONCEPT_ID}
 
 
 def test_relationships_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
     kg = _split_kg(split_engines)
-    triples = tuple(kg.relationships(subjects=(SUBJECT_CONCEPT_ID,), predicates=None, objects=None))
+    triples = tuple(kg.relationships(subjects=(SUBJECT_CONCEPT_ID,), objects=None))
 
     assert triples == ((SUBJECT_CONCEPT_ID, "maps to", OBJECT_CONCEPT_ID),)
 
 
 def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines) -> None:
     kg = _split_kg(split_engines)
-    triples = tuple(
-        kg.relationships(subjects=(OBJECT_CONCEPT_ID,), predicates=None, objects=None, invert=True)
-    )
+    triples = tuple(kg.relationships(subjects=(OBJECT_CONCEPT_ID,), objects=None, invert=True))
 
     assert triples == ((OBJECT_CONCEPT_ID, "maps to", SUBJECT_CONCEPT_ID),)
 
