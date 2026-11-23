@@ -40,13 +40,11 @@ def test_a_consistent_mapping_passes():
     _check(GOOD)
 
 
-def test_an_id_unknown_to_the_cdm_names_the_owner_of_its_name():
+def test_an_id_unknown_to_the_cdm_is_rejected():
     mapping = GOOD.copy()
     mapping.loc[1, "relationship_id"] = "membership inference"
 
-    with pytest.raises(
-        ClassificationDataError, match="'membership inference'.*belongs to relationship_id 'Is a'"
-    ):
+    with pytest.raises(ClassificationDataError, match="'membership inference'.*not in the CDM"):
         _check(mapping)
 
 

@@ -13,25 +13,20 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipMapping,
 )
 
-RELATIONSHIPS = [
-    {"relationship_id": "Is a", "relationship_name": "Is a", "reverse_relationship_id": "Subsumes"},
-    {
-        "relationship_id": "Subsumes",
-        "relationship_name": "Subsumes",
-        "reverse_relationship_id": "Is a",
-    },
-]
-EXPECTED_CLASSES = {
-    (PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
-    (PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
-}
-EXPECTED_MAPPINGS = {
-    ("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
-    ("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
-}
-
 
 def _seed_duckdb_vocabulary(engine) -> None:
+    relationships = [
+        {
+            "relationship_id": "Is a",
+            "relationship_name": "Is a",
+            "reverse_relationship_id": "Subsumes",
+        },
+        {
+            "relationship_id": "Subsumes",
+            "relationship_name": "Subsumes",
+            "reverse_relationship_id": "Is a",
+        },
+    ]
     relationship_table = sa.Table(
         "relationship",
         sa.MetaData(),
@@ -42,12 +37,20 @@ def _seed_duckdb_vocabulary(engine) -> None:
     )
     with engine.begin() as connection:
         relationship_table.create(connection)
-        connection.execute(relationship_table.insert(), RELATIONSHIPS)
+        connection.execute(relationship_table.insert(), relationships)
 
 
 def test_relationship_classification_runs_and_is_idempotent_on_duckdb(duckdb_db, tmp_path):
     resolved = duckdb_db.resolved
     assert resolved is not None
+    expected_classes = {
+        (PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
+        (PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
+    }
+    expected_mappings = {
+        ("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        ("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
+    }
 
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference,direction\n"
@@ -98,15 +101,15 @@ def test_relationship_classification_runs_and_is_idempotent_on_duckdb(duckdb_db,
             )
         }
 
-    assert actual_classes == EXPECTED_CLASSES
-    assert actual_mappings == EXPECTED_MAPPINGS
+    assert actual_classes == expected_classes
+    assert actual_mappings == expected_mappings
 
     cli.relationship_classification(str(tmp_path), resolved=resolved)
 
     with duckdb_db.committing_engine.connect() as connection:
         assert connection.scalar(
             sa.select(sa.func.count()).select_from(RelationshipClass.__table__)
-        ) == len(EXPECTED_CLASSES)
+        ) == len(expected_classes)
         assert connection.scalar(
             sa.select(sa.func.count()).select_from(RelationshipMapping.__table__)
-        ) == len(EXPECTED_MAPPINGS)
+        ) == len(expected_mappings)

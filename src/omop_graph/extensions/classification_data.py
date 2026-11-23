@@ -27,9 +27,7 @@ def check_classification(classification: pd.DataFrame) -> None:
     ClassificationDataError
         If a Hierarchy row has no ``up`` or ``down`` direction, or another row has one.
     """
-    directions = classification.get(
-        "direction", pd.Series(index=classification.index, dtype=object)
-    )
+    directions = classification["direction"]
     is_hierarchy = classification["predicate_kind"] == PredicateKind.HIERARCHY.value
     valid = [direction.value for direction in HierarchyDirection]
     missing = classification.loc[is_hierarchy & ~directions.isin(valid), "predicate_subkind"]
@@ -54,7 +52,7 @@ def check_mapping_against_cdm(
     """Check the mapping against the CDM ``relationship`` table, raising on every problem found.
 
     Every mapped ``relationship_id`` must be in the CDM and mapped once, a row's ``r_name``,
-    when present, must equal the CDM ``relationship_name``, every CDM relationship must have
+    must equal the CDM ``relationship_name``, every CDM relationship must have
     a classified row, and a Hierarchy relationship and its CDM reverse must both be Hierarchy
     with opposite directions.
 
@@ -62,7 +60,7 @@ def check_mapping_against_cdm(
     ----------
     mapping : pd.DataFrame
         Rows of ``predicate_mapping.csv`` with ``relationship_id``, ``predicate_kind``,
-        ``predicate_subkind``, ``direction`` and, optionally, ``r_name`` columns.
+        ``predicate_subkind``, ``direction`` and ``r_name`` columns.
     relationships : Mapping[str, tuple[str, str]]
         CDM ``relationship_id`` to ``(relationship_name, reverse_relationship_id)``.
 
@@ -79,22 +77,14 @@ def check_mapping_against_cdm(
             "before running `relationship-classification`."
         )
 
-    id_by_name: dict[str, str | None] = {}
-    for relationship_id, (name, _) in relationships.items():
-        id_by_name[name] = None if name in id_by_name else relationship_id
-
     ids = mapping["relationship_id"].tolist()
-    names = mapping["r_name"].tolist() if "r_name" in mapping.columns else [None] * len(ids)
     problems: list[str] = []
-    for relationship_id, raw_name in zip(ids, names, strict=True):
-        name = raw_name if isinstance(raw_name, str) else None
+    for relationship_id, name in zip(ids, mapping["r_name"], strict=True):
         if relationship_id not in relationships:
-            owner = id_by_name.get(name) if name is not None else None
-            hint = f"; that name belongs to relationship_id {owner!r}" if owner else ""
             problems.append(
-                f"relationship_id {relationship_id!r} (r_name {name!r}) is not in the CDM{hint}"
+                f"relationship_id {relationship_id!r} (r_name {name!r}) is not in the CDM"
             )
-        elif name is not None and name != relationships[relationship_id][0]:
+        elif name != relationships[relationship_id][0]:
             problems.append(
                 f"relationship_id {relationship_id!r} has r_name {name!r} but the CDM "
                 f"relationship_name is {relationships[relationship_id][0]!r}"

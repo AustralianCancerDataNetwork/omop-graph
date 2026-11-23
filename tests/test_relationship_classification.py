@@ -72,26 +72,18 @@ def test_relationship_classification_is_idempotent(pg_db):
         assert n_class and n_class > 0
 
 
-_CLASSIFICATION_CSV = (
-    "class,subclass,description,semantics,inference\n"
-    "Identity,mapping,Identity mapping,identity,none\n"
-)
-_MAPPING_HEADER = "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
-_MAPS_TO = "Identity,mapping,Maps to,Maps to,,,\n"
-_MAPPED_FROM = "Identity,mapping,Mapped from,Mapped from,,,\n"
-
-
-def _write_files(directory, *mapping_rows: str) -> None:
-    (directory / "predicate_classification.csv").write_text(_CLASSIFICATION_CSV)
-    (directory / "predicate_mapping.csv").write_text(_MAPPING_HEADER + "".join(mapping_rows))
-
-
 def test_relationship_classification_rejects_bad_files_and_keeps_the_loaded_tables(pg_db, tmp_path):
+    maps_to = "Identity,mapping,Maps to,Maps to\n"
+    mapped_from = "Identity,mapping,Mapped from,Mapped from\n"
+    unknown = "Identity,mapping,unknown_rel,Unknown\n"
     good, bad = tmp_path / "good", tmp_path / "bad"
-    good.mkdir()
-    bad.mkdir()
-    _write_files(good, _MAPS_TO, _MAPPED_FROM)
-    _write_files(bad, _MAPS_TO, _MAPPED_FROM, "Identity,mapping,unknown_rel,Unknown,,,\n")
+    for directory, rows in ((good, maps_to + mapped_from), (bad, maps_to + mapped_from + unknown)):
+        directory.mkdir()
+        (directory / "predicate_classification.csv").write_text(
+            "class,subclass,description,semantics,inference\n"
+            "Identity,mapping,Identity mapping,identity,none\n"
+        )
+        (directory / "predicate_mapping.csv").write_text("class,subclass,r_id,r_name\n" + rows)
 
     with scoped_test_schema(
         pg_db.resolved,

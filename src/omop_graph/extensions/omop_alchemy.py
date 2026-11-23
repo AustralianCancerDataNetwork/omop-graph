@@ -34,7 +34,7 @@ class HierarchyDirection(Enum):
     DOWN = "down"
 
 
-def _predicate_kind_values(enum_cls: type[Enum]) -> list[str]:
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
     return [member.value for member in enum_cls]
 
 
@@ -42,12 +42,12 @@ def _predicate_kind_enum() -> sa.Enum:
     """Use a varchar-backed enum on DuckDB and the native enum elsewhere."""
     return sa.Enum(
         PredicateKind,
-        values_callable=_predicate_kind_values,
+        values_callable=_enum_values,
         schema=Role.PRIMARY.value,
     ).with_variant(
         sa.Enum(
             PredicateKind,
-            values_callable=_predicate_kind_values,
+            values_callable=_enum_values,
             native_enum=False,
             create_constraint=True,
         ),
@@ -75,7 +75,7 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     direction: so.Mapped[HierarchyDirection | None] = so.mapped_column(
         sa.Enum(
             HierarchyDirection,
-            values_callable=_predicate_kind_values,
+            values_callable=_enum_values,
             native_enum=False,
             create_constraint=True,
         ),
