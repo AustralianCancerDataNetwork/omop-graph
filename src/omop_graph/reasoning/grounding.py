@@ -60,13 +60,27 @@ class GroundingConstraints:
     search_constraint : ConceptFilter, optional
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
-        Maximum allowed distance in the hierarchy between a candidate and a parent.
-        Defaults to ``6``.
+        With ``parent_ids``, the maximum ``concept_ancestor`` distance between a
+        standard concept and a parent. Without it, the maximum number of identity hops
+        from the candidate to a standard concept. Defaults to ``6``.
     predicate_kinds : frozenset[PredicateKind], optional
         Edge types allowed during BFS traversal. Defaults to IDENTITY only, which
         covers the OMOP "Maps to" and "Non-standard to Standard" relationships. Allowing
         HIERARCHY or ASSOCIATION edges would traverse parent-of and cross-domain links,
         expanding candidates to unrelated concepts and diluting grounding results.
+
+    Notes
+    -----
+    ``max_depth`` has a different meaning in each mode:
+
+    - With ``parent_ids`` it caps ``min_levels_of_separation`` in ``concept_ancestor``.
+      The identity hops from the candidate to the standard concept are not capped.
+    - Without ``parent_ids`` it caps the identity hops and no ancestor check is made.
+
+    ``min_levels_of_separation`` is the length of the shortest chain of ancestry-defining
+    relationships. ``concept_ancestor`` merges all such relationship types and does not
+    record which one produced a level, so one level is not necessarily one ``Is a`` step.
+    The same value is ``StandardConcept.separation``, which ranks the results.
     """
 
     parent_ids: tuple[int, ...] | None
