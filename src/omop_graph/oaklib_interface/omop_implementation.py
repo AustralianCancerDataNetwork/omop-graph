@@ -3,6 +3,7 @@ from typing import ClassVar
 
 from oa_configurator import ResolvedCDMDatabase
 from oaklib.interfaces import (
+    MappingProviderInterface,
     OboGraphInterface,
     RelationGraphInterface,
     SearchInterface,
@@ -18,6 +19,7 @@ from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
+from omop_graph.oaklib_interface.mapping_provider import OMOPMappingProviderInterface
 from omop_graph.oaklib_interface.obograph import OMOPOboGraphInterface
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.relation_graph import OMOPRelationGraphInterface
@@ -31,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 class OMOPAlchemyImplementation(
     ReadOnlyMixin,
+    OMOPMappingProviderInterface,
     OMOPOboGraphInterface,
     OMOPRelationGraphInterface,
     OMOPBasicOntologyInterface,
@@ -38,6 +41,7 @@ class OMOPAlchemyImplementation(
     OMOPTextAnnotatorInterface,
     SearchInterface,
     TextAnnotatorInterface,
+    MappingProviderInterface,
     OboGraphInterface,
     RelationGraphInterface,
     BasicOntologyInterface,

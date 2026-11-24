@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from oaklib.interfaces import (
     BasicOntologyInterface,
+    MappingProviderInterface,
     OboGraphInterface,
     RelationGraphInterface,
     SearchInterface,
@@ -29,17 +30,14 @@ from omop_graph.oaklib_interface.unsupported import UNSUPPORTED
 
 CLAIMED = (
     BasicOntologyInterface,
+    MappingProviderInterface,
     OboGraphInterface,
     RelationGraphInterface,
     SearchInterface,
     TextAnnotatorInterface,
 )
 
-PENDING = frozenset(
-    {
-        "BasicOntologyInterface.simple_mappings_by_curie",
-    }
-)
+PENDING: frozenset[str] = frozenset()
 
 
 def _raises_not_implemented(function: Callable) -> bool:

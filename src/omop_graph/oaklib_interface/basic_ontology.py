@@ -687,11 +687,6 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             parents = self.kg.parents(cid)
         return [self.codec.concept_curie(p) for p in parents]
 
-    def simple_mappings_by_curie(self, curie: CURIE):
-        raise NotImplementedError(
-            "TODO: need to implement mapping interface and have self.sssom_mappings"
-        )
-
     def entity_alias_map(self, curie: CURIE) -> ALIAS_MAP:
         """
         Get a map of alias types to alias values.
@@ -706,8 +701,6 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         for s in self.kg.synonyms_for_concept(view.concept_id):
             m[HAS_EXACT_SYNONYM].append(s)
-
-        m[HAS_DBXREF].append(f"{view.vocabulary_id}:{view.concept_code}")
 
         return m
 
@@ -763,6 +756,6 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 m[TERM_REPLACED_BY].append(self.codec.concept_curie(edge.object_id))
 
         # vocabulary-qualified identifier (important!)
-        m[HAS_DBXREF].append(f"{cv.vocabulary_id}:{cv.concept_code}")
+        m[HAS_DBXREF].append(self.codec.code_curie(cv.vocabulary_id, cv.concept_code))
 
         return dict(m)

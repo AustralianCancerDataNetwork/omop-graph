@@ -74,6 +74,35 @@ class SynonymView:
 
 
 @dataclass(frozen=True)
+class MappingView:
+    """
+    A concept relationship together with the vocabularies of its two concepts.
+
+    Parameters
+    ----------
+    subject_id : int
+        The concept the relationship starts from.
+    predicate_id : str
+        The relationship id.
+    object_id : int
+        The concept the relationship points to.
+    valid_start_date : date
+        When the relationship became valid.
+    subject_source : str
+        The vocabulary of the subject concept.
+    object_source : str
+        The vocabulary of the object concept.
+    """
+
+    subject_id: int
+    predicate_id: str
+    object_id: int
+    valid_start_date: date
+    subject_source: str
+    object_source: str
+
+
+@dataclass(frozen=True)
 class ConceptView:
     """
     A lightweight, immutable view of an OMOP Concept.

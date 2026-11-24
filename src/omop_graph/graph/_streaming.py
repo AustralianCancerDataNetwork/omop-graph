@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Select
+from sqlalchemy.sql import Executable
 
 
-def stream(stmt: Select, batch_size: int = 10_000) -> Select:
+def stream[T: Executable](stmt: T, batch_size: int = 10_000) -> T:
     """
     Return *stmt* set to fetch its rows from a server-side cursor in batches.
 
@@ -16,14 +16,14 @@ def stream(stmt: Select, batch_size: int = 10_000) -> Select:
 
     Parameters
     ----------
-    stmt : Select
-        The statement to stream.
+    stmt : Executable
+        The statement to stream, such as a select or a union of selects.
     batch_size : int
         Rows fetched per round trip.
 
     Returns
     -------
-    Select
+    Executable
         The statement with ``stream_results`` and ``yield_per`` set.
     """
     return stmt.execution_options(stream_results=True, yield_per=batch_size)

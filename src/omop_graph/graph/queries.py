@@ -14,6 +14,7 @@ The queries cover:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Literal, cast
 
 from omop_alchemy.backends import (
@@ -41,9 +42,11 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    true,
+    union_all,
 )
 from sqlalchemy.orm import aliased
-from sqlalchemy.sql import ColumnElement, Select
+from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
 from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
 from .edges import EdgeFilter
@@ -515,6 +518,58 @@ def q_closure(
     )
     closure = closure.union(step)
     return select(closure.c.origin, closure.c.reached).where(closure.c.origin != closure.c.reached)
+
+
+def q_mappings(
+    concept_ids: tuple[int, ...] | None, edge_filter: EdgeFilter, source: str | None = None
+) -> Select | CompoundSelect:
+    """
+    Query the edges of *edge_filter* with the vocabularies of their concepts.
+
+    Parameters
+    ----------
+    concept_ids : tuple[int, ...] | None
+        Only edges starting from these concepts, or all edges when None.
+    edge_filter : EdgeFilter
+        Conditions on the edges, see :func:`q_edges`. Edges from a concept to itself are
+        left out.
+    source : str, optional
+        Only edges with this vocabulary on either side. It is two queries, one for each
+        side, since a condition on either side of the join cannot use an index.
+    """
+
+    def edges(side: Callable[[type[Concept], type[Concept]], ColumnElement[bool]]) -> Select:
+        Subject = aliased(Concept)
+        Object = aliased(Concept)
+        stmt = (
+            select(
+                Concept_Relationship.concept_id_1.label("subject_id"),
+                Concept_Relationship.relationship_id.label("predicate_id"),
+                Concept_Relationship.concept_id_2.label("object_id"),
+                Concept_Relationship.valid_start_date,
+                Subject.vocabulary_id.label("subject_source"),
+                Object.vocabulary_id.label("object_source"),
+            )
+            .join(Subject, Subject.concept_id == Concept_Relationship.concept_id_1)
+            .join(Object, Object.concept_id == Concept_Relationship.concept_id_2)
+            .where(Concept_Relationship.concept_id_1 != Concept_Relationship.concept_id_2)
+            .where(side(Subject, Object))
+        )
+        stmt = _filter_concept_relationships(stmt, edge_filter)
+        if concept_ids is not None:
+            stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
+        return stmt
+
+    if source is None:
+        return edges(lambda subject, object_: true())
+    return union_all(
+        edges(lambda subject, object_: subject.vocabulary_id == source),
+        edges(
+            lambda subject, object_: and_(
+                object_.vocabulary_id == source, subject.vocabulary_id != source
+            )
+        ),
+    )
 
 
 def q_relationships(

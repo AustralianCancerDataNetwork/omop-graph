@@ -11,6 +11,11 @@ _NO_EDGE_INDEX = (
     "Use relationships() and entailed_relationships() with filters instead."
 )
 
+_NO_CLUSTERS = (
+    "Clustering the mappings loads all of them into memory, about 20 million in an Athena "
+    "release. Use get_transitive_mappings_by_curie for one concept."
+)
+
 UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.set_label": _READ_ONLY,
     "BasicOntologyInterface.create_entity": _READ_ONLY,
@@ -21,6 +26,7 @@ UNSUPPORTED: dict[str, str] = {
     "OboGraphInterface.load_graph": _READ_ONLY,
     "BasicOntologyInterface.edge_index": _NO_EDGE_INDEX,
     "BasicOntologyInterface.entailed_edge_index": _NO_EDGE_INDEX,
+    "MappingProviderInterface.get_mapping_clusters": _NO_CLUSTERS,
 }
 """Reason for each unsupported oaklib method, keyed by ``Interface.method``."""
 

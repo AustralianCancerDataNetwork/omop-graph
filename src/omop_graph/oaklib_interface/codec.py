@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from enum import Enum
+from functools import cached_property
 from urllib.parse import quote, unquote
 
 from oaklib.datamodels.vocabulary import IS_A
@@ -67,6 +69,47 @@ class OMOPCodec:
     def __init__(self, kg: KnowledgeGraph):
         self.kg = kg
 
+    @cached_property
+    def _vocabulary_ids_by_prefix(self) -> dict[str, str]:
+        """
+        The ``vocabulary_id`` behind each CURIE prefix, checked for collisions.
+
+        Read on first use and not in ``__init__``, so a codec that never converts a
+        vocabulary prefix does not query the ``vocabulary`` table. It is not refreshed
+        for the life of the codec.
+        """
+        ids: dict[str, str] = {}
+        for view in self.kg.vocabularies():
+            prefix = self.vocabulary_prefix(view.vocabulary_id)
+            if ids.setdefault(prefix, view.vocabulary_id) != view.vocabulary_id:
+                raise ValueError(
+                    f"Vocabularies {ids[prefix]!r} and {view.vocabulary_id!r} "
+                    f"both become the CURIE prefix {prefix!r}."
+                )
+        return ids
+
+    @staticmethod
+    def vocabulary_prefix(vocabulary_id: str) -> str:
+        """
+        Convert a ``vocabulary_id`` to a valid CURIE prefix.
+
+        Characters that are not word characters become ``_``, so ``Nebraska Lexicon`` is
+        ``Nebraska_Lexicon``.
+        """
+        return re.sub(r"\W", "_", vocabulary_id)
+
+    def vocabulary_id(self, prefix: str) -> str:
+        """
+        Convert a CURIE prefix back to its ``vocabulary_id``.
+
+        A prefix that is already a ``vocabulary_id``, or names no vocabulary, is returned as it is.
+        """
+        return self._vocabulary_ids_by_prefix.get(prefix, prefix)
+
+    def code_curie(self, vocabulary_id: str, concept_code: str) -> CURIE:
+        """Convert a vocabulary and concept code to a CURIE, for example ``SNOMED:254637007``."""
+        return ":".join((self.vocabulary_prefix(vocabulary_id), concept_code))
+
     def prefix_map(self) -> dict[str, str]:
         """
         Return the prefix map for OMOP entities.
@@ -112,7 +155,8 @@ class OMOPCodec:
         Parse a CURIE into an OMOP concept id.
 
         An ``OMOP`` CURIE carries the id itself. Any other prefix is read as
-        ``vocab:code`` and resolved through the Knowledge Graph.
+        ``vocab:code``, where the prefix is a ``vocabulary_id`` or its CURIE prefix, and
+        resolved through the Knowledge Graph.
 
         Parameters
         ----------
@@ -127,7 +171,7 @@ class OMOPCodec:
         prefix, _, local = curie.partition(":")
         if prefix == OMOP_PREFIX:
             return int(local)
-        return self.kg.concept_id_by_code(prefix, local)
+        return self.kg.concept_id_by_code(self.vocabulary_id(prefix), local)
 
     def predicate_curie(self, relationship_id: str | int) -> PRED_CURIE:
         """

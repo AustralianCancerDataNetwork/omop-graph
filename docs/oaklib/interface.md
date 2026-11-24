@@ -25,6 +25,7 @@ The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies,
 The primary adapter class that inherits from multiple OAK interfaces:
 
 * **`BasicOntologyInterface`**: Handles labels, aliases, and metadata mapping.
+* **`MappingProviderInterface`**: SSSOM mappings from the identity and mapping relationships, see [Mappings](#mappings).
 * **`OboGraphInterface`**: Nodes, `ancestors`, `descendants`, graphs and paths, see [Walking the hierarchy](#walking-the-hierarchy).
 * **`RelationGraphInterface`**: Relationships that follow from the stored ones through the `Is a` hierarchy, see [Entailed relationships](#entailed-relationships).
 * **`SearchInterface`**: Enables term-based searching across labels and synonyms.
@@ -58,6 +59,24 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 * A non-standard concept has no ancestry, so its `ancestors` are empty. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the standard concepts it maps to: its walks include them and their ancestors, and its entailed relationships are theirs, reported for the concept itself. This is off by default because the result holds concepts that no stored edge connects to the concept.
 * `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary.
 * `descendants` of a concept near the top of a hierarchy return very many concepts.
+
+### Mappings
+`sssom_mappings` serves the OMOP mappings as SSSOM, with the looked up concept as the subject.
+
+| OMOP relationship | SSSOM predicate |
+| --- | --- |
+| Identity, exact equivalence (`Maps to`, `Mapped from`) | `skos:exactMatch` |
+| Identity, near equivalence (`Brand name of`) | `skos:closeMatch` |
+| Association, mapping (`ICDO - SNOMED`) | `skos:relatedMatch` |
+| Concept vocabulary and code | `oio:hasDbXref` |
+
+* Version lineage such as `Concept replaced by` is not a mapping, and neither is a concept mapped to itself.
+* OMOP stores each pair in both directions, so a standard concept has a mapping to every source concept that maps to it. Without concepts, `sssom_mappings` lists both directions of each pair.
+* The justification is `semapv:UnspecifiedMatching`, since OMOP does not record how a mapping was made. The date is when the relationship became valid, and the comment names the OMOP relationship.
+* A source or code can use a vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`. It is written `Nebraska_Lexicon`, and either spelling is accepted as input.
+* The cross-reference is a mapping only, so it is not in `entity_alias_map`. It can be looked up from the concept or from `vocabulary_id:concept_code`.
+* Mappings are not limited to the adapter's `concept_filter`.
+* `get_transitive_mappings_by_curie` follows exact equivalence in both directions, which also reaches the concepts that share a target. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.
