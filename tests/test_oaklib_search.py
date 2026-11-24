@@ -1,0 +1,201 @@
+"""Search over labels, aliases and identifiers, on a small world with every kind of match."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import date
+from typing import cast
+
+import pytest
+import sqlalchemy as sa
+from oaklib.datamodels.search import SearchConfiguration, SearchProperty, SearchTermSyntax
+from omop_alchemy.cdm.model.vocabulary.concept import Concept
+from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
+from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
+from orm_loader.helpers import Base
+from sqlalchemy.orm import sessionmaker
+
+from omop_graph.extensions.omop_alchemy import PredicateKind, RelationshipClass, RelationshipMapping
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.oaklib_interface.codec import OMOPLanguage
+from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
+
+CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED = range(400, 406)
+SPACED_CODE = "C34.9"
+
+
+def curie(concept_id: int) -> str:
+    return f"OMOP:{concept_id}"
+
+
+def config(**fields) -> SearchConfiguration:
+    return SearchConfiguration(**fields)
+
+
+@pytest.fixture(scope="module")
+def adapter() -> Iterator[OMOPAlchemyImplementation]:
+    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
+        schema_translate_map={"primary": None, "vocab": None}
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            cast(sa.Table, model.__table__)
+            for model in (
+                Concept,
+                Concept_Synonym,
+                Vocabulary,
+                RelationshipClass,
+                RelationshipMapping,
+            )
+        ],
+    )
+
+    def concept(concept_id: int, name: str, standard: str | None = "S", **fields) -> Concept:
+        return Concept(
+            concept_id=concept_id,
+            concept_name=name,
+            concept_code=fields.pop("concept_code", f"C{concept_id}"),
+            domain_id="Condition",
+            vocabulary_id=fields.pop("vocabulary_id", "SNOMED"),
+            concept_class_id="Clinical Finding",
+            standard_concept=standard,
+            valid_start_date=date(2020, 1, 1),
+            valid_end_date=date(2099, 12, 31),
+            **fields,
+        )
+
+    with sessionmaker(bind=engine)() as session:
+        session.add_all(
+            [
+                *(
+                    Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
+                    for i, v in enumerate(("SNOMED", "ICD10CM"))
+                ),
+                RelationshipClass(
+                    predicate_kind=PredicateKind.IDENTITY,
+                    predicate_subkind="Exact equivalence",
+                    description="x",
+                    semantics="x",
+                    inference="none",
+                ),
+                RelationshipMapping(
+                    relationship_id="Maps to",
+                    predicate_kind=PredicateKind.IDENTITY,
+                    predicate_subkind="Exact equivalence",
+                ),
+                concept(CANCER, "Cancer"),
+                concept(PREFIXED, "Cancer of lung"),
+                concept(CONTAINING, "Small cell lung cancer"),
+                concept(LOWER, "cancer", standard=None),
+                concept(
+                    SOURCE,
+                    "Malignant neoplasm",
+                    standard=None,
+                    vocabulary_id="ICD10CM",
+                    concept_code=SPACED_CODE,
+                ),
+                concept(RETIRED, "Cancer old", standard=None, invalid_reason="U"),
+                Concept_Synonym(
+                    concept_id=CONTAINING,
+                    concept_synonym_name="Oat cell carcinoma",
+                    language_concept_id=OMOPLanguage.ENGLISH.concept_id,
+                ),
+            ]
+        )
+        session.commit()
+    try:
+        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessionmaker(bind=engine)))
+    finally:
+        engine.dispose()
+
+
+def search(adapter, term: str, **fields) -> list[str]:
+    return list(adapter.basic_search(term, config(**fields)))
+
+
+def test_the_default_search_is_an_exact_case_insensitive_label_match(adapter) -> None:
+    assert search(adapter, "CANCER") == [curie(CANCER), curie(LOWER)]
+    assert list(adapter.basic_search("cancer")) == [curie(CANCER), curie(LOWER)]
+
+
+def test_partial_matches_come_exact_then_prefix_then_substring(adapter) -> None:
+    assert search(adapter, "cancer", is_partial=True) == [
+        curie(CANCER),
+        curie(LOWER),
+        curie(PREFIXED),
+        curie(CONTAINING),
+    ]
+
+
+def test_starts_with_does_not_match_inside_a_label(adapter) -> None:
+    syntax = SearchTermSyntax.STARTS_WITH
+
+    assert search(adapter, "cancer", syntax=syntax) == [
+        curie(CANCER),
+        curie(LOWER),
+        curie(PREFIXED),
+    ]
+
+
+def test_the_limit_keeps_the_best_matches(adapter) -> None:
+    everything = search(adapter, "cancer", is_partial=True)
+
+    assert search(adapter, "cancer", is_partial=True, limit=2) == everything[:2]
+    assert search(adapter, "cancer", is_partial=True, limit=1) == everything[:1]
+
+
+def test_aliases_are_only_searched_on_request(adapter) -> None:
+    assert search(adapter, "oat cell carcinoma") == []
+    assert search(adapter, "oat cell carcinoma", properties=[SearchProperty.ALIAS]) == [
+        curie(CONTAINING)
+    ]
+
+
+def test_a_label_and_an_alias_match_is_reported_once(adapter) -> None:
+    assert search(adapter, "cancer", properties=[SearchProperty.ALIAS]).count(curie(CANCER)) == 1
+
+
+def test_deprecated_concepts_are_left_out_unless_requested(adapter) -> None:
+    assert curie(RETIRED) not in search(adapter, "cancer old")
+    assert search(adapter, "cancer old", include_obsoletes_in_results=True) == [curie(RETIRED)]
+
+
+def test_an_identifier_is_found_first(adapter) -> None:
+    identifier = [SearchProperty.IDENTIFIER]
+
+    assert search(adapter, curie(CANCER), properties=identifier) == [curie(CANCER)]
+    assert search(adapter, f"ICD10CM:{SPACED_CODE}", properties=identifier) == [curie(SOURCE)]
+    assert search(adapter, "ICD10CM:nothing", properties=identifier) == []
+    assert search(adapter, curie(RETIRED), properties=identifier) == []
+    assert search(
+        adapter, curie(RETIRED), properties=identifier, include_obsoletes_in_results=True
+    ) == [curie(RETIRED)]
+
+
+def test_anything_searches_labels_aliases_and_identifiers(adapter) -> None:
+    anything = [SearchProperty.ANYTHING]
+
+    assert search(adapter, curie(CANCER), properties=anything) == [curie(CANCER)]
+    assert search(adapter, "oat cell carcinoma", properties=anything) == [curie(CONTAINING)]
+
+
+@pytest.mark.parametrize(
+    "syntax",
+    [SearchTermSyntax.REGULAR_EXPRESSION, SearchTermSyntax.SQL, SearchTermSyntax.LUCENE],
+)
+def test_unsupported_syntaxes_raise(adapter, syntax) -> None:
+    with pytest.raises(ValueError, match="not supported"):
+        search(adapter, "cancer", syntax=syntax)
+
+
+def test_fuzzy_search_without_a_full_text_index_adds_nothing(adapter) -> None:
+    assert search(adapter, "cancer", is_fuzzy=True) == search(adapter, "cancer")
+
+
+def test_multiple_terms(adapter) -> None:
+    assert list(adapter.multiterm_search(["cancer", "cancer of lung"])) == [
+        curie(CANCER),
+        curie(LOWER),
+        curie(PREFIXED),
+    ]

@@ -246,6 +246,7 @@ class LabelMatchKind(Enum):
     -----
     Supported match kinds include:
     - EXACT: Direct case-insensitive match on concept_name.
+    - STARTS_WITH: The label starts with the query, case-insensitively.
     - FTS: Full-text search match (fuzzy).
     - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
     - EMBEDDING: Match based on vector similarity.
@@ -256,9 +257,10 @@ class LabelMatchKind(Enum):
     """
 
     EXACT = 0
-    FTS = 1
-    PARTIAL = 2
-    EMBEDDING = 3
+    STARTS_WITH = 1
+    FTS = 2
+    PARTIAL = 3
+    EMBEDDING = 4
 
     def __lt__(self, other: LabelMatchKind) -> bool:
         return self.value < other.value

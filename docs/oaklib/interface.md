@@ -128,6 +128,13 @@ for parent in adapter.hierarchical_parents("OMOP:313217"):
     print(f"Parent CURIE: {parent}")
 ```
 
+`basic_search` returns the best matches first and honours `limit`:
+
+* Labels are always searched, aliases with the `ALIAS` property, and identifiers (an `OMOP` CURIE or `vocabulary:code`) with `IDENTIFIER`.
+* The order is identifier, exact label, labels starting with the term (`STARTS_WITH` syntax or `is_partial`), then labels containing it (`is_partial`), then full-text matches (`is_fuzzy`, only where the database has the index). Within a kind, standard and active concepts come first.
+* Matching is case-insensitive, and deprecated concepts are left out unless `include_obsoletes_in_results` is set.
+* Regular expression, SQL and Lucene syntax raise `ValueError`.
+
 ### Text Annotation (Grounding)
 The interface allows you to process clinical text and ground it to OMOP:
 
@@ -140,5 +147,7 @@ config = TextAnnotationConfiguration()
 for annotation in adapter.annotate_text(text, configuration=config):
     print(f"Match: {annotation.object_label} ({annotation.object_id})")
 ```
+
+`annotate_text` yields nothing when the text does not ground.
 
 ---

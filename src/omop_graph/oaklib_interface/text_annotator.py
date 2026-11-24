@@ -69,12 +69,11 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         Yields
         -------
         TextAnnotation
-            An object representing the grounded text span.
+            An object representing the grounded text span. Nothing is yielded when
+            the text does not ground.
 
         Raises
         ------
-        RuntimeError
-            If grounding fails for the text.
         Exception
             If annotations are malformed.
         """
@@ -139,8 +138,8 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         )
 
         if not grounded:
-            raise RuntimeError(f"Failed to ground text: {text}")
-            # TODO: Embedding retrieval only as a fallback?
+            logger.info("Nothing grounds %r", text)
+            return
 
         for ground in grounded:
             yield nen_annotation(

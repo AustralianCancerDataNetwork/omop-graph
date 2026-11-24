@@ -275,6 +275,7 @@ def q_concept_name_ilike(
     search_constraint: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
+    anchored: bool = False,
 ) -> Select:
     """
     Query for partial matches on concept names using ILIKE.
@@ -287,6 +288,8 @@ def q_concept_name_ilike(
         Additional filters.
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
+    anchored : bool, optional
+        If True, the name must start with the query instead of containing it.
 
     Returns
     -------
@@ -298,10 +301,10 @@ def q_concept_name_ilike(
     if "%" in query_concept_name:
         raise ValueError("query_concept_name should not contain wildcards like '%'.")
 
-    if synonym:
-        base_stmt = q_concept_synonym().where(name_expr.ilike(f"%{query_concept_name}%"))
-    else:
-        base_stmt = q_concept_name().where(name_expr.ilike(f"%{query_concept_name}%"))
+    pattern = f"{query_concept_name}%" if anchored else f"%{query_concept_name}%"
+    base_stmt = (q_concept_synonym() if synonym else q_concept_name()).where(
+        name_expr.ilike(pattern)
+    )
     if search_constraint:
         if not isinstance(search_constraint, ConceptFilter):
             raise TypeError("search_constraint must be an instance of ConceptFilter")

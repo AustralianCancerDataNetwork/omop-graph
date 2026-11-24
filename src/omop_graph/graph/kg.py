@@ -376,6 +376,7 @@ class KnowledgeGraph(GraphBackend):
         synonym: bool = False,
         search_constraint: ConceptFilter | None = None,
         sort: bool = True,
+        limit: int | None = None,
     ) -> tuple[LabelMatch, ...]:
         """
         Resolve a query to concept_id(s).
@@ -385,12 +386,15 @@ class KnowledgeGraph(GraphBackend):
         query_term : str
             The term to search for.
         match_kind : LabelMatchKind
-            The kind of match to perform (exact, fulltext, partial).
+            The kind of match to perform (exact, starts with, fulltext, partial).
         synonym : bool
             If True, searches in Concept_Synonym instead of Concept.
         search_constraint : ConceptFilter, optional
             Additional filters for domain/vocabulary.
-
+        sort : bool
+            Whether to order the matches by quality.
+        limit : int, optional
+            The most matches to read.
         """
         input_query_term = self._normalise_query_term(query_term)
         if not input_query_term:
@@ -401,6 +405,8 @@ class KnowledgeGraph(GraphBackend):
                 fn = q_concept_name_match
             elif match_kind == LabelMatchKind.PARTIAL:
                 fn = q_concept_name_ilike
+            elif match_kind == LabelMatchKind.STARTS_WITH:
+                fn = functools.partial(q_concept_name_ilike, anchored=True)
             elif match_kind == LabelMatchKind.FTS:
                 fn = functools.partial(q_concept_name_fulltext, engine=session.get_bind(Concept))
             else:
@@ -418,6 +424,8 @@ class KnowledgeGraph(GraphBackend):
                     return ()
                 raise
 
+            if limit is not None:
+                cn = cn.limit(limit)
             matches = tuple(
                 LabelMatch(
                     input_query=input_query_term,

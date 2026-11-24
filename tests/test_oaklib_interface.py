@@ -29,6 +29,12 @@ def test_annotate_text_standardizes_non_standard_candidate_without_parent_annota
     assert annotations[0].object_id == "OMOP:196653"
 
 
+def test_annotate_text_yields_nothing_when_nothing_grounds(mock_cdm_kg: KnowledgeGraph) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+
+    assert list(interface.annotate_text(text="zzzz qqqq nonsense")) == []
+
+
 def test_entities_lists_concepts_or_relationships_by_owl_type(mock_cdm_kg: KnowledgeGraph) -> None:
     adapter = OMOPAlchemyImplementation(kg=mock_cdm_kg)
 

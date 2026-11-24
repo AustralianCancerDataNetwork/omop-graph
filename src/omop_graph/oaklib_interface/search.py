@@ -1,8 +1,10 @@
 """Search over the OMOP knowledge graph."""
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterator
+from typing import ClassVar
 
+from linkml_runtime.linkml_model.meta import PermissibleValue
 from oaklib.datamodels.search import (
     SearchConfiguration,
     SearchProperty,
@@ -10,6 +12,7 @@ from oaklib.datamodels.search import (
 )
 from oaklib.interfaces import SearchInterface
 from oaklib.types import CURIE
+from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 
 from omop_graph.graph import KnowledgeGraph
@@ -48,6 +51,13 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
     Mixin providing search capabilities over an OMOP knowledge graph.
     """
 
+    UNSUPPORTED_SYNTAXES: ClassVar[tuple[PermissibleValue, ...]] = (
+        SearchTermSyntax.REGULAR_EXPRESSION,
+        SearchTermSyntax.SQL,
+        SearchTermSyntax.LUCENE,
+    )
+    """The search term syntaxes that raise ``ValueError``."""
+
     def __init__(self, *args, kg: KnowledgeGraph, **kwargs):
         super().__init__(*args, kg=kg, **kwargs)
 
@@ -55,84 +65,103 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
         self,
         search_term: str,
         config: SearchConfiguration | None = None,
-    ) -> Iterable[CURIE]:
+    ) -> Iterator[CURIE]:
         """
-        Perform a basic search over the knowledge graph.
+        Search concepts by label, alias and identifier, best matches first.
+
+        Labels are always searched, aliases with the ``ALIAS`` property and identifiers with
+        ``IDENTIFIER`` or ``MAPPED_IDENTIFIER``. An identifier is an ``OMOP`` CURIE or a
+        ``vocabulary:code``. Matches are ordered by kind, then labels before aliases, and
+        within a kind by standard, active, shorter and lower id. The kinds are:
+
+        - an identifier match
+        - an exact label, matched case-insensitively
+        - a label starting with the term, for the ``STARTS_WITH`` syntax or ``is_partial``
+        - a label containing the term, for ``is_partial``
+        - a full-text match, for ``is_fuzzy``, when the database has the index
+
+        Deprecated concepts are left out unless ``include_obsoletes_in_results`` is set.
 
         Parameters
         ----------
         search_term : str
             The term to search for.
         config : SearchConfiguration, optional
-            Configuration for search behavior (fuzzy, properties to search).
+            Which properties to search and how to match. ``limit`` caps the results.
 
         Yields
-        -------
+        ------
         CURIE
-            The CURIEs of matching concepts.
+            The CURIEs of matching concepts, each once.
 
         Raises
         ------
         ValueError
-            If Regex search is requested (not supported).
+            If the syntax is regular expression, SQL or Lucene, which are not supported.
         """
-        if config is None:
-            config = SearchConfiguration()
+        config = config or SearchConfiguration()
+        for syntax in self.UNSUPPORTED_SYNTAXES:
+            if config.syntax == SearchTermSyntax(syntax.text):
+                raise ValueError(f"{syntax.text} search is not supported for OMOP")
 
-        props = _normalise_properties(config)
-
+        props = set(_normalise_properties(config))
         if SearchProperty.ANYTHING.text in props:
-            props = list(SUPPORTED_PROPERTIES)
+            props = SUPPORTED_PROPERTIES
+        by_identifier = bool(
+            props & {SearchProperty.IDENTIFIER.text, SearchProperty.MAPPED_IDENTIFIER.text}
+        )
+        starts_with = config.syntax == SearchTermSyntax(SearchTermSyntax.STARTS_WITH.text)
+        kinds = [LabelMatchKind.EXACT]
+        if starts_with or config.is_partial:
+            kinds.append(LabelMatchKind.STARTS_WITH)
+        if config.is_partial and not starts_with:
+            kinds.append(LabelMatchKind.PARTIAL)
+        if config.is_fuzzy:
+            kinds.append(LabelMatchKind.FTS)
 
-        props = [p for p in props if p in SUPPORTED_PROPERTIES]
+        include_obsoletes = bool(config.include_obsoletes_in_results)
+        constraint = ConceptFilter(require_standard=False, require_active=not include_obsoletes)
+        found: dict[int, None] = {}
 
-        seen: set[int] = set()
+        def full() -> bool:
+            return config.limit is not None and len(found) >= config.limit
 
-        if config.syntax == SearchTermSyntax.REGULAR_EXPRESSION:
-            raise ValueError("REGULAR_EXPRESSION search is not supported for OMOP")
+        if by_identifier:
+            concept_id = self._concept_by_identifier(search_term)
+            if concept_id is not None:
+                view = self.kg.concept_view(concept_id)
+                if view.is_active or include_obsoletes:
+                    found[concept_id] = None
+                    yield self.codec.concept_curie(concept_id)
 
-        if config.is_partial or config.syntax == SearchTermSyntax.STARTS_WITH:
-            match_kind = LabelMatchKind.PARTIAL
-        else:
-            match_kind = LabelMatchKind.EXACT
-
-        if SearchProperty.LABEL.text in props:
-            matches = self.kg.concept_lookup(
-                search_term,
-                match_kind=match_kind,
-                synonym=False,
-            )
-            for lm in matches:
-                cid = lm.matched_concept_id
-                if cid not in seen:
-                    seen.add(cid)
-                    yield self.codec.concept_curie(cid)
-
-        if SearchProperty.ALIAS.text in props:
-            matches = self.kg.concept_lookup(
-                search_term,
-                match_kind=match_kind,
-                synonym=True,
-            )
-            for lm in matches:
-                cid = lm.matched_concept_id
-                if cid not in seen:
-                    seen.add(cid)
-                    yield self.codec.concept_curie(cid)
-
-        if (
-            SearchProperty.IDENTIFIER.text in props
-            or SearchProperty.MAPPED_IDENTIFIER.text in props
-        ) and ":" in search_term:
-            vocab, code = search_term.split(":", 1)
-            try:
-                cid = self.kg.concept_id_by_code(vocab, code)
-                if cid not in seen:
-                    seen.add(cid)
-                    yield self.codec.concept_curie(cid)
-            except NoResultFound:
-                pass
-            except MultipleResultsFound:
-                logger.warning(
-                    "Skipping ambiguous identifier %r: several concepts match", search_term
+        for kind in kinds:
+            for synonym in (False, True):
+                if full():
+                    return
+                if synonym and SearchProperty.ALIAS.text not in props:
+                    continue
+                matches = self.kg.concept_lookup(
+                    search_term,
+                    match_kind=kind,
+                    synonym=synonym,
+                    search_constraint=constraint,
+                    limit=None if config.limit is None else config.limit + len(found),
                 )
+                for match in matches:
+                    if match.matched_concept_id not in found:
+                        found[match.matched_concept_id] = None
+                        yield self.codec.concept_curie(match.matched_concept_id)
+                        if full():
+                            return
+
+    def _concept_by_identifier(self, search_term: str) -> int | None:
+        """The concept an ``OMOP`` CURIE or ``vocabulary:code`` names, or None."""
+        if ":" not in search_term:
+            return None
+        try:
+            return self.codec.parse_concept(search_term)
+        except (NoResultFound, ValueError):
+            return None
+        except MultipleResultsFound:
+            logger.warning("Skipping ambiguous identifier %r: several concepts match", search_term)
+            return None
