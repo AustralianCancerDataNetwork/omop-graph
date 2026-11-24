@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+IS_A_RELATIONSHIP_ID = "Is a"
+"""The relationship id of the subclass edge. Its transitive closure is the strict hierarchy."""
+
 
 @dataclass(frozen=True)
 class EdgeFilter:

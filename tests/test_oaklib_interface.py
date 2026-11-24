@@ -102,5 +102,6 @@ def test_relationships_follow_the_oaklib_flags(mock_cdm_kg: KnowledgeGraph) -> N
     ]
     assert list(adapter.relationships(include_tbox=False)) == []
     assert list(adapter.relationships(include_abox=False)) == list(adapter.relationships())
-    with pytest.raises(NotImplementedError, match="include_entailed"):
-        list(adapter.relationships(include_entailed=True))
+    assert list(adapter.relationships(subjects=["OMOP:900001"], include_entailed=True)) == list(
+        adapter.relationships(subjects=["OMOP:900001"])
+    )

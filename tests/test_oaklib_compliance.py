@@ -15,17 +15,26 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
-from oaklib.interfaces import BasicOntologyInterface, SearchInterface, TextAnnotatorInterface
+from oaklib.interfaces import (
+    BasicOntologyInterface,
+    RelationGraphInterface,
+    SearchInterface,
+    TextAnnotatorInterface,
+)
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from omop_graph.oaklib_interface.unsupported import UNSUPPORTED
 
-CLAIMED = (BasicOntologyInterface, SearchInterface, TextAnnotatorInterface)
+CLAIMED = (
+    BasicOntologyInterface,
+    RelationGraphInterface,
+    SearchInterface,
+    TextAnnotatorInterface,
+)
 
 PENDING = frozenset(
     {
-        "BasicOntologyInterface._all_entailed_relationships",
         "BasicOntologyInterface.simple_mappings_by_curie",
     }
 )

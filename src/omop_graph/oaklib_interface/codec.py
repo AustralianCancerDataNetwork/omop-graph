@@ -9,10 +9,10 @@ from oaklib.datamodels.vocabulary import IS_A
 from oaklib.types import CURIE, PRED_CURIE
 
 from omop_graph.graph import KnowledgeGraph
+from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID
 
 OMOP_PREFIX = "OMOP"
 OMOP_REL_PREFIX = "OMOP_REL"
-IS_A_RELATIONSHIP_ID = "Is a"
 REPLACED_BY_RELATIONSHIP_ID = "Concept replaced by"
 
 

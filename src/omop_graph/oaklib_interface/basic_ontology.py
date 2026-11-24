@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from functools import cached_property
+from itertools import batched
 
 from oaklib.datamodels.vocabulary import (
     DEPRECATED_PREDICATE,
@@ -29,12 +30,11 @@ from sqlalchemy.exc import NoResultFound
 
 from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 from omop_graph.graph import KnowledgeGraph
-from omop_graph.graph.edges import EdgeFilter, Predicate
+from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID, EdgeFilter, Predicate
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import (
-    IS_A_RELATIONSHIP_ID,
     OMOP_PREFIX,
     REPLACED_BY_RELATIONSHIP_ID,
     OMOPLanguage,
@@ -471,7 +471,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         include_abox : bool
             Ignored.
         include_entailed : bool
-            Not implemented yet.
+            If True, yield the relationships entailed by the strict ``Is a`` hierarchy:
+            (S, R, E) for every asserted (S, R, D) where E is D or an ancestor of D.
+            Relationships of ancestors are not inherited. Without subjects and objects
+            this streams the entailed relationships of every concept.
         exclude_blank : bool
             Ignored.
         invert : bool
@@ -482,13 +485,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         Tuple[CURIE, PRED_CURIE, CURIE]
             Triples (subject, predicate, object).
 
-        Raises
-        ------
-        NotImplementedError
-            If ``include_entailed`` is True.
         """
-        if include_entailed:
-            raise NotImplementedError("include_entailed is not implemented yet")
         if not include_tbox:
             return
 
@@ -504,14 +501,33 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             tuple([self.codec.parse_concept(o) for o in objects]) if objects is not None else None
         )
 
-        relationships = tuple(
-            self.kg.relationships(
-                subjects=subject_ids,
-                objects=object_ids,
-                edge_filter=EdgeFilter(predicate_ids=predicate_ids),
-                invert=invert,
+        edge_filter = EdgeFilter(predicate_ids=predicate_ids)
+
+        if include_entailed:
+            if subject_ids is None and object_ids is None:
+                allowed = {self.codec.predicate_curie(p) for p in predicate_ids}
+                for s, p, o in self._all_entailed_relationships():
+                    if p in allowed:
+                        yield (o, p, s) if invert else (s, p, o)
+                return
+            if invert:
+                subject_ids, object_ids = object_ids, subject_ids
+            entailed = (
+                (o, p, s) if invert else (s, p, o)
+                for s, p, o in self.kg.entailed_relationships(
+                    subject_ids, object_ids, edge_filter, self.concept_filter
+                )
             )
-        )
+            relationships = tuple(entailed)
+        else:
+            relationships = tuple(
+                self.kg.relationships(
+                    subjects=subject_ids,
+                    objects=object_ids,
+                    edge_filter=edge_filter,
+                    invert=invert,
+                )
+            )
 
         for s, p, o in relationships:
             yield (
@@ -569,6 +585,19 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 self.codec.predicate_curie(p),
                 self.codec.concept_curie(o),
             )
+
+    def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
+        """Stream the entailed relationships of every concept, one batch of subjects at a time."""
+        edge_filter = EdgeFilter(predicate_ids=self.default_relationship_ids)
+        for batch in batched(self.kg.entities(self.concept_filter), self.kg.LOOKUP_BATCH_SIZE):
+            for s, p, o in self.kg.entailed_relationships(
+                batch, None, edge_filter, self.concept_filter
+            ):
+                yield (
+                    self.codec.concept_curie(s),
+                    self.codec.predicate_curie(p),
+                    self.codec.concept_curie(o),
+                )
 
     @property
     def edge_index(self):
@@ -678,102 +707,3 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         m[HAS_DBXREF].append(f"{cv.vocabulary_id}:{cv.concept_code}")
 
         return dict(m)
-
-    def entailed_outgoing_relationships(
-        self,
-        curie: CURIE,
-        predicates: list[PRED_CURIE] | None = None,
-    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
-        """
-        Retrieve outgoing relationships, including those implied by the hierarchy.
-
-        Currently disabled: always raises ``NotImplementedError``, per the
-        raise message below, since a CDM change broke the body's assumptions.
-        """
-        raise NotImplementedError("Changes to the CDM currently prevents this function")
-        concept_id = self.codec.parse_concept(curie)
-
-        pred_filter = {self.codec.parse_predicate(p) for p in predicates} if predicates else None
-
-        with self.kg.session_factory() as session:
-            for edge in self.kg.iter_edges(
-                session=session, concept_ids=concept_id, direction="out"
-            ):
-                if pred_filter and edge.predicate_id not in pred_filter:
-                    continue
-
-                pred_curie = self.codec.predicate_curie(edge.predicate_id)
-
-                # hierarchical entailment
-                if self.kg.predicate_kind(edge.predicate_id) == PredicateKind.HIERARCHY:
-                    yield pred_curie, self.codec.concept_curie(edge.object_id)
-
-                    for parent in self.kg.parents(edge.object_id):
-                        yield pred_curie, self.codec.concept_curie(parent)
-
-                else:
-                    yield pred_curie, self.codec.concept_curie(edge.object_id)
-
-    def entailed_outputgoing_relationships_by_curie(
-        self, *args, **kwargs
-    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
-        # return self.entailed_outgoing_relationships(*args, **kwargs)
-        raise NotImplementedError("Not Implemented: use entailed_outgoing_relationships instead")
-
-    def entailed_incoming_relationships(
-        self,
-        curie: CURIE,
-        predicates: list[PRED_CURIE] | None = None,
-    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
-        """
-        Retrieve incoming relationships.
-        """
-        concept_id = self.codec.parse_concept(curie)
-
-        pred_filter = {self.codec.parse_predicate(p) for p in predicates} if predicates else None
-
-        with self.kg.session_factory() as session:
-            for edge in self.kg.iter_edges(
-                session=session,
-                concept_ids=concept_id,
-                direction="in",
-                edge_filter=EdgeFilter(
-                    predicate_ids=frozenset(pred_filter) if pred_filter else None
-                ),
-            ):
-                yield (
-                    self.codec.predicate_curie(edge.predicate_id),
-                    self.codec.concept_curie(edge.subject_id),
-                )
-
-    def entailed_incoming_relationships_by_curie(
-        self, *args, **kwargs
-    ) -> Iterable[tuple[PRED_CURIE, CURIE]]:
-        # return self.entailed_incoming_relationships(*args, **kwargs)
-        raise NotImplementedError("Not Implemented: use entailed_incoming_relationships instead")
-
-    def entailed_relationships_between(
-        self,
-        subject: CURIE,
-        object: CURIE,
-    ) -> Iterable[PRED_CURIE]:
-        """
-        Find relationships connecting a subject and object, including hierarchical ones.
-
-        Currently disabled: always raises ``NotImplementedError``, per the
-        raise message below, since a CDM change broke the body's assumptions.
-        """
-        raise NotImplementedError("Change in OMOP CDM made this function not work anymore")
-
-        subj_id = self.codec.parse_concept(subject)
-        obj_id = self.codec.parse_concept(object)
-
-        # direct relationships
-        with self.kg.session_factory() as session:
-            for edge in self.kg.iter_edges(session=session, concept_ids=subj_id, direction="out"):
-                if edge.object_id == obj_id:
-                    yield self.codec.predicate_curie(edge.predicate_id)
-
-        # hierarchical entailment
-        if obj_id in self.kg.parents(subj_id):
-            yield self.codec.predicate_curie("is_a")

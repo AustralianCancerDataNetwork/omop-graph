@@ -18,9 +18,10 @@ import functools
 import logging
 import re
 from collections import defaultdict
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from itertools import batched
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from oa_configurator import ResolvedModel
 from omop_alchemy.backends import BackendNotSupportedError, FullTextError
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
 # Local Application Imports
 from ..extensions.emb import MissingExtensionError
 from ..extensions.omop_alchemy import (
+    HierarchyDirection,
     PredicateKind,
     PredicateSubkind,
     RelationshipMappingElement,
@@ -77,6 +79,7 @@ from .queries import (
     q_domains,
     q_edges,
     q_entities,
+    q_is_a_closure,
     q_leaves,
     q_obsolete_concepts,
     q_parents,
@@ -188,6 +191,9 @@ class KnowledgeGraph(GraphBackend):
         Python, so no query joins the two databases.
     emb_config : KnowledgeGraphEmbeddingConfiguration, optional
     """
+
+    LOOKUP_BATCH_SIZE: ClassVar[int] = 5_000
+    """Most concept ids sent in one ``IN`` list."""
 
     def __init__(
         self,
@@ -688,6 +694,141 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
+
+    def is_a_closure(
+        self,
+        concept_ids: Iterable[int],
+        direction: HierarchyDirection = HierarchyDirection.UP,
+        concept_filter: ConceptFilter | None = None,
+    ) -> dict[int, frozenset[int]]:
+        """
+        Find the strict ``Is a`` ancestors or descendants of each concept.
+
+        Unlike :meth:`parents`, which reads ``concept_ancestor``, this follows active
+        ``Is a`` edges only, so it holds no cohort, therapeutic or composition ancestry.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            Concepts to start from.
+        direction : HierarchyDirection
+            ``UP`` for ancestors, ``DOWN`` for descendants.
+        concept_filter : ConceptFilter, optional
+            Report only the concepts it selects. The walk still passes through the others,
+            so a concept above an excluded one is still reached. ``concept_ids`` must be unset.
+
+        Returns
+        -------
+        dict[int, frozenset[int]]
+            Every requested concept mapped to the concepts reached from it, never itself.
+        """
+        starts = tuple(dict.fromkeys(concept_ids))
+        reached: dict[int, set[int]] = {concept_id: set() for concept_id in starts}
+        with self.session_factory() as session:
+            for batch in batched(starts, self.LOOKUP_BATCH_SIZE):
+                for origin, other in session.execute(q_is_a_closure(batch, direction)):
+                    reached[origin].add(other)
+        if concept_filter is not None:
+            in_scope = self._within(set().union(*reached.values()), concept_filter)
+            reached = {concept_id: others & in_scope for concept_id, others in reached.items()}
+        return {concept_id: frozenset(others) for concept_id, others in reached.items()}
+
+    def _within(self, concept_ids: Iterable[int], concept_filter: ConceptFilter) -> set[int]:
+        """Select the concepts among *concept_ids* that *concept_filter* selects."""
+        found: set[int] = set()
+        with self.session_factory() as session:
+            for batch in batched(set(concept_ids), self.LOOKUP_BATCH_SIZE):
+                stmt = q_entities(replace(concept_filter, concept_ids=tuple(batch)))
+                found.update(session.execute(stmt).scalars())
+        return found
+
+    def entailed_relationships(
+        self,
+        subjects: tuple[int, ...] | None,
+        objects: tuple[int, ...] | None,
+        edge_filter: EdgeFilter | None = None,
+        concept_filter: ConceptFilter | None = None,
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """
+        Query relationships, including those entailed by the strict ``Is a`` hierarchy.
+
+        A triple (S, R, E) is entailed when (S, R, D) is asserted and E is D or an
+        ``Is a`` ancestor of D. Relationships of ancestors are not inherited downwards.
+        Each triple is yielded once.
+
+        Parameters
+        ----------
+        subjects : tuple[int, ...] | None
+            Subject concept ids.
+        objects : tuple[int, ...] | None
+            Object concept ids. At least one of *subjects* and *objects* is required.
+        edge_filter : EdgeFilter, optional
+            Which asserted relationships to start from, as in :meth:`relationships`.
+        concept_filter : ConceptFilter, optional
+            Which ``Is a`` ancestors, or descendants for incoming relationships, count as
+            entailed objects, as in :meth:`is_a_closure`. Asserted edges are unaffected.
+
+        Yields
+        ------
+        tuple[int, str, int]
+            Triples of (subject_concept_id, relationship_id, object_concept_id).
+
+        Raises
+        ------
+        ValueError
+            If both *subjects* and *objects* are None.
+        """
+        if subjects is None and objects is None:
+            raise ValueError("Entailed relationships need subjects or objects")
+        if subjects is not None:
+            triples = self._entailed_from_subjects(subjects, objects, edge_filter, concept_filter)
+        else:
+            assert objects is not None
+            triples = self._entailed_into_objects(objects, edge_filter, concept_filter)
+        seen: set[tuple[int, str, int]] = set()
+        for triple in triples:
+            if triple not in seen:
+                seen.add(triple)
+                yield triple
+
+    def _entailed_from_subjects(
+        self,
+        subjects: tuple[int, ...],
+        objects: tuple[int, ...] | None,
+        edge_filter: EdgeFilter | None,
+        concept_filter: ConceptFilter | None,
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """Generalise the filler of every asserted edge of *subjects* up the ``Is a`` hierarchy."""
+        wanted = None if objects is None else frozenset(objects)
+        asserted: list[tuple[int, str, int]] = []
+        for batch in batched(subjects, self.LOOKUP_BATCH_SIZE):
+            asserted.extend(self.relationships(batch, None, edge_filter))
+        ancestors = self.is_a_closure(
+            {filler for _, _, filler in asserted}, concept_filter=concept_filter
+        )
+        for subject_id, relationship_id, filler in asserted:
+            for reached in (filler, *ancestors[filler]):
+                if wanted is None or reached in wanted:
+                    yield subject_id, relationship_id, reached
+
+    def _entailed_into_objects(
+        self,
+        objects: tuple[int, ...],
+        edge_filter: EdgeFilter | None,
+        concept_filter: ConceptFilter | None,
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """Find the edges into *objects* and into their ``Is a`` descendants."""
+        descendants = self.is_a_closure(
+            objects, HierarchyDirection.DOWN, concept_filter=concept_filter
+        )
+        targets_by_filler: dict[int, list[int]] = defaultdict(list)
+        for target, below in descendants.items():
+            for filler in (target, *below):
+                targets_by_filler[filler].append(target)
+        for batch in batched(targets_by_filler, self.LOOKUP_BATCH_SIZE):
+            for subject_id, relationship_id, filler in self.relationships(None, batch, edge_filter):
+                for target in targets_by_filler[filler]:
+                    yield subject_id, relationship_id, target
 
     def entities(
         self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER

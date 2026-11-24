@@ -2,7 +2,7 @@ import logging
 from typing import ClassVar
 
 from oa_configurator import ResolvedCDMDatabase
-from oaklib.interfaces import SearchInterface, TextAnnotatorInterface
+from oaklib.interfaces import RelationGraphInterface, SearchInterface, TextAnnotatorInterface
 from oaklib.interfaces.basic_ontology_interface import (
     BasicOntologyInterface,
 )
@@ -14,6 +14,7 @@ from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguratio
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
+from omop_graph.oaklib_interface.relation_graph import OMOPRelationGraphInterface
 from omop_graph.oaklib_interface.search import OMOPSearchInterface
 from omop_graph.oaklib_interface.text_annotator import OMOPTextAnnotatorInterface
 from omop_graph.oaklib_interface.unsupported import ReadOnlyMixin
@@ -24,11 +25,13 @@ logger = logging.getLogger(__name__)
 
 class OMOPAlchemyImplementation(
     ReadOnlyMixin,
+    OMOPRelationGraphInterface,
     OMOPBasicOntologyInterface,
     OMOPSearchInterface,
     OMOPTextAnnotatorInterface,
     SearchInterface,
     TextAnnotatorInterface,
+    RelationGraphInterface,
     BasicOntologyInterface,
 ):
     """

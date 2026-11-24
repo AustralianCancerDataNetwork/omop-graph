@@ -25,8 +25,25 @@ The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies,
 The primary adapter class that inherits from multiple OAK interfaces:
 
 * **`BasicOntologyInterface`**: Handles labels, aliases, and metadata mapping.
+* **`RelationGraphInterface`**: Relationships that follow from the stored ones through the `Is a` hierarchy, see [Entailed relationships](#entailed-relationships).
 * **`SearchInterface`**: Enables term-based searching across labels and synonyms.
 * **`TextAnnotatorInterface`**: Provides a pipeline to ground raw text spans to OMOP Concept IDs using the internal `KnowledgeGraph` resolvers.
+
+### Entailed relationships
+A stored relationship `A -R-> B1` entails `A -R-> B2` for every `B2` reached from `B1` by following `Is a` upwards, repeatedly. `R` is any relationship, including `Is a` itself.
+
+| Stored | Entailed |
+| --- | --- |
+| Lung cancer `Has finding site` Lung | Lung cancer `Has finding site` Thoracic organ |
+| Lung `Is a` Thoracic organ | |
+| Lung cancer `Is a` Cancer | Lung cancer `Is a` Disease |
+| Cancer `Is a` Disease | |
+
+* oaklib has largely subsumed `RelationGraphInterface` into `BasicOntologyInterface`, so the entailment is implemented on `OMOPBasicOntologyInterface` as `relationships(include_entailed=True)`. The `RelationGraphInterface` methods wrap it.
+* Only `Is a` is followed upwards, not the other ancestry in `concept_ancestor` such as ATC or SPL classes.
+* The relationships of an ancestor are not inherited by its descendants.
+* Only concepts within the adapter's `concept_filter` are reported as entailed targets, though the climb passes through the others.
+* The incoming direction is the mirror image, and for a concept near the top of a hierarchy it returns very many relationships.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.
