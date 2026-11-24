@@ -48,6 +48,7 @@ from ..extensions.omop_alchemy import (
     RelationshipMappingElement,
     load_relationship_mapping,
 )
+from ._streaming import stream
 from .base import GraphBackend
 from .edges import EdgeFilter, EdgeView, Predicate
 from .nodes import (
@@ -534,7 +535,7 @@ class KnowledgeGraph(GraphBackend):
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
             return
-        yield from self._classified_triples(q_relationships(None, None, resolved))
+        yield from self._classified_triples(stream(q_relationships(None, None, resolved)))
 
     def _classified_triples(self, stmt: Select) -> Generator[tuple[int, str, int], None, None]:
         """Run *stmt*, a relationship triple query, and keep the triples of classified relationships."""
@@ -763,7 +764,7 @@ class KnowledgeGraph(GraphBackend):
             besides the deleted ones (``D``).
         """
         with self.session_factory() as session:
-            yield from session.execute(q_obsolete_concepts(include_updated)).scalars()
+            yield from session.execute(stream(q_obsolete_concepts(include_updated))).scalars()
 
     def vocabularies(self) -> tuple[VocabularyView, ...]:
         """Return every vocabulary."""
