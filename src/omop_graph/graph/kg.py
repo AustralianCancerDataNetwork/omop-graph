@@ -1109,8 +1109,10 @@ class KnowledgeGraph(GraphBackend):
         if not parent_ids:
             return {}
 
+        rows: list[Row] = []
         with self.session_factory() as session:
-            rows = session.execute(q_concept_potential_ancestors_batch(child_ids, parent_ids)).all()
+            for batch in batched(child_ids, self.LOOKUP_BATCH_SIZE):
+                rows.extend(session.execute(q_concept_potential_ancestors_batch(batch, parent_ids)))
 
         result: dict[int, dict[int, AncestorMatch]] = defaultdict(dict)
         for row in rows:

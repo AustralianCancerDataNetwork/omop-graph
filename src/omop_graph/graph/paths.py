@@ -16,7 +16,9 @@ from __future__ import annotations
 import heapq
 import logging
 from collections import defaultdict, deque
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from itertools import batched
 from typing import (
     TYPE_CHECKING,
 )
@@ -24,7 +26,7 @@ from typing import (
 # Local Application Imports
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeFilter, EdgeView
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.nodes import AncestorMatch, ConceptView, LabelMatchKind
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.reasoning.resolvers import CandidateHit
 
@@ -559,15 +561,15 @@ class QueueItem:
         live infrastructure for future weighted traversal; see Notes in find_standard_paths.
     node : Node
         The graph node at this position in the frontier.
-    mk : LabelMatchKind
-        Match kind inherited from the originating candidate hit.
+    candidate_index : int
+        Position in the search's candidates of the candidate this item was reached from.
     iterations : int
         BFS depth (number of hops from the candidate).
     """
 
     cost: float
     node: Node = field(compare=False)
-    mk: LabelMatchKind = field(compare=False)
+    candidate_index: int = field(compare=False)
     iterations: int = field(default=0, compare=False)
 
 
@@ -650,31 +652,40 @@ def get_unique_standard_concepts(
     return list(unique_best_concepts.values())
 
 
+def _load_views(
+    kg: KnowledgeGraph, views: dict[int, ConceptView], concept_ids: Iterable[int]
+) -> None:
+    """Add the views of the concepts in *concept_ids* that *views* lacks."""
+    missing = {concept_id for concept_id in concept_ids if concept_id not in views}
+    for batch in batched(missing, kg.LOOKUP_BATCH_SIZE):
+        views.update((view.concept_id, view) for view in kg.concept_views(batch, sort=False))
+
+
 def find_standard_paths(
     kg: KnowledgeGraph,
     targets: tuple[int, ...] | None,
-    candidate: CandidateHit,
+    candidates: Sequence[CandidateHit],
     edge_filter: EdgeFilter = DEFAULT_PATH_FILTER,
     max_depth: int = 6,
     max_concepts: int | None = None,
-) -> list[StandardConcept]:
+) -> list[list[StandardConcept]]:
     """
-    Search for standard concepts reachable from a candidate, optionally verified against
-    ancestor targets.
+    Search for the standard concepts reachable from each candidate, optionally verified
+    against ancestor targets.
 
-    Performs a breadth-first search (BFS) starting from the candidate. Each BFS wave drains
-    the entire frontier at once. Non-standard concepts are expanded by fetching their
-    outgoing edges and enqueueing standard neighbours.
+    Performs a breadth-first search (BFS) from all candidates at once. Each BFS wave drains
+    the entire queue, and reads the edges, concepts and ancestors of the whole wave in
+    single queries. Non-standard concepts are expanded by following their outgoing edges
+    to standard concepts.
 
     Notes
     -----
     This function has two modes:
 
-    1. When ``targets`` is provided, each wave issues a single batched concept_ancestor
-    query for all standard concepts in that wave to reduce DB round trips (O(N) to O(W),
-    where W is the number of waves. Standard concepts that satisfy at least one target
-    ancestor constraint are recorded and not expanded further, preventing dilution by
-    more distant concepts. Standard concepts with no ancestry match are expanded
+    1. When ``targets`` is provided, the standard concepts of each wave are checked against
+    the targets with one batched concept_ancestor query. Standard concepts that satisfy at
+    least one target ancestor constraint are recorded and not expanded further, preventing
+    dilution by more distant concepts. Standard concepts with no ancestry match are expanded
     further (e.g. deprecated-standard -> replacement-standard chains).
 
     2. When ``targets`` is None or empty, there is no ancestor to verify against: the
@@ -692,8 +703,8 @@ def find_standard_paths(
         Ancestor concept IDs to verify candidates against. A result is produced for
         each target that a reached standard concept is a genuine descendant of. When
         None or empty, no ancestor verification is performed (see above).
-    candidate : CandidateHit
-        The initial search hit to start traversal from.
+    candidates : Sequence of CandidateHit
+        The initial search hits to start traversal from.
     edge_filter : EdgeFilter
         Which edges to traverse. Defaults to active edges within a domain. Callers
         in the grounding pipeline restrict it to ``PredicateKind.IDENTITY``, limiting
@@ -703,16 +714,16 @@ def find_standard_paths(
         ``targets`` is given, or maximum identity-hop count permitted when ``targets``
         is None. Defaults to ``6``.
     max_concepts : int, optional
-        Per-target cap on unique standard concepts collected (or an overall cap when
-        ``targets`` is None). Once every bucket has reached this count the search
-        stops early.
+        Per-target cap on unique standard concepts collected for each candidate (or an
+        overall cap when ``targets`` is None). Once every target of a candidate has reached
+        this count, the search for that candidate stops.
 
     Returns
     -------
-    list of StandardConcept
-        Flat deduplicated list of standard concepts that satisfy at least one target
-        ancestor constraint, or, when ``targets`` is None, every standard concept
-        reached.
+    list of list of StandardConcept
+        For each candidate in order, its deduplicated standard concepts that satisfy at
+        least one target ancestor constraint, or, when ``targets`` is None, every standard
+        concept reached.
 
     Notes
     -----
@@ -728,148 +739,124 @@ def find_standard_paths(
     # Placeholder for the non-parent-ID grounding so the target accumulation works
     unconstrained_placeholder: int = 0
 
-    source_view = kg.concept_view(candidate.concept_id)
-    source_is_std = source_view.standard_concept if source_view else False
+    views: dict[int, ConceptView] = {}
+    _load_views(kg, views, (candidate.concept_id for candidate in candidates))
 
-    # Initialise the queue
     queue = [
         QueueItem(
             cost=0.0,
-            node=Node(candidate.concept_id, source_is_std),
-            mk=candidate.match_kind,
+            node=Node(candidate.concept_id, bool(views[candidate.concept_id].standard_concept)),
+            candidate_index=index,
             iterations=0,
         )
+        for index, candidate in enumerate(candidates)
     ]
-    # Track the shallowest iteration we have enqueued per concept to avoid
+    # Per candidate, the shallowest iteration we have enqueued per concept to avoid
     # unbounded duplicate growth in high-degree neighborhoods.
-    visited_min_iteration: dict[int, int] = {candidate.concept_id: 0}
-
-    found_standard_concepts: dict[int, list[StandardConcept]] = (
+    visited_min_iteration: list[dict[int, int]] = [
+        {candidate.concept_id: 0} for candidate in candidates
+    ]
+    found_standard_concepts: list[dict[int, list[StandardConcept]]] = [
         {target_id: [] for target_id in targets} if targets else {unconstrained_placeholder: []}
-    )
+        for _ in candidates
+    ]
+
+    def is_done(candidate_index: int) -> bool:
+        if not max_concepts:
+            return False
+        found = found_standard_concepts[candidate_index]
+        return all(len(concepts) >= max_concepts for concepts in found.values())
+
+    def standard_concept_of(item: QueueItem, separation: int) -> StandardConcept:
+        candidate = candidates[item.candidate_index]
+        return StandardConcept(
+            hierarchy_cost=item.cost,
+            concept_id=item.node.concept_id,
+            concept_name=views[item.node.concept_id].concept_name,
+            separation=separation,
+            original_id=candidate.concept_id,
+            original_name=views[candidate.concept_id].concept_name,
+            matched_concept_label=candidate.matched_concept_label,
+            match_kind=candidate.match_kind,
+            synonym=candidate.synonym,
+            identity_hops=item.iterations,
+        )
 
     while queue:
-        wave: list[QueueItem] = []
-        while queue:
-            # Drain the entire heap to process them at once and reduce round-trips to DB for ancestor checks.
-            wave.append(heapq.heappop(queue))
+        # Drain the entire heap to process it at once and reduce round-trips to the DB,
+        # leaving out the candidates whose search is done.
+        wave = [
+            item
+            for _ in range(len(queue))
+            if not is_done((item := heapq.heappop(queue)).candidate_index)
+        ]
 
-        if max_concepts and all(
-            len(concepts) >= max_concepts for concepts in found_standard_concepts.values()
-        ):
-            break
-
-        standard_items = [item for item in wave if item.node.is_standard]
+        dedup_standard_items: dict[tuple[int, int], QueueItem] = {}
+        for item in wave:
+            if item.node.is_standard:
+                dedup_standard_items.setdefault((item.candidate_index, item.node.concept_id), item)
+        standard_items = list(dedup_standard_items.values())
         expand_items = [item for item in wave if not item.node.is_standard]
 
-        if standard_items:
-            # Dedup
-            dedup_standard_items: dict[int, QueueItem] = {}
+        if targets:
+            multi_ancestors: dict[int, dict[int, AncestorMatch]] = {}
+            standard_ids = {item.node.concept_id for item in standard_items}
+            for batch in batched(standard_ids, kg.LOOKUP_BATCH_SIZE):
+                multi_ancestors.update(kg.get_potential_ancestors_batch(batch, targets))
+
             for item in standard_items:
-                if item.node.concept_id not in dedup_standard_items:
-                    dedup_standard_items[item.node.concept_id] = item
-            child_ids = tuple(dedup_standard_items.keys())
-
-            if targets:
-                multi_ancestors = kg.get_potential_ancestors_batch(child_ids, targets)
-
-                for concept_id, item in dedup_standard_items.items():
-                    ancestor_matches = multi_ancestors.get(concept_id, {})
-                    if ancestor_matches:
-                        for target_id, potential_ancestor in ancestor_matches.items():
-                            if potential_ancestor.min_levels_of_separation > max_depth:
-                                continue
-                            if (
-                                max_concepts
-                                and len(found_standard_concepts.get(target_id, [])) >= max_concepts
-                            ):
-                                continue
-
-                            found_standard_concepts[target_id].append(
-                                StandardConcept(
-                                    hierarchy_cost=item.cost,
-                                    concept_id=concept_id,
-                                    concept_name=kg.concept_view(concept_id).concept_name,
-                                    separation=potential_ancestor.min_levels_of_separation,
-                                    original_id=candidate.concept_id,
-                                    original_name=source_view.concept_name,
-                                    matched_concept_label=candidate.matched_concept_label,
-                                    match_kind=item.mk,
-                                    synonym=candidate.synonym,
-                                    identity_hops=item.iterations,
-                                )
-                            )
-                    else:
-                        expand_items.append(item)
-            else:
-                # Unconstrained: no ancestor to verify against, so every standard
-                # concept reached is immediately accepted and not expanded further.
-                for concept_id, item in dedup_standard_items.items():
-                    if (
-                        max_concepts
-                        and len(found_standard_concepts[unconstrained_placeholder]) >= max_concepts
-                    ):
+                ancestor_matches = multi_ancestors.get(item.node.concept_id)
+                if not ancestor_matches:
+                    # No target is an ancestor, so keep walking (e.g. to a replacement).
+                    expand_items.append(item)
+                    continue
+                found = found_standard_concepts[item.candidate_index]
+                for target_id, potential_ancestor in ancestor_matches.items():
+                    if potential_ancestor.min_levels_of_separation > max_depth:
                         continue
-
-                    found_standard_concepts[unconstrained_placeholder].append(
-                        StandardConcept(
-                            hierarchy_cost=item.cost,
-                            concept_id=concept_id,
-                            concept_name=kg.concept_view(concept_id).concept_name,
-                            separation=item.iterations,
-                            original_id=candidate.concept_id,
-                            original_name=source_view.concept_name,
-                            matched_concept_label=candidate.matched_concept_label,
-                            match_kind=item.mk,
-                            synonym=candidate.synonym,
-                            identity_hops=item.iterations,
-                        )
+                    if max_concepts and len(found[target_id]) >= max_concepts:
+                        continue
+                    found[target_id].append(
+                        standard_concept_of(item, potential_ancestor.min_levels_of_separation)
                     )
+        else:
+            # Unconstrained: there is no ancestor to check, so accept the standard concept.
+            for item in standard_items:
+                found = found_standard_concepts[item.candidate_index][unconstrained_placeholder]
+                if max_concepts and len(found) >= max_concepts:
+                    continue
+                found.append(standard_concept_of(item, item.iterations))
 
-        # Expand: Go to next best concept_id
+        # Expand: Go to next best concept_id. One query reads the edges of the whole wave.
+        object_ids_by_subject: defaultdict[int, list[int]] = defaultdict(list)
+        subject_ids = {item.node.concept_id for item in expand_items}
+        for batch in batched(subject_ids, kg.LOOKUP_BATCH_SIZE):
+            for subject_id, _, object_id in kg.relationships(batch, None, edge_filter):
+                object_ids_by_subject[subject_id].append(object_id)
+        _load_views(kg, views, (o for ids in object_ids_by_subject.values() for o in ids))
+
         for item in expand_items:
-            subject_node = item.node
-            cost = item.cost
-            mk = item.mk
-            iterations = item.iterations
+            next_iterations = item.iterations + 1
+            visited = visited_min_iteration[item.candidate_index]
 
-            with kg.session_factory() as session:
-                edges = list(
-                    kg.iter_edges(
-                        session=session,
-                        concept_ids=subject_node.concept_id,
-                        direction="out",
-                        edge_filter=edge_filter,
-                    )
-                )
-            if not edges:
-                continue
-
-            unique_object_ids = tuple(dict.fromkeys(e.object_id for e in edges))
-            view_map = {v.concept_id: v for v in kg.concept_views(unique_object_ids)}
-
-            for edge in edges:
-                object_id = edge.object_id
-                object_view = view_map.get(object_id) or kg.concept_view(object_id)
-                object_is_std = object_view.standard_concept
+            for object_id in dict.fromkeys(object_ids_by_subject[item.node.concept_id]):
+                object_view = views.get(object_id)
 
                 # Optimization: Only traverse to Standard concepts
-                if not object_is_std:
+                if object_view is None or not object_view.standard_concept:
                     continue
-
-                next_iterations = iterations + 1
 
                 # Early-stop for unconstrained mode:
                 # Number of hops from candidate to standard concept
                 # exceeds max_depth to prevent infinite expansion
                 if not targets and next_iterations > max_depth:
                     continue
-                prev_best_iteration = visited_min_iteration.get(object_id)
+                prev_best_iteration = visited.get(object_id)
                 if prev_best_iteration is not None and prev_best_iteration <= next_iterations:
                     continue
-                visited_min_iteration[object_id] = next_iterations
+                visited[object_id] = next_iterations
 
-                new_cost = cost
+                new_cost = item.cost
                 # Cost differentiation is reserved for future use. When COST_PREDICATES is
                 # defined (e.g. IDENTITY=0, HIERARCHY=1, ASSOCIATION=2), replace with:
                 #   new_cost = cost + COST_PREDICATES[predicate_kind_for_this_edge]
@@ -880,14 +867,17 @@ def find_standard_paths(
                     queue,
                     QueueItem(
                         cost=new_cost,
-                        node=Node(concept_id=object_id, is_standard=object_is_std),
-                        mk=mk,
+                        node=Node(concept_id=object_id, is_standard=True),
+                        candidate_index=item.candidate_index,
                         iterations=next_iterations,
                     ),
                 )
 
-    # list comprehension for flattening + deduplication
-    return list({x for v in found_standard_concepts.values() for x in v})
+    # list comprehension for flattening + deduplication, keeping the order found
+    return [
+        list(dict.fromkeys(concept for concepts in found.values() for concept in concepts))
+        for found in found_standard_concepts
+    ]
 
 
 @dataclass(frozen=True)

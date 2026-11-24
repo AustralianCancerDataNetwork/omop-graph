@@ -168,3 +168,41 @@ def test_grounding_standard_candidate_without_parent_ids_is_zero_hop(
     assert ranked[0].concept_id == 196653
     assert ranked[0].identity_hops == 0
     assert ranked[0].separation == 0
+
+
+def test_grounding_ranks_each_standard_concept_once_when_several_candidates_reach_it(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    # "Malignant tumor of kidney" and the non-standard "Kidney carcinoma term" both
+    # reach concept 196653, and "Mass of kidney" is concept 900999.
+    pipeline = ResolverPipeline(resolvers=(PartialLabelResolver(),))
+
+    ranked = ground_term(
+        resolver_pipeline=pipeline,
+        kg=mock_cdm_kg,
+        query="kidney",
+        query_embedding=None,
+        constraints=_constraints(),
+    )
+
+    assert sorted(c.concept_id for c in ranked) == [196653, 900999]
+    assert [c.total_score for c in ranked] == sorted((c.total_score for c in ranked), reverse=True)
+
+
+def test_grounding_without_parent_ids_ranks_every_standard_concept_reached(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    pipeline = ResolverPipeline(resolvers=(PartialLabelResolver(),))
+
+    ranked = ground_term(
+        resolver_pipeline=pipeline,
+        kg=mock_cdm_kg,
+        query="kidney",
+        query_embedding=None,
+        constraints=_unconstrained_constraints(),
+    )
+
+    ids = [c.concept_id for c in ranked]
+    assert 196653 in ids
+    assert len(ids) == len(set(ids))
+    assert [c.total_score for c in ranked] == sorted((c.total_score for c in ranked), reverse=True)

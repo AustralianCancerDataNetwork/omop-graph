@@ -58,7 +58,7 @@ The graph has two notions of ancestry, and they differ:
 | `parents`, `children`, and the ancestor checks of [grounding](../reasoning/grounding.md) | OMOP's `concept_ancestor` table | All ancestry OMOP precomputes: `Is a`, but also classification such as ATC classes, SPL labels and cohorts. Only standard and classification concepts. |
 | `closure`, `entailed_relationships` and the [OAK adapter](../oaklib/interface.md) | The active `Is a` edges | Strict `Is a` ancestors and descendants, including concepts that are not standard. |
 
-For example Metformin has no `Is a` ancestors but six ancestors in `concept_ancestor`, ATC classes such as "Biguanides". `closure` walks one query for a whole batch of concepts, and takes an `EdgeFilter` to follow other relationships:
+Grounding keeps `concept_ancestor` because it needs the distance to a parent, `min_levels_of_separation`, which `closure` does not return. For example Metformin has no `Is a` ancestors but six ancestors in `concept_ancestor`, ATC classes such as "Biguanides". `closure` walks one query for a whole batch of concepts, and takes an `EdgeFilter` to follow other relationships:
 
 ```python
 from omop_graph.extensions.omop_alchemy import HierarchyDirection

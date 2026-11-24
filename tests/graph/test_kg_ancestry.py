@@ -55,10 +55,10 @@ def test_find_standard_paths_checks_all_targets_in_one_pass(
         synonym=False,
     )
 
-    found = find_standard_paths(
+    (found,) = find_standard_paths(
         kg=mock_cdm_kg,
         targets=(PARENT_CANCER_ID, CONCEPT_META_ID),
-        candidate=candidate,
+        candidates=[candidate],
         max_depth=6,
     )
 
@@ -79,10 +79,10 @@ def test_find_standard_paths_max_concepts_caps_per_target(
         synonym=False,
     )
 
-    found = find_standard_paths(
+    (found,) = find_standard_paths(
         kg=mock_cdm_kg,
         targets=(PARENT_CANCER_ID,),
-        candidate=candidate,
+        candidates=[candidate],
         max_depth=6,
         max_concepts=1,
     )
@@ -103,10 +103,10 @@ def test_find_standard_paths_without_targets_walks_identity_hop_to_standard(
         synonym=False,
     )
 
-    found = find_standard_paths(
+    (found,) = find_standard_paths(
         kg=mock_cdm_kg,
         targets=None,
-        candidate=candidate,
+        candidates=[candidate],
         max_depth=6,
     )
 
@@ -126,10 +126,10 @@ def test_find_standard_paths_without_targets_accepts_standard_candidate_at_zero_
         synonym=False,
     )
 
-    found = find_standard_paths(
+    (found,) = find_standard_paths(
         kg=mock_cdm_kg,
         targets=None,
-        candidate=candidate,
+        candidates=[candidate],
         max_depth=6,
     )
 

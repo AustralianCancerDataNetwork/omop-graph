@@ -30,13 +30,9 @@ from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.graph.paths import (
-    StandardConcept,
-    find_standard_paths,
-)
+from omop_graph.graph.paths import StandardConcept, find_standard_paths
 from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
-    CandidateHit,
     EmbeddingResolver,
     ResolverPipeline,
 )
@@ -205,30 +201,27 @@ def ground_term(
         return []
 
     # Hierarchy anchoring (or unconstrained standardization when parent_ids is None)
-    for hit in resolved:
-        candidate_standard_concepts = find_standard_concepts(
-            kg=kg,
-            candidate=hit,
-            parent_ids=constraints.parent_ids,
-            max_depth=constraints.max_depth,
-            max_paths=None,
-            predicate_kinds=constraints.predicate_kinds,
-        )
-        if not candidate_standard_concepts:
-            concept_name = kg.concept_view(hit.concept_id).concept_name
-            if constraints.parent_ids:
-                logger.debug(
-                    f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
-                    f"has no path to parents {constraints.parent_ids} "
-                    f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
-                )
-            else:
-                logger.debug(
-                    f"No standard concept reachable from {hit.concept_id} ({concept_name}) "
-                    f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
-                )
-            continue
-        standard_concepts.extend(candidate_standard_concepts)
+    found_per_hit = find_standard_paths(
+        kg=kg,
+        targets=constraints.parent_ids,
+        candidates=resolved,
+        edge_filter=EdgeFilter(predicate_kinds=constraints.predicate_kinds, within_domain=True),
+        max_depth=constraints.max_depth,
+    )
+    for hit, found in zip(resolved, found_per_hit, strict=True):
+        if found:
+            standard_concepts.extend(found)
+        elif constraints.parent_ids:
+            logger.debug(
+                f"Failed hierarchy constraint: {hit.concept_id} ({hit.matched_concept_label}) "
+                f"has no path to parents {constraints.parent_ids} "
+                f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
+            )
+        else:
+            logger.debug(
+                f"No standard concept reachable from {hit.concept_id} ({hit.matched_concept_label}) "
+                f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
+            )
 
     if not standard_concepts:
         logger.info(f"No standard concepts found for '{query}' after hierarchy validation.")
@@ -283,52 +276,3 @@ def ground_term(
         best_by_concept_id.values(), key=lambda sc: sc.total_score, reverse=True
     )
     return deduped_ranked[:max_candidates] if max_candidates is not None else deduped_ranked
-
-
-def find_standard_concepts(
-    kg: KnowledgeGraph,
-    candidate: CandidateHit,
-    parent_ids: tuple[int, ...] | None,
-    max_depth: int,
-    max_paths: int | None = 3,
-    predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
-) -> list[StandardConcept]:
-    """
-    Identify standard concepts related to a candidate, optionally satisfying parent
-    constraints.
-
-    Parameters
-    ----------
-    kg : KnowledgeGraph
-        The Knowledge Graph instance.
-    candidate : CandidateHit
-        The initial match found by a resolver.
-    parent_ids : tuple of int, optional
-        Acceptable ancestor concept IDs. When None, no ancestor verification is
-        performed. Instead, the candidate is standardized via identity hops only.
-    max_depth : int
-        Maximum min_levels_of_separation allowed in the ancestry check when
-        parent_ids is given, or maximum identity-hop count allowed when parent_ids
-        is None.
-    max_paths : int, optional
-        Per-target cap on unique standard concepts collected (or an overall cap when
-        parent_ids is None).
-    predicate_kinds : frozenset of PredicateKind, optional
-        Edge types to traverse. Defaults to IDENTITY only, which covers the OMOP
-        "Maps to" relationships between non-standard and standard concepts. See
-        GroundingConstraints.predicate_kinds for the rationale.
-
-    Returns
-    -------
-    list of StandardConcept
-        Standard concepts associated with the candidate that satisfy the ancestor
-        constraint, or, when parent_ids is None, every standard concept reached.
-    """
-    return find_standard_paths(
-        kg=kg,
-        candidate=candidate,
-        targets=parent_ids,
-        edge_filter=EdgeFilter(predicate_kinds=predicate_kinds, within_domain=True),
-        max_depth=max_depth,
-        max_concepts=max_paths,
-    )

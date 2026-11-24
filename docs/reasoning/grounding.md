@@ -29,6 +29,8 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 3.  **Anchor**: For each candidate, find the nearest **Standard Concept**. This is required for Step 4, as `concept_ancestor` only holds standard and classification concepts.
     - If the candidate is already Standard, the hop count is 0.
     - If Non-Standard, follow `IDENTITY` relationship to the next standard concept.
+    - With `parent_ids`, a standard concept that descends from none of them is followed on through its identity edges, so a deprecated standard concept reaches its replacement.
+    - All candidates are searched together, one wave of edges at a time. Each wave reads its relationships, concepts and ancestors in single queries, so the queries made depend on the number of waves and not on the number of candidates.
 4.  **Verify**: Check the `concept_ancestor` table to see if the Standard Anchor is a descendant of the required `parent_ids`. 
     - Requires [`GroundingConstraints`](#grounding-constraints) for accurate grounding/verification
     - `concept_ancestor` holds more than `Is a` ancestry, see [Two Kinds of Ancestry](../graph/kg.md#two-kinds-of-ancestry)
