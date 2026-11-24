@@ -1,21 +1,26 @@
-"""Entailment and walks over the strict Is a hierarchy, on a world where it differs from concept_ancestor."""
+"""Entailment and walks over the strict Is a hierarchy, on a small CDM where it differs from concept_ancestor."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
-from typing import cast
 
 import pytest
-import sqlalchemy as sa
+from fixtures.cdm_builders import (
+    ancestor,
+    classified,
+    concept,
+    edge,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+    synonym,
+)
 from oaklib.datamodels.vocabulary import IS_A
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
 from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
-from orm_loader.helpers import Base
-from sqlalchemy.orm import sessionmaker
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
@@ -43,7 +48,6 @@ from omop_graph.reasoning.concept_handlers import standardise_ids
 OUTDATED, OUTER_ROOT, SOURCE, SOURCE_TWO, ORPHAN = range(210, 215)
 SITE = "OMOP_REL:Has%20finding%20site"
 MAPS_TO = "OMOP_REL:Maps%20to"
-START, END = date(2020, 1, 1), date(2099, 12, 31)
 
 
 def curie(concept_id: int) -> str:
@@ -52,150 +56,54 @@ def curie(concept_id: int) -> str:
 
 @pytest.fixture(scope="module")
 def adapter() -> Iterator[OMOPAlchemyImplementation]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
-    tables = [
-        cast(sa.Table, model.__table__)
-        for model in (
-            Concept,
-            Relationship,
-            Concept_Ancestor,
-            Concept_Relationship,
-            Concept_Synonym,
-            RelationshipClass,
-            RelationshipMapping,
-        )
+    rows = [
+        *(concept(concept_id) for concept_id in range(DISEASE, LOOP_B + 1)),
+        concept(OUTDATED, invalid_reason="U", standard_concept=None),
+        concept(OUTER_ROOT),
+        *(
+            concept(concept_id, standard_concept=None)
+            for concept_id in (SOURCE, SOURCE_TWO, ORPHAN)
+        ),
+        relationship("Is a", "Subsumes"),
+        relationship("Subsumes", "Is a"),
+        relationship("Has finding site", "Finding site of"),
+        relationship("Maps to", "Mapped from"),
+        relationship_class(PredicateKind.IDENTITY, "Exact"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
+        relationship_class(PredicateKind.ATTRIBUTE, "Site"),
+        classified("Maps to", PredicateKind.IDENTITY, "Exact"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Has finding site", PredicateKind.ATTRIBUTE, "Site"),
+        edge(SOURCE, "Maps to", LUNG_CANCER),
+        edge(SOURCE_TWO, "Maps to", LUNG_CANCER),
+        edge(SOURCE_TWO, "Maps to", LUNG),
+        edge(CANCER, "Is a", DISEASE),
+        edge(SMOKING_RELATED, "Is a", DISEASE),
+        edge(LUNG_CANCER, "Is a", CANCER),
+        edge(LUNG_CANCER, "Is a", SMOKING_RELATED),
+        edge(LUNG_CANCER, "Is a", RETIRED_PARENT, invalid_reason="D"),
+        edge(CANCER, "Is a", OUTDATED),
+        edge(OUTDATED, "Is a", OUTER_ROOT),
+        edge(LUNG, "Is a", THORAX_ORGAN),
+        edge(LUNG_CANCER, "Has finding site", LUNG),
+        edge(LOOP_A, "Is a", LOOP_B),
+        edge(LOOP_B, "Is a", LOOP_A),
+        synonym(LUNG_CANCER, "Lung neoplasm", OMOPLanguage.ENGLISH),
+        synonym(LUNG_CANCER, "Cancer de pulmon", OMOPLanguage.SPANISH),
+        ancestor(DISEASE, LUNG_CANCER),
+        ancestor(COHORT, LUNG_CANCER),
     ]
-    Base.metadata.create_all(engine, tables=tables)
-
-    def concept(concept_id: int, **fields) -> Concept:
-        return Concept(
-            concept_id=concept_id,
-            concept_name=f"Concept {concept_id}",
-            concept_code=f"C{concept_id}",
-            domain_id="Condition",
-            vocabulary_id="SNOMED",
-            concept_class_id="Clinical Finding",
-            valid_start_date=START,
-            valid_end_date=END,
-            **{"standard_concept": "S", **fields},
-        )
-
-    def relationship(relationship_id: str, reverse: str) -> Relationship:
-        return Relationship(
-            relationship_id=relationship_id,
-            relationship_name=relationship_id,
-            is_hierarchical="0",
-            defines_ancestry="0",
-            reverse_relationship_id=reverse,
-            relationship_concept_id=0,
-        )
-
-    def edge(
-        subject: int, relationship_id: str, object_: int, invalid_reason: str | None = None
-    ) -> Concept_Relationship:
-        return Concept_Relationship(
-            concept_id_1=subject,
-            relationship_id=relationship_id,
-            concept_id_2=object_,
-            valid_start_date=START,
-            valid_end_date=END,
-            invalid_reason=invalid_reason,
-        )
-
-    def ancestor(ancestor_id: int, descendant_id: int) -> Concept_Ancestor:
-        return Concept_Ancestor(
-            ancestor_concept_id=ancestor_id,
-            descendant_concept_id=descendant_id,
-            min_levels_of_separation=1,
-            max_levels_of_separation=1,
-        )
-
-    with sessionmaker(bind=engine)() as session:
-        session.add_all(
-            [
-                *(concept(concept_id) for concept_id in range(DISEASE, LOOP_B + 1)),
-                concept(OUTDATED, invalid_reason="U", standard_concept=None),
-                concept(OUTER_ROOT),
-                *(
-                    concept(concept_id, standard_concept=None)
-                    for concept_id in (SOURCE, SOURCE_TWO, ORPHAN)
-                ),
-                relationship("Is a", "Subsumes"),
-                relationship("Subsumes", "Is a"),
-                relationship("Has finding site", "Finding site of"),
-                relationship("Maps to", "Mapped from"),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.IDENTITY,
-                    predicate_subkind="Exact",
-                    description="maps",
-                    semantics="maps",
-                    inference="none",
-                ),
-                RelationshipMapping(
-                    relationship_id="Maps to",
-                    predicate_kind=PredicateKind.IDENTITY,
-                    predicate_subkind="Exact",
-                ),
-                edge(SOURCE, "Maps to", LUNG_CANCER),
-                edge(SOURCE_TWO, "Maps to", LUNG_CANCER),
-                edge(SOURCE_TWO, "Maps to", LUNG),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.HIERARCHY,
-                    predicate_subkind="Taxonomic - up",
-                    direction=HierarchyDirection.UP,
-                    description="up",
-                    semantics="up",
-                    inference="none",
-                ),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.ATTRIBUTE,
-                    predicate_subkind="Site",
-                    description="site",
-                    semantics="site",
-                    inference="none",
-                ),
-                RelationshipMapping(
-                    relationship_id="Is a",
-                    predicate_kind=PredicateKind.HIERARCHY,
-                    predicate_subkind="Taxonomic - up",
-                ),
-                RelationshipMapping(
-                    relationship_id="Has finding site",
-                    predicate_kind=PredicateKind.ATTRIBUTE,
-                    predicate_subkind="Site",
-                ),
-                edge(CANCER, "Is a", DISEASE),
-                edge(SMOKING_RELATED, "Is a", DISEASE),
-                edge(LUNG_CANCER, "Is a", CANCER),
-                edge(LUNG_CANCER, "Is a", SMOKING_RELATED),
-                edge(LUNG_CANCER, "Is a", RETIRED_PARENT, invalid_reason="D"),
-                edge(CANCER, "Is a", OUTDATED),
-                edge(OUTDATED, "Is a", OUTER_ROOT),
-                edge(LUNG, "Is a", THORAX_ORGAN),
-                edge(LUNG_CANCER, "Has finding site", LUNG),
-                edge(LOOP_A, "Is a", LOOP_B),
-                edge(LOOP_B, "Is a", LOOP_A),
-                Concept_Synonym(
-                    concept_id=LUNG_CANCER,
-                    concept_synonym_name="Lung neoplasm",
-                    language_concept_id=OMOPLanguage.ENGLISH.concept_id,
-                ),
-                Concept_Synonym(
-                    concept_id=LUNG_CANCER,
-                    concept_synonym_name="Cancer de pulmon",
-                    language_concept_id=OMOPLanguage.SPANISH.concept_id,
-                ),
-                ancestor(DISEASE, LUNG_CANCER),
-                ancestor(COHORT, LUNG_CANCER),
-            ]
-        )
-        session.commit()
-    try:
-        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessionmaker(bind=engine)))
-    finally:
-        engine.dispose()
+    models = (
+        Concept,
+        Relationship,
+        Concept_Ancestor,
+        Concept_Relationship,
+        Concept_Synonym,
+        RelationshipClass,
+        RelationshipMapping,
+    )
+    with sqlite_cdm(models, rows) as sessions:
+        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 
 def test_closure_follows_active_is_a_edges_only(adapter) -> None:

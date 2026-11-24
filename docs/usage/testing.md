@@ -21,7 +21,7 @@ The tests are grouped by what they cover, in folders under `tests`:
 - `db` for connections, schemas and the Postgres fixture
 - `extensions` for the optional embedding and full-text support
 - `cli` for the command line
-- `fixtures` for the shared mock CDM
+- `fixtures` for the shared mock CDM and `cdm_builders.py`, the builders of the small in-memory CDMs the oaklib tests describe
 
 ## What Is Currently Tested
 

@@ -1,19 +1,21 @@
-"""Search over labels, aliases and identifiers, on a small world with every kind of match."""
+"""Search over labels, aliases and identifiers, on a small CDM with every kind of match."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
-from typing import cast
 
 import pytest
-import sqlalchemy as sa
+from fixtures.cdm_builders import (
+    classified,
+    concept,
+    relationship_class,
+    sqlite_cdm,
+    synonym,
+)
 from oaklib.datamodels.search import SearchConfiguration, SearchProperty, SearchTermSyntax
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
-from orm_loader.helpers import Base
-from sqlalchemy.orm import sessionmaker
 
 from omop_graph.extensions.omop_alchemy import PredicateKind, RelationshipClass, RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
@@ -34,80 +36,30 @@ def config(**fields) -> SearchConfiguration:
 
 @pytest.fixture(scope="module")
 def adapter() -> Iterator[OMOPAlchemyImplementation]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            cast(sa.Table, model.__table__)
-            for model in (
-                Concept,
-                Concept_Synonym,
-                Vocabulary,
-                RelationshipClass,
-                RelationshipMapping,
-            )
-        ],
-    )
-
-    def concept(concept_id: int, name: str, standard: str | None = "S", **fields) -> Concept:
-        return Concept(
-            concept_id=concept_id,
-            concept_name=name,
-            concept_code=fields.pop("concept_code", f"C{concept_id}"),
-            domain_id="Condition",
-            vocabulary_id=fields.pop("vocabulary_id", "SNOMED"),
-            concept_class_id="Clinical Finding",
-            standard_concept=standard,
-            valid_start_date=date(2020, 1, 1),
-            valid_end_date=date(2099, 12, 31),
-            **fields,
-        )
-
-    with sessionmaker(bind=engine)() as session:
-        session.add_all(
-            [
-                *(
-                    Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
-                    for i, v in enumerate(("SNOMED", "ICD10CM"))
-                ),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.IDENTITY,
-                    predicate_subkind="Exact equivalence",
-                    description="x",
-                    semantics="x",
-                    inference="none",
-                ),
-                RelationshipMapping(
-                    relationship_id="Maps to",
-                    predicate_kind=PredicateKind.IDENTITY,
-                    predicate_subkind="Exact equivalence",
-                ),
-                concept(CANCER, "Cancer"),
-                concept(PREFIXED, "Cancer of lung"),
-                concept(CONTAINING, "Small cell lung cancer"),
-                concept(LOWER, "cancer", standard=None),
-                concept(
-                    SOURCE,
-                    "Malignant neoplasm",
-                    standard=None,
-                    vocabulary_id="ICD10CM",
-                    concept_code=SPACED_CODE,
-                ),
-                concept(RETIRED, "Cancer old", standard=None, invalid_reason="U"),
-                Concept_Synonym(
-                    concept_id=CONTAINING,
-                    concept_synonym_name="Oat cell carcinoma",
-                    language_concept_id=OMOPLanguage.ENGLISH.concept_id,
-                ),
-            ]
-        )
-        session.commit()
-    try:
-        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessionmaker(bind=engine)))
-    finally:
-        engine.dispose()
+    rows = [
+        *(
+            Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
+            for i, v in enumerate(("SNOMED", "ICD10CM"))
+        ),
+        relationship_class(PredicateKind.IDENTITY, "Exact equivalence"),
+        classified("Maps to", PredicateKind.IDENTITY, "Exact equivalence"),
+        concept(CANCER, "Cancer"),
+        concept(PREFIXED, "Cancer of lung"),
+        concept(CONTAINING, "Small cell lung cancer"),
+        concept(LOWER, "cancer", standard_concept=None),
+        concept(
+            SOURCE,
+            "Malignant neoplasm",
+            standard_concept=None,
+            vocabulary_id="ICD10CM",
+            concept_code=SPACED_CODE,
+        ),
+        concept(RETIRED, "Cancer old", standard_concept=None, invalid_reason="U"),
+        synonym(CONTAINING, "Oat cell carcinoma", OMOPLanguage.ENGLISH),
+    ]
+    models = (Concept, Concept_Synonym, Vocabulary, RelationshipClass, RelationshipMapping)
+    with sqlite_cdm(models, rows) as sessions:
+        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 
 def search(adapter, term: str, **fields) -> list[str]:

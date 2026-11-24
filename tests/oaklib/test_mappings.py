@@ -1,13 +1,19 @@
-"""Mappings served as SSSOM, on a small world with every kind of mapping edge."""
+"""Mappings served as SSSOM, on a small CDM with every kind of mapping edge."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
-from typing import cast
 
 import pytest
-import sqlalchemy as sa
+from fixtures.cdm_builders import (
+    START,
+    classified,
+    concept,
+    edge_pair,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+)
 from oaklib.datamodels.vocabulary import (
     HAS_DBXREF,
     SKOS_CLOSE_MATCH,
@@ -19,8 +25,6 @@ from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relat
 from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
-from orm_loader.helpers import Base
-from sqlalchemy.orm import sessionmaker
 from sssom.constants import SEMAPV
 
 from omop_graph.extensions.omop_alchemy import (
@@ -33,7 +37,6 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 STANDARD, SOURCE_ICD, SOURCE_READ, BRAND, INGREDIENT, REPLACED, ICDO, SPACED = range(300, 308)
-STARTED = date(2020, 1, 1)
 PAIRS = (
     ("Maps to", "Mapped from", PredicateKind.IDENTITY, "Exact equivalence"),
     ("Brand name of", "Has brand name", PredicateKind.IDENTITY, "Near equivalence"),
@@ -48,119 +51,51 @@ def curie(concept_id: int) -> str:
 
 @pytest.fixture(scope="module")
 def adapter() -> Iterator[OMOPAlchemyImplementation]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
+    vocabularies = ("SNOMED", "ICD10CM", "Read", "RxNorm", "ICDO3", "Nebraska Lexicon")
+    rows = [
+        concept(STANDARD),
+        concept(SOURCE_ICD, vocabulary_id="ICD10CM", standard_concept=None),
+        concept(SOURCE_READ, vocabulary_id="Read", standard_concept=None),
+        concept(BRAND, vocabulary_id="RxNorm", standard_concept=None),
+        concept(INGREDIENT, vocabulary_id="RxNorm"),
+        concept(REPLACED, standard_concept=None, invalid_reason="U"),
+        concept(ICDO, vocabulary_id="ICDO3", standard_concept=None),
+        concept(SPACED, vocabulary_id="Nebraska Lexicon", standard_concept=None),
+        *(
+            Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
+            for i, v in enumerate(vocabularies)
+        ),
+        *(
+            relationship(r, reverse)
+            for pair in PAIRS
+            for r, reverse in ((pair[0], pair[1]), (pair[1], pair[0]))
+        ),
+        *(relationship_class(kind, subkind) for kind, subkind in {(p[2], p[3]) for p in PAIRS}),
+        *(
+            classified(r, kind, subkind)
+            for forward, backward, kind, subkind in PAIRS
+            for r in (forward, backward)
+        ),
+        *edge_pair(SOURCE_ICD, "Maps to", "Mapped from", STANDARD),
+        *edge_pair(SOURCE_READ, "Maps to", "Mapped from", STANDARD),
+        *edge_pair(SOURCE_READ, "Maps to", "Mapped from", REPLACED, invalid_reason="D"),
+        *edge_pair(STANDARD, "Maps to", "Mapped from", STANDARD),
+        *edge_pair(BRAND, "Brand name of", "Has brand name", INGREDIENT),
+        *edge_pair(ICDO, "ICDO - SNOMED", "SNOMED - ICDO", STANDARD),
+        *edge_pair(REPLACED, "Concept replaced by", "Concept replaces", STANDARD),
+        *edge_pair(SPACED, "Maps to", "Mapped from", STANDARD),
+    ]
+    models = (
+        Concept,
+        Relationship,
+        Concept_Relationship,
+        Concept_Synonym,
+        Vocabulary,
+        RelationshipClass,
+        RelationshipMapping,
     )
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            cast(sa.Table, model.__table__)
-            for model in (
-                Concept,
-                Relationship,
-                Concept_Relationship,
-                Concept_Synonym,
-                Vocabulary,
-                RelationshipClass,
-                RelationshipMapping,
-            )
-        ],
-    )
-
-    def concept(concept_id: int, vocabulary: str, standard: str | None, **fields) -> Concept:
-        return Concept(
-            concept_id=concept_id,
-            concept_name=f"Concept {concept_id}",
-            concept_code=f"C{concept_id}",
-            domain_id="Condition",
-            vocabulary_id=vocabulary,
-            concept_class_id="Clinical Finding",
-            standard_concept=standard,
-            valid_start_date=STARTED,
-            valid_end_date=date(2099, 12, 31),
-            **fields,
-        )
-
-    def edges(
-        subject: int, relationship_id: str, reverse: str, object_: int, invalid: str | None = None
-    ) -> list[Concept_Relationship]:
-        def edge(s: int, r: str, o: int) -> Concept_Relationship:
-            return Concept_Relationship(
-                concept_id_1=s,
-                relationship_id=r,
-                concept_id_2=o,
-                valid_start_date=STARTED,
-                valid_end_date=date(2099, 12, 31),
-                invalid_reason=invalid,
-            )
-
-        return [edge(subject, relationship_id, object_), edge(object_, reverse, subject)]
-
-    with sessionmaker(bind=engine)() as session:
-        session.add_all(
-            [
-                concept(STANDARD, "SNOMED", "S"),
-                concept(SOURCE_ICD, "ICD10CM", None),
-                concept(SOURCE_READ, "Read", None),
-                concept(BRAND, "RxNorm", None),
-                concept(INGREDIENT, "RxNorm", "S"),
-                concept(REPLACED, "SNOMED", None, invalid_reason="U"),
-                concept(ICDO, "ICDO3", None),
-                concept(SPACED, "Nebraska Lexicon", None),
-                *(
-                    Vocabulary(
-                        vocabulary_id=vocabulary,
-                        vocabulary_name=vocabulary,
-                        vocabulary_concept_id=index,
-                    )
-                    for index, vocabulary in enumerate(
-                        ("SNOMED", "ICD10CM", "Read", "RxNorm", "ICDO3", "Nebraska Lexicon")
-                    )
-                ),
-                *(
-                    Relationship(
-                        relationship_id=r,
-                        relationship_name=r,
-                        is_hierarchical="0",
-                        defines_ancestry="0",
-                        reverse_relationship_id=reverse,
-                        relationship_concept_id=0,
-                    )
-                    for pair in PAIRS
-                    for r, reverse in ((pair[0], pair[1]), (pair[1], pair[0]))
-                ),
-                *(
-                    RelationshipClass(
-                        predicate_kind=kind,
-                        predicate_subkind=subkind,
-                        description=subkind,
-                        semantics=subkind,
-                        inference="none",
-                    )
-                    for kind, subkind in {(p[2], p[3]) for p in PAIRS}
-                ),
-                *(
-                    RelationshipMapping(
-                        relationship_id=r, predicate_kind=kind, predicate_subkind=subkind
-                    )
-                    for forward, backward, kind, subkind in PAIRS
-                    for r in (forward, backward)
-                ),
-                *edges(SOURCE_ICD, "Maps to", "Mapped from", STANDARD),
-                *edges(SOURCE_READ, "Maps to", "Mapped from", STANDARD),
-                *edges(SOURCE_READ, "Maps to", "Mapped from", REPLACED, invalid="D"),
-                *edges(STANDARD, "Maps to", "Mapped from", STANDARD),
-                *edges(BRAND, "Brand name of", "Has brand name", INGREDIENT),
-                *edges(ICDO, "ICDO - SNOMED", "SNOMED - ICDO", STANDARD),
-                *edges(REPLACED, "Concept replaced by", "Concept replaces", STANDARD),
-                *edges(SPACED, "Maps to", "Mapped from", STANDARD),
-            ]
-        )
-        session.commit()
-    try:
-        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessionmaker(bind=engine)))
-    finally:
-        engine.dispose()
+    with sqlite_cdm(models, rows) as sessions:
+        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 
 def summary(mappings) -> set[tuple[str, str, str]]:
@@ -177,7 +112,7 @@ def test_a_source_concept_maps_to_its_standard_concept(adapter) -> None:
     mapping = next(m for m in mappings if m.predicate_id == SKOS_EXACT_MATCH)
     assert (mapping.subject_source, mapping.object_source) == ("ICD10CM", "SNOMED")
     assert mapping.mapping_justification == SEMAPV.UnspecifiedMatching.value
-    assert mapping.mapping_date == STARTED.isoformat()
+    assert mapping.mapping_date == START.isoformat()
     assert mapping.comment == "OMOP relationship Maps to"
 
 

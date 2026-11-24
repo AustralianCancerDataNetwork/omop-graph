@@ -1,13 +1,20 @@
-"""Behaviour of the basic ontology interface on a small world with every OMOP case it maps."""
+"""Behaviour of the basic ontology interface on a small CDM with every OMOP case it maps."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
-from typing import cast
 
 import pytest
-import sqlalchemy as sa
+from fixtures.cdm_builders import (
+    ancestor,
+    classified,
+    concept,
+    edge,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+    synonym,
+)
 from oaklib.datamodels.vocabulary import (
     DEPRECATED_PREDICATE,
     INVERSE_OF,
@@ -24,8 +31,6 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
-from orm_loader.helpers import Base
-from sqlalchemy.orm import sessionmaker
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
@@ -41,159 +46,67 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 DISEASE, CANCER, DELETED, OUTDATED, ICD_CODE, LONELY = 100, 101, 102, 103, 104, 105
 SNOMED_ONTOLOGY, ICD_ONTOLOGY, CONDITION_DOMAIN = 44819097, 44819098, 3
 SUBSUMES = "OMOP_REL:Subsumes"
-START, END = date(2020, 1, 1), date(2099, 12, 31)
 
 
 @pytest.fixture(scope="module")
 def adapter() -> Iterator[OMOPAlchemyImplementation]:
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
-    tables = [
-        cast(sa.Table, model.__table__)
-        for model in (
-            Concept,
-            Domain,
-            Vocabulary,
-            Relationship,
-            Concept_Ancestor,
-            Concept_Relationship,
-            Concept_Synonym,
-            RelationshipClass,
-            RelationshipMapping,
-        )
+    rows = [
+        Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=3),
+        Vocabulary(
+            vocabulary_id="SNOMED",
+            vocabulary_name="SNOMED CT",
+            vocabulary_reference="http://snomed.example",
+            vocabulary_version="2024",
+            vocabulary_concept_id=SNOMED_ONTOLOGY,
+        ),
+        Vocabulary(
+            vocabulary_id="ICD10",
+            vocabulary_name="ICD-10",
+            vocabulary_concept_id=ICD_ONTOLOGY,
+        ),
+        concept(DISEASE, "Disease"),
+        concept(CANCER, "Cancer"),
+        concept(DELETED, "Removed disease", invalid_reason="D"),
+        concept(OUTDATED, "Outdated disease", invalid_reason="U"),
+        concept(ICD_CODE, "Code", vocabulary_id="ICD10", standard_concept=None),
+        concept(LONELY, "Lonely disease"),
+        relationship("Is a", "Subsumes"),
+        relationship("Subsumes", "Is a"),
+        relationship("Concept replaced by", "Concept replaces"),
+        relationship("Concept replaces", "Concept replaced by"),
+        relationship("Unclassified", "Unclassified"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
+        relationship_class(PredicateKind.IDENTITY, "Version lineage"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
+        classified("Concept replaced by", PredicateKind.IDENTITY, "Version lineage"),
+        classified("Concept replaces", PredicateKind.IDENTITY, "Version lineage"),
+        edge(CANCER, "Is a", DISEASE),
+        edge(DISEASE, "Subsumes", CANCER),
+        edge(OUTDATED, "Concept replaced by", CANCER),
+        edge(CANCER, "Concept replaces", OUTDATED),
+        ancestor(DISEASE, DISEASE, 0),
+        ancestor(CANCER, CANCER, 0),
+        ancestor(LONELY, LONELY, 0),
+        ancestor(DISEASE, CANCER, 1),
+        synonym(CANCER, "Neoplasm", OMOPLanguage.ENGLISH),
+        synonym(CANCER, "Cáncer", OMOPLanguage.SPANISH),
+        synonym(CANCER, "Cancer fr", OMOPLanguage.FRENCH),
     ]
-    Base.metadata.create_all(engine, tables=tables)
-
-    def concept(concept_id: int, name: str, **fields) -> Concept:
-        return Concept(
-            concept_id=concept_id,
-            concept_name=name,
-            concept_code=f"C{concept_id}",
-            domain_id="Condition",
-            vocabulary_id=fields.pop("vocabulary_id", "SNOMED"),
-            concept_class_id="Clinical Finding",
-            standard_concept=fields.pop("standard_concept", "S"),
-            valid_start_date=START,
-            valid_end_date=END,
-            **fields,
-        )
-
-    def relationship(relationship_id: str, reverse: str) -> Relationship:
-        return Relationship(
-            relationship_id=relationship_id,
-            relationship_name=relationship_id,
-            is_hierarchical="0",
-            defines_ancestry="0",
-            reverse_relationship_id=reverse,
-            relationship_concept_id=0,
-        )
-
-    def edge(subject: int, relationship_id: str, object_: int) -> Concept_Relationship:
-        return Concept_Relationship(
-            concept_id_1=subject,
-            relationship_id=relationship_id,
-            concept_id_2=object_,
-            valid_start_date=START,
-            valid_end_date=END,
-        )
-
-    def ancestor(ancestor_id: int, descendant_id: int, levels: int) -> Concept_Ancestor:
-        return Concept_Ancestor(
-            ancestor_concept_id=ancestor_id,
-            descendant_concept_id=descendant_id,
-            min_levels_of_separation=levels,
-            max_levels_of_separation=levels,
-        )
-
-    def synonym(concept_id: int, name: str, language: OMOPLanguage) -> Concept_Synonym:
-        return Concept_Synonym(
-            concept_id=concept_id,
-            concept_synonym_name=name,
-            language_concept_id=language.concept_id,
-        )
-
-    with sessionmaker(bind=engine)() as session:
-        session.add_all(
-            [
-                Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=3),
-                Vocabulary(
-                    vocabulary_id="SNOMED",
-                    vocabulary_name="SNOMED CT",
-                    vocabulary_reference="http://snomed.example",
-                    vocabulary_version="2024",
-                    vocabulary_concept_id=SNOMED_ONTOLOGY,
-                ),
-                Vocabulary(
-                    vocabulary_id="ICD10",
-                    vocabulary_name="ICD-10",
-                    vocabulary_concept_id=ICD_ONTOLOGY,
-                ),
-                concept(DISEASE, "Disease"),
-                concept(CANCER, "Cancer"),
-                concept(DELETED, "Removed disease", invalid_reason="D"),
-                concept(OUTDATED, "Outdated disease", invalid_reason="U"),
-                concept(ICD_CODE, "Code", vocabulary_id="ICD10", standard_concept=None),
-                concept(LONELY, "Lonely disease"),
-                relationship("Is a", "Subsumes"),
-                relationship("Subsumes", "Is a"),
-                relationship("Concept replaced by", "Concept replaces"),
-                relationship("Concept replaces", "Concept replaced by"),
-                relationship("Unclassified", "Unclassified"),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.HIERARCHY,
-                    predicate_subkind="Taxonomic - up",
-                    direction=HierarchyDirection.UP,
-                    description="up",
-                    semantics="up",
-                    inference="none",
-                ),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.HIERARCHY,
-                    predicate_subkind="Taxonomic - down",
-                    direction=HierarchyDirection.DOWN,
-                    description="down",
-                    semantics="down",
-                    inference="none",
-                ),
-                RelationshipClass(
-                    predicate_kind=PredicateKind.IDENTITY,
-                    predicate_subkind="Version lineage",
-                    description="lineage",
-                    semantics="lineage",
-                    inference="none",
-                ),
-                *(
-                    RelationshipMapping(
-                        relationship_id=relationship_id,
-                        predicate_kind=kind,
-                        predicate_subkind=subkind,
-                    )
-                    for relationship_id, kind, subkind in (
-                        ("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
-                        ("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
-                        ("Concept replaced by", PredicateKind.IDENTITY, "Version lineage"),
-                        ("Concept replaces", PredicateKind.IDENTITY, "Version lineage"),
-                    )
-                ),
-                edge(CANCER, "Is a", DISEASE),
-                edge(DISEASE, "Subsumes", CANCER),
-                edge(OUTDATED, "Concept replaced by", CANCER),
-                edge(CANCER, "Concept replaces", OUTDATED),
-                ancestor(DISEASE, DISEASE, 0),
-                ancestor(CANCER, CANCER, 0),
-                ancestor(LONELY, LONELY, 0),
-                ancestor(DISEASE, CANCER, 1),
-                synonym(CANCER, "Neoplasm", OMOPLanguage.ENGLISH),
-                synonym(CANCER, "Cáncer", OMOPLanguage.SPANISH),
-                synonym(CANCER, "Cancer fr", OMOPLanguage.FRENCH),
-            ]
-        )
-        session.commit()
-    try:
-        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessionmaker(bind=engine)))
-    finally:
-        engine.dispose()
+    models = (
+        Concept,
+        Domain,
+        Vocabulary,
+        Relationship,
+        Concept_Ancestor,
+        Concept_Relationship,
+        Concept_Synonym,
+        RelationshipClass,
+        RelationshipMapping,
+    )
+    with sqlite_cdm(models, rows) as sessions:
+        yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 
 def test_each_vocabulary_is_an_ontology_with_its_metadata(adapter) -> None:
