@@ -28,6 +28,52 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class VocabularyView:
+    """
+    A row of the `vocabulary` table.
+
+    Parameters
+    ----------
+    vocabulary_id : str
+        The vocabulary identifier (e.g., 'SNOMED').
+    vocabulary_name : str
+        The full name of the vocabulary.
+    vocabulary_reference : str, optional
+        Where the vocabulary comes from.
+    vocabulary_version : str, optional
+        The loaded version of the vocabulary.
+    vocabulary_concept_id : int
+        The concept that stands for the vocabulary.
+    """
+
+    vocabulary_id: str
+    vocabulary_name: str
+    vocabulary_reference: str | None
+    vocabulary_version: str | None
+    vocabulary_concept_id: int
+
+
+@dataclass(frozen=True)
+class SynonymView:
+    """
+    A row of the `concept_synonym` table.
+
+    Parameters
+    ----------
+    concept_id : int
+        The concept the synonym belongs to.
+    name : str
+        The synonym text.
+    language_concept_id : int
+        The concept for the language of the synonym.
+    """
+
+    concept_id: int
+    name: str
+    language_concept_id: int
+
+
+@dataclass(frozen=True)
 class ConceptView:
     """
     A lightweight, immutable view of an OMOP Concept.

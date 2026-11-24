@@ -29,6 +29,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy import Row
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
 
 if TYPE_CHECKING:
     from omop_emb import (
@@ -54,6 +55,8 @@ from .nodes import (
     ConceptView,
     LabelMatch,
     LabelMatchKind,
+    SynonymView,
+    VocabularyView,
 )
 from .queries import (
     DEFAULT_CONCEPT_FILTER,
@@ -67,19 +70,23 @@ from .queries import (
     q_concept_num_ancestors,
     q_concept_potential_ancestor,
     q_concept_potential_ancestors_batch,
-    q_concept_synonym_filtered,
     q_concept_view,
     q_concept_views,
     q_concept_vocabulary_ids,
+    q_domains,
     q_edges,
     q_entities,
     q_leaves,
+    q_obsolete_concepts,
     q_parents,
     q_predicate_name,
     q_predicate_row,
     q_relationships,
     q_roots,
     q_singletons,
+    q_synonym_language_ids,
+    q_synonyms,
+    q_vocabularies,
 )
 
 logger = logging.getLogger(__name__)
@@ -512,10 +519,27 @@ class KnowledgeGraph(GraphBackend):
         if resolved is None:
             return
 
+        yield from self._classified_triples(
+            q_relationships(subjects=subjects, objects=objects, edge_filter=resolved)
+        )
+
+    def all_relationships(
+        self, edge_filter: EdgeFilter | None = None
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """
+        Yield every relationship selected by *edge_filter*, read through a server-side cursor.
+
+        Meant for scans of the whole table. The triples are as in :meth:`relationships`.
+        """
+        resolved = self._resolve_edge_filter(edge_filter)
+        if resolved is None:
+            return
+        yield from self._classified_triples(q_relationships(None, None, resolved))
+
+    def _classified_triples(self, stmt: Select) -> Generator[tuple[int, str, int], None, None]:
+        """Run *stmt*, a relationship triple query, and keep the triples of classified relationships."""
         with self.session_factory() as session:
-            for s, p, o in session.execute(
-                q_relationships(subjects=subjects, objects=objects, edge_filter=resolved)
-            ):
+            for s, p, o in session.execute(stmt):
                 if p in self._relationship_mapping:
                     yield s, p, o
 
@@ -676,35 +700,100 @@ class KnowledgeGraph(GraphBackend):
             for row in session.execute(q_entities(concept_filter)):
                 yield int(row.concept_id)
 
-    def roots(self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> tuple[int, ...]:
+    def roots(
+        self,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        edge_filter: EdgeFilter | None = None,
+    ) -> tuple[int, ...]:
         """
         Retrieve root concepts (no parents) among those selected by *concept_filter*.
-        """
-        with self.session_factory() as session:
-            return tuple(session.execute(q_roots(concept_filter)).scalars())
 
-    def leaves(self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> tuple[int, ...]:
+        Without *edge_filter* the parents are the closure's level 1 ancestors. With it, a
+        parent is the target of an outgoing edge it selects.
+        """
+        return self._enumerate(q_roots, concept_filter, edge_filter)
+
+    def leaves(
+        self,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        edge_filter: EdgeFilter | None = None,
+    ) -> tuple[int, ...]:
         """
         Retrieve leaf concepts (no children) among those selected by *concept_filter*.
-        """
-        with self.session_factory() as session:
-            return tuple(session.execute(q_leaves(concept_filter)).scalars())
 
-    def singletons(self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> tuple[int, ...]:
+        Without *edge_filter* the children are the closure's level 1 descendants. With it,
+        a child is the source of an incoming edge it selects.
+        """
+        return self._enumerate(q_leaves, concept_filter, edge_filter)
+
+    def singletons(
+        self,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        edge_filter: EdgeFilter | None = None,
+    ) -> tuple[int, ...]:
         """
         Retrieve singleton concepts (no parents and no children) among those selected by
-        *concept_filter*.
+        *concept_filter*. See :meth:`roots` for *edge_filter*.
+        """
+        return self._enumerate(q_singletons, concept_filter, edge_filter)
+
+    def _enumerate(
+        self,
+        build: Callable[[ConceptFilter, EdgeFilter | None], Select],
+        concept_filter: ConceptFilter,
+        edge_filter: EdgeFilter | None,
+    ) -> tuple[int, ...]:
+        """Run *build* with *edge_filter* resolved, or list every concept when it selects no edge."""
+        if edge_filter is None:
+            stmt = build(concept_filter, None)
+        else:
+            resolved = self._resolve_edge_filter(edge_filter)
+            stmt = build(concept_filter, resolved) if resolved else q_entities(concept_filter)
+        with self.session_factory() as session:
+            return tuple(session.execute(stmt).scalars())
+
+    def obsolete_concepts(self, include_updated: bool = True) -> Generator[int, None, None]:
+        """
+        Yield the ids of deprecated concepts.
+
+        Parameters
+        ----------
+        include_updated : bool
+            If True, include the concepts updated into others (``invalid_reason`` ``U``)
+            besides the deleted ones (``D``).
         """
         with self.session_factory() as session:
-            return tuple(session.execute(q_singletons(concept_filter)).scalars())
+            yield from session.execute(q_obsolete_concepts(include_updated)).scalars()
+
+    def vocabularies(self) -> tuple[VocabularyView, ...]:
+        """Return every vocabulary."""
+        with self.session_factory() as session:
+            return tuple(
+                VocabularyView(**row._mapping) for row in session.execute(q_vocabularies())
+            )
+
+    def domain_concept_ids(self) -> dict[str, int]:
+        """Return the concept id of each domain, keyed by ``domain_id``."""
+        with self.session_factory() as session:
+            return {row.domain_id: row.domain_concept_id for row in session.execute(q_domains())}
+
+    def synonyms(self, concept_ids: tuple[int, ...]) -> tuple[SynonymView, ...]:
+        """Return the synonyms of *concept_ids*, ordered by concept and name."""
+        with self.session_factory() as session:
+            return tuple(
+                SynonymView(**row._mapping) for row in session.execute(q_synonyms(concept_ids))
+            )
+
+    def synonym_language_ids(self) -> frozenset[int]:
+        """Return the language concept ids that at least one synonym uses."""
+        with self.session_factory() as session:
+            return frozenset(session.execute(q_synonym_language_ids()).scalars())
 
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
         """
         Retrieve all synonyms for a concept.
         """
-        with self.session_factory() as session:
-            rows = session.execute(q_concept_synonym_filtered(concept_id)).all()
-        return tuple(row.name for row in rows)
+        return tuple(synonym.name for synonym in self.synonyms((concept_id,)))
 
     def predicates(self) -> tuple[Predicate, ...]:
         """

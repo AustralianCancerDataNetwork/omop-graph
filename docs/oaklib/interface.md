@@ -73,8 +73,8 @@ Since the adapter implements the `SearchInterface`, you can perform standardized
 for curie in adapter.basic_search("Atrial Fibrillation"):
     print(f"Found: {curie}")
 
-# Traverse parents (returns CURIEs)
-for parent in adapter.parents("OMOP:313217"):
+# Direct parents (returns CURIEs)
+for parent in adapter.hierarchical_parents("OMOP:313217"):
     print(f"Parent CURIE: {parent}")
 ```
 

@@ -14,10 +14,8 @@ from oaklib.datamodels.vocabulary import (
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.oaklib_interface.omop_implementation import (
-    OMOPAlchemyImplementation,
-    OMOPTextAnnotatorInterface,
-)
+from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
+from omop_graph.oaklib_interface.text_annotator import OMOPTextAnnotatorInterface
 
 
 def test_annotate_text_standardizes_non_standard_candidate_without_parent_annotation(

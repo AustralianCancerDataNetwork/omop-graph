@@ -19,12 +19,15 @@ from typing import Literal, cast
 from omop_alchemy.backends import (
     resolve_backend,
 )
+from omop_alchemy.cdm.model import InvalidReasonFlag, normalised_flag_expr
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
     Concept_Ancestor,
     Concept_Relationship,
     Concept_Synonym,
+    Domain,
     Relationship,
+    Vocabulary,
 )
 from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy import (
@@ -40,7 +43,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.orm import aliased
-from sqlalchemy.sql import Select
+from sqlalchemy.sql import ColumnElement, Select
 
 from ..extensions.omop_alchemy import RelationshipMapping
 from .edges import EdgeFilter
@@ -496,10 +499,10 @@ def q_relationships(
     )
     stmt = _filter_concept_relationships(stmt, edge_filter)
 
-    if subjects:
+    if subjects is not None:
         stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
 
-    if objects:
+    if objects is not None:
         stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
 
     return stmt
@@ -516,55 +519,117 @@ def q_entities(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select
     return concept_filter.apply(select(Concept.concept_id))
 
 
-def q_concept_synonym_filtered(concept_id: int) -> Select:
-    """Query synonyms for a specific concept."""
-    stmt = q_concept_synonym()
-    return stmt.where(Concept_Synonym.concept_id == concept_id)
+def q_synonyms(concept_ids: tuple[int, ...]) -> Select:
+    """Query the synonyms of *concept_ids* with their language concept, ordered by name."""
+    return (
+        select(
+            Concept_Synonym.concept_id,
+            Concept_Synonym.concept_synonym_name.label("name"),
+            Concept_Synonym.language_concept_id,
+        )
+        .where(Concept_Synonym.concept_id.in_(concept_ids))
+        .order_by(Concept_Synonym.concept_id, Concept_Synonym.concept_synonym_name)
+    )
 
 
-def q_singletons(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
+def q_synonym_language_ids() -> Select:
+    """Query the distinct language concept ids used by synonyms."""
+    return select(Concept_Synonym.language_concept_id).distinct()
+
+
+def q_vocabularies() -> Select:
+    """Query all vocabularies."""
+    return select(
+        Vocabulary.vocabulary_id,
+        Vocabulary.vocabulary_name,
+        Vocabulary.vocabulary_reference,
+        Vocabulary.vocabulary_version,
+        Vocabulary.vocabulary_concept_id,
+    )
+
+
+def q_domains() -> Select:
+    """Query all domains with their concept id."""
+    return select(Domain.domain_id, Domain.domain_concept_id)
+
+
+def q_obsolete_concepts(include_updated: bool = True) -> Select:
+    """Query the ids of deleted concepts, and of updated ones when *include_updated*."""
+    reasons = [InvalidReasonFlag.DELETED]
+    if include_updated:
+        reasons.append(InvalidReasonFlag.UPDATED)
+    return select(Concept.concept_id).where(
+        normalised_flag_expr(Concept.invalid_reason).in_(reasons)
+    )
+
+
+def _has_parent(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
+    """Correlated test that a concept has a parent: in the closure, or by *edge_filter* edges."""
+    if edge_filter is None:
+        return exists(
+            select(1).where(
+                Concept_Ancestor.descendant_concept_id == Concept.concept_id,
+                Concept_Ancestor.min_levels_of_separation == 1,
+            )
+        )
+    return exists(
+        _filter_concept_relationships(
+            select(1)
+            .select_from(Concept_Relationship)
+            .where(Concept_Relationship.concept_id_1 == Concept.concept_id),
+            edge_filter,
+        )
+    )
+
+
+def _has_child(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
+    """Correlated test that a concept has a child: in the closure, or by *edge_filter* edges."""
+    if edge_filter is None:
+        return exists(
+            select(1).where(
+                Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
+                Concept_Ancestor.min_levels_of_separation == 1,
+            )
+        )
+    return exists(
+        _filter_concept_relationships(
+            select(1)
+            .select_from(Concept_Relationship)
+            .where(Concept_Relationship.concept_id_2 == Concept.concept_id),
+            edge_filter,
+        )
+    )
+
+
+def q_roots(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, edge_filter: EdgeFilter | None = None
+) -> Select:
     """
-    Query for singleton concepts (no parents, no children).
-    Uses NOT EXISTS subqueries on the ancestor table.
+    Query for root concepts (no parents).
+
+    Parents are the closure's level 1 ancestors, or with *edge_filter* the targets of
+    outgoing edges it selects.
     """
-    return q_roots(concept_filter).where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
-        )
-    )
+    return q_entities(concept_filter).where(~_has_parent(edge_filter))
 
 
-def q_roots(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
-    """Query for root concepts (no parents)."""
-    return q_entities(concept_filter).where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.descendant_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
-        )
-    )
+def q_leaves(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, edge_filter: EdgeFilter | None = None
+) -> Select:
+    """
+    Query for leaf concepts (no children).
+
+    Children are the closure's level 1 descendants, or with *edge_filter* the sources of
+    incoming edges it selects.
+    """
+    return q_entities(concept_filter).where(~_has_child(edge_filter))
 
 
-def q_leaves(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
-    """Query for leaf concepts (no children)."""
-    return q_entities(concept_filter).where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
-        )
-    )
+def q_singletons(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, edge_filter: EdgeFilter | None = None
+) -> Select:
+    """Query for singleton concepts (no parents and no children). See :func:`q_roots`."""
+    return q_entities(concept_filter).where(~_has_parent(edge_filter), ~_has_child(edge_filter))
 
 
 def q_concept_domain_ids() -> Select:

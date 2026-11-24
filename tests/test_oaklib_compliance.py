@@ -26,20 +26,7 @@ CLAIMED = (BasicOntologyInterface, SearchInterface, TextAnnotatorInterface)
 PENDING = frozenset(
     {
         "BasicOntologyInterface._all_entailed_relationships",
-        "BasicOntologyInterface._all_relationships",
-        "BasicOntologyInterface.comments",
-        "BasicOntologyInterface.definition",
-        "BasicOntologyInterface.multilingual_labels",
-        "BasicOntologyInterface.obsoletes",
-        "BasicOntologyInterface.ontologies",
-        "BasicOntologyInterface.ontology_metadata_map",
-        "BasicOntologyInterface.ontology_versions",
-        "BasicOntologyInterface.owl_types",
-        "BasicOntologyInterface.relationships_metadata",
         "BasicOntologyInterface.simple_mappings_by_curie",
-        "BasicOntologyInterface.subset_members",
-        "BasicOntologyInterface.subsets",
-        "BasicOntologyInterface.terms_categories",
     }
 )
 
