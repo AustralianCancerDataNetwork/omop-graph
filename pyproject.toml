@@ -38,7 +38,7 @@ dependencies = [
   "typing-extensions>=4.15.0",
   "typer>=0.12",
   "rich>=13.0",
-  "oaklib",
+  "oaklib>=0.7.4",
   "oa-configurator>=2.1.0,<3"
 ]
 
