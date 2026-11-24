@@ -78,6 +78,10 @@ class EdgeFilter:
                 )
 
 
+IS_A_FILTER = EdgeFilter(predicate_ids=frozenset({IS_A_RELATIONSHIP_ID}))
+"""Selects the active ``Is a`` edges."""
+
+
 @dataclass(frozen=True)
 class EdgeView:
     """

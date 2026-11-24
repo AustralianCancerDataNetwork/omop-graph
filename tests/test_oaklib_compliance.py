@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from oaklib.interfaces import (
     BasicOntologyInterface,
+    OboGraphInterface,
     RelationGraphInterface,
     SearchInterface,
     TextAnnotatorInterface,
@@ -28,6 +29,7 @@ from omop_graph.oaklib_interface.unsupported import UNSUPPORTED
 
 CLAIMED = (
     BasicOntologyInterface,
+    OboGraphInterface,
     RelationGraphInterface,
     SearchInterface,
     TextAnnotatorInterface,

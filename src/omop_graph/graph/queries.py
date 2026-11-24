@@ -46,7 +46,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql import ColumnElement, Select
 
 from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
-from .edges import IS_A_RELATIONSHIP_ID, EdgeFilter
+from .edges import EdgeFilter
 
 
 def _concept_has_standardness_expr():
@@ -486,15 +486,17 @@ def q_ancestors(concept_id: int) -> Select:
     )
 
 
-def q_is_a_closure(concept_ids: tuple[int, ...], direction: HierarchyDirection) -> Select:
+def q_closure(
+    concept_ids: tuple[int, ...], direction: HierarchyDirection, edge_filter: EdgeFilter
+) -> Select:
     """
-    Query the strict ``Is a`` closure of a batch of concepts as (origin, reached) pairs.
+    Query the transitive closure of the edges of *edge_filter* as (origin, reached) pairs.
 
-    Follows active ``Is a`` edges only, so unlike ``concept_ancestor`` it holds no cohort,
-    therapeutic or composition ancestry. ``UP`` reaches ancestors and ``DOWN`` descendants.
-    A concept is never reached from itself.
+    Follows the selected edges repeatedly from each concept. ``UP`` goes from the subject of
+    an edge to its object, as from a concept to its ``Is a`` ancestors, and ``DOWN`` the
+    other way. A concept is never reached from itself. Its kind and subkind fields are
+    ignored, see :func:`_filter_concept_relationships`.
     """
-    edge_filter = EdgeFilter(predicate_ids=frozenset({IS_A_RELATIONSHIP_ID}))
     near, far = (
         (Concept_Relationship.concept_id_1, Concept_Relationship.concept_id_2)
         if direction is HierarchyDirection.UP
@@ -504,7 +506,7 @@ def q_is_a_closure(concept_ids: tuple[int, ...], direction: HierarchyDirection) 
         select(near.label("origin"), far.label("reached")).where(near.in_(concept_ids)),
         edge_filter,
     )
-    closure = seed.cte("is_a_closure", recursive=True)
+    closure = seed.cte("closure", recursive=True)
     step = _filter_concept_relationships(
         select(closure.c.origin, far)
         .select_from(closure)

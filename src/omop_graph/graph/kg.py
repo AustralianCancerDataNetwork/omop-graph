@@ -52,7 +52,7 @@ from ..extensions.omop_alchemy import (
 )
 from ._streaming import stream
 from .base import GraphBackend
-from .edges import EdgeFilter, EdgeView, Predicate
+from .edges import IS_A_FILTER, EdgeFilter, EdgeView, Predicate
 from .nodes import (
     AncestorMatch,
     ConceptView,
@@ -65,6 +65,7 @@ from .queries import (
     DEFAULT_CONCEPT_FILTER,
     q_all_predicates,
     q_children,
+    q_closure,
     q_concept_domain_ids,
     q_concept_id_by_code,
     q_concept_name_fulltext,
@@ -79,7 +80,6 @@ from .queries import (
     q_domains,
     q_edges,
     q_entities,
-    q_is_a_closure,
     q_leaves,
     q_obsolete_concepts,
     q_parents,
@@ -695,24 +695,29 @@ class KnowledgeGraph(GraphBackend):
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
 
-    def is_a_closure(
+    def closure(
         self,
         concept_ids: Iterable[int],
         direction: HierarchyDirection = HierarchyDirection.UP,
+        edge_filter: EdgeFilter = IS_A_FILTER,
         concept_filter: ConceptFilter | None = None,
     ) -> dict[int, frozenset[int]]:
         """
-        Find the strict ``Is a`` ancestors or descendants of each concept.
+        Find the concepts reached by following edges repeatedly from each concept.
 
-        Unlike :meth:`parents`, which reads ``concept_ancestor``, this follows active
-        ``Is a`` edges only, so it holds no cohort, therapeutic or composition ancestry.
+        By default this is the strict ``Is a`` ancestors, which unlike :meth:`parents`
+        (``concept_ancestor``) holds no cohort, therapeutic or composition ancestry. Other
+        edge filters give the closure over other relationships, which can be very large.
 
         Parameters
         ----------
         concept_ids : Iterable[int]
             Concepts to start from.
         direction : HierarchyDirection
-            ``UP`` for ancestors, ``DOWN`` for descendants.
+            ``UP`` follows an edge from its subject to its object, as to ancestors, and
+            ``DOWN`` from its object to its subject, as to descendants.
+        edge_filter : EdgeFilter
+            The edges to follow. Relationships without a classification are not followed.
         concept_filter : ConceptFilter, optional
             Report only the concepts it selects. The walk still passes through the others,
             so a concept above an excluded one is still reached. ``concept_ids`` must be unset.
@@ -724,10 +729,17 @@ class KnowledgeGraph(GraphBackend):
         """
         starts = tuple(dict.fromkeys(concept_ids))
         reached: dict[int, set[int]] = {concept_id: set() for concept_id in starts}
-        with self.session_factory() as session:
-            for batch in batched(starts, self.LOOKUP_BATCH_SIZE):
-                for origin, other in session.execute(q_is_a_closure(batch, direction)):
-                    reached[origin].add(other)
+        resolved = self._resolve_edge_filter(edge_filter)
+        if resolved is not None:
+            followed = frozenset(self._relationship_mapping)
+            if resolved.predicate_ids:
+                followed &= resolved.predicate_ids
+            resolved = replace(resolved, predicate_ids=followed)
+        if resolved is not None and resolved.predicate_ids:
+            with self.session_factory() as session:
+                for batch in batched(starts, self.LOOKUP_BATCH_SIZE):
+                    for origin, other in session.execute(q_closure(batch, direction, resolved)):
+                        reached[origin].add(other)
         if concept_filter is not None:
             in_scope = self._within(set().union(*reached.values()), concept_filter)
             reached = {concept_id: others & in_scope for concept_id, others in reached.items()}
@@ -766,7 +778,7 @@ class KnowledgeGraph(GraphBackend):
             Which asserted relationships to start from, as in :meth:`relationships`.
         concept_filter : ConceptFilter, optional
             Which ``Is a`` ancestors, or descendants for incoming relationships, count as
-            entailed objects, as in :meth:`is_a_closure`. Asserted edges are unaffected.
+            entailed objects, as in :meth:`closure`. Asserted edges are unaffected.
 
         Yields
         ------
@@ -803,7 +815,7 @@ class KnowledgeGraph(GraphBackend):
         asserted: list[tuple[int, str, int]] = []
         for batch in batched(subjects, self.LOOKUP_BATCH_SIZE):
             asserted.extend(self.relationships(batch, None, edge_filter))
-        ancestors = self.is_a_closure(
+        ancestors = self.closure(
             {filler for _, _, filler in asserted}, concept_filter=concept_filter
         )
         for subject_id, relationship_id, filler in asserted:
@@ -818,9 +830,7 @@ class KnowledgeGraph(GraphBackend):
         concept_filter: ConceptFilter | None,
     ) -> Generator[tuple[int, str, int], None, None]:
         """Find the edges into *objects* and into their ``Is a`` descendants."""
-        descendants = self.is_a_closure(
-            objects, HierarchyDirection.DOWN, concept_filter=concept_filter
-        )
+        descendants = self.closure(objects, HierarchyDirection.DOWN, concept_filter=concept_filter)
         targets_by_filler: dict[int, list[int]] = defaultdict(list)
         for target, below in descendants.items():
             for filler in (target, *below):

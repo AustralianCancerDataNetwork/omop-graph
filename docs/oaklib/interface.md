@@ -25,6 +25,7 @@ The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies,
 The primary adapter class that inherits from multiple OAK interfaces:
 
 * **`BasicOntologyInterface`**: Handles labels, aliases, and metadata mapping.
+* **`OboGraphInterface`**: Nodes, `ancestors`, `descendants`, graphs and paths, see [Walking the hierarchy](#walking-the-hierarchy).
 * **`RelationGraphInterface`**: Relationships that follow from the stored ones through the `Is a` hierarchy, see [Entailed relationships](#entailed-relationships).
 * **`SearchInterface`**: Enables term-based searching across labels and synonyms.
 * **`TextAnnotatorInterface`**: Provides a pipeline to ground raw text spans to OMOP Concept IDs using the internal `KnowledgeGraph` resolvers.
@@ -44,6 +45,18 @@ A stored relationship `A -R-> B1` entails `A -R-> B2` for every `B2` reached fro
 * The relationships of an ancestor are not inherited by its descendants.
 * Only concepts within the adapter's `concept_filter` are reported as entailed targets, though the climb passes through the others.
 * The incoming direction is the mirror image, and for a concept near the top of a hierarchy it returns very many relationships.
+
+### Walking the hierarchy
+`ancestors`, `descendants` and the graphs built on them follow the predicates you give, each walk taking one query for all start concepts. Without predicates they follow `rdfs:subClassOf`, the strict `Is a` hierarchy. oaklib walks every predicate in that case, but over all OMOP relationships a walk reaches most of the vocabulary within a few hops.
+
+```python
+adapter.ancestors("OMOP:258369", reflexive=False)
+adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20finding%20site"])
+```
+
+* `ancestors` and `descendants` report only concepts within the adapter's `concept_filter`, though the walk passes through the others. `ancestor_graph` and `descendant_graph` keep every concept on the walk so the graph stays connected.
+* `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary.
+* `descendants` of a concept near the top of a hierarchy return very many concepts.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.
