@@ -50,6 +50,30 @@ These three thresholds are judgement thresholds chosen with the script. They are
 
 `src/omop_graph/data/generalises_provenance.json` records the vocabulary release and date of the run, all parameters, how many proposals change at nearby thresholds, the flags that were changed to follow the audit, and the nine relationships whose flag was kept or left empty against the proposal. Where the check is mixed or cannot be run, such as for vocabularies whose hierarchy does not follow their attributes, the flag stays empty. The check measures whether the data is consistent under inheritance, not whether the claim holds, so an empty flag does not mean the relationship does not generalise.
 
+## Selecting Edges
+
+An `EdgeFilter` selects edges, and every function that reads edges takes one: `kg.edges`, `kg.relationships`, the path functions and traversal. All its fields are optional and combine with AND:
+
+| Field | Selects |
+|---|---|
+| `predicate_ids` | These relationship ids. |
+| `predicate_kinds` | Relationships of these `PredicateKind`s. |
+| `predicate_subkinds` | Relationships of these subkinds. An unknown subkind raises, listing the valid ones. |
+| `active_only` | Edges that are not deprecated. Defaults to `True`. |
+| `on` | Edges whose validity period covers this date. |
+| `within_domain` | Edges whose two concepts share a domain. Defaults to `False`, since most attribute edges cross domains. |
+
+The edges of a relationship without a classification are skipped, so a filter never returns them.
+
+```python
+from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.edges import EdgeFilter
+
+hierarchy = EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY}))
+for subject_id, relationship_id, object_id in kg.relationships((concept_id,), None, hierarchy):
+    print(relationship_id, object_id)
+```
+
 ## Predicate Classification
 
 To allow reproduction and evaluation of this approach, we provide clear guidelines how we classified edge predicates of the OMOP CDM into the aforementioned groups. The following table provides exact descriptions about each `class` and `subclass`.

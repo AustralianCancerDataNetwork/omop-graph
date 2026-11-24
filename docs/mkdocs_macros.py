@@ -6,6 +6,13 @@ import pandas as pd
 
 def define_env(env):
     @env.macro
+    def oaklib_compliance() -> str:
+        """The tables of implemented, unsupported and unimplemented oaklib interfaces."""
+        from omop_graph.oaklib_interface._compliance import render_markdown
+
+        return render_markdown()
+
+    @env.macro
     def to_grouped_table(
         file_path: str,
         group_cols: list[int] | None = None,

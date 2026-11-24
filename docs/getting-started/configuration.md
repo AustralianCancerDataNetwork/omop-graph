@@ -21,7 +21,7 @@ omop-config configure omop_graph
 
 | Field | References | Description |
 |---|---|---|
-| `cdm_db` | a `[databases.*]` entry, `kind = "cdm"` | Shared by naming convention with omop-alchemy's own `cdm_db` field |
+| `cdm_db` | a `[databases.*]` entry, `kind = "cdm"` | Shared by naming convention with omop-alchemy's own `cdm_db` field. The knowledge graph and the [OAK adapter](../oaklib/interface.md) use it when no database is named |
 | `embedding_model_name` | a `[models.*]` entry, optional | Not read by omop-graph itself; a caller resolving embedding-based grounding on omop-graph's behalf (e.g. omop-spires) can use it the same way it uses `cdm_db` |
 | `vector_store_name` | a `[vector_stores.*]` entry, optional | Same reasoning as `embedding_model_name` |
 | `max_depth` | plain int, default `6` | Maximum graph traversal depth for pathfinding and grounding |

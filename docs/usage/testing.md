@@ -7,7 +7,7 @@ This page summarizes how tests are configured in `omop-graph` and what is curren
 The test runner configuration lives in `pytest.toml` at the repository root:
 
 - `testpaths = ["tests"]`
-- `addopts = ["-rf", "-rx", "--disable-pytest-warnings"]`
+- `addopts = ["-rf", "-rx", "--disable-pytest-warnings", "-m", "not db_dialect"]`, which leaves out the PostgreSQL-only suite
 - CLI logging enabled at `DEBUG`, filtered to `omop_graph`/`orm_loader`/`omop_spires`/`tests` namespaces (an autouse session fixture in `tests/conftest.py`)
 
 ## Layout
@@ -28,6 +28,9 @@ The tests are grouped by what they cover, in folders under `tests`:
 The default suite runs graph queries against an **in-memory SQLite mock CDM** (`tests/fixtures/mock_cdm.py`'s `mock_cdm_engine_sqlite` fixture, used by `mock_cdm_kg`). PostgreSQL-only integration tests use the separate `mock_cdm_engine` fixture and oa-configurator's isolated test database fixture. Current SQLite coverage includes:
 
 - Grounding behavior from text inputs to expected OMOP concept IDs
+- The knowledge graph: edge selection, traversal, enumeration and the two kinds of ancestry
+- The relationship classification data and loader
+- The oaklib adapter, one file per interface, each on a small CDM built row by row, and a compliance test that every method an implemented interface leaves unimplemented is either implemented or registered as unsupported
 - Optional full-text behavior guards when sidecar full-text metadata/columns are not present
 - KnowledgeGraph full-text lookup returning no matches when SQLite does not support full-text search
 

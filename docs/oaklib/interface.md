@@ -6,12 +6,12 @@ The `omop-graph` library provides an adapter for the [Ontology Access Kit (OAK)]
 
 ## Overview
 
-The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements core OAK interfaces for searching, graph traversal, and text annotation.
+The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements the OAK interfaces for labels and metadata, relationships and entailment, graph traversal, mappings, searching, and text annotation. The adapter only reads: vocabularies are loaded with `omop-maint`, and embeddings with `omop-emb`.
 
 ### Compliance Status
-!!! info "Development Note"
-    
-    This interface is designed to adhere to OAK’s general design principles to ensure cross-compatibility with the ecosystem. While core features like searching and hierarchy traversal are stable, some advanced OWL-specific methods (like global relationship enumeration) are currently being refined to better align with the RDBMS nature of OMOP.
+The adapter implements the oaklib interfaces below and raises `OMOPUnsupportedError`, with the reason, for the methods that have no OMOP meaning. These tables are generated from the code, and a test checks that every method that raises `NotImplementedError` in an implemented interface is either implemented or listed here.
+
+{{ oaklib_compliance() }}
 
 ---
 
@@ -24,12 +24,25 @@ The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies,
 ### `OMOPAlchemyImplementation` 
 The primary adapter class that inherits from multiple OAK interfaces:
 
-* **`BasicOntologyInterface`**: Handles labels, aliases, and metadata mapping.
+* **`BasicOntologyInterface`**: Labels (also in other languages), aliases, ontologies, deprecation and replacements, relationships, and the roots, leaves and singletons of the hierarchy.
 * **`MappingProviderInterface`**: SSSOM mappings from the identity and mapping relationships, see [Mappings](#mappings).
 * **`OboGraphInterface`**: Nodes, `ancestors`, `descendants`, graphs and paths, see [Walking the hierarchy](#walking-the-hierarchy).
 * **`RelationGraphInterface`**: Relationships that follow from the stored ones through the `Is a` hierarchy, see [Entailed relationships](#entailed-relationships).
-* **`SearchInterface`**: Enables term-based searching across labels and synonyms.
-* **`TextAnnotatorInterface`**: Provides a pipeline to ground raw text spans to OMOP Concept IDs using the internal `KnowledgeGraph` resolvers.
+* **`SearchInterface`**: Term-based searching across labels, synonyms and identifiers, see [Searching and Traversal](#searching-and-traversal).
+* **`TextAnnotatorInterface`**: Grounds raw text to OMOP Concept IDs with the [grounding pipeline](../reasoning/grounding.md), see [Text Annotation](#text-annotation-grounding).
+
+### Identifiers
+| What | CURIE |
+| --- | --- |
+| A concept | `OMOP:<concept_id>`, for example `OMOP:313217`. A `vocabulary_id:concept_code`, such as `SNOMED:49436004`, is accepted as input. |
+| `Is a` | `rdfs:subClassOf` |
+| Any other relationship | `OMOP_REL:<relationship_id>`, percent-encoded, for example `OMOP_REL:Has%20finding%20site` |
+| An ontology | `OMOP:<vocabulary_concept_id>`, one for each vocabulary |
+| A category | `OMOP:<domain_concept_id>`, the domain of the concept |
+
+* A relationship is shown from the child to the parent: for hierarchy relationships only the upward direction (`Is a`) is listed, and the children of a concept are the subjects of the relationships into it. The downward direction (`Subsumes`) can be asked for by name.
+* A vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`, is written `Nebraska_Lexicon` in CURIEs, and either spelling is accepted as input.
+* `entities`, `roots`, `leafs` and `singletons` list active standard and classification concepts. Pass `concept_filter=ConceptFilter(...)` to the constructor to change that.
 
 ### Entailed relationships
 A stored relationship `A -R-> B1` entails `A -R-> B2` for every `B2` reached from `B1` by following `Is a` upwards, repeatedly. `R` is any relationship, including `Is a` itself.
@@ -114,6 +127,8 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 
 adapter = OMOPAlchemyImplementation(resolved=resolve_cdm_database("cdm_db"))
 ```
+
+The constructor also takes an existing `KnowledgeGraph` as `kg`, a `concept_filter` for the concepts the adapter lists, and `standardise` (see [Walking the hierarchy](#walking-the-hierarchy)).
 
 ### Searching and Traversal
 Since the adapter implements the `SearchInterface`, you can perform standardized searches:

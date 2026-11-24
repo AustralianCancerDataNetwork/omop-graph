@@ -15,27 +15,17 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
-from oaklib.interfaces import (
-    BasicOntologyInterface,
-    MappingProviderInterface,
-    OboGraphInterface,
-    RelationGraphInterface,
-    SearchInterface,
-    TextAnnotatorInterface,
-)
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-from omop_graph.oaklib_interface.unsupported import UNSUPPORTED
-
-CLAIMED = (
-    BasicOntologyInterface,
-    MappingProviderInterface,
-    OboGraphInterface,
-    RelationGraphInterface,
-    SearchInterface,
-    TextAnnotatorInterface,
+from omop_graph.oaklib_interface._compliance import (
+    claimed_interface_classes,
+    render_markdown,
+    unclaimed_interface_names,
 )
+from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
+from omop_graph.oaklib_interface.unsupported import NOT_CLAIMED, UNSUPPORTED
+
+CLAIMED = tuple(claimed_interface_classes().values())
 
 PENDING: frozenset[str] = frozenset()
 
@@ -124,3 +114,22 @@ def test_methods_that_raise_in_oaklib_are_implemented_or_registered(
 
     assert function is not vars(interface)[name]
     assert f"{interface.__name__}.{name}" in UNSUPPORTED or not _raises_not_implemented(function)
+
+
+def test_every_oaklib_interface_is_implemented_or_listed_with_a_reason() -> None:
+    assert unclaimed_interface_names() == set(NOT_CLAIMED)
+
+
+def test_every_unsupported_method_belongs_to_an_implemented_interface() -> None:
+    claimed = claimed_interface_classes()
+
+    for key in UNSUPPORTED:
+        interface, _, method = key.partition(".")
+        assert hasattr(claimed[interface], method), key
+
+
+def test_the_compliance_tables_list_the_registries() -> None:
+    markdown = render_markdown()
+
+    assert all(f"`{key}`" in markdown for key in UNSUPPORTED)
+    assert all(f"`{name}`" in markdown for name in NOT_CLAIMED)

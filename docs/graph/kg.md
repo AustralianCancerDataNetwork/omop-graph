@@ -17,10 +17,11 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 ## Key Features
 
 * **SQLAlchemy Integration:** Efficiently manages database sessions and executes optimized queries against the CDM.
-* **LRU Caching:** Implements high-performance caching for frequent lookups, such as concept IDs, labels, and predicates, to minimize database round-trips.
-* **Semantic Predicates:** Resolves standard OMOP relationship IDs into rich `Predicate` objects that understand hierarchy and directionality. See [here for more information](edges.md)
+* **Cached Classification:** Reads the [relationship classification](edges.md) once, when the graph is created, and keeps the valid domains and vocabularies after their first use.
+* **Semantic Predicates:** Resolves standard OMOP relationship IDs into rich `Predicate` objects that understand hierarchy and directionality, and selects edges with an `EdgeFilter`. See [here for more information](edges.md)
 * **Flexible Search:** Supports exact matches, fuzzy `ILIKE` searches, and full-text search (bag-of-words) across concept names and synonyms. See [documentation for more information](../reasoning/resolvers.md)
-* **Graph Traversal:** Simple methods to retrieve `edges`, `parents`, `children`, `roots`, and `leaves`.
+* **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
+* **Standardisation and Mappings:** `standardise` finds the standard concepts a concept stands for, and `mappings` lists the mappings of concepts with their vocabularies.
 * **Extensibility:** Includes a dedicated namespace for embedding-based operations (requires `omop-emb` - see [Installation instructions](../usage/installation.md#embedding-rag) for more information).
 
 ---
@@ -45,6 +46,28 @@ if matches:
     parents = kg.parents(matches[0].matched_concept_id)
     print(f"Parent IDs: {parents}")
 ```
+
+---
+
+### Two Kinds of Ancestry
+
+The graph has two notions of ancestry, and they differ:
+
+| | Source | Holds |
+|---|---|---|
+| `parents`, `children`, and the ancestor checks of [grounding](../reasoning/grounding.md) | OMOP's `concept_ancestor` table | All ancestry OMOP precomputes: `Is a`, but also classification such as ATC classes, SPL labels and cohorts. Only standard and classification concepts. |
+| `closure`, `entailed_relationships` and the [OAK adapter](../oaklib/interface.md) | The active `Is a` edges | Strict `Is a` ancestors and descendants, including concepts that are not standard. |
+
+For example Metformin has no `Is a` ancestors but six ancestors in `concept_ancestor`, ATC classes such as "Biguanides". `closure` walks one query for a whole batch of concepts, and takes an `EdgeFilter` to follow other relationships:
+
+```python
+from omop_graph.extensions.omop_alchemy import HierarchyDirection
+
+kg.closure([concept_id])[concept_id]  # strict Is a ancestors
+kg.closure([concept_id], HierarchyDirection.DOWN)[concept_id]  # strict Is a descendants
+```
+
+A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg.standardise([concept_id])` maps it to the standard concepts at the end of its identity edges such as `Maps to`, which can be several.
 
 ---
 
