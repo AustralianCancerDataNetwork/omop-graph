@@ -26,6 +26,7 @@ from omop_graph.extensions.omop_alchemy import (
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.codec import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
+from omop_graph.reasoning.concept_handlers import standardise_ids
 
 (
     DISEASE,
@@ -39,8 +40,9 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
     LOOP_A,
     LOOP_B,
 ) = range(200, 210)
-OUTDATED, OUTER_ROOT = 210, 211
+OUTDATED, OUTER_ROOT, SOURCE, SOURCE_TWO, ORPHAN = range(210, 215)
 SITE = "OMOP_REL:Has%20finding%20site"
+MAPS_TO = "OMOP_REL:Maps%20to"
 START, END = date(2020, 1, 1), date(2099, 12, 31)
 
 
@@ -116,9 +118,29 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
                 *(concept(concept_id) for concept_id in range(DISEASE, LOOP_B + 1)),
                 concept(OUTDATED, invalid_reason="U", standard_concept=None),
                 concept(OUTER_ROOT),
+                *(
+                    concept(concept_id, standard_concept=None)
+                    for concept_id in (SOURCE, SOURCE_TWO, ORPHAN)
+                ),
                 relationship("Is a", "Subsumes"),
                 relationship("Subsumes", "Is a"),
                 relationship("Has finding site", "Finding site of"),
+                relationship("Maps to", "Mapped from"),
+                RelationshipClass(
+                    predicate_kind=PredicateKind.IDENTITY,
+                    predicate_subkind="Exact",
+                    description="maps",
+                    semantics="maps",
+                    inference="none",
+                ),
+                RelationshipMapping(
+                    relationship_id="Maps to",
+                    predicate_kind=PredicateKind.IDENTITY,
+                    predicate_subkind="Exact",
+                ),
+                edge(SOURCE, "Maps to", LUNG_CANCER),
+                edge(SOURCE_TWO, "Maps to", LUNG_CANCER),
+                edge(SOURCE_TWO, "Maps to", LUNG),
                 RelationshipClass(
                     predicate_kind=PredicateKind.HIERARCHY,
                     predicate_subkind="Taxonomic - up",
@@ -224,8 +246,9 @@ def test_entailed_incoming_reaches_through_descendants(adapter) -> None:
     assert set(adapter.entailed_incoming_relationships(curie(THORAX_ORGAN))) == {
         (IS_A, curie(LUNG)),
         (SITE, curie(LUNG_CANCER)),
+        (MAPS_TO, curie(SOURCE_TWO)),
     }
-    assert set(adapter.entailed_incoming_relationships(curie(DISEASE))) == {
+    assert set(adapter.entailed_incoming_relationships(curie(DISEASE), [IS_A])) == {
         (IS_A, curie(CANCER)),
         (IS_A, curie(SMOKING_RELATED)),
         (IS_A, curie(LUNG_CANCER)),
@@ -264,7 +287,8 @@ def test_by_curie_variants_delegate(adapter) -> None:
         (IS_A, curie(THORAX_ORGAN))
     }
     assert set(adapter.entailed_incoming_relationships_by_curie(curie(LUNG))) == {
-        (SITE, curie(LUNG_CANCER))
+        (SITE, curie(LUNG_CANCER)),
+        (MAPS_TO, curie(SOURCE_TWO)),
     }
 
 
@@ -415,3 +439,77 @@ def test_synonyms_of_many_concepts(adapter) -> None:
 
     assert {c for c, _ in found} == {curie(LUNG_CANCER)}
     assert {spv.pred for _, spv in found} == {"hasExactSynonym"}
+
+
+@pytest.fixture(scope="module")
+def standardising(adapter) -> OMOPAlchemyImplementation:
+    return OMOPAlchemyImplementation(kg=adapter.kg, standardise=True)
+
+
+def test_a_concept_stands_for_its_standard_concepts(adapter) -> None:
+    assert adapter.kg.standardise([LUNG_CANCER, SOURCE, SOURCE_TWO, ORPHAN, 999999]) == {
+        LUNG_CANCER: (LUNG_CANCER,),
+        SOURCE: (LUNG_CANCER,),
+        SOURCE_TWO: (LUNG_CANCER, LUNG),
+        ORPHAN: (),
+        999999: (),
+    }
+
+
+def test_standardise_ids_picks_the_lowest_standard_concept(adapter) -> None:
+    assert standardise_ids({SOURCE_TWO, ORPHAN, CANCER}, adapter.kg) == {
+        SOURCE_TWO: LUNG_CANCER,
+        ORPHAN: ORPHAN,
+        CANCER: CANCER,
+    }
+
+
+def test_a_non_standard_concept_has_no_ancestors_by_default(adapter) -> None:
+    assert list(adapter.ancestors(curie(SOURCE), reflexive=False)) == []
+
+
+def test_a_non_standard_concept_takes_the_ancestors_of_its_standard_concepts(
+    standardising,
+) -> None:
+    assert set(standardising.ancestors(curie(SOURCE), reflexive=False)) == {
+        curie(c) for c in (LUNG_CANCER, CANCER, SMOKING_RELATED, DISEASE, OUTER_ROOT)
+    }
+    assert set(standardising.ancestors(curie(SOURCE_TWO), reflexive=False)) >= {
+        curie(THORAX_ORGAN),
+        curie(DISEASE),
+    }
+    assert list(standardising.ancestors(curie(ORPHAN), reflexive=False)) == []
+
+
+def test_a_standard_concept_walks_as_before_with_standardise(adapter, standardising) -> None:
+    assert set(standardising.ancestors(curie(LUNG_CANCER))) == set(
+        adapter.ancestors(curie(LUNG_CANCER))
+    )
+
+
+def test_a_non_standard_concept_takes_the_entailed_relationships_of_its_standard_concepts(
+    adapter, standardising
+) -> None:
+    own = set(adapter.entailed_outgoing_relationships(curie(SOURCE), [IS_A, SITE]))
+    assert own == set()
+    assert set(standardising.entailed_outgoing_relationships(curie(SOURCE), [IS_A, SITE])) == {
+        (IS_A, curie(CANCER)),
+        (IS_A, curie(DISEASE)),
+        (IS_A, curie(SMOKING_RELATED)),
+        (IS_A, curie(OUTER_ROOT)),
+        (SITE, curie(LUNG)),
+        (SITE, curie(THORAX_ORGAN)),
+    }
+
+
+def test_entailed_relationships_are_reported_for_the_concept_that_stands_in(standardising) -> None:
+    triples = set(
+        standardising.relationships(
+            subjects=[curie(SOURCE)], predicates=[SITE], include_entailed=True
+        )
+    )
+
+    assert triples == {
+        (curie(SOURCE), SITE, curie(LUNG)),
+        (curie(SOURCE), SITE, curie(THORAX_ORGAN)),
+    }

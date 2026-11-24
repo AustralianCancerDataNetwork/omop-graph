@@ -60,6 +60,12 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         The concepts the adapter enumerates. Defaults to active standard and
         classification concepts. ``limit`` and ``concept_ids`` are rejected because they
         would silently truncate every enumeration.
+    standardise : bool
+        If True, a non-standard concept stands in for the standard concepts it maps to
+        when walking the hierarchy and entailing relationships. Its walks include those
+        concepts and their ancestors, and its entailed relationships those of each of them,
+        reported for the concept itself. Off by default, since the result then holds
+        concepts that no stored edge connects to the concept.
 
     Raises
     ------
@@ -72,12 +78,14 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         *args,
         kg: KnowledgeGraph,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
         **kwargs,
     ):
         if concept_filter.limit is not None or concept_filter.concept_ids is not None:
             raise ValueError("The adapter's concept_filter must not set limit or concept_ids.")
         super().__init__(*args, kg=kg, **kwargs)
         self.concept_filter = concept_filter
+        self.standardise = standardise
 
     @cached_property
     def predicates_by_curie(self) -> dict[PRED_CURIE, Predicate]:
@@ -514,9 +522,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 subject_ids, object_ids = object_ids, subject_ids
             entailed = (
                 (o, p, s) if invert else (s, p, o)
-                for s, p, o in self.kg.entailed_relationships(
-                    subject_ids, object_ids, edge_filter, self.concept_filter
-                )
+                for s, p, o in self._entailed(subject_ids, object_ids, edge_filter)
             )
             relationships = tuple(entailed)
         else:
@@ -585,6 +591,59 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 self.codec.predicate_curie(p),
                 self.codec.concept_curie(o),
             )
+
+    def _standing_in(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
+        """
+        Map each concept to the concepts it stands in for: itself, and with ``standardise``
+        also the standard concepts it maps to.
+        """
+        ids = tuple(dict.fromkeys(concept_ids))
+        if not self.standardise:
+            return {concept_id: (concept_id,) for concept_id in ids}
+        return {
+            concept_id: tuple(dict.fromkeys((concept_id, *targets)))
+            for concept_id, targets in self.kg.standardise(ids).items()
+        }
+
+    def _entailed(
+        self,
+        subject_ids: tuple[int, ...] | None,
+        object_ids: tuple[int, ...] | None,
+        edge_filter: EdgeFilter,
+    ) -> Iterator[tuple[int, str, int]]:
+        """
+        Entailed relationships of ids, where with ``standardise`` a concept also has those of
+        its standard concepts. The subjects, or the objects when there are no subjects,
+        are the ones that stand in, and are reported in place of their standard concepts.
+        """
+        if not self.standardise:
+            yield from self.kg.entailed_relationships(
+                subject_ids, object_ids, edge_filter, self.concept_filter
+            )
+            return
+        by_subject = subject_ids is not None
+        assert subject_ids is not None or object_ids is not None
+        standing = self._standing_in(subject_ids if subject_ids is not None else object_ids or ())
+        origins: dict[int, list[int]] = defaultdict(list)
+        for origin, stand_ins in standing.items():
+            for stand_in in stand_ins:
+                origins[stand_in].append(origin)
+        expanded = tuple(origins)
+        seen: set[tuple[int, str, int]] = set()
+        if by_subject:
+            triples = self.kg.entailed_relationships(
+                expanded, object_ids, edge_filter, self.concept_filter
+            )
+            reported = ((origin, p, o) for s, p, o in triples for origin in origins[s])
+        else:
+            triples = self.kg.entailed_relationships(
+                None, expanded, edge_filter, self.concept_filter
+            )
+            reported = ((s, p, origin) for s, p, o in triples for origin in origins[o])
+        for triple in reported:
+            if triple not in seen:
+                seen.add(triple)
+                yield triple
 
     def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """Stream the entailed relationships of every concept, one batch of subjects at a time."""

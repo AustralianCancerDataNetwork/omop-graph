@@ -142,14 +142,23 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
                 self.codec.parse_predicate(p) for p in self._traversal_predicates(predicates)
             )
         )
+        standing = self._standing_in(ids.values())
         reached = self.kg.closure(
-            ids.values(),
+            {stand_in for stand_ins in standing.values() for stand_in in stand_ins},
             direction,
             edge_filter,
             self.concept_filter if scoped else None,
         )
         return {
-            curie: [self.codec.concept_curie(other) for other in sorted(reached[concept_id])]
+            curie: [
+                self.codec.concept_curie(other)
+                for other in sorted(
+                    set().union(
+                        *(reached[stand_in] for stand_in in standing[concept_id]),
+                        set(standing[concept_id]) - {concept_id},
+                    )
+                )
+            ]
             for curie, concept_id in ids.items()
         }
 

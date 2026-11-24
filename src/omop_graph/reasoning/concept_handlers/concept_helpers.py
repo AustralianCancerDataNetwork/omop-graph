@@ -14,49 +14,24 @@ def standardise_ids(
     kg: KnowledgeGraph,
 ) -> dict[int, int]:
     """
-    Map a set of concept IDs to their Standard Concept IDs.
+    Map a set of concept IDs to a Standard Concept ID.
 
-    Currently disabled: always raises ``NotImplementedError``. The predicate
-    search this relied on changed and the body below was never updated to
-    match (it also still calls ``kg.iter_edges(predicate=...)``, a parameter
-    that no longer exists; see ``predicate_ids``/``predicate_kinds``).
-
-    Intended behavior once reimplemented: attempts to find a 'Maps to'
-    relationship for each input ID. If a 'Maps to' edge exists, the target ID
-    is used (Standard Concept). If no such edge exists, the original ID is
-    returned (fallback to self).
+    A concept that stands for several standard concepts maps to the lowest id among them,
+    and one that stands for none maps to itself.
 
     Parameters
     ----------
     ids : set[int]
         A set of OMOP Concept IDs to standardize.
     kg : KnowledgeGraph
-        The graph instance used to look up 'Maps to' relationships.
+        The graph instance used to look up identity relationships.
 
     Returns
     -------
     dict[int, int]
         A dictionary mapping the original input ID to its standardized ID.
     """
-    mapping: dict[int, int] = {}
-
-    raise NotImplementedError(
-        "predicate search has changed. Needs to change here too. Subsumes no longer valid."
-    )
-    for cid in ids:
-        mapped = None
-        # Look for the first 'Maps to' relationship
-        with kg.session_factory() as session:
-            for e in kg.iter_edges(
-                session=session,
-                concept_ids=cid,
-                direction="out",
-                predicate="Maps to",
-            ):
-                mapped = e.object_id
-                break  # Assume the first mapping is sufficient
-
-        # Use the mapped ID if found, otherwise keep the original
-        mapping[cid] = mapped if mapped is not None else cid
-
-    return mapping
+    return {
+        concept_id: targets[0] if targets else concept_id
+        for concept_id, targets in kg.standardise(ids).items()
+    }

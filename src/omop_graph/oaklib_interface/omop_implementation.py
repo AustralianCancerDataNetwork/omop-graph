@@ -76,6 +76,9 @@ class OMOPAlchemyImplementation(
     concept_filter : ConceptFilter, optional
         The concepts the adapter enumerates. Defaults to active standard and
         classification concepts.
+    standardise : bool, optional
+        If True, a non-standard concept stands in for the standard concepts it maps to
+        when walking the hierarchy and entailing relationships. Defaults to False.
     """
 
     # oaklib's class_resolver keys plugins by class name; this adds the "omop:" scheme.
@@ -89,6 +92,7 @@ class OMOPAlchemyImplementation(
         kg: KnowledgeGraph | None = None,
         kg_emb_config: KnowledgeGraphEmbeddingConfiguration | None = None,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
         **kwargs,
     ):
         if resource is None:
@@ -102,4 +106,10 @@ class OMOPAlchemyImplementation(
             )
             bind_default_renderers(kg)
 
-        super().__init__(resource=resource, kg=kg, concept_filter=concept_filter, **kwargs)
+        super().__init__(
+            resource=resource,
+            kg=kg,
+            concept_filter=concept_filter,
+            standardise=standardise,
+            **kwargs,
+        )

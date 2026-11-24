@@ -81,6 +81,9 @@ class EdgeFilter:
 IS_A_FILTER = EdgeFilter(predicate_ids=frozenset({IS_A_RELATIONSHIP_ID}))
 """Selects the active ``Is a`` edges."""
 
+IDENTITY_FILTER = EdgeFilter(predicate_kinds=frozenset({PredicateKind.IDENTITY}))
+"""Selects the active identity edges, such as ``Maps to``."""
+
 
 @dataclass(frozen=True)
 class EdgeView:

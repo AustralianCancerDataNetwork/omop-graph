@@ -52,7 +52,7 @@ from ..extensions.omop_alchemy import (
 )
 from ._streaming import stream
 from .base import GraphBackend
-from .edges import IS_A_FILTER, EdgeFilter, EdgeView, Predicate
+from .edges import IDENTITY_FILTER, IS_A_FILTER, EdgeFilter, EdgeView, Predicate
 from .nodes import (
     AncestorMatch,
     ConceptView,
@@ -744,6 +744,58 @@ class KnowledgeGraph(GraphBackend):
             in_scope = self._within(set().union(*reached.values()), concept_filter)
             reached = {concept_id: others & in_scope for concept_id, others in reached.items()}
         return {concept_id: frozenset(others) for concept_id, others in reached.items()}
+
+    def standardise(
+        self, concept_ids: Iterable[int], edge_filter: EdgeFilter = IDENTITY_FILTER
+    ) -> dict[int, tuple[int, ...]]:
+        """
+        Find the standard concepts each concept stands for.
+
+        A standard or classification concept stands for itself. Any other concept stands
+        for the standard concepts at the end of its identity edges, such as ``Maps to``
+        and ``Concept replaced by``, which may be several. Edges to non-standard concepts
+        are not followed further.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            Concepts to standardise.
+        edge_filter : EdgeFilter
+            The edges that map a concept to its standard concepts.
+
+        Returns
+        -------
+        dict[int, tuple[int, ...]]
+            Every requested concept mapped to its standard concepts in ascending order,
+            empty when it has none or does not exist.
+        """
+        ids = tuple(dict.fromkeys(concept_ids))
+        standard = self._standard_among(ids)
+        mapped: dict[int, set[int]] = {concept_id: set() for concept_id in ids}
+        sources = tuple(concept_id for concept_id in ids if concept_id not in standard)
+        for batch in batched(sources, self.LOOKUP_BATCH_SIZE):
+            for subject_id, _, object_id in self.relationships(batch, None, edge_filter):
+                mapped[subject_id].add(object_id)
+        standard_targets = self._standard_among(set().union(*mapped.values()))
+        return {
+            concept_id: (
+                (concept_id,)
+                if concept_id in standard
+                else tuple(sorted(mapped[concept_id] & standard_targets))
+            )
+            for concept_id in ids
+        }
+
+    def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:
+        """Select the standard or classification concepts among *concept_ids*."""
+        found: set[int] = set()
+        for batch in batched(set(concept_ids), self.LOOKUP_BATCH_SIZE):
+            found.update(
+                view.concept_id
+                for view in self.concept_views(batch, sort=False)
+                if view.standard_concept
+            )
+        return found
 
     def _within(self, concept_ids: Iterable[int], concept_filter: ConceptFilter) -> set[int]:
         """Select the concepts among *concept_ids* that *concept_filter* selects."""

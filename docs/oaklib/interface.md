@@ -55,6 +55,7 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 ```
 
 * `ancestors` and `descendants` report only concepts within the adapter's `concept_filter`, though the walk passes through the others. `ancestor_graph` and `descendant_graph` keep every concept on the walk so the graph stays connected.
+* A non-standard concept has no ancestry, so its `ancestors` are empty. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the standard concepts it maps to: its walks include them and their ancestors, and its entailed relationships are theirs, reported for the concept itself. This is off by default because the result holds concepts that no stored edge connects to the concept.
 * `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary.
 * `descendants` of a concept near the top of a hierarchy return very many concepts.
 
