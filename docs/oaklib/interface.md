@@ -6,7 +6,7 @@ The `omop-graph` library provides an adapter for the [Ontology Access Kit (OAK)]
 
 ## Overview
 
-The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements the OAK interfaces for labels and metadata, relationships and entailment, graph traversal, mappings, searching, and text annotation. The adapter only reads: vocabularies are loaded with `omop-maint`, and embeddings with `omop-emb`.
+The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements the OAK interfaces for labels and metadata, relationships and entailment, graph traversal, mappings, searching, and text annotation. The adapter only reads: vocabularies are loaded with `omop-alchemy`, and embeddings with `omop-emb`.
 
 ### Compliance Status
 The adapter implements the oaklib interfaces below and raises `OMOPUnsupportedError`, with the reason, for the methods that have no OMOP meaning. These tables are generated from the code, and a test checks that every method that raises `NotImplementedError` in an implemented interface is either implemented or listed here.

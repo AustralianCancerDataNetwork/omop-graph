@@ -72,7 +72,7 @@ from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers import ResolverPipeline
 
 constraints = GroundingConstraints(
-    parent_ids=(441840,),  # 'Clinical finding' — only accept descendants of this ancestor
+    parent_ids=(441840,),  # 'Clinical finding': only accept descendants of this ancestor
     search_constraint=ConceptFilter(
         domains=("Condition",),
         vocabularies=("SNOMED",),

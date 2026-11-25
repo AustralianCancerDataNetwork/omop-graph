@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
+from linkml_runtime.linkml_model.annotations import Annotation
 from oaklib.datamodels.text_annotator import TextAnnotationConfiguration
 from oaklib.datamodels.vocabulary import (
     OWL_ANNOTATION_PROPERTY,
@@ -15,7 +16,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-from omop_graph.oaklib_interface.text_annotator import OMOPTextAnnotatorInterface
+from omop_graph.oaklib_interface.text_annotator import AnnotationKey, OMOPTextAnnotatorInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 WHOLE_TEXT = TextAnnotationConfiguration(matches_whole_text=True)
@@ -48,6 +49,28 @@ def test_annotate_text_without_whole_text_matching_is_unsupported(
 
     with pytest.raises(OMOPUnsupportedError, match="matches_whole_text"):
         interface.annotate_text("Kidney carcinoma term", configuration)
+
+
+def test_annotate_text_rejects_a_vocabulary_that_does_not_exist(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+    annotations = {AnnotationKey.VOCABS.value: Annotation(tag="vocabs", value="NoSuchVocabulary")}
+
+    with pytest.raises(ValueError, match="NoSuchVocabulary"):
+        list(interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT, annotations=annotations))
+
+
+def test_annotate_text_rejects_a_parent_id_that_names_no_concept(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+    annotations = {
+        AnnotationKey.PARENT_IDS.value: Annotation(tag="parent_ids", value="NoSuch:code")
+    }
+
+    with pytest.raises(ValueError, match="names no concept"):
+        list(interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT, annotations=annotations))
 
 
 def test_annotate_text_stops_at_the_limit(mock_cdm_kg: KnowledgeGraph) -> None:

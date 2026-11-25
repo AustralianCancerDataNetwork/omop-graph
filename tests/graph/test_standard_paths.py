@@ -187,7 +187,8 @@ def test_the_queries_made_do_not_grow_with_the_candidates(kg) -> None:
             nonlocal count
             count += 1
 
-        engine = kg.session_factory.kw["bind"]
+        with kg.session_factory() as session:
+            engine = session.get_bind()
         event.listen(engine, "before_cursor_execute", count_query)
         try:
             search(kg, candidates, targets)

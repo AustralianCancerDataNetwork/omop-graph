@@ -28,14 +28,17 @@ from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 from omop_graph.graph import KnowledgeGraph
-from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID, EdgeFilter, EdgeView, Predicate
+from omop_graph.graph.edges import (
+    IS_A_RELATIONSHIP_ID,
+    REPLACED_BY_RELATIONSHIP_ID,
+    EdgeFilter,
+    EdgeView,
+    Predicate,
+)
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
-from omop_graph.oaklib_interface.codec import (
-    REPLACED_BY_RELATIONSHIP_ID,
-    OMOPLanguage,
-)
+from omop_graph.oaklib_interface.codec import OMOPLanguage, OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 logger = logging.getLogger(__name__)
@@ -208,12 +211,12 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             metadata: METADATA_MAP = {
                 "id": [ontology],
                 LABEL_PREDICATE: [vocabulary.vocabulary_name],
-                "omop:vocabulary_id": [vocabulary.vocabulary_id],
+                OMOPMetadataKey.VOCABULARY_ID: [vocabulary.vocabulary_id],
             }
             if vocabulary.vocabulary_version:
                 metadata[OWL_VERSION_INFO] = [vocabulary.vocabulary_version]
             if vocabulary.vocabulary_reference:
-                metadata["omop:vocabulary_reference"] = [vocabulary.vocabulary_reference]
+                metadata[OMOPMetadataKey.VOCABULARY_REFERENCE] = [vocabulary.vocabulary_reference]
             return metadata
         return {}
 
@@ -580,8 +583,8 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Yield each relationship with the validity dates and ``invalid_reason`` of its edge.
 
-        Deprecated edges are included, so a relationship from :meth:`relationships` always
-        finds its edge.
+        Deprecated edges are included. A relationship without an edge, such as an entailed
+        one, has no metadata.
         """
         relationships = list(relationships)
         concept_ids = self._resolve_concepts({c for s, _, o in relationships for c in (s, o)})
@@ -603,11 +606,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             metadata: list[tuple[PRED_CURIE, str]] = []
             if edge is not None:
                 metadata = [
-                    ("omop:valid_start_date", f"{edge.valid_start_date}"),
-                    ("omop:valid_end_date", f"{edge.valid_end_date}"),
+                    (OMOPMetadataKey.VALID_START_DATE, f"{edge.valid_start_date}"),
+                    (OMOPMetadataKey.VALID_END_DATE, f"{edge.valid_end_date}"),
                 ]
                 if edge.invalid_reason:
-                    metadata.append(("omop:invalid_reason", edge.invalid_reason))
+                    metadata.append((OMOPMetadataKey.INVALID_REASON, edge.invalid_reason))
             yield relationship, metadata
 
     def _all_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
@@ -790,21 +793,21 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             m[LABEL_PREDICATE].append(cv.concept_name)
 
             # core OMOP metadata
-            m["omop:concept_id"].append(f"{cv.concept_id}")
-            m["omop:domain"].append(cv.domain_id)
-            m["omop:vocabulary"].append(cv.vocabulary_id)
-            m["omop:concept_class"].append(cv.concept_class_id)
-            m["omop:concept_code"].append(cv.concept_code)
+            m[OMOPMetadataKey.CONCEPT_ID].append(f"{cv.concept_id}")
+            m[OMOPMetadataKey.DOMAIN].append(cv.domain_id)
+            m[OMOPMetadataKey.VOCABULARY].append(cv.vocabulary_id)
+            m[OMOPMetadataKey.CONCEPT_CLASS].append(cv.concept_class_id)
+            m[OMOPMetadataKey.CONCEPT_CODE].append(cv.concept_code)
 
             if cv.standard_concept:
-                m["omop:standard_concept"].append("S")
+                m[OMOPMetadataKey.STANDARD_CONCEPT].append("S")
 
             # validity
-            m["omop:valid_start_date"].append(f"{cv.valid_start_date}")
-            m["omop:valid_end_date"].append(f"{cv.valid_end_date}")
+            m[OMOPMetadataKey.VALID_START_DATE].append(f"{cv.valid_start_date}")
+            m[OMOPMetadataKey.VALID_END_DATE].append(f"{cv.valid_end_date}")
 
             if cv.invalid_reason:
-                m["omop:invalid_reason"].append(cv.invalid_reason)
+                m[OMOPMetadataKey.INVALID_REASON].append(cv.invalid_reason)
 
             if not cv.is_active:
                 m[DEPRECATED_PREDICATE].append("true")

@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 IS_A_RELATIONSHIP_ID = "Is a"
 """The relationship id of the subclass edge. Its transitive closure is the strict hierarchy."""
 
+REPLACED_BY_RELATIONSHIP_ID = "Concept replaced by"
+"""The relationship id from a deprecated concept to the concept that replaces it."""
+
 
 @dataclass(frozen=True)
 class EdgeFilter:

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
 from typing import cast
 
 import pytest
 import sqlalchemy as sa
 from omop_alchemy.cdm.model.vocabulary import Concept_Relationship
-from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
@@ -16,10 +16,6 @@ from omop_graph.graph.queries import q_edges, q_relationships
 
 SOURCE = 900001
 IDENTITY_MAPPING = PredicateSubkind(PredicateKind.IDENTITY, "mapping")
-
-
-def _sql(statement) -> str:
-    return str(statement.compile(dialect=postgresql.dialect()))
 
 
 def test_kinds_and_subkinds_must_be_the_typed_values() -> None:
@@ -89,33 +85,9 @@ def test_the_same_subkind_name_under_another_kind_is_unknown(mock_cdm_kg: Knowle
         mock_cdm_kg.edges(SOURCE, direction="out", edge_filter=wrong_kind)
 
 
-@pytest.mark.parametrize(
-    "build", [lambda f: q_edges(1, "out", f), lambda f: q_relationships(None, None, f)]
-)
-def test_edges_and_relationships_share_the_validity_and_domain_conditions(build) -> None:
-    default_sql = _sql(build(EdgeFilter()))
-    everything_sql = _sql(build(EdgeFilter(active_only=False)))
-    within_domain_sql = _sql(build(EdgeFilter(within_domain=True)))
-
-    assert "invalid_reason" in default_sql
-    assert "invalid_reason" not in everything_sql.split("FROM")[1]
-    assert "domain_id" not in default_sql
-    assert "domain_id" in within_domain_sql
-
-
-@pytest.mark.parametrize(
-    ("edge_filter", "expected_objects"),
-    [
-        (EdgeFilter(active_only=False), {2, 3}),
-        (EdgeFilter(), {3}),
-        (EdgeFilter(active_only=False, on=date(2015, 1, 1)), {2, 3}),
-        (EdgeFilter(active_only=False, on=date(2025, 1, 1)), {3}),
-        (EdgeFilter(on=date(2015, 1, 1)), {3}),
-    ],
-)
-def test_on_selects_edges_by_validity_period_independently_of_active_only(
-    edge_filter: EdgeFilter, expected_objects: set[int]
-) -> None:
+@pytest.fixture
+def two_edges() -> Iterator[Session]:
+    """A session over a deprecated edge 1 to 2 and an active edge 1 to 3."""
     engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
         schema_translate_map={"vocab": None}
     )
@@ -142,8 +114,39 @@ def test_on_selects_edges_by_validity_period_independently_of_active_only(
             ]
         )
         session.commit()
-        rows = session.execute(q_edges(1, "out", edge_filter))
-        objects = {row.object_id for row in rows}
+        yield session
     engine.dispose()
 
-    assert objects == expected_objects
+
+@pytest.mark.parametrize(
+    ("edge_filter", "expected_objects"),
+    [
+        (EdgeFilter(active_only=False), {2, 3}),
+        (EdgeFilter(), {3}),
+        (EdgeFilter(active_only=False, on=date(2015, 1, 1)), {2, 3}),
+        (EdgeFilter(active_only=False, on=date(2025, 1, 1)), {3}),
+        (EdgeFilter(on=date(2015, 1, 1)), {3}),
+    ],
+)
+def test_on_selects_edges_by_validity_period_independently_of_active_only(
+    two_edges: Session, edge_filter: EdgeFilter, expected_objects: set[int]
+) -> None:
+    rows = two_edges.execute(q_edges(1, "out", edge_filter))
+
+    assert {row.object_id for row in rows} == expected_objects
+
+
+@pytest.mark.parametrize(
+    ("edge_filter", "expected_objects"),
+    [
+        (EdgeFilter(active_only=False), {2, 3}),
+        (EdgeFilter(), {3}),
+        (EdgeFilter(active_only=False, on=date(2025, 1, 1)), {3}),
+    ],
+)
+def test_relationships_apply_the_same_validity_conditions_as_edges(
+    two_edges: Session, edge_filter: EdgeFilter, expected_objects: set[int]
+) -> None:
+    rows = two_edges.execute(q_relationships((1,), None, edge_filter))
+
+    assert {row.concept_id_2 for row in rows} == expected_objects

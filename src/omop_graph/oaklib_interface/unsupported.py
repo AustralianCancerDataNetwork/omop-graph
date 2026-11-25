@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 _READ_ONLY = (
     "The OMOP adapter only reads. Vocabulary data is written by loading Athena releases "
-    "with orm-loader, and embeddings by omop-emb."
+    "with the omop-alchemy CLI, and embeddings by omop-emb."
 )
 _NO_EDGE_INDEX = (
     "Building the edge index loads every concept relationship into memory. "

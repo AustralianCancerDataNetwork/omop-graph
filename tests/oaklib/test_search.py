@@ -26,7 +26,7 @@ from omop_graph.oaklib_interface.codec import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED, PERCENT = range(400, 407)
-SPACED_CODE = "C34.9"
+SPACED_CODE = "C34 9"
 
 
 def curie(concept_id: int) -> str:
@@ -60,6 +60,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         concept(RETIRED, "Cancer old", standard_concept=None, invalid_reason="U"),
         concept(PERCENT, "Dose of 100% oxygen"),
         synonym(CONTAINING, "Oat cell carcinoma", OMOPLanguage.ENGLISH),
+        synonym(CANCER, "Cancer", OMOPLanguage.ENGLISH),
     ]
     models = (Concept, Concept_Synonym, Vocabulary, RelationshipClass, RelationshipMapping)
     with sqlite_cdm(models, rows) as sessions:

@@ -14,18 +14,10 @@ from oaklib.datamodels.search import (
 from oaklib.interfaces import SearchInterface
 from oaklib.types import CURIE
 
-from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 
 logger = logging.getLogger(__name__)
-
-SUPPORTED_PROPERTIES = {
-    SearchProperty.LABEL.text,
-    SearchProperty.ALIAS.text,
-    SearchProperty.IDENTIFIER.text,
-    SearchProperty.MAPPED_IDENTIFIER.text,
-}
 
 
 def _normalise_properties(config: SearchConfiguration) -> list[str]:
@@ -57,11 +49,18 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
     )
     """The search term syntaxes that raise ``ValueError``."""
 
+    SUPPORTED_PROPERTIES: ClassVar[frozenset[str]] = frozenset(
+        {
+            SearchProperty.LABEL.text,
+            SearchProperty.ALIAS.text,
+            SearchProperty.IDENTIFIER.text,
+            SearchProperty.MAPPED_IDENTIFIER.text,
+        }
+    )
+    """The search properties that have an effect."""
+
     IGNORED_FIELDS: ClassVar[tuple[str, ...]] = ("categories", "cursor", "is_complete")
     """The ``SearchConfiguration`` fields that have no effect."""
-
-    def __init__(self, *args, kg: KnowledgeGraph, **kwargs):
-        super().__init__(*args, kg=kg, **kwargs)
 
     def basic_search(
         self,
@@ -74,13 +73,11 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
         Labels are always searched, aliases with the ``ALIAS`` property and identifiers with
         ``IDENTIFIER`` or ``MAPPED_IDENTIFIER``. An identifier is an ``OMOP`` CURIE or a
         ``vocabulary:code``. Matches are ordered by kind, then labels before aliases, and
-        within a kind by standard, active, shorter and lower id. The kinds are:
-
-        - an identifier match
-        - an exact label, matched case-insensitively
-        - a label starting with the term, for the ``STARTS_WITH`` syntax or ``is_partial``
-        - a label containing the term, for ``is_partial``
-        - a full-text match, for ``is_fuzzy``, when the database has the index
+        within a kind by standard, active, shorter and lower id. The kinds are an identifier
+        match, an exact label matched case-insensitively, a label starting with the term (for
+        the ``STARTS_WITH`` syntax or ``is_partial``), a label containing the term (for
+        ``is_partial``) and a full-text match (for ``is_fuzzy``, when the database has the
+        index).
 
         Deprecated concepts are left out unless ``include_obsoletes_in_results`` is set.
         The adapter's ``concept_filter`` narrows the vocabularies and domains searched, but
@@ -112,11 +109,11 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
 
         props = set(_normalise_properties(config))
         ignored = [field for field in self.IGNORED_FIELDS if getattr(config, field)]
-        ignored += sorted(props - SUPPORTED_PROPERTIES - {SearchProperty.ANYTHING.text})
+        ignored += sorted(props - self.SUPPORTED_PROPERTIES - {SearchProperty.ANYTHING.text})
         if ignored:
             logger.info("The search configuration has no effect for %s.", ", ".join(ignored))
         if SearchProperty.ANYTHING.text in props:
-            props = SUPPORTED_PROPERTIES
+            props = set(self.SUPPORTED_PROPERTIES)
         by_identifier = bool(
             props & {SearchProperty.IDENTIFIER.text, SearchProperty.MAPPED_IDENTIFIER.text}
         )

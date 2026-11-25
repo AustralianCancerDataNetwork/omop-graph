@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Iterator
+from enum import StrEnum
 from itertools import islice
 from typing import ClassVar
 
@@ -16,7 +17,6 @@ from oaklib.interfaces.text_annotator_interface import nen_annotation
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph import KnowledgeGraph
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -24,10 +24,13 @@ from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 
 logger = logging.getLogger(__name__)
 
-ANNOTATIONS_SPLIT_CHAR = ","
-ANNOTATIONS_PARENT_ID_KEY = "parent_ids"
-ANNOTATIONS_VOCABS_KEY = "vocabs"
-ANNOTATIONS_DOMAINS_KEY = "domains"
+
+class AnnotationKey(StrEnum):
+    """The keys of the ``annotations`` argument of ``annotate_text``."""
+
+    PARENT_IDS = "parent_ids"
+    VOCABS = "vocabs"
+    DOMAINS = "domains"
 
 
 class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
@@ -40,6 +43,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         The underlying OMOP knowledge graph.
     """
 
+    ANNOTATION_SEPARATOR: ClassVar[str] = ","
+    """The character separating several values of one annotation."""
+
     IGNORED_FIELDS: ClassVar[tuple[str, ...]] = (
         "sources",
         "categories",
@@ -47,9 +53,6 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         "include_aliases",
     )
     """The ``TextAnnotationConfiguration`` fields that have no effect."""
-
-    def __init__(self, kg: KnowledgeGraph, **kwargs):
-        super().__init__(kg=kg, **kwargs)
 
     def _parent_id(self, parent: str) -> int:
         """
@@ -137,17 +140,17 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
             def split_annotations(ann):
                 if ann is not None and isinstance(ann.value, str):
-                    return tuple(val.strip() for val in ann.value.split(ANNOTATIONS_SPLIT_CHAR))
+                    return tuple(val.strip() for val in ann.value.split(self.ANNOTATION_SEPARATOR))
                 return None
 
             try:
-                parent_ids = split_annotations(annotations.get(ANNOTATIONS_PARENT_ID_KEY, None))
-                vocabs = split_annotations(annotations.get(ANNOTATIONS_VOCABS_KEY, None))
-                domains = split_annotations(annotations.get(ANNOTATIONS_DOMAINS_KEY, None))
+                parent_ids = split_annotations(annotations.get(AnnotationKey.PARENT_IDS, None))
+                vocabs = split_annotations(annotations.get(AnnotationKey.VOCABS, None))
+                domains = split_annotations(annotations.get(AnnotationKey.DOMAINS, None))
             except Exception:
                 logger.error(
                     f"Annotations passed in wrong format. Expected key: val, "
-                    f"where val is separated by '{ANNOTATIONS_SPLIT_CHAR}' if using multiple values."
+                    f"where val is separated by '{self.ANNOTATION_SEPARATOR}' if using multiple values."
                 )
                 raise
         else:

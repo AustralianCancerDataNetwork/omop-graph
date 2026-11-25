@@ -15,12 +15,12 @@ The `omop-graph` command prepares a CDM for the graph. It has two commands: `rel
 
 ---
 
-!!! info "Vocabulary loading moved to `omop-maint`"
-    Athena vocabularies are loaded with the [`omop-maint` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) of [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy), which replaced `omop-graph omop-cdm`.
+!!! info "Vocabulary loading moved to `omop-alchemy`"
+    Athena vocabularies are loaded with the [`omop-alchemy` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) of [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy), which replaced `omop-graph omop-cdm`.
 
 ## `populate-with-test-data`
 
-Adds synthetic patient data to a CDM whose vocabularies are loaded with [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/). It refuses to run unless both the primary and the vocabulary connection of the configured database are marked `test_only`.
+Adds synthetic patient data to a CDM whose vocabularies are loaded with [`omop-alchemy load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/). It refuses to run unless both the primary and the vocabulary connection of the configured database are marked `test_only`.
 
 ## `relationship-classification` {: #relationship-classification }
 
@@ -33,7 +33,7 @@ The standard OMOP `relationship` table provides basic metadata, but lacks unifie
     The command drops and recreates both classification tables. A database classified by an earlier release has no `direction` column on `relationship_class`, and the `KnowledgeGraph` refuses to start on it with an error naming this command.
 
 ### Prerequisites
-1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
+1. Prepopulated OMOP CDM (e.g. using [`omop-alchemy load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
 2. `omop-graph` configured via oa-configurator (`omop-config configure omop_graph`, see [Getting Started: Configuration](../getting-started/configuration.md)); the CDM connection is resolved from `OmopGraphConfig.cdm_db`, no environment variables involved.
 3. Nothing further — the classification data ships with the package:
     - **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).

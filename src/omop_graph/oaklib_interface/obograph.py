@@ -9,6 +9,7 @@ from oaklib.datamodels.obograph import (
     Graph,
     Meta,
     Node,
+    NodeTypeEnum,
     SynonymPropertyValue,
     XrefPropertyValue,
 )
@@ -114,9 +115,11 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             node_id = (self.curie_to_uri(curie) or curie) if expand_curies else curie
             predicate = self.predicates_by_curie.get(curie)
             if predicate is not None:
-                nodes[curie] = Node(id=node_id, lbl=predicate.name, type="PROPERTY")
+                nodes[curie] = Node(id=node_id, lbl=predicate.name, type=NodeTypeEnum.PROPERTY.text)
             elif curie in views:
-                nodes[curie] = Node(id=node_id, lbl=views[curie].concept_name, type="CLASS")
+                nodes[curie] = Node(
+                    id=node_id, lbl=views[curie].concept_name, type=NodeTypeEnum.CLASS.text
+                )
                 if include_metadata:
                     nodes[curie].meta = Meta(
                         synonyms=synonyms[curie],
@@ -268,9 +271,12 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         predicates = dict.fromkeys(e.pred for e in edges if isinstance(e, Edge))
         labels = dict(self.labels([*concepts, *predicates]))
         graph_nodes: list[Node | dict] = [
-            Node(id=curie, lbl=labels.get(curie), type="CLASS") for curie in concepts
+            Node(id=curie, lbl=labels.get(curie), type=NodeTypeEnum.CLASS.text)
+            for curie in concepts
         ]
-        graph_nodes += [Node(id=p, lbl=labels.get(p), type="PROPERTY") for p in predicates]
+        graph_nodes += [
+            Node(id=p, lbl=labels.get(p), type=NodeTypeEnum.PROPERTY.text) for p in predicates
+        ]
         return Graph(id="omop", nodes=graph_nodes, edges=edges)
 
     def _walked(

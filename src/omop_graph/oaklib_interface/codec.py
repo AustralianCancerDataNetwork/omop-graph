@@ -6,7 +6,7 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import Iterable
-from enum import Enum
+from enum import Enum, StrEnum
 from functools import cached_property
 from urllib.parse import quote, unquote
 
@@ -22,7 +22,22 @@ logger = logging.getLogger(__name__)
 
 OMOP_PREFIX = "OMOP"
 OMOP_REL_PREFIX = "OMOP_REL"
-REPLACED_BY_RELATIONSHIP_ID = "Concept replaced by"
+
+
+class OMOPMetadataKey(StrEnum):
+    """The metadata keys the adapter adds to the entities and relationships it describes."""
+
+    CONCEPT_ID = "omop:concept_id"
+    DOMAIN = "omop:domain"
+    VOCABULARY = "omop:vocabulary"
+    CONCEPT_CLASS = "omop:concept_class"
+    CONCEPT_CODE = "omop:concept_code"
+    STANDARD_CONCEPT = "omop:standard_concept"
+    VALID_START_DATE = "omop:valid_start_date"
+    VALID_END_DATE = "omop:valid_end_date"
+    INVALID_REASON = "omop:invalid_reason"
+    VOCABULARY_ID = "omop:vocabulary_id"
+    VOCABULARY_REFERENCE = "omop:vocabulary_reference"
 
 
 class OMOPLanguage(Enum):
