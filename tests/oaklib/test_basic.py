@@ -79,7 +79,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
         relationship_class(PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
         relationship_class(PredicateKind.IDENTITY, "Version lineage"),
-        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up", generalises=True),
         classified("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
         classified("Concept replaced by", PredicateKind.IDENTITY, "Version lineage"),
         classified("Concept replaces", PredicateKind.IDENTITY, "Version lineage"),

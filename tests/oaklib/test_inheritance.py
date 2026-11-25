@@ -55,7 +55,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
         relationship_class(PredicateKind.ATTRIBUTE, "Site"),
         classified("Maps to", PredicateKind.IDENTITY, "Exact"),
-        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up", generalises=True),
         classified("Has finding site", PredicateKind.ATTRIBUTE, "Site", generalises=True),
         classified("Finding site of", PredicateKind.ATTRIBUTE, "Site"),
         edge(LUNG_CANCER, "Is a", DISEASE),

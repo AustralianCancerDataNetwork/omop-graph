@@ -143,7 +143,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         return frozenset(
             predicate.relationship_id
             for predicate in self.predicates_by_curie.values()
-            if predicate.entails_along_is_a
+            if predicate.generalises
         )
 
     def _scope(

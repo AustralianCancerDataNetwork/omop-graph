@@ -29,7 +29,6 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.graph.edges import Predicate
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.codec import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
@@ -80,7 +79,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         classified("Maps to", PredicateKind.IDENTITY, "Exact"),
         classified("Mapped from", PredicateKind.IDENTITY, "Exact"),
         classified("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
-        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up", generalises=True),
         classified("Has finding site", PredicateKind.ATTRIBUTE, "Site", generalises=True),
         classified("Finding site of", PredicateKind.ATTRIBUTE, "Site"),
         edge(SOURCE, "Maps to", LUNG_CANCER),
@@ -220,24 +219,6 @@ def test_a_mapping_is_not_generalised_up_the_hierarchy(adapter) -> None:
         (MAPS_TO, curie(LUNG)),
     }
     assert set(adapter.entailed_incoming_relationships(curie(THORAX_ORGAN), [MAPS_TO])) == set()
-
-
-@pytest.mark.parametrize(
-    ("kind", "direction", "generalises", "expected"),
-    [
-        (PredicateKind.HIERARCHY, HierarchyDirection.UP, False, True),
-        (PredicateKind.HIERARCHY, HierarchyDirection.DOWN, False, False),
-        (PredicateKind.ATTRIBUTE, None, True, True),
-        (PredicateKind.ATTRIBUTE, None, False, False),
-        (PredicateKind.COMPOSITION, None, True, True),
-        (PredicateKind.ASSOCIATION, None, True, True),
-        (PredicateKind.IDENTITY, None, False, False),
-    ],
-)
-def test_only_some_relationships_generalise_up_is_a(kind, direction, generalises, expected) -> None:
-    predicate = Predicate("R", "R", None, kind, "Any", direction, generalises)
-
-    assert predicate.entails_along_is_a is expected
 
 
 def test_a_relationship_that_does_not_generalise_is_stored_edges_only(adapter) -> None:

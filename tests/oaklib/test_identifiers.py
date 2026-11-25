@@ -71,7 +71,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         relationship_class(PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
         classified("Maps to", PredicateKind.IDENTITY, "Exact equivalence"),
         classified("Mapped from", PredicateKind.IDENTITY, "Exact equivalence"),
-        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up", generalises=True),
         classified("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
         *edge_pair(CHILD, "Is a", "Subsumes", PARENT),
         *edge_pair(SOURCE, "Maps to", "Mapped from", PARENT),

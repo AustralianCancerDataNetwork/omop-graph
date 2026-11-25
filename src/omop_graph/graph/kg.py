@@ -912,7 +912,7 @@ class KnowledgeGraph(GraphBackend):
 
         Each triple is yielded once. Every relationship *edge_filter* selects is treated
         this way, so the caller selects only those for which that is sound, see
-        :attr:`omop_graph.graph.edges.Predicate.entails_along_is_a`.
+        :attr:`omop_graph.graph.edges.Predicate.generalises`.
 
         Parameters
         ----------
