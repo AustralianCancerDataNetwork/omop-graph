@@ -20,6 +20,7 @@ from datetime import date
 from enum import Enum
 from html import escape
 from itertools import chain
+from typing import Self
 
 from omop_alchemy.cdm.model import normalised_flag
 from sqlalchemy import Row
@@ -240,7 +241,18 @@ class ConceptView:
 class LabelMatchKind(Enum):
     """
     Classification of how a label matched a concept.
-    Value order defines priority (lower is better):
+
+    The value is the priority, where lower is better. Each member also carries the
+    badge text, badge colour and reason shown in notebook renderings.
+
+    Attributes
+    ----------
+    badge : str
+        Short text of the badge.
+    colour : str
+        Background colour of the badge.
+    reason : str
+        Why the label matched, for summaries.
 
     Notes
     -----
@@ -256,11 +268,23 @@ class LabelMatchKind(Enum):
     The ``LabelMatch.synonym`` field carries that distinction for callers that need it.
     """
 
-    EXACT = 0
-    STARTS_WITH = 1
-    FTS = 2
-    PARTIAL = 3
-    EMBEDDING = 4
+    EXACT = (0, "exact", "#2b7", "direct name match")
+    STARTS_WITH = (1, "starts with", "#84b", "label starts with the query")
+    FTS = (2, "fulltext", "#27a", "fulltext match")
+    PARTIAL = (3, "partial", "#888", "label contains the query")
+    EMBEDDING = (4, "embedding", "#a72", "embedding match")
+
+    badge: str
+    colour: str
+    reason: str
+
+    def __new__(cls, priority: int, badge: str, colour: str, reason: str) -> Self:
+        member = object.__new__(cls)
+        member._value_ = priority
+        member.badge = badge
+        member.colour = colour
+        member.reason = reason
+        return member
 
     def __lt__(self, other: LabelMatchKind) -> bool:
         return self.value < other.value
@@ -304,13 +328,10 @@ class LabelMatch:
         """
         Render a rich HTML representation for Jupyter notebooks.
         """
-        kind_badges = {
-            LabelMatchKind.EXACT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>exact</span>",
-            LabelMatchKind.FTS: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
-            LabelMatchKind.PARTIAL: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>partial</span>",
-            LabelMatchKind.EMBEDDING: "<span style='background:#a72; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>embedding</span>",
-        }
-        kind_badge = kind_badges[self.match_kind]
+        kind_badge = (
+            f"<span style='background:{self.match_kind.colour}; color:white; padding:2px 6px; "
+            f"border-radius:4px; font-size:0.75em;'>{self.match_kind.badge}</span>"
+        )
 
         std_badge = (
             "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>standard</span>"
@@ -408,18 +429,7 @@ class LabelMatchGroupView:
         for cid, ms in self.groups.items():
             best = ms[0]
 
-            reasons = []
-            # Determine match kind
-            if best.match_kind is LabelMatchKind.EXACT:
-                reasons.append("direct name match")
-            elif best.match_kind is LabelMatchKind.PARTIAL:
-                reasons.append("synonym match")
-            elif best.match_kind is LabelMatchKind.FTS:
-                reasons.append("fulltext match")
-            elif best.match_kind is LabelMatchKind.EMBEDDING:
-                reasons.append("embedding match")
-            else:
-                reasons.append("unknown match")
+            reasons = [best.match_kind.reason]
 
             # Determine concept status
             reasons.append("standard" if best.is_standard else "non-standard")
