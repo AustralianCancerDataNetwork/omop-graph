@@ -70,7 +70,9 @@ from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeFilter
 
 hierarchy = EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY}))
-for subject_id, relationship_id, object_id in kg.relationships((concept_id,), edge_filter=hierarchy):
+for subject_id, relationship_id, object_id in kg.relationships(
+    (concept_id,), edge_filter=hierarchy
+):
     print(relationship_id, object_id)
 ```
 
