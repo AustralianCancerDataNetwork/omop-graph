@@ -2,6 +2,8 @@
 
 import logging
 from collections.abc import Iterator
+from itertools import islice
+from typing import ClassVar
 
 import numpy as np
 from linkml_runtime.linkml_model.annotations import Annotation
@@ -16,6 +18,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
+from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 
@@ -36,6 +39,14 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     kg : KnowledgeGraph
         The underlying OMOP knowledge graph.
     """
+
+    IGNORED_FIELDS: ClassVar[tuple[str, ...]] = (
+        "sources",
+        "categories",
+        "model",
+        "include_aliases",
+    )
+    """The ``TextAnnotationConfiguration`` fields that have no effect."""
 
     def __init__(self, kg: KnowledgeGraph, **kwargs):
         super().__init__(kg=kg, **kwargs)
@@ -63,49 +74,64 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         max_depth: int = 6,
     ) -> Iterator[TextAnnotation]:
         """
-        Annotate text by grounding terms to the OMOP vocabulary.
+        Annotate text by grounding the whole text as one term to the OMOP vocabulary.
 
         Parameters
         ----------
         text : str
             The input text to annotate.
-        query_embedding : np.ndarray
+        configuration : TextAnnotationConfiguration, optional
+            Must set ``matches_whole_text``. ``limit`` caps the annotations and
+            ``token_exclusion_list`` drops tokens from the text.
+        query_embedding : np.ndarray, optional
             Pre-computed query embedding for the input text. When None and the KG
             has a writer interface, the embedding is computed on demand.
-        configuration : TextAnnotationConfiguration, optional
-            Configuration settings for annotation (e.g., token exclusion).
         annotations : Dict[str, Annotation], optional
             LinkML annotations that provide context constraints (parent IDs,
             vocabularies, domains).
         max_depth : int
             Maximum grounding hierarchy depth. Default: 6
 
-        Yields
+        Returns
         -------
-        TextAnnotation
-            An object representing the grounded text span. Nothing is yielded when
-            the text does not ground.
+        Iterator[TextAnnotation]
+            One annotation per grounded concept. Nothing is yielded when the text
+            does not ground.
 
         Raises
         ------
+        OMOPUnsupportedError
+            If ``matches_whole_text`` is not set, since spans are not annotated.
         Exception
             If annotations are malformed.
         """
         if configuration is None:
             configuration = TextAnnotationConfiguration()
+        if not configuration.matches_whole_text:
+            raise OMOPUnsupportedError("TextAnnotatorInterface.annotate_text")
 
-        if isinstance(text, str) and configuration.token_exclusion_list:
+        ignored = [field for field in self.IGNORED_FIELDS if getattr(configuration, field)]
+        if ignored:
+            logger.info("The annotation configuration has no effect for %s.", ", ".join(ignored))
+
+        return islice(
+            self._ground_whole_text(text, configuration, query_embedding, annotations, max_depth),
+            configuration.limit,
+        )
+
+    def _ground_whole_text(
+        self,
+        text: str,
+        configuration: TextAnnotationConfiguration,
+        query_embedding: np.ndarray | None,
+        annotations: dict[str, Annotation] | None,
+        max_depth: int,
+    ) -> Iterator[TextAnnotation]:
+        """Ground the text, with its excluded tokens removed, as one term."""
+        if configuration.token_exclusion_list:
             text = " ".join(
-                [term for term in text.split() if term not in configuration.token_exclusion_list]
+                term for term in text.split() if term not in configuration.token_exclusion_list
             )
-        elif isinstance(text, tuple) and configuration.token_exclusion_list:
-            filtered_text = ()
-            # text is a tuple of string(s)
-            for token in text:
-                filtered_text = filtered_text + tuple(
-                    term for term in token.split() if term not in configuration.token_exclusion_list
-                )
-            text = " ".join(filtered_text)
 
         if annotations is not None:
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
+from oaklib.datamodels.text_annotator import TextAnnotationConfiguration
 from oaklib.datamodels.vocabulary import (
     OWL_ANNOTATION_PROPERTY,
     OWL_CLASS,
@@ -15,6 +16,9 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from omop_graph.oaklib_interface.text_annotator import OMOPTextAnnotatorInterface
+from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
+
+WHOLE_TEXT = TextAnnotationConfiguration(matches_whole_text=True)
 
 
 def test_annotate_text_standardizes_non_standard_candidate_without_parent_annotation(
@@ -22,7 +26,7 @@ def test_annotate_text_standardizes_non_standard_candidate_without_parent_annota
 ) -> None:
     interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
 
-    annotations = list(interface.annotate_text(text="Kidney carcinoma term", annotations=None))
+    annotations = list(interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT))
 
     assert len(annotations) == 1
     assert annotations[0].object_id == "OMOP:196653"
@@ -31,7 +35,55 @@ def test_annotate_text_standardizes_non_standard_candidate_without_parent_annota
 def test_annotate_text_yields_nothing_when_nothing_grounds(mock_cdm_kg: KnowledgeGraph) -> None:
     interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
 
-    assert list(interface.annotate_text(text="zzzz qqqq nonsense")) == []
+    assert list(interface.annotate_text("zzzz qqqq nonsense", WHOLE_TEXT)) == []
+
+
+@pytest.mark.parametrize(
+    "configuration", [None, TextAnnotationConfiguration(), TextAnnotationConfiguration(limit=1)]
+)
+def test_annotate_text_without_whole_text_matching_is_unsupported(
+    mock_cdm_kg: KnowledgeGraph, configuration: TextAnnotationConfiguration | None
+) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+
+    with pytest.raises(OMOPUnsupportedError, match="matches_whole_text"):
+        interface.annotate_text("Kidney carcinoma term", configuration)
+
+
+def test_annotate_text_stops_at_the_limit(mock_cdm_kg: KnowledgeGraph) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+    text = "Kidney carcinoma term"
+    unlimited = list(interface.annotate_text(text, WHOLE_TEXT))
+
+    limited = TextAnnotationConfiguration(matches_whole_text=True, limit=0)
+
+    assert unlimited
+    assert list(interface.annotate_text(text, limited)) == []
+
+
+def test_annotate_text_drops_excluded_tokens(mock_cdm_kg: KnowledgeGraph) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+    configuration = TextAnnotationConfiguration(
+        matches_whole_text=True, token_exclusion_list=["patient", "has"]
+    )
+
+    annotations = list(interface.annotate_text("patient has Kidney carcinoma term", configuration))
+
+    assert [annotation.object_id for annotation in annotations] == ["OMOP:196653"]
+
+
+def test_annotate_text_names_the_configuration_fields_it_ignores(
+    mock_cdm_kg: KnowledgeGraph, caplog: pytest.LogCaptureFixture
+) -> None:
+    interface = OMOPTextAnnotatorInterface(kg=mock_cdm_kg)
+    configuration = TextAnnotationConfiguration(
+        matches_whole_text=True, sources=["SNOMED"], include_aliases=True
+    )
+
+    with caplog.at_level("INFO", logger="omop_graph.oaklib_interface.text_annotator"):
+        list(interface.annotate_text("Kidney carcinoma term", configuration))
+
+    assert "sources, include_aliases" in caplog.text
 
 
 def test_entities_lists_concepts_or_relationships_by_owl_type(mock_cdm_kg: KnowledgeGraph) -> None:

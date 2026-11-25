@@ -169,18 +169,19 @@ for parent in adapter.hierarchical_parents("OMOP:313217"):
 * Regular expression, SQL and Lucene syntax raise `ValueError`.
 
 ### Text Annotation (Grounding)
-The interface allows you to process clinical text and ground it to OMOP:
+The whole text is grounded as one term, which requires to set `matches_whole_text=True`. Spans within a longer text are not annotated, and a configuration without `matches_whole_text` (including no configuration) raises `OMOPUnsupportedError`.
 
 ```python
 from oaklib.datamodels.text_annotator import TextAnnotationConfiguration
 
-text = "Patient presents with acute myocardial infarction."
-config = TextAnnotationConfiguration()
+config = TextAnnotationConfiguration(matches_whole_text=True, limit=5)
 
-for annotation in adapter.annotate_text(text, configuration=config):
+for annotation in adapter.annotate_text("atrial fibrillation", configuration=config):
     print(f"Match: {annotation.object_label} ({annotation.object_id})")
 ```
 
-`annotate_text` yields nothing when the text does not ground.
+* `annotate_text` yields nothing when the text does not ground, as a sentence such as `"patient has cancer"` usually does not.
+* `limit` caps the number of annotations, and `token_exclusion_list` drops tokens from the text before grounding.
+* `sources`, `categories`, `model` and `include_aliases` have no effect. An info message names the ones that were set.
 
 ---

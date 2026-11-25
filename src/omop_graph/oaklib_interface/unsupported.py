@@ -23,6 +23,11 @@ _NO_CLUSTERS = (
     "release. Use get_transitive_mappings_by_curie for one concept."
 )
 
+_NO_SPANS = (
+    "Only whole-text grounding is supported, so set matches_whole_text. "
+    "Spans within a longer text are not annotated."
+)
+
 UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.set_label": _READ_ONLY,
     "BasicOntologyInterface.create_entity": _READ_ONLY,
@@ -34,6 +39,7 @@ UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.edge_index": _NO_EDGE_INDEX,
     "BasicOntologyInterface.entailed_edge_index": _NO_EDGE_INDEX,
     "MappingProviderInterface.get_mapping_clusters": _NO_CLUSTERS,
+    "TextAnnotatorInterface.annotate_text": _NO_SPANS,
 }
 """Reason for each unsupported oaklib method, keyed by ``Interface.method``."""
 
