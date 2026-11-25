@@ -59,7 +59,7 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
     )
     """The search properties that have an effect."""
 
-    IGNORED_FIELDS: ClassVar[tuple[str, ...]] = ("categories", "cursor", "is_complete")
+    IGNORED_SEARCH_FIELDS: ClassVar[tuple[str, ...]] = ("categories", "cursor", "is_complete")
     """The ``SearchConfiguration`` fields that have no effect."""
 
     def basic_search(
@@ -108,7 +108,7 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
                 raise ValueError(f"{syntax.text} search is not supported for OMOP")
 
         props = set(_normalise_properties(config))
-        ignored = [field for field in self.IGNORED_FIELDS if getattr(config, field)]
+        ignored = [field for field in self.IGNORED_SEARCH_FIELDS if getattr(config, field)]
         ignored += sorted(props - self.SUPPORTED_PROPERTIES - {SearchProperty.ANYTHING.text})
         if ignored:
             logger.info("The search configuration has no effect for %s.", ", ".join(ignored))

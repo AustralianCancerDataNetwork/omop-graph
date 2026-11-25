@@ -109,6 +109,20 @@ def test_annotate_text_names_the_configuration_fields_it_ignores(
     assert "sources, include_aliases" in caplog.text
 
 
+def test_the_full_adapter_annotates_text_and_names_the_ignored_fields(
+    mock_cdm_kg: KnowledgeGraph, caplog: pytest.LogCaptureFixture
+) -> None:
+    interface = OMOPAlchemyImplementation(kg=mock_cdm_kg)
+    configuration = TextAnnotationConfiguration(
+        matches_whole_text=True, sources=["SNOMED"], include_aliases=True
+    )
+
+    with caplog.at_level("INFO", logger="omop_graph.oaklib_interface.text_annotator"):
+        list(interface.annotate_text("Kidney carcinoma term", configuration))
+
+    assert "sources, include_aliases" in caplog.text
+
+
 def test_entities_lists_concepts_or_relationships_by_owl_type(mock_cdm_kg: KnowledgeGraph) -> None:
     adapter = OMOPAlchemyImplementation(kg=mock_cdm_kg)
 

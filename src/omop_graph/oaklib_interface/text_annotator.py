@@ -46,7 +46,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
     ANNOTATION_SEPARATOR: ClassVar[str] = ","
     """The character separating several values of one annotation."""
 
-    IGNORED_FIELDS: ClassVar[tuple[str, ...]] = (
+    IGNORED_ANNOTATION_FIELDS: ClassVar[tuple[str, ...]] = (
         "sources",
         "categories",
         "model",
@@ -113,7 +113,9 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         if not configuration.matches_whole_text:
             raise OMOPUnsupportedError("TextAnnotatorInterface.annotate_text")
 
-        ignored = [field for field in self.IGNORED_FIELDS if getattr(configuration, field)]
+        ignored = [
+            field for field in self.IGNORED_ANNOTATION_FIELDS if getattr(configuration, field)
+        ]
         if ignored:
             logger.info("The annotation configuration has no effect for %s.", ", ".join(ignored))
 
