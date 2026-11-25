@@ -14,6 +14,7 @@ The queries cover:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import Literal, cast
 
@@ -287,7 +288,7 @@ def q_concept_name_ilike(
     Parameters
     ----------
     query_concept_name : str
-        The concept name to search for.
+        The concept name to search for. ``%``, ``_`` and ``\\`` match themselves.
     search_constraint : ConceptFilter, optional
         Additional filters.
     synonym : bool, optional
@@ -302,12 +303,10 @@ def q_concept_name_ilike(
     """
     name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
-    if "%" in query_concept_name:
-        raise ValueError("query_concept_name should not contain wildcards like '%'.")
-
-    pattern = f"{query_concept_name}%" if anchored else f"%{query_concept_name}%"
+    escaped = re.sub(r"([\\%_])", r"\\\1", query_concept_name)
+    pattern = f"{escaped}%" if anchored else f"%{escaped}%"
     base_stmt = (q_concept_synonym() if synonym else q_concept_name()).where(
-        name_expr.ilike(pattern)
+        name_expr.ilike(pattern, escape="\\")
     )
     if search_constraint:
         if not isinstance(search_constraint, ConceptFilter):
@@ -646,14 +645,21 @@ def q_domains() -> Select:
     return select(Domain.domain_id, Domain.domain_concept_id)
 
 
-def q_obsolete_concepts(include_updated: bool = True) -> Select:
-    """Query the ids of deleted concepts, and of updated ones when *include_updated*."""
+def q_obsolete_concepts(
+    include_updated: bool = True, concept_filter: ConceptFilter | None = None
+) -> Select:
+    """
+    Query the ids of deleted concepts, and of updated ones when *include_updated*.
+
+    A *concept_filter* narrows them, by its vocabularies and domains and its other fields.
+    """
     reasons = [InvalidReasonFlag.DELETED]
     if include_updated:
         reasons.append(InvalidReasonFlag.UPDATED)
-    return select(Concept.concept_id).where(
+    stmt = select(Concept.concept_id).where(
         normalised_flag_expr(Concept.invalid_reason).in_(reasons)
     )
+    return concept_filter.apply(stmt) if concept_filter else stmt
 
 
 def _has_parent(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:

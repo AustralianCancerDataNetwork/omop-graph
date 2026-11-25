@@ -47,6 +47,7 @@ The primary adapter class that inherits from multiple OAK interfaces:
 * A CURIE that names no concept, and a predicate CURIE that names no OMOP relationship such as `BFO:0000050`, are left out of the result instead of raising.
 * `prefix_map` holds the oaklib defaults, `OMOP` and `OMOP_REL`, and each vocabulary that is a canonical prefix of the [Bioregistry](https://bioregistry.io), matched by name. A vocabulary the Bioregistry does not have, such as `Nebraska_Lexicon`, has no URI.
 * `entities`, `roots`, `leafs` and `singletons` list active standard and classification concepts. Pass `concept_filter=ConceptFilter(...)` to the constructor to change that.
+* `entities(filter_obsoletes=False)` lists every concept in the filter's vocabularies and domains, whatever its standardness or validity, so it includes everything `obsoletes` yields. `obsoletes` stays within those vocabularies and domains.
 
 ### Entailed relationships
 A stored relationship `A -R-> B1` entails `A -R-> B2` for every `B2` reached from `B1` by following `Is a` upwards, repeatedly. `R` is any relationship, including `Is a` itself.
@@ -151,7 +152,9 @@ for parent in adapter.hierarchical_parents("OMOP:313217"):
 
 * Labels are always searched, aliases with the `ALIAS` property, and identifiers (an `OMOP` CURIE or `vocabulary:code`) with `IDENTIFIER`.
 * The order is identifier, exact label, labels starting with the term (`STARTS_WITH` syntax or `is_partial`), then labels containing it (`is_partial`), then full-text matches (`is_fuzzy`, only where the database has the index). Within a kind, standard and active concepts come first.
-* Matching is case-insensitive, and deprecated concepts are left out unless `include_obsoletes_in_results` is set.
+* Matching is case-insensitive, and `%`, `_` and `\` in the term match themselves. Deprecated concepts are left out unless `include_obsoletes_in_results` is set.
+* The adapter's `concept_filter` narrows the vocabularies and domains searched, but not standardness.
+* `categories`, `cursor`, `is_complete` and the `REPLACEMENT_IDENTIFIER` and `COMMENT` properties have no effect. An info message names the ones that were set.
 * Regular expression, SQL and Lucene syntax raise `ValueError`.
 
 ### Text Annotation (Grounding)

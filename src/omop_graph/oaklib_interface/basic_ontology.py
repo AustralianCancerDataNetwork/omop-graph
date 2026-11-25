@@ -134,6 +134,21 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             ),
         )
 
+    @property
+    def _every_concept(self) -> ConceptFilter:
+        """
+        The adapter's vocabularies and domains, whatever the standardness or validity.
+
+        It selects every concept that ``entities(filter_obsoletes=False)`` lists, which
+        includes the ones ``obsoletes`` yields.
+        """
+        return replace(
+            self.concept_filter,
+            require_standard=False,
+            include_classification=False,
+            require_active=False,
+        )
+
     def _resolve_concepts(self, curies: Iterable[CURIE]) -> dict[CURIE, int]:
         """Concept ids of the CURIEs that name a concept in the graph, others left out."""
         curies = list(curies)
@@ -217,7 +232,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def obsoletes(self, include_merged: bool = True) -> Iterable[CURIE]:
         """
-        Yield the deprecated concepts.
+        Yield the deprecated concepts, within the adapter's vocabularies and domains.
+
+        Standardness is not required, so every concept listed here is also listed by
+        ``entities(filter_obsoletes=False)``.
 
         Parameters
         ----------
@@ -225,7 +243,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             If True, include the concepts updated into a replacement (``invalid_reason``
             ``U``) besides the deleted ones (``D``).
         """
-        for cid in self.kg.obsolete_concepts(include_updated=include_merged):
+        for cid in self.kg.obsolete_concepts(include_merged, self._every_concept):
             yield self.codec.concept_curie(cid)
 
     def dangling(self, curies: Iterable[CURIE] | None = None) -> Iterable[CURIE]:
@@ -297,8 +315,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         Parameters
         ----------
         filter_obsoletes : bool
-            If True, exclude deprecated concepts. Applied on top of the adapter's
-            ``concept_filter``.
+            If True, the concepts the adapter's ``concept_filter`` selects, active ones
+            only. With the default filter these are the active standard and
+            classification concepts. If False, every concept in the filter's vocabularies
+            and domains. The filter's standardness and validity requirements are dropped,
+            so deprecated and non-standard concepts are included.
         owl_type : str | None
             ``owl:Class`` or None for concepts, ``owl:ObjectProperty`` for relationships
             as predicate CURIEs. The other OWL types have no entities here and yield nothing.
@@ -326,7 +347,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         if owl_type not in (None, OWL_CLASS):
             return
 
-        scope = concept_filter or self._scope(filter_obsoletes)
+        scope = concept_filter or (
+            self._scope(filter_obsoletes) if filter_obsoletes else self._every_concept
+        )
         # Consume the generator so no session stays open.
         for cid in tuple(self.kg.entities(scope)):
             yield self.codec.concept_curie(cid)

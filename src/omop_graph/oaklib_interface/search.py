@@ -1,6 +1,8 @@
 """Search over the OMOP knowledge graph."""
 
+import logging
 from collections.abc import Iterator
+from dataclasses import replace
 from typing import ClassVar
 
 from linkml_runtime.linkml_model.meta import PermissibleValue
@@ -11,11 +13,12 @@ from oaklib.datamodels.search import (
 )
 from oaklib.interfaces import SearchInterface
 from oaklib.types import CURIE
-from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.oaklib_interface.base import OMOPBaseInterface
+from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_PROPERTIES = {
     SearchProperty.LABEL.text,
@@ -42,7 +45,7 @@ def _normalise_properties(config: SearchConfiguration) -> list[str]:
     return [getattr(p, "text", None) or str(p) for p in (config.properties or [])]
 
 
-class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
+class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
     """
     Mixin providing search capabilities over an OMOP knowledge graph.
     """
@@ -53,6 +56,9 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
         SearchTermSyntax.LUCENE,
     )
     """The search term syntaxes that raise ``ValueError``."""
+
+    IGNORED_FIELDS: ClassVar[tuple[str, ...]] = ("categories", "cursor", "is_complete")
+    """The ``SearchConfiguration`` fields that have no effect."""
 
     def __init__(self, *args, kg: KnowledgeGraph, **kwargs):
         super().__init__(*args, kg=kg, **kwargs)
@@ -77,6 +83,10 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
         - a full-text match, for ``is_fuzzy``, when the database has the index
 
         Deprecated concepts are left out unless ``include_obsoletes_in_results`` is set.
+        The adapter's ``concept_filter`` narrows the vocabularies and domains searched, but
+        not standardness. ``categories``, ``cursor``, ``is_complete`` and the
+        ``REPLACEMENT_IDENTIFIER`` and ``COMMENT`` properties have no effect, and an info
+        message names the ones that were set.
 
         Parameters
         ----------
@@ -101,6 +111,10 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                 raise ValueError(f"{syntax.text} search is not supported for OMOP")
 
         props = set(_normalise_properties(config))
+        ignored = [field for field in self.IGNORED_FIELDS if getattr(config, field)]
+        ignored += sorted(props - SUPPORTED_PROPERTIES - {SearchProperty.ANYTHING.text})
+        if ignored:
+            logger.info("The search configuration has no effect for %s.", ", ".join(ignored))
         if SearchProperty.ANYTHING.text in props:
             props = SUPPORTED_PROPERTIES
         by_identifier = bool(
@@ -115,20 +129,21 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
         if config.is_fuzzy:
             kinds.append(LabelMatchKind.FTS)
 
-        include_obsoletes = bool(config.include_obsoletes_in_results)
-        constraint = ConceptFilter(require_standard=False, require_active=not include_obsoletes)
+        constraint = replace(
+            self._every_concept, require_active=not config.include_obsoletes_in_results
+        )
         found: dict[int, None] = {}
 
         def full() -> bool:
             return config.limit is not None and len(found) >= config.limit
 
-        if by_identifier:
+        if by_identifier and not full():
             concept_id = self.codec.resolve_concept(search_term)
-            views = self.kg.concept_views((concept_id,)) if concept_id is not None else ()
-            for view in views:
-                if view.is_active or include_obsoletes:
-                    found[view.concept_id] = None
-                    yield self.codec.concept_curie(view.concept_id)
+            if concept_id is not None:
+                in_scope = tuple(self.kg.entities(replace(constraint, concept_ids=(concept_id,))))
+                for concept_id in in_scope:
+                    found[concept_id] = None
+                    yield self.codec.concept_curie(concept_id)
 
         for kind in kinds:
             for synonym in (False, True):

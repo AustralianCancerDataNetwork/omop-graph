@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -16,13 +17,15 @@ from oaklib.datamodels.search import SearchConfiguration, SearchProperty, Search
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import PredicateKind, RelationshipClass, RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.oaklib_interface import search as search_module
 from omop_graph.oaklib_interface.codec import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
-CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED = range(400, 406)
+CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED, PERCENT = range(400, 407)
 SPACED_CODE = "C34.9"
 
 
@@ -55,6 +58,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
             concept_code=SPACED_CODE,
         ),
         concept(RETIRED, "Cancer old", standard_concept=None, invalid_reason="U"),
+        concept(PERCENT, "Dose of 100% oxygen"),
         synonym(CONTAINING, "Oat cell carcinoma", OMOPLanguage.ENGLISH),
     ]
     models = (Concept, Concept_Synonym, Vocabulary, RelationshipClass, RelationshipMapping)
@@ -139,6 +143,46 @@ def test_anything_searches_labels_aliases_and_identifiers(adapter) -> None:
 def test_unsupported_syntaxes_raise(adapter, syntax) -> None:
     with pytest.raises(ValueError, match="not supported"):
         search(adapter, "cancer", syntax=syntax)
+
+
+@pytest.mark.parametrize("term", ["_", "\\", "cancer%", "c_ncer"])
+def test_wildcards_in_a_partial_search_match_themselves(adapter, term) -> None:
+    assert search(adapter, term, is_partial=True) == []
+
+
+def test_a_wildcard_character_in_a_name_is_found(adapter) -> None:
+    assert search(adapter, "100%", is_partial=True) == [curie(PERCENT)]
+
+
+def test_a_limit_of_zero_yields_nothing_even_for_an_identifier(adapter) -> None:
+    assert search(adapter, curie(CANCER), properties=[SearchProperty.IDENTIFIER], limit=0) == []
+
+
+def test_search_stays_within_the_adapters_vocabularies(adapter) -> None:
+    icd = OMOPAlchemyImplementation(
+        kg=adapter.kg, concept_filter=ConceptFilter(vocabularies=("ICD10CM",))
+    )
+    props = {"properties": [SearchProperty.ANYTHING], "is_partial": True}
+
+    assert search(icd, "neoplasm", **props) == [curie(SOURCE)]
+    assert search(icd, "cancer", **props) == []
+    assert search(icd, curie(CANCER), **props) == []
+    assert search(icd, f"ICD10CM:{SPACED_CODE}", **props) == [curie(SOURCE)]
+
+
+def test_search_ignores_the_standardness_of_the_adapters_filter(adapter) -> None:
+    standard = OMOPAlchemyImplementation(
+        kg=adapter.kg, concept_filter=ConceptFilter(require_standard=True)
+    )
+
+    assert search(standard, "malignant neoplasm") == [curie(SOURCE)]
+
+
+def test_configuration_without_an_effect_is_logged(adapter, caplog) -> None:
+    with caplog.at_level(logging.INFO, logger=search_module.logger.name):
+        search(adapter, "cancer", categories=["biolink:Disease"], is_complete=True)
+
+    assert "categories, is_complete" in caplog.text
 
 
 def test_fuzzy_search_without_a_full_text_index_adds_nothing(adapter) -> None:

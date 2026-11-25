@@ -1007,7 +1007,9 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             return tuple(session.execute(stmt).scalars())
 
-    def obsolete_concepts(self, include_updated: bool = True) -> Generator[int, None, None]:
+    def obsolete_concepts(
+        self, include_updated: bool = True, concept_filter: ConceptFilter | None = None
+    ) -> Generator[int, None, None]:
         """
         Yield the ids of deprecated concepts.
 
@@ -1016,9 +1018,12 @@ class KnowledgeGraph(GraphBackend):
         include_updated : bool
             If True, include the concepts updated into others (``invalid_reason`` ``U``)
             besides the deleted ones (``D``).
+        concept_filter : ConceptFilter, optional
+            Narrows the concepts, for example to some vocabularies or domains.
         """
+        stmt = q_obsolete_concepts(include_updated, concept_filter)
         with self.session_factory() as session:
-            yield from session.execute(stream(q_obsolete_concepts(include_updated))).scalars()
+            yield from session.execute(stream(stmt)).scalars()
 
     def vocabularies(self) -> tuple[VocabularyView, ...]:
         """Return every vocabulary."""

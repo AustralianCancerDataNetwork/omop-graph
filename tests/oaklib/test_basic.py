@@ -31,6 +31,7 @@ from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
@@ -138,6 +139,23 @@ def test_obsoletes_include_updated_concepts_only_when_merged_are_included(
     adapter, include_merged, expected
 ) -> None:
     assert set(adapter.obsoletes(include_merged=include_merged)) == expected
+
+
+def test_every_obsolete_is_an_entity_when_obsoletes_are_not_filtered(adapter) -> None:
+    everything = set(adapter.entities(filter_obsoletes=False))
+
+    assert set(adapter.obsoletes()) <= everything
+    assert {f"OMOP:{ICD_CODE}", f"OMOP:{DELETED}"} <= everything
+    assert {f"OMOP:{ICD_CODE}", f"OMOP:{DELETED}"}.isdisjoint(adapter.entities())
+
+
+def test_obsoletes_stay_within_the_adapters_vocabularies(adapter) -> None:
+    restricted = OMOPAlchemyImplementation(
+        kg=adapter.kg, concept_filter=ConceptFilter(vocabularies=("ICD10",))
+    )
+
+    assert set(restricted.obsoletes()) == set()
+    assert set(restricted.entities(filter_obsoletes=False)) == {f"OMOP:{ICD_CODE}"}
 
 
 def test_an_updated_concept_is_deprecated_and_names_its_replacement(adapter) -> None:

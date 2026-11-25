@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import cast
 
 import pytest
@@ -71,15 +70,23 @@ class _RecordingKnowledgeGraph:
         return iter(())
 
 
-@pytest.mark.parametrize("filter_obsoletes", [True, False])
-def test_filter_obsoletes_applies_to_the_standing_scope(filter_obsoletes: bool) -> None:
+@pytest.mark.parametrize(
+    ("filter_obsoletes", "expected"),
+    [
+        (True, ConceptFilter(domains=("Condition",), require_standard=True, require_active=True)),
+        (False, ConceptFilter(domains=("Condition",))),
+    ],
+)
+def test_filter_obsoletes_applies_to_the_standing_scope(
+    filter_obsoletes: bool, expected: ConceptFilter
+) -> None:
     kg = _RecordingKnowledgeGraph()
     standing = ConceptFilter(domains=("Condition",), require_standard=True)
     adapter = OMOPAlchemyImplementation(kg=cast(KnowledgeGraph, kg), concept_filter=standing)
 
     list(adapter.entities(filter_obsoletes=filter_obsoletes))
 
-    assert kg.scopes == [replace(standing, require_active=filter_obsoletes)]
+    assert kg.scopes == [expected]
 
 
 def test_an_explicit_concept_filter_replaces_the_standing_scope_as_given() -> None:
