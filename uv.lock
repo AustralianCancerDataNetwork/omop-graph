@@ -2264,7 +2264,7 @@ requires-dist = [
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'" },
     { name = "oa-configurator", specifier = ">=2.1.0,<3" },
     { name = "oa-configurator", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=2.1.0,<3" },
-    { name = "oaklib", specifier = ">=0.7.4" },
+    { name = "oaklib", specifier = ">=0.7.5" },
     { name = "omop-alchemy", specifier = ">=3.0.0,<4" },
     { name = "omop-alchemy", extras = ["duckdb"], marker = "extra == 'dev'", specifier = ">=3.0.0,<4" },
     { name = "omop-alchemy", extras = ["duckdb"], marker = "extra == 'duckdb'", specifier = ">=3.0.0,<4" },

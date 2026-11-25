@@ -414,7 +414,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         Without *predicates* the parents come from the ``concept_ancestor`` closure, which
         is OMOP's own ancestry. With them, a parent is the target of an edge of one of the
-        predicates. ``ignore_owl_thing`` and ``annotated_roots`` have no effect.
+        predicates. If no concept has an edge for a predicate, then no concept has a parent
+        through it, so every concept is a root. ``ignore_owl_thing`` and
+        ``annotated_roots`` have no effect.
         ``id_prefixes`` are vocabulary ids or CURIE prefixes.
         """
         return self._enumerate(

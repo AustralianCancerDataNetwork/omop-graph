@@ -229,7 +229,8 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         start_curies : CURIE | list[CURIE]
             Concepts to start from.
         predicates : list[PRED_CURIE] | None
-            The predicates to follow. Defaults to ``rdfs:subClassOf``.
+            The predicates to follow. Defaults to ``rdfs:subClassOf``, the strict ``Is a``
+            hierarchy, where oaklib follows every predicate.
         reflexive : bool
             If True, include the starting concepts.
         method : GraphTraversalMethod | None
