@@ -73,9 +73,10 @@ def test_is_a_is_also_accepted_in_its_omop_rel_form(adapter: OMOPAlchemyImplemen
     assert adapter.codec.parse_predicate("OMOP_REL:Is%20a") == "Is a"
 
 
-def test_an_unknown_predicate_prefix_is_rejected(adapter: OMOPAlchemyImplementation) -> None:
-    with pytest.raises(ValueError, match="Unsupported predicate CURIE"):
-        adapter.codec.parse_predicate("skos:exactMatch")
+def test_a_predicate_outside_omop_names_no_relationship(
+    adapter: OMOPAlchemyImplementation,
+) -> None:
+    assert adapter.codec.parse_predicate("skos:exactMatch") is None
 
 
 def test_only_the_up_direction_of_hierarchy_relationships_is_exposed_by_default(

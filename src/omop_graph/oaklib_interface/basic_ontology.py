@@ -26,11 +26,10 @@ from oaklib.interfaces.basic_ontology_interface import (
 )
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
-from sqlalchemy.exc import NoResultFound
 
 from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 from omop_graph.graph import KnowledgeGraph
-from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID, EdgeFilter, Predicate
+from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID, EdgeFilter, EdgeView, Predicate
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
@@ -120,31 +119,48 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         The adapter's concept filter with the oaklib enumeration arguments applied.
 
         ``filter_obsoletes`` replaces the adapter's choice. ``id_prefixes`` narrows the
-        vocabularies, read as vocabulary ids. The ``OMOP`` prefix is every concept's own
-        prefix, so naming it does not narrow.
+        vocabularies, each named by its ``vocabulary_id`` or its CURIE prefix. The ``OMOP``
+        prefix is every concept's own prefix, so naming it does not narrow.
         """
         scope = replace(self.concept_filter, require_active=filter_obsoletes)
         if not id_prefixes or OMOP_PREFIX in id_prefixes:
             return scope
+        vocabularies = dict.fromkeys(self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
         return replace(
             scope,
             vocabularies=tuple(
-                prefix
-                for prefix in id_prefixes
-                if scope.vocabularies is None or prefix in scope.vocabularies
+                vocabulary
+                for vocabulary in vocabularies
+                if scope.vocabularies is None or vocabulary in scope.vocabularies
             ),
         )
 
     def _resolve_concepts(self, curies: Iterable[CURIE]) -> dict[CURIE, int]:
         """Concept ids of the CURIEs that name a concept in the graph, others left out."""
-        ids = {}
-        for curie in curies:
-            if self.codec.is_predicate_curie(curie):
-                continue
-            try:
-                ids[curie] = self.codec.parse_concept(curie)
-            except (NoResultFound, ValueError):
-                continue
+        curies = list(curies)
+        resolved = {
+            curie: concept_id
+            for curie in curies
+            if (concept_id := self.codec.resolve_concept(curie)) is not None
+        }
+        if len(resolved) < len(set(curies)):
+            left_out = [curie for curie in dict.fromkeys(curies) if curie not in resolved]
+            logger.debug("%d CURIEs name no concept, such as %s.", len(left_out), left_out[:3])
+        return resolved
+
+    def _concept_ids(self, curies: Iterable[CURIE] | None) -> tuple[int, ...] | None:
+        """
+        The ids of the CURIEs that name a concept, or None for no restriction.
+
+        An info message names the CURIEs when none of them names a concept, since nothing
+        then matches.
+        """
+        if curies is None:
+            return None
+        curies = list(curies)
+        ids = tuple(dict.fromkeys(self._resolve_concepts(curies).values()))
+        if curies and not ids:
+            logger.info("No CURIE names a concept, so nothing matches: %s", curies[:3])
         return ids
 
     def _concept_views(self, curies: Iterable[CURIE]) -> dict[CURIE, ConceptView]:
@@ -324,7 +340,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterator[CURIE]:
         """Yield the concepts *build* selects, over the closure or over the named predicates."""
         edge_filter = (
-            EdgeFilter(predicate_ids=frozenset(self.codec.parse_predicate(p) for p in predicates))
+            EdgeFilter(predicate_ids=self.codec.relationship_ids(predicates))
             if predicates
             else None
         )
@@ -345,7 +361,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         Without *predicates* the parents come from the ``concept_ancestor`` closure, which
         is OMOP's own ancestry. With them, a parent is the target of an edge of one of the
         predicates. ``ignore_owl_thing`` and ``annotated_roots`` have no effect.
-        ``id_prefixes`` are read as vocabulary ids.
+        ``id_prefixes`` are vocabulary ids or CURIE prefixes.
         """
         return self._enumerate(
             self.kg.roots, predicates, self._scope(filter_obsoletes, id_prefixes)
@@ -497,17 +513,13 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         if not include_tbox:
             return
 
-        subject_ids = (
-            tuple([self.codec.parse_concept(s) for s in subjects]) if subjects is not None else None
-        )
+        subject_ids = self._concept_ids(subjects)
+        object_ids = self._concept_ids(objects)
         predicate_ids = (
-            frozenset(self.codec.parse_predicate(p) for p in predicates)
-            if predicates
-            else self.default_relationship_ids
+            self.codec.relationship_ids(predicates) if predicates else self.default_relationship_ids
         )
-        object_ids = (
-            tuple([self.codec.parse_concept(o) for o in objects]) if objects is not None else None
-        )
+        if not predicate_ids:
+            return
 
         edge_filter = EdgeFilter(predicate_ids=predicate_ids)
 
@@ -552,9 +564,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         finds its edge.
         """
         relationships = list(relationships)
-        subject_ids = tuple({self.codec.parse_concept(s) for s, _, _ in relationships})
-        predicate_ids = frozenset(self.codec.parse_predicate(p) for _, p, _ in relationships)
-        edges = {
+        concept_ids = self._resolve_concepts({c for s, _, o in relationships for c in (s, o)})
+        subject_ids = tuple({concept_ids[s] for s, _, _ in relationships if s in concept_ids})
+        predicate_ids = self.codec.relationship_ids(p for _, p, _ in relationships)
+        edges: dict[tuple[int | None, str | None, int | None], EdgeView] = {
             (edge.subject_id, edge.predicate_id, edge.object_id): edge
             for edge in self.kg.edges(
                 subject_ids,
@@ -565,11 +578,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         for relationship in relationships:
             s, p, o = relationship
             edge = edges.get(
-                (
-                    self.codec.parse_concept(s),
-                    self.codec.parse_predicate(p),
-                    self.codec.parse_concept(o),
-                )
+                (concept_ids.get(s), self.codec.parse_predicate(p), concept_ids.get(o))
             )
             metadata: list[tuple[PRED_CURIE, str]] = []
             if edge is not None:
@@ -673,7 +682,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         With ``isa_only`` the parents are the targets of ``Is a`` edges. Otherwise they are
         the level 1 ancestors of ``concept_ancestor``, OMOP's own ancestry.
         """
-        cid = self.codec.parse_concept(curie)
+        cid = self.codec.resolve_concept(curie)
+        if cid is None:
+            return []
         if isa_only:
             parents = [
                 edge.object_id

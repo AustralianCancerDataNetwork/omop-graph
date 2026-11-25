@@ -21,6 +21,7 @@ from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
 from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
+from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
@@ -99,6 +100,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         Concept_Ancestor,
         Concept_Relationship,
         Concept_Synonym,
+        Vocabulary,
         RelationshipClass,
         RelationshipMapping,
     )

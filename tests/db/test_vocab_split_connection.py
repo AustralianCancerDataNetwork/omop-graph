@@ -350,10 +350,10 @@ def test_concept_view_resolves_against_the_vocab_connection(split_engines: _Engi
     assert view.concept_name == "Subject concept"
 
 
-def test_concept_id_by_code_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
+def test_concepts_by_code_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
     kg = _split_kg(split_engines)
 
-    assert kg.concept_id_by_code("SNOMED", "SUBJ") == SUBJECT_CONCEPT_ID
+    assert kg.concepts_by_code("SNOMED", "SUBJ") == {SUBJECT_CONCEPT_ID: True}
 
 
 def test_concept_ids_by_label_resolves_against_the_vocab_connection(

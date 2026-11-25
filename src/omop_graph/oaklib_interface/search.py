@@ -1,6 +1,5 @@
 """Search over the OMOP knowledge graph."""
 
-import logging
 from collections.abc import Iterator
 from typing import ClassVar
 
@@ -13,13 +12,10 @@ from oaklib.datamodels.search import (
 from oaklib.interfaces import SearchInterface
 from oaklib.types import CURIE
 from omop_alchemy.cdm.query import ConceptFilter
-from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
-
-logger = logging.getLogger(__name__)
 
 SUPPORTED_PROPERTIES = {
     SearchProperty.LABEL.text,
@@ -127,12 +123,12 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
             return config.limit is not None and len(found) >= config.limit
 
         if by_identifier:
-            concept_id = self._concept_by_identifier(search_term)
-            if concept_id is not None:
-                view = self.kg.concept_view(concept_id)
+            concept_id = self.codec.resolve_concept(search_term)
+            views = self.kg.concept_views((concept_id,)) if concept_id is not None else ()
+            for view in views:
                 if view.is_active or include_obsoletes:
-                    found[concept_id] = None
-                    yield self.codec.concept_curie(concept_id)
+                    found[view.concept_id] = None
+                    yield self.codec.concept_curie(view.concept_id)
 
         for kind in kinds:
             for synonym in (False, True):
@@ -153,15 +149,3 @@ class OMOPSearchInterface(OMOPBaseInterface, SearchInterface):
                         yield self.codec.concept_curie(match.matched_concept_id)
                         if full():
                             return
-
-    def _concept_by_identifier(self, search_term: str) -> int | None:
-        """The concept an ``OMOP`` CURIE or ``vocabulary:code`` names, or None."""
-        if ":" not in search_term:
-            return None
-        try:
-            return self.codec.parse_concept(search_term)
-        except (NoResultFound, ValueError):
-            return None
-        except MultipleResultsFound:
-            logger.warning("Skipping ambiguous identifier %r: several concepts match", search_term)
-            return None

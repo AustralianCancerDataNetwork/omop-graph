@@ -203,15 +203,16 @@ def test_the_cross_reference_is_not_an_alias(adapter) -> None:
     assert HAS_DBXREF not in adapter.entity_alias_map(curie(STANDARD))
 
 
-def test_transitive_mappings_follow_exact_equivalence_in_both_directions(adapter) -> None:
+def test_transitive_mappings_go_from_a_source_concept_to_its_standard_concepts(adapter) -> None:
     mappings = list(adapter.get_transitive_mappings_by_curie(curie(SOURCE_ICD)))
 
-    assert summary(mappings) == {
-        (curie(SOURCE_ICD), SKOS_EXACT_MATCH, curie(STANDARD)),
-        (curie(SOURCE_ICD), SKOS_EXACT_MATCH, curie(SOURCE_READ)),
-        (curie(SOURCE_ICD), SKOS_EXACT_MATCH, curie(SPACED)),
-    }
-    assert {m.mapping_justification for m in mappings} == {SEMAPV.MappingChaining.value}
+    assert summary(mappings) == {(curie(SOURCE_ICD), SKOS_EXACT_MATCH, curie(STANDARD))}
+    assert {m.subject_source for m in mappings} == {"ICD10CM"}
+    assert {m.object_source for m in mappings} == {"SNOMED"}
+
+
+def test_transitive_mappings_do_not_join_the_concepts_sharing_a_target(adapter) -> None:
+    assert list(adapter.get_transitive_mappings_by_curie(curie(STANDARD))) == []
 
 
 def test_clusters_are_unsupported(adapter) -> None:

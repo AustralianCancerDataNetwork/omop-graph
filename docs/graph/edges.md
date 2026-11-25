@@ -56,11 +56,11 @@ An `EdgeFilter` selects edges, and every function that reads edges takes one: `k
 
 | Field | Selects |
 |---|---|
-| `predicate_ids` | These relationship ids. |
+| `predicate_ids` | These relationship ids. An empty set selects no edge, and `None` selects all. |
 | `predicate_kinds` | Relationships of these `PredicateKind`s. |
 | `predicate_subkinds` | Relationships of these subkinds. An unknown subkind raises, listing the valid ones. |
 | `active_only` | Edges that are not deprecated. Defaults to `True`. |
-| `on` | Edges whose validity period covers this date. |
+| `on` | Edges whose validity period covers this date, independent of `active_only`. |
 | `within_domain` | Edges whose two concepts share a domain. Defaults to `False`, since most attribute edges cross domains. |
 
 The edges of a relationship without a classification are skipped, so a filter never returns them.

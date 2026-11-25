@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 import re
+from collections import defaultdict
+from collections.abc import Iterable
 from enum import Enum
 from functools import cached_property
 from urllib.parse import quote, unquote
 
 from oaklib.datamodels.vocabulary import IS_A
+from oaklib.interfaces.basic_ontology_interface import get_default_prefix_map
 from oaklib.types import CURIE, PRED_CURIE
+from prefixmaps import load_context
 
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID
+
+logger = logging.getLogger(__name__)
 
 OMOP_PREFIX = "OMOP"
 OMOP_REL_PREFIX = "OMOP_REL"
@@ -68,25 +75,25 @@ class OMOPCodec:
 
     def __init__(self, kg: KnowledgeGraph):
         self.kg = kg
+        self._ignored_predicates: set[PRED_CURIE] = set()
 
     @cached_property
-    def _vocabulary_ids_by_prefix(self) -> dict[str, str]:
-        """
-        The ``vocabulary_id`` behind each CURIE prefix, checked for collisions.
+    def _classified_relationship_ids(self) -> frozenset[str]:
+        """The ids of the relationships the knowledge graph has a classification for."""
+        return frozenset(predicate.relationship_id for predicate in self.kg.predicates())
 
-        Read on first use and not in ``__init__``, so a codec that never converts a
-        vocabulary prefix does not query the ``vocabulary`` table. It is not refreshed
-        for the life of the codec.
-        """
-        ids: dict[str, str] = {}
-        for view in self.kg.vocabularies():
-            prefix = self.vocabulary_prefix(view.vocabulary_id)
-            if ids.setdefault(prefix, view.vocabulary_id) != view.vocabulary_id:
-                raise ValueError(
-                    f"Vocabularies {ids[prefix]!r} and {view.vocabulary_id!r} "
-                    f"both become the CURIE prefix {prefix!r}."
-                )
-        return ids
+    @cached_property
+    def _vocabulary_ids(self) -> frozenset[str]:
+        """The ``vocabulary_id`` of every vocabulary, read on first use and then kept."""
+        return frozenset(view.vocabulary_id for view in self.kg.vocabularies())
+
+    @cached_property
+    def _vocabulary_ids_by_prefix(self) -> dict[str, tuple[str, ...]]:
+        """The ``vocabulary_id`` values that become each CURIE prefix."""
+        by_prefix: dict[str, list[str]] = defaultdict(list)
+        for vocabulary_id in sorted(self._vocabulary_ids):
+            by_prefix[self.vocabulary_prefix(vocabulary_id)].append(vocabulary_id)
+        return {prefix: tuple(ids) for prefix, ids in by_prefix.items()}
 
     @staticmethod
     def vocabulary_prefix(vocabulary_id: str) -> str:
@@ -102,27 +109,67 @@ class OMOPCodec:
         """
         Convert a CURIE prefix back to its ``vocabulary_id``.
 
-        A prefix that is already a ``vocabulary_id``, or names no vocabulary, is returned as it is.
+        A prefix that is already a ``vocabulary_id`` is returned as it is. It is returned
+        as it is too when it names no vocabulary, or several, in which case a warning
+        lists them. Nothing then resolves under it.
         """
-        return self._vocabulary_ids_by_prefix.get(prefix, prefix)
+        if prefix in self._vocabulary_ids:
+            return prefix
+        ids = self._vocabulary_ids_by_prefix.get(prefix, ())
+        if len(ids) > 1:
+            logger.warning(
+                "The prefix %r stands for several vocabularies (%s). Use a vocabulary id.",
+                prefix,
+                ", ".join(ids),
+            )
+            return prefix
+        return ids[0] if ids else prefix
 
     def code_curie(self, vocabulary_id: str, concept_code: str) -> CURIE:
-        """Convert a vocabulary and concept code to a CURIE, for example ``SNOMED:254637007``."""
-        return ":".join((self.vocabulary_prefix(vocabulary_id), concept_code))
+        """
+        Convert a vocabulary and concept code to a CURIE, for example ``SNOMED:254637007``.
+
+        The code is percent-encoded, so ``[iU]/L`` in ``UCUM`` gives ``UCUM:%5BiU%5D%2FL``.
+        """
+        return ":".join((self.vocabulary_prefix(vocabulary_id), quote(concept_code, safe="")))
+
+    @cached_property
+    def _prefix_map(self) -> dict[str, str]:
+        """
+        The prefixes of the CURIEs the adapter emits and the URI each stands for.
+
+        These are the oaklib defaults, then each vocabulary whose prefix is a canonical
+        Bioregistry prefix, then ``OMOP`` and ``OMOP_REL``. A vocabulary outside the
+        Bioregistry has no URI.
+        """
+        registry = {
+            prefix.lower(): namespace
+            for prefix, namespace in load_context("bioregistry").as_dict().items()
+        }
+        vocabularies = {
+            prefix: registry[prefix.lower()]
+            for prefix in self._vocabulary_ids_by_prefix
+            if prefix.lower() in registry
+        }
+        unmapped = sorted(set(self._vocabulary_ids_by_prefix) - vocabularies.keys())
+        logger.debug("No Bioregistry URI for the vocabulary prefixes %s.", ", ".join(unmapped))
+        return {
+            **get_default_prefix_map(),
+            **vocabularies,
+            OMOP_PREFIX: "https://athena.ohdsi.org/search-terms/terms/",
+            OMOP_REL_PREFIX: "https://athena.ohdsi.org/relationship/",
+        }
 
     def prefix_map(self) -> dict[str, str]:
         """
-        Return the prefix map for OMOP entities.
+        Return the prefix map for the CURIEs of OMOP entities.
 
         Returns
         -------
         dict[str, str]
             Prefixes mapped to URI bases.
         """
-        return {
-            OMOP_PREFIX: "https://athena.ohdsi.org/concept/",
-            OMOP_REL_PREFIX: "https://athena.ohdsi.org/relationship/",
-        }
+        return dict(self._prefix_map)
 
     def concept_curie(self, concept_id: int) -> CURIE:
         """
@@ -150,28 +197,44 @@ class OMOPCodec:
         """Return True for a predicate CURIE: ``rdfs:subClassOf`` or an ``OMOP_REL`` CURIE."""
         return curie == IS_A or curie.partition(":")[0] == OMOP_REL_PREFIX
 
-    def parse_concept(self, curie: CURIE) -> int:
+    def resolve_concept(self, curie: CURIE) -> int | None:
         """
-        Parse a CURIE into an OMOP concept id.
+        Resolve a CURIE to an OMOP concept id.
 
         An ``OMOP`` CURIE carries the id itself. Any other prefix is read as
-        ``vocab:code``, where the prefix is a ``vocabulary_id`` or its CURIE prefix, and
-        resolved through the Knowledge Graph.
+        ``vocab:code``, where the prefix is a ``vocabulary_id`` or its CURIE prefix and
+        the code is percent-encoded. OMOP does not keep a code unique, so a valid concept
+        is preferred over deprecated ones. When several concepts still share the code, a
+        warning lists them and the CURIE is unresolved.
 
         Parameters
         ----------
         curie : CURIE
-            The CURIE to parse.
+            The CURIE to resolve.
 
         Returns
         -------
-        int
-            The OMOP concept id.
+        int | None
+            The OMOP concept id, or None when the CURIE names no concept or is ambiguous.
+            An ``OMOP`` CURIE is not checked against the concept table.
         """
-        prefix, _, local = curie.partition(":")
+        prefix, separator, local = curie.partition(":")
+        if not separator or self.is_predicate_curie(curie):
+            return None
         if prefix == OMOP_PREFIX:
-            return int(local)
-        return self.kg.concept_id_by_code(self.vocabulary_id(prefix), local)
+            return int(local) if local.isascii() and local.isdigit() else None
+        matches = self.kg.concepts_by_code(self.vocabulary_id(prefix), unquote(local))
+        candidates = [concept_id for concept_id, is_valid in matches.items() if is_valid]
+        candidates = candidates or list(matches)
+        if not candidates:
+            logger.debug("%s names no concept.", curie)
+        if len(candidates) > 1:
+            logger.warning(
+                "%s is ambiguous. Use one of %s.",
+                curie,
+                ", ".join(self.concept_curie(concept_id) for concept_id in candidates),
+            )
+        return candidates[0] if len(candidates) == 1 else None
 
     def predicate_curie(self, relationship_id: str | int) -> PRED_CURIE:
         """
@@ -194,7 +257,7 @@ class OMOPCodec:
             return IS_A
         return ":".join((OMOP_REL_PREFIX, quote(str(relationship_id), safe="")))
 
-    def parse_predicate(self, pred: PRED_CURIE) -> str:
+    def parse_predicate(self, pred: PRED_CURIE) -> str | None:
         """
         Parse a predicate CURIE into an OMOP relationship id.
 
@@ -208,17 +271,33 @@ class OMOPCodec:
 
         Returns
         -------
-        str
-            The relationship id.
-
-        Raises
-        ------
-        ValueError
-            If the CURIE is neither ``rdfs:subClassOf`` nor an ``OMOP_REL`` CURIE.
+        str | None
+            The relationship id, or None when the CURIE is neither ``rdfs:subClassOf``
+            nor an ``OMOP_REL`` CURIE, so it names no OMOP relationship.
         """
         if pred == IS_A:
             return IS_A_RELATIONSHIP_ID
         prefix, _, local = pred.partition(":")
-        if prefix != OMOP_REL_PREFIX:
-            raise ValueError(f"Unsupported predicate CURIE: {pred}")
-        return unquote(local)
+        return unquote(local) if prefix == OMOP_REL_PREFIX else None
+
+    def relationship_ids(self, predicates: Iterable[PRED_CURIE]) -> frozenset[str]:
+        """
+        The relationship ids of the predicate CURIEs.
+
+        A predicate that is not an OMOP one, or names no classified relationship, selects
+        nothing. An info message names it, once for each predicate.
+        """
+        relationship_ids: set[str] = set()
+        for predicate in predicates:
+            relationship_id = self.parse_predicate(predicate)
+            if relationship_id is not None:
+                relationship_ids.add(relationship_id)
+            if (
+                relationship_id not in self._classified_relationship_ids
+                and predicate not in self._ignored_predicates
+            ):
+                self._ignored_predicates.add(predicate)
+                logger.warning(
+                    "The predicate %s names no OMOP relationship and matches nothing.", predicate
+                )
+        return frozenset(relationship_ids)

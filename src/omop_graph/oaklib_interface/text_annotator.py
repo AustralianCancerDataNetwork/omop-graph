@@ -16,6 +16,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
+from omop_graph.oaklib_interface.codec import OMOP_PREFIX
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 
@@ -39,6 +40,21 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
     def __init__(self, kg: KnowledgeGraph, **kwargs):
         super().__init__(kg=kg, **kwargs)
+
+    def _parent_id(self, parent: str) -> int:
+        """
+        The concept id of a ``parent_ids`` entry, given as an id or as a CURIE.
+
+        Raises
+        ------
+        ValueError
+            If the entry names no concept.
+        """
+        curie = parent if ":" in parent else f"{OMOP_PREFIX}:{parent}"
+        concept_id = self.codec.resolve_concept(curie)
+        if concept_id is None:
+            raise ValueError(f"parent_ids entry {parent!r} names no concept.")
+        return concept_id
 
     def annotate_text(
         self,
@@ -116,9 +132,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             domains = None
 
         constraints = GroundingConstraints(
-            parent_ids=(
-                tuple(self.codec.parse_concept(pid) for pid in parent_ids) if parent_ids else None
-            ),
+            parent_ids=tuple(self._parent_id(pid) for pid in parent_ids) if parent_ids else None,
             search_constraint=ConceptFilter(
                 domains=domains,
                 vocabularies=vocabs,

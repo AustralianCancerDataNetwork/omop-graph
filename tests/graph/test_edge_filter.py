@@ -60,6 +60,17 @@ def test_filter_fields_combine_with_and(
     assert len(edges) == len(triples) == expected
 
 
+def test_an_empty_predicate_set_selects_no_edge_where_none_selects_all(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    nothing = EdgeFilter(predicate_ids=frozenset())
+
+    assert len(mock_cdm_kg.edges(SOURCE, direction="out", edge_filter=nothing)) == 0
+    assert tuple(mock_cdm_kg.relationships((SOURCE,), None, edge_filter=nothing)) == ()
+    assert mock_cdm_kg.closure([SOURCE], edge_filter=nothing) == {SOURCE: frozenset()}
+    assert len(mock_cdm_kg.edges(SOURCE, direction="out", edge_filter=EdgeFilter())) > 0
+
+
 def test_an_unknown_subkind_names_the_valid_ones(mock_cdm_kg: KnowledgeGraph) -> None:
     typo = EdgeFilter(
         predicate_subkinds=frozenset({PredicateSubkind(PredicateKind.IDENTITY, "mappin")})

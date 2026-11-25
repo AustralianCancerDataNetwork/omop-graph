@@ -39,6 +39,7 @@ dependencies = [
   "typer>=0.12",
   "rich>=13.0",
   "oaklib>=0.7.4",
+  "prefixmaps>=0.2.6",
   "oa-configurator>=2.1.0,<3"
 ]
 

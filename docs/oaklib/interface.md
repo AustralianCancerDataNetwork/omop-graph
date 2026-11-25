@@ -41,7 +41,11 @@ The primary adapter class that inherits from multiple OAK interfaces:
 | A category | `OMOP:<domain_concept_id>`, the domain of the concept |
 
 * A relationship is shown from the child to the parent: for hierarchy relationships only the upward direction (`Is a`) is listed, and the children of a concept are the subjects of the relationships into it. The downward direction (`Subsumes`) can be asked for by name.
-* A vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`, is written `Nebraska_Lexicon` in CURIEs, and either spelling is accepted as input.
+* A vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`, is written `Nebraska_Lexicon` in CURIEs, and either spelling is accepted as input, including in `id_prefixes`.
+* A concept code is percent-encoded in a CURIE, so the code `[iU]/L` of the `UCUM` vocabulary is `UCUM:%5BiU%5D%2FL`.
+* OMOP does not keep a code unique within its vocabulary. A `vocabulary_id:concept_code` names the valid concept when only one has the code. When several do, it names none and a warning lists their `OMOP:<concept_id>` CURIEs, which are always unambiguous.
+* A CURIE that names no concept, and a predicate CURIE that names no OMOP relationship such as `BFO:0000050`, are left out of the result instead of raising.
+* `prefix_map` holds the oaklib defaults, `OMOP` and `OMOP_REL`, and each vocabulary that is a canonical prefix of the [Bioregistry](https://bioregistry.io), matched by name. A vocabulary the Bioregistry does not have, such as `Nebraska_Lexicon`, has no URI.
 * `entities`, `roots`, `leafs` and `singletons` list active standard and classification concepts. Pass `concept_filter=ConceptFilter(...)` to the constructor to change that.
 
 ### Entailed relationships
@@ -89,7 +93,7 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 * A source or code can use a vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`. It is written `Nebraska_Lexicon`, and either spelling is accepted as input.
 * The cross-reference is a mapping only, so it is not in `entity_alias_map`. It can be looked up from the concept or from `vocabulary_id:concept_code`.
 * Mappings are not limited to the adapter's `concept_filter`.
-* `get_transitive_mappings_by_curie` follows exact equivalence in both directions, which also reaches the concepts that share a target. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
+* `get_transitive_mappings_by_curie` follows exact equivalence from a non-standard concept to the standard concepts it maps to, and a standard concept has none. OMOP maps many concepts to one and stores each mapping in both directions, so following them both ways would join every concept that shares a target, and the result would be most of a vocabulary. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.

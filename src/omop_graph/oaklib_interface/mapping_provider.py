@@ -16,7 +16,7 @@ from oaklib.types import CURIE, PRED_CURIE
 from sssom.constants import SEMAPV
 from sssom_schema import Mapping
 
-from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind, PredicateSubkind
+from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.nodes import ConceptView, MappingView
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
@@ -164,36 +164,34 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
     def simple_mappings_by_curie(self, curie: CURIE) -> Iterator[tuple[PRED_CURIE, CURIE]]:
         """Yield the predicate and object of each mapping of a concept."""
         for mapping in self.sssom_mappings([curie]):
-            if mapping.subject_id == curie:
-                yield mapping.predicate_id, cast(CURIE, mapping.object_id)
+            yield mapping.predicate_id, cast(CURIE, mapping.object_id)
 
     def get_transitive_mappings_by_curie(self, curie: CURIE) -> Iterator[Mapping]:
         """
-        Yield a ``skos:exactMatch`` to every concept reached by following exact equivalence
-        mappings repeatedly, in both directions.
+        Yield a ``skos:exactMatch`` to each standard concept a non-standard concept maps to.
 
-        Since OMOP maps many concepts to one, the concepts that share a target are reached too.
+        OMOP stores a mapping in both directions and maps many concepts to one, so
+        following the exact equivalences both ways would join every concept that shares
+        a target. The chain is followed only from a non-standard concept to the standard
+        concepts it maps to, and ends there. A standard concept has none.
         """
-        predicates = self._mapping_predicates
-        exact = frozenset(r for r, p in predicates.items() if p == SKOS_EXACT_MATCH)
+        exact = frozenset(r for r, p in self._mapping_predicates.items() if p == SKOS_EXACT_MATCH)
         concept_id = self._resolve_concepts([curie]).get(curie)
         if concept_id is None:
             return
-        reached = self.kg.closure(
-            [concept_id], HierarchyDirection.UP, EdgeFilter(predicate_ids=exact)
-        )[concept_id]
+        reached = self.kg.standardise([concept_id], EdgeFilter(predicate_ids=exact))[concept_id]
+        targets = tuple(other for other in reached if other != concept_id)
         views = {
             view.concept_id: view
-            for view in self.kg.concept_views(tuple(reached | {concept_id}), sort=False)
+            for view in self.kg.concept_views((concept_id, *targets), sort=False)
         }
-        for other in sorted(reached):
+        for other in targets:
             yield self._mapping(
-                curie,
+                self.codec.concept_curie(concept_id),
                 SKOS_EXACT_MATCH,
                 self.codec.concept_curie(other),
                 self.codec.vocabulary_prefix(views[concept_id].vocabulary_id),
                 self.codec.vocabulary_prefix(views[other].vocabulary_id),
-                SEMAPV.MappingChaining,
             )
 
     def get_mapping_clusters(self, *args, **kwargs):

@@ -138,9 +138,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         starts = [start_curies] if isinstance(start_curies, str) else list(start_curies)
         ids = self._resolve_concepts(starts)
         edge_filter = EdgeFilter(
-            predicate_ids=frozenset(
-                self.codec.parse_predicate(p) for p in self._traversal_predicates(predicates)
-            )
+            predicate_ids=self.codec.relationship_ids(self._traversal_predicates(predicates))
         )
         standing = self._standing_in(ids.values())
         reached = self.kg.closure(

@@ -174,9 +174,9 @@ def q_concept_views(concept_ids: tuple[int, ...], sort: bool = True) -> Select:
     return stmt
 
 
-def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:
+def q_concepts_by_code(vocabulary_id: str, concept_code: str) -> Select:
     """
-    Query for a Concept ID given its source vocabulary and code.
+    Query the id and validity of every concept with a vocabulary and code.
 
     Parameters
     ----------
@@ -188,11 +188,15 @@ def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:
     Returns
     -------
     Select
-        A statement selecting just the concept_id.
+        A statement selecting ``concept_id`` and ``is_valid``, ordered by concept id.
     """
-    return select(Concept.concept_id).where(
-        Concept.vocabulary_id == vocabulary_id,
-        Concept.concept_code == concept_code,
+    return (
+        select(Concept.concept_id, Concept.is_valid_expr().label("is_valid"))
+        .where(
+            Concept.vocabulary_id == vocabulary_id,
+            Concept.concept_code == concept_code,
+        )
+        .order_by(Concept.concept_id)
     )
 
 
@@ -415,7 +419,7 @@ def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Sele
         stmt = stmt.join(Obj, Concept_Relationship.concept_id_2 == Obj.concept_id)
         stmt = stmt.where(Subj.domain_id == Obj.domain_id)
 
-    if edge_filter.predicate_ids:
+    if edge_filter.predicate_ids is not None:
         stmt = stmt.where(Concept_Relationship.relationship_id.in_(edge_filter.predicate_ids))
 
     return stmt

@@ -68,7 +68,6 @@ from .queries import (
     q_children,
     q_closure,
     q_concept_domain_ids,
-    q_concept_id_by_code,
     q_concept_name_fulltext,
     q_concept_name_ilike,
     q_concept_name_match,
@@ -78,6 +77,7 @@ from .queries import (
     q_concept_view,
     q_concept_views,
     q_concept_vocabulary_ids,
+    q_concepts_by_code,
     q_domains,
     q_edges,
     q_entities,
@@ -347,9 +347,11 @@ class KnowledgeGraph(GraphBackend):
             )
         return concept_views
 
-    def concept_id_by_code(self, vocabulary_id: str, concept_code: str) -> int:
+    def concepts_by_code(self, vocabulary_id: str, concept_code: str) -> dict[int, bool]:
         """
-        Look up a Concept ID using the vocabulary ID and concept code.
+        Look up every concept with a vocabulary ID and concept code.
+
+        OMOP does not keep a code unique within its vocabulary, so there can be several.
 
         Parameters
         ----------
@@ -360,14 +362,13 @@ class KnowledgeGraph(GraphBackend):
 
         Returns
         -------
-        int
-            The resolved OMOP Concept ID.
+        dict[int, bool]
+            Whether each matching concept is valid, by concept id in ascending order.
+            Empty when no concept has the code.
         """
         with self.session_factory() as session:
-            concept_id = int(
-                session.execute(q_concept_id_by_code(vocabulary_id, concept_code)).scalar_one()
-            )
-        return concept_id
+            rows = session.execute(q_concepts_by_code(vocabulary_id, concept_code))
+            return {int(row.concept_id): bool(row.is_valid) for row in rows}
 
     def concept_lookup(
         self,
@@ -678,7 +679,7 @@ class KnowledgeGraph(GraphBackend):
         """Fold the kind and subkind fields of *edge_filter* into ``predicate_ids``.
 
         Returns None when they select no relationship, so the caller has nothing
-        to query.
+        to query. An empty ``predicate_ids`` selects none, where None selects all.
 
         Raises
         ------
@@ -686,6 +687,8 @@ class KnowledgeGraph(GraphBackend):
             If ``predicate_subkinds`` names a subkind no relationship is classified under.
         """
         edge_filter = edge_filter or EdgeFilter()
+        if edge_filter.predicate_ids is not None and not edge_filter.predicate_ids:
+            return None
         kinds, subkinds = edge_filter.predicate_kinds, edge_filter.predicate_subkinds
         if not kinds and not subkinds:
             return edge_filter
@@ -709,7 +712,7 @@ class KnowledgeGraph(GraphBackend):
                 not subkinds or PredicateSubkind(m.predicate_kind, m.predicate_subkind) in subkinds
             )
         )
-        if edge_filter.predicate_ids:
+        if edge_filter.predicate_ids is not None:
             selected &= edge_filter.predicate_ids
         if not selected:
             return None
@@ -780,7 +783,7 @@ class KnowledgeGraph(GraphBackend):
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is not None:
             followed = frozenset(self._relationship_mapping)
-            if resolved.predicate_ids:
+            if resolved.predicate_ids is not None:
                 followed &= resolved.predicate_ids
             resolved = replace(resolved, predicate_ids=followed)
         if resolved is not None and resolved.predicate_ids:

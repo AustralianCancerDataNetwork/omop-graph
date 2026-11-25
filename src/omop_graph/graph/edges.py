@@ -43,7 +43,7 @@ class EdgeFilter:
     Parameters
     ----------
     predicate_ids : frozenset[str], optional
-        Only these relationship ids.
+        Only these relationship ids. An empty set selects no edge, and None selects all.
     predicate_kinds : frozenset[PredicateKind], optional
         Only relationships of these kinds.
     predicate_subkinds : frozenset[PredicateSubkind], optional
