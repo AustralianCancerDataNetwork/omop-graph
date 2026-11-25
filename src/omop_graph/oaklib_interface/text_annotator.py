@@ -16,7 +16,6 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
-from omop_graph.oaklib_interface.codec import OMOP_PREFIX
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 
@@ -50,8 +49,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         ValueError
             If the entry names no concept.
         """
-        curie = parent if ":" in parent else f"{OMOP_PREFIX}:{parent}"
-        concept_id = self.codec.resolve_concept(curie)
+        concept_id = self.codec.resolve_reference(parent)
         if concept_id is None:
             raise ValueError(f"parent_ids entry {parent!r} names no concept.")
         return concept_id

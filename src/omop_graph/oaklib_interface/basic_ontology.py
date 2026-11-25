@@ -34,7 +34,6 @@ from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import (
-    OMOP_PREFIX,
     REPLACED_BY_RELATIONSHIP_ID,
     OMOPLanguage,
 )
@@ -123,7 +122,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         prefix is every concept's own prefix, so naming it does not narrow.
         """
         scope = replace(self.concept_filter, require_active=filter_obsoletes)
-        if not id_prefixes or OMOP_PREFIX in id_prefixes:
+        if not id_prefixes or any(map(self.codec.is_omop_prefix, id_prefixes)):
             return scope
         vocabularies = dict.fromkeys(self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
         return replace(

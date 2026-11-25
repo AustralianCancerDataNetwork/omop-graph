@@ -159,6 +159,26 @@ def test_an_ambiguous_code_is_unresolved_and_the_warning_lists_the_concepts(
     assert f"Use one of {curie(AMBIGUOUS_ONE)}, {curie(AMBIGUOUS_TWO)}" in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("reference", "expected"),
+    [
+        (str(PARENT), PARENT),
+        (curie(PARENT), PARENT),
+        ("SNOMED:with%20space", SPACE),
+        (UNKNOWN, None),
+        ("nothing", None),
+    ],
+)
+def test_a_reference_is_a_bare_id_or_a_curie(adapter, reference: str, expected: int | None) -> None:
+    assert adapter.codec.resolve_reference(reference) == expected
+
+
+def test_a_parent_that_names_no_concept_raises(adapter) -> None:
+    assert adapter._parent_id(str(PARENT)) == PARENT
+    with pytest.raises(ValueError, match="names no concept"):
+        adapter._parent_id(UNKNOWN)
+
+
 def test_a_prefix_shared_by_vocabularies_resolves_nothing_and_breaks_nothing(
     adapter, caplog: pytest.LogCaptureFixture
 ) -> None:

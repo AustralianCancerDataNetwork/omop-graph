@@ -193,6 +193,29 @@ class OMOPCodec:
         assert isinstance(concept_id, int), "Expected concept_id to be an integer"
         return ":".join((OMOP_PREFIX, str(concept_id)))
 
+    @staticmethod
+    def is_omop_prefix(prefix: str) -> bool:
+        """Return True for the ``OMOP`` prefix, whose local part is the concept id."""
+        return prefix == OMOP_PREFIX
+
+    def resolve_reference(self, reference: str) -> int | None:
+        """
+        Resolve a bare concept id or a CURIE to an OMOP concept id.
+
+        Parameters
+        ----------
+        reference : str
+            A concept id such as ``"12345"``, or any CURIE accepted by :meth:`resolve_concept`.
+
+        Returns
+        -------
+        int | None
+            The OMOP concept id, or None when the reference names no concept.
+        """
+        if ":" not in reference:
+            reference = self.concept_curie(int(reference)) if reference.isdecimal() else reference
+        return self.resolve_concept(reference)
+
     def is_predicate_curie(self, curie: CURIE) -> bool:
         """Return True for a predicate CURIE: ``rdfs:subClassOf`` or an ``OMOP_REL`` CURIE."""
         return curie == IS_A or curie.partition(":")[0] == OMOP_REL_PREFIX
@@ -221,7 +244,7 @@ class OMOPCodec:
         prefix, separator, local = curie.partition(":")
         if not separator or self.is_predicate_curie(curie):
             return None
-        if prefix == OMOP_PREFIX:
+        if self.is_omop_prefix(prefix):
             return int(local) if local.isascii() and local.isdigit() else None
         matches = self.kg.concepts_by_code(self.vocabulary_id(prefix), unquote(local))
         candidates = [concept_id for concept_id, is_valid in matches.items() if is_valid]

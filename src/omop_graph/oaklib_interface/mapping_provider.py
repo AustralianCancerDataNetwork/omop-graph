@@ -20,7 +20,6 @@ from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.nodes import ConceptView, MappingView
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
-from omop_graph.oaklib_interface.codec import OMOP_PREFIX
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 
@@ -137,7 +136,7 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
             return
         requested = [curies] if isinstance(curies, str) else list(curies)
         ids = self._resolve_concepts(requested)
-        concepts = {c: i for c, i in ids.items() if c.split(":", 1)[0] == OMOP_PREFIX}
+        concepts = {c: i for c, i in ids.items() if self.codec.is_omop_prefix(c.partition(":")[0])}
         for edge in self.kg.mappings(concepts.values(), edge_filter, source):
             yield self._edge_mapping(edge, predicates)
         subject = {concept_id: self.codec.concept_curie(concept_id) for concept_id in ids.values()}
