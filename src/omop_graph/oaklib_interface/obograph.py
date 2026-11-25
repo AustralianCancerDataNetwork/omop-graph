@@ -107,13 +107,11 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         if include_metadata:
             for curie, spv in self.synonym_property_values(curies):
                 synonyms[curie].append(spv)
-        views = self._concept_views(
-            curie for curie in curies if curie not in self.predicates_by_curie
-        )
+        views = self._concept_views(curie for curie in curies if self.predicate(curie) is None)
         nodes: dict[CURIE, Node] = {}
         for curie in curies:
             node_id = (self.curie_to_uri(curie) or curie) if expand_curies else curie
-            predicate = self.predicates_by_curie.get(curie)
+            predicate = self.predicate(curie)
             if predicate is not None:
                 nodes[curie] = Node(id=node_id, lbl=predicate.name, type=NodeTypeEnum.PROPERTY.text)
             elif curie in views:

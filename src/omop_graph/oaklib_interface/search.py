@@ -135,10 +135,10 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
             return config.limit is not None and len(found) >= config.limit
 
         if by_identifier and not full():
-            concept_id = self.codec.resolve_concept(search_term)
-            if concept_id is not None:
-                in_scope = tuple(self.kg.entities(replace(constraint, concept_ids=(concept_id,))))
-                for concept_id in in_scope:
+            candidates = self.codec.concept_candidates(search_term)
+            if candidates:
+                in_scope = tuple(self.kg.entities(replace(constraint, concept_ids=candidates)))
+                for concept_id in in_scope[: None if config.limit is None else config.limit]:
                     found[concept_id] = None
                     yield self.codec.concept_curie(concept_id)
 

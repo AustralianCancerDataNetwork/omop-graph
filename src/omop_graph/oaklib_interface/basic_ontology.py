@@ -96,6 +96,30 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         }
 
     @cached_property
+    def _predicates_by_relationship_id(self) -> dict[str, Predicate]:
+        """The classified relationships, keyed by their relationship id."""
+        return {predicate.relationship_id: predicate for predicate in self.kg.predicates()}
+
+    def predicate(self, curie: CURIE) -> Predicate | None:
+        """
+        The classified relationship a predicate CURIE names.
+
+        ``Is a`` is found as ``rdfs:subClassOf`` and as ``OMOP_REL:Is%20a``.
+
+        Parameters
+        ----------
+        curie : CURIE
+            The predicate CURIE.
+
+        Returns
+        -------
+        Predicate | None
+            The relationship, or None when the CURIE names no classified relationship.
+        """
+        relationship_id = self.codec.parse_predicate(curie)
+        return self._predicates_by_relationship_id.get(relationship_id) if relationship_id else None
+
+    @cached_property
     def default_relationship_ids(self) -> frozenset[str]:
         """
         The classified relationships exposed when no predicate is named.
@@ -150,8 +174,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         The adapter's vocabularies and domains, whatever the standardness or validity.
 
-        It selects every concept that ``entities(filter_obsoletes=False)`` lists, which
-        includes the ones ``obsoletes`` yields.
+        Search and ``obsoletes`` select from these concepts.
         """
         return replace(
             self.concept_filter,
@@ -274,7 +297,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """Yield ``owl:Class`` for each concept and ``owl:ObjectProperty`` for each relationship."""
         entities = list(entities)
         for entity in entities:
-            if entity in self.predicates_by_curie:
+            if self.predicate(entity) is not None:
                 yield entity, OWL_OBJECT_PROPERTY
         for entity in self._concept_views(entities):
             yield entity, OWL_CLASS
@@ -328,9 +351,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         filter_obsoletes : bool
             If True, the concepts the adapter's ``concept_filter`` selects, active ones
             only. With the default filter these are the active standard and
-            classification concepts. If False, every concept in the filter's vocabularies
-            and domains. The filter's standardness and validity requirements are dropped,
-            so deprecated and non-standard concepts are included.
+            classification concepts. If False, the deprecated concepts of the filter's
+            vocabularies and domains are listed too, whatever their standardness, which
+            are the ones ``obsoletes`` yields.
         owl_type : str | None
             ``owl:Class`` or None for concepts, ``owl:ObjectProperty`` for relationships
             as predicate CURIEs. The other OWL types have no entities here and yield nothing.
@@ -358,11 +381,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         if owl_type not in (None, OWL_CLASS):
             return
 
-        scope = concept_filter or (
-            self._scope(filter_obsoletes) if filter_obsoletes else self._every_concept
-        )
-        for cid in self.kg.entities(scope):
+        for cid in self.kg.entities(concept_filter or self._scope(filter_obsoletes=True)):
             yield self.codec.concept_curie(cid)
+        if concept_filter is None and not filter_obsoletes:
+            yield from self.obsoletes()
 
     def _enumerate(
         self,
@@ -434,9 +456,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         curies = list(curies)
         if lang is None or lang == self.default_language:
             names = {
-                curie: predicate.name
-                for curie in curies
-                if (predicate := self.predicates_by_curie.get(curie))
+                curie: predicate.name for curie in curies if (predicate := self.predicate(curie))
             }
             names |= {
                 curie: view.concept_name for curie, view in self._concept_views(curies).items()
@@ -769,7 +789,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         curies = list(dict.fromkeys(curies))
         maps: dict[CURIE, METADATA_MAP] = {}
         for curie in curies:
-            predicate = self.predicates_by_curie.get(curie)
+            predicate = self.predicate(curie)
             if predicate is not None:
                 maps[curie] = {"id": [curie], LABEL_PREDICATE: [predicate.name]}
                 if predicate.reverse_id:

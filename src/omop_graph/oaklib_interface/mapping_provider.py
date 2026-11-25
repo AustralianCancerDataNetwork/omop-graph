@@ -102,8 +102,7 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         Parameters
         ----------
         curies : CURIE | Iterable[CURIE] | None
-            Concepts to look up. A ``vocabulary_id:concept_code`` gives only the
-            cross-reference mapping of its concept.
+            Concepts to look up, as ``OMOP`` CURIEs or ``vocabulary_id:concept_code``.
         source : str | None
             Only mappings with this vocabulary on either side, as its ``vocabulary_id`` or
             its CURIE prefix.
@@ -135,12 +134,12 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
             return
         requested = [curies] if isinstance(curies, str) else list(curies)
         ids = self._resolve_concepts(requested)
-        concepts = {c: i for c, i in ids.items() if self.codec.is_omop_prefix(c.partition(":")[0])}
-        for edge in self.kg.mappings(concepts.values(), edge_filter, source):
+        concept_ids = tuple(dict.fromkeys(ids.values()))
+        for edge in self.kg.mappings(concept_ids, edge_filter, source):
             yield self._edge_mapping(edge, predicates)
-        subject = {concept_id: self.codec.concept_curie(concept_id) for concept_id in ids.values()}
+        subject = {concept_id: self.codec.concept_curie(concept_id) for concept_id in concept_ids}
         yield from self._cross_references(
-            self.kg.concept_views(tuple(dict.fromkeys(ids.values())), sort=False), source, subject
+            self.kg.concept_views(concept_ids, sort=False), source, subject
         )
 
     def _edge_mapping(self, edge: MappingView, predicates: dict[str, PRED_CURIE]) -> Mapping:
@@ -172,6 +171,13 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         following the exact equivalences both ways would join every concept that shares
         a target. The chain is followed only from a non-standard concept to the standard
         concepts it maps to, and ends there. A standard concept has none.
+
+        Notes
+        -----
+        Only one step is taken. A concept whose identity edge leads to another non-standard
+        concept, which itself maps to a standard concept, gets no mapping. Following such
+        chains is the horizontal transitive closure, see
+        https://github.com/AustralianCancerDataNetwork/omop-graph/issues/20
         """
         exact = frozenset(r for r, p in self._mapping_predicates.items() if p == SKOS_EXACT_MATCH)
         concept_id = self._resolve_concepts([curie]).get(curie)

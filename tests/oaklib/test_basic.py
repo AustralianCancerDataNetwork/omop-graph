@@ -141,12 +141,13 @@ def test_obsoletes_include_updated_concepts_only_when_merged_are_included(
     assert set(adapter.obsoletes(include_merged=include_merged)) == expected
 
 
-def test_every_obsolete_is_an_entity_when_obsoletes_are_not_filtered(adapter) -> None:
+def test_unfiltered_entities_are_the_entities_and_the_obsoletes(adapter) -> None:
     everything = set(adapter.entities(filter_obsoletes=False))
 
+    assert everything == set(adapter.entities()) | set(adapter.obsoletes())
     assert set(adapter.obsoletes()) <= everything
-    assert {f"OMOP:{ICD_CODE}", f"OMOP:{DELETED}"} <= everything
-    assert {f"OMOP:{ICD_CODE}", f"OMOP:{DELETED}"}.isdisjoint(adapter.entities())
+    assert {f"OMOP:{DELETED}", f"OMOP:{OUTDATED}"} <= everything
+    assert f"OMOP:{ICD_CODE}" not in everything
 
 
 def test_obsoletes_stay_within_the_adapters_vocabularies(adapter) -> None:

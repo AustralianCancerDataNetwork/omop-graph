@@ -141,10 +141,11 @@ def test_version_lineage_self_maps_and_deprecated_edges_are_not_mappings(adapter
     assert (curie(SOURCE_READ), SKOS_EXACT_MATCH, curie(REPLACED)) not in every
 
 
-def test_a_vocabulary_code_gives_only_the_cross_reference(adapter) -> None:
-    assert summary(adapter.sssom_mappings([f"ICD10CM:C{SOURCE_ICD}"])) == {
-        (curie(SOURCE_ICD), HAS_DBXREF, f"ICD10CM:C{SOURCE_ICD}")
-    }
+def test_a_vocabulary_code_gives_the_mappings_of_its_concept(adapter) -> None:
+    by_code = summary(adapter.sssom_mappings([f"ICD10CM:C{SOURCE_ICD}"]))
+
+    assert by_code == summary(adapter.sssom_mappings([curie(SOURCE_ICD)]))
+    assert (curie(SOURCE_ICD), SKOS_EXACT_MATCH, curie(STANDARD)) in by_code
 
 
 def test_a_vocabulary_that_is_not_a_curie_prefix_gets_a_safe_one(adapter) -> None:
@@ -152,12 +153,9 @@ def test_a_vocabulary_that_is_not_a_curie_prefix_gets_a_safe_one(adapter) -> Non
 
     assert (curie(SPACED), HAS_DBXREF, f"Nebraska_Lexicon:C{SPACED}") in summary(mappings)
     assert {m.subject_source for m in mappings} == {"Nebraska_Lexicon"}
-    assert summary(adapter.sssom_mappings([f"Nebraska_Lexicon:C{SPACED}"])) == {
-        (curie(SPACED), HAS_DBXREF, f"Nebraska_Lexicon:C{SPACED}")
-    }
-    assert summary(adapter.sssom_mappings([f"Nebraska Lexicon:C{SPACED}"])) == {
-        (curie(SPACED), HAS_DBXREF, f"Nebraska_Lexicon:C{SPACED}")
-    }
+    by_curie = summary(mappings)
+    assert summary(adapter.sssom_mappings([f"Nebraska_Lexicon:C{SPACED}"])) == by_curie
+    assert summary(adapter.sssom_mappings([f"Nebraska Lexicon:C{SPACED}"])) == by_curie
     for source in ("Nebraska_Lexicon", "Nebraska Lexicon"):
         assert summary(adapter.sssom_mappings([curie(STANDARD)], source=source)) == {
             (curie(STANDARD), SKOS_EXACT_MATCH, curie(SPACED))

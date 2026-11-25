@@ -14,7 +14,8 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from oaklib.datamodels.vocabulary import HAS_DBXREF, IS_A
+from oaklib.datamodels.search import SearchConfiguration, SearchProperty
+from oaklib.datamodels.vocabulary import HAS_DBXREF, IS_A, OWL_OBJECT_PROPERTY
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
@@ -159,6 +160,25 @@ def test_an_ambiguous_code_is_unresolved_and_the_warning_lists_the_concepts(
     assert f"Use one of {curie(AMBIGUOUS_ONE)}, {curie(AMBIGUOUS_TWO)}" in caplog.text
 
 
+def test_a_search_by_an_ambiguous_code_yields_every_candidate(adapter) -> None:
+    identifier = SearchConfiguration(properties=[SearchProperty.IDENTIFIER.text])
+
+    assert set(adapter.basic_search("DRG:015", identifier)) == {
+        curie(AMBIGUOUS_ONE),
+        curie(AMBIGUOUS_TWO),
+    }
+    limited = SearchConfiguration(properties=[SearchProperty.IDENTIFIER.text], limit=1)
+    assert len(list(adapter.basic_search("DRG:015", limited))) == 1
+
+
+def test_is_a_is_known_by_both_of_its_predicate_curies(adapter) -> None:
+    for predicate in (IS_A, "OMOP_REL:Is%20a"):
+        assert list(adapter.owl_types([predicate])) == [(predicate, OWL_OBJECT_PROPERTY)]
+        assert list(adapter.dangling([predicate])) == []
+        assert adapter.label(predicate) == adapter.label(IS_A) is not None
+        assert adapter.entity_metadata_map(predicate)["id"] == [predicate]
+
+
 @pytest.mark.parametrize(
     ("reference", "expected"),
     [
@@ -207,10 +227,11 @@ def test_id_prefixes_take_a_vocabulary_id_or_its_curie_prefix(adapter, prefix: s
     assert list(adapter.roots(id_prefixes=[prefix])) == [curie(COLON)]
 
 
-def test_a_vocabulary_code_gives_the_cross_reference_and_names_its_concept(adapter) -> None:
-    assert set(adapter.simple_mappings_by_curie("ICD10CM:I48.9")) == {
-        ("oio:hasDbXref", "ICD10CM:I48.9")
-    }
+def test_a_vocabulary_code_gives_the_mappings_and_names_its_concept(adapter) -> None:
+    assert set(adapter.simple_mappings_by_curie("ICD10CM:I48.9")) == set(
+        adapter.simple_mappings_by_curie(curie(SOURCE))
+    )
+    assert ("oio:hasDbXref", "ICD10CM:I48.9") in adapter.simple_mappings_by_curie("ICD10CM:I48.9")
     (mapping,) = adapter.get_transitive_mappings_by_curie("ICD10CM:I48.9")
     assert mapping.subject_id == curie(SOURCE)
 

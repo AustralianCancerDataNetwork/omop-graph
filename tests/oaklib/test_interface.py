@@ -153,21 +153,23 @@ class _RecordingKnowledgeGraph:
 
     def __init__(self) -> None:
         self.scopes: list[ConceptFilter] = []
+        self.obsolete_scopes: list[ConceptFilter] = []
 
     def entities(self, concept_filter: ConceptFilter):
         self.scopes.append(concept_filter)
         return iter(())
 
+    def obsolete_concepts(self, include_updated: bool, concept_filter: ConceptFilter):
+        self.obsolete_scopes.append(concept_filter)
+        return iter(())
+
 
 @pytest.mark.parametrize(
-    ("filter_obsoletes", "expected"),
-    [
-        (True, ConceptFilter(domains=("Condition",), require_standard=True, require_active=True)),
-        (False, ConceptFilter(domains=("Condition",))),
-    ],
+    ("filter_obsoletes", "expected_obsolete_scopes"),
+    [(True, []), (False, [ConceptFilter(domains=("Condition",))])],
 )
 def test_filter_obsoletes_applies_to_the_standing_scope(
-    filter_obsoletes: bool, expected: ConceptFilter
+    filter_obsoletes: bool, expected_obsolete_scopes: list[ConceptFilter]
 ) -> None:
     kg = _RecordingKnowledgeGraph()
     standing = ConceptFilter(domains=("Condition",), require_standard=True)
@@ -175,7 +177,10 @@ def test_filter_obsoletes_applies_to_the_standing_scope(
 
     list(adapter.entities(filter_obsoletes=filter_obsoletes))
 
-    assert kg.scopes == [expected]
+    assert kg.scopes == [
+        ConceptFilter(domains=("Condition",), require_standard=True, require_active=True)
+    ]
+    assert kg.obsolete_scopes == expected_obsolete_scopes
 
 
 def test_an_explicit_concept_filter_replaces_the_standing_scope_as_given() -> None:

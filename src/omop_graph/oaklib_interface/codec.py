@@ -235,15 +235,42 @@ class OMOPCodec:
         """Return True for a predicate CURIE: ``rdfs:subClassOf`` or an ``OMOP_REL`` CURIE."""
         return curie == IS_A or curie.partition(":")[0] == OMOP_REL_PREFIX
 
+    def concept_candidates(self, curie: CURIE) -> tuple[int, ...]:
+        """
+        The OMOP concept ids a CURIE can name.
+
+        An ``OMOP`` CURIE carries the id itself. Any other prefix is read as
+        ``vocab:code``, where the prefix is a ``vocabulary_id`` or its CURIE prefix and
+        the code is percent-encoded. OMOP does not keep a code unique, so the valid
+        concepts are preferred over deprecated ones, and several remain when they share
+        the code.
+
+        Parameters
+        ----------
+        curie : CURIE
+            The CURIE to look up.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The concept ids, empty when the CURIE names no concept. An ``OMOP`` CURIE is
+            not checked against the concept table.
+        """
+        prefix, separator, local = curie.partition(":")
+        if not separator or self.is_predicate_curie(curie):
+            return ()
+        if self.is_omop_prefix(prefix):
+            return (int(local),) if local.isascii() and local.isdigit() else ()
+        matches = self.kg.concepts_by_code(self.vocabulary_id(prefix), unquote(local))
+        candidates = [concept_id for concept_id, is_valid in matches.items() if is_valid]
+        return tuple(candidates or matches)
+
     def resolve_concept(self, curie: CURIE) -> int | None:
         """
         Resolve a CURIE to an OMOP concept id.
 
-        An ``OMOP`` CURIE carries the id itself. Any other prefix is read as
-        ``vocab:code``, where the prefix is a ``vocabulary_id`` or its CURIE prefix and
-        the code is percent-encoded. OMOP does not keep a code unique, so a valid concept
-        is preferred over deprecated ones. When several concepts still share the code, a
-        warning lists them and the CURIE is unresolved.
+        When several concepts share the code of a ``vocab:code`` CURIE, a warning lists
+        them and the CURIE is unresolved, see :meth:`concept_candidates`.
 
         Parameters
         ----------
@@ -256,14 +283,7 @@ class OMOPCodec:
             The OMOP concept id, or None when the CURIE names no concept or is ambiguous.
             An ``OMOP`` CURIE is not checked against the concept table.
         """
-        prefix, separator, local = curie.partition(":")
-        if not separator or self.is_predicate_curie(curie):
-            return None
-        if self.is_omop_prefix(prefix):
-            return int(local) if local.isascii() and local.isdigit() else None
-        matches = self.kg.concepts_by_code(self.vocabulary_id(prefix), unquote(local))
-        candidates = [concept_id for concept_id, is_valid in matches.items() if is_valid]
-        candidates = candidates or list(matches)
+        candidates = self.concept_candidates(curie)
         if not candidates:
             logger.debug("%s names no concept.", curie)
         if len(candidates) > 1:
