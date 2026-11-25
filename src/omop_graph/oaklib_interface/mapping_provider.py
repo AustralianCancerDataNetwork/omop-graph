@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable, Iterator
 from dataclasses import replace
-from itertools import batched
 from typing import ClassVar, cast
 
 from oaklib.datamodels.vocabulary import (
@@ -128,7 +127,7 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
                 if source is None
                 else replace(self.concept_filter, vocabularies=(source,))
             )
-            for batch in batched(self.kg.entities(scope), self.kg.LOOKUP_BATCH_SIZE):
+            for batch in self.kg.batches(self.kg.entities(scope)):
                 subject = {concept_id: self.codec.concept_curie(concept_id) for concept_id in batch}
                 yield from self._cross_references(
                     self.kg.concept_views(batch, sort=False), source, subject

@@ -18,9 +18,9 @@ import functools
 import logging
 import re
 from collections import defaultdict
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Iterator
 from dataclasses import dataclass, replace
-from itertools import batched
+from itertools import batched, product
 from typing import TYPE_CHECKING, ClassVar, Literal
 
 from oa_configurator import ResolvedModel
@@ -332,28 +332,52 @@ class KnowledgeGraph(GraphBackend):
             row = session.execute(q_concept_view(concept_id)).one()
         return ConceptView.from_row(row)
 
+    @classmethod
+    def batches[T](cls, ids: Iterable[T]) -> Iterator[tuple[T, ...]]:
+        """
+        Split *ids* into tuples of at most ``LOOKUP_BATCH_SIZE`` ids, in order.
+
+        Every query that takes a list of ids runs once for each batch, which keeps the
+        number of bind parameters of a statement under the limit of the database. The ids
+        can be concept ids or the CURIEs of an adapter.
+        """
+        return batched(ids, cls.LOOKUP_BATCH_SIZE)
+
+    def _rows_in_batches(
+        self, session: Session, build: Callable[[tuple[int, ...]], Select], ids: Iterable[int]
+    ) -> Iterator[Row]:
+        """Yield the rows of ``build(batch)`` for each batch of *ids*, in the order of *ids*."""
+        for batch in self.batches(ids):
+            yield from session.execute(build(batch))
+
     def concept_views(
-        self, concept_ids: tuple[int, ...], sort: bool = True
+        self, concept_ids: Iterable[int], sort: bool = True
     ) -> tuple[ConceptView, ...]:
         """
-        Retrieve multiple concept views in a batch.
+        Retrieve the views of several concepts, however many.
 
         Parameters
         ----------
-        concept_ids : tuple[int, ...]
-            A tuple of OMOP Concept IDs.
+        concept_ids : Iterable[int]
+            OMOP Concept IDs.
+        sort : bool
+            If True, the views of each batch of ``LOOKUP_BATCH_SIZE`` ids are ordered by
+            match quality: standard concepts first, then active ones, then shorter names.
 
         Returns
         -------
         tuple[ConceptView, ...]
-            A tuple of concept views.
+            The views of the concepts that exist, each once.
         """
         with self.session_factory() as session:
-            concept_views = tuple(
+            return tuple(
                 ConceptView.from_row(row)
-                for row in session.execute(q_concept_views(concept_ids, sort=sort))
+                for row in self._rows_in_batches(
+                    session,
+                    lambda batch: q_concept_views(batch, sort=sort),
+                    dict.fromkeys(concept_ids),
+                )
             )
-        return concept_views
 
     def concepts_by_code(self, vocabulary_id: str, concept_code: str) -> dict[int, bool]:
         """
@@ -506,20 +530,25 @@ class KnowledgeGraph(GraphBackend):
 
     def relationships(
         self,
-        subjects: tuple[int, ...] | None,
-        objects: tuple[int, ...] | None,
+        subjects: Iterable[int] | None,
+        *,
+        objects: Iterable[int] | None = None,
         edge_filter: EdgeFilter | None = None,
         invert: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
         Query relationships between concepts.
 
+        Any number of subjects and objects is allowed. With neither, every relationship
+        the filter selects is read through a server-side cursor, so the table is never
+        held in memory.
+
         Parameters
         ----------
-        subjects : tuple[int, ...] | None
-            Subject concept ids.
-        objects : tuple[int, ...] | None
-            Object concept ids.
+        subjects : Iterable[int] | None
+            Subject concept ids, or None for any.
+        objects : Iterable[int] | None
+            Object concept ids, or None for any.
         edge_filter : EdgeFilter, optional
             Which relationships to return. Defaults to ``EdgeFilter()``. Relationships
             without a classification are skipped, as in :meth:`iter_edges`.
@@ -545,22 +574,22 @@ class KnowledgeGraph(GraphBackend):
         if resolved is None:
             return
 
-        yield from self._classified_triples(
-            q_relationships(subjects=subjects, objects=objects, edge_filter=resolved)
-        )
+        if subjects is None and objects is None:
+            statements = (stream(q_relationships(None, None, resolved)),)
+        else:
+            subject_batches = (None,) if subjects is None else tuple(self.batches(subjects))
+            object_batches = (None,) if objects is None else tuple(self.batches(objects))
+            statements = tuple(
+                q_relationships(subject_batch, object_batch, resolved)
+                for subject_batch, object_batch in product(subject_batches, object_batches)
+            )
+        yield from self._classified_triples(statements)
 
     def all_relationships(
         self, edge_filter: EdgeFilter | None = None
     ) -> Generator[tuple[int, str, int], None, None]:
-        """
-        Yield every relationship selected by *edge_filter*, read through a server-side cursor.
-
-        Meant for scans of the whole table. The triples are as in :meth:`relationships`.
-        """
-        resolved = self._resolve_edge_filter(edge_filter)
-        if resolved is None:
-            return
-        yield from self._classified_triples(stream(q_relationships(None, None, resolved)))
+        """Yield every relationship selected by *edge_filter*, as :meth:`relationships` does."""
+        yield from self.relationships(None, edge_filter=edge_filter)
 
     def mappings(
         self,
@@ -590,22 +619,22 @@ class KnowledgeGraph(GraphBackend):
             statements = [stream(q_mappings(None, resolved, source))]
         else:
             ids = tuple(dict.fromkeys(concept_ids))
-            statements = [
-                q_mappings(batch, resolved, source)
-                for batch in batched(ids, self.LOOKUP_BATCH_SIZE)
-            ]
+            statements = [q_mappings(batch, resolved, source) for batch in self.batches(ids)]
         with self.session_factory() as session:
             for stmt in statements:
                 for row in session.execute(stmt):
                     if row.predicate_id in self._relationship_mapping:
                         yield MappingView(**row._mapping)
 
-    def _classified_triples(self, stmt: Select) -> Generator[tuple[int, str, int], None, None]:
-        """Run *stmt*, a relationship triple query, and keep the triples of classified relationships."""
+    def _classified_triples(
+        self, statements: Iterable[Select]
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """Run the relationship triple queries and keep the triples of classified relationships."""
         with self.session_factory() as session:
-            for s, p, o in session.execute(stmt):
-                if p in self._relationship_mapping:
-                    yield s, p, o
+            for stmt in statements:
+                for s, p, o in session.execute(stmt):
+                    if p in self._relationship_mapping:
+                        yield s, p, o
 
     def reverse_predicate_id(self, relationship_id: str) -> str | None:
         """
@@ -621,7 +650,7 @@ class KnowledgeGraph(GraphBackend):
 
     def edges(
         self,
-        concept_ids: tuple[int, ...] | int,
+        concept_ids: Iterable[int] | int,
         direction: Literal["in", "out"],
         edge_filter: EdgeFilter | None = None,
     ) -> tuple[EdgeView, ...]:
@@ -630,8 +659,8 @@ class KnowledgeGraph(GraphBackend):
 
         Parameters
         ----------
-        concept_ids : int, tuple[int, ...]
-            The source/target concept ID(s).
+        concept_ids : int, Iterable[int]
+            The source/target concept ID(s), however many.
         direction : str
             'out' for outgoing, 'in' for incoming.
         edge_filter : EdgeFilter, optional
@@ -651,7 +680,7 @@ class KnowledgeGraph(GraphBackend):
     def iter_edges(
         self,
         session: Session,
-        concept_ids: int | tuple[int, ...],
+        concept_ids: int | Iterable[int],
         direction: Literal["in", "out"],
         edge_filter: EdgeFilter | None = None,
         ordered: bool = False,
@@ -660,20 +689,26 @@ class KnowledgeGraph(GraphBackend):
 
         Edges whose relationship has no classification are skipped. If
         ``ordered=True``, edges are ordered by source concept, target concept,
-        and relationship ID, making results reproducible. If ``ordered=False``,
-        row order is unspecified and may differ between runs and backends.
+        and relationship ID within each batch of ``LOOKUP_BATCH_SIZE`` concepts, making
+        results reproducible. If ``ordered=False``, row order is unspecified and may
+        differ between runs and backends.
         """
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
             return
 
-        stmt = q_edges(
-            concept_ids=concept_ids,
-            direction=direction,
-            edge_filter=resolved,
-            ordered=ordered,
+        ids = (concept_ids,) if isinstance(concept_ids, int) else concept_ids
+        rows = self._rows_in_batches(
+            session,
+            lambda batch: q_edges(
+                concept_ids=batch,
+                direction=direction,
+                edge_filter=resolved,
+                ordered=ordered,
+            ),
+            ids,
         )
-        for row in session.execute(stmt):
+        for row in rows:
             mapping = self._relationship_mapping.get(row.predicate_id)
             if mapping is None:
                 continue
@@ -796,7 +831,7 @@ class KnowledgeGraph(GraphBackend):
             resolved = replace(resolved, predicate_ids=followed)
         if resolved is not None and resolved.predicate_ids:
             with self.session_factory() as session:
-                for batch in batched(starts, self.LOOKUP_BATCH_SIZE):
+                for batch in self.batches(starts):
                     for origin, other in session.execute(q_closure(batch, direction, resolved)):
                         reached[origin].add(other)
         if concept_filter is not None:
@@ -832,8 +867,8 @@ class KnowledgeGraph(GraphBackend):
         standard = self._standard_among(ids)
         mapped: dict[int, set[int]] = {concept_id: set() for concept_id in ids}
         sources = tuple(concept_id for concept_id in ids if concept_id not in standard)
-        for batch in batched(sources, self.LOOKUP_BATCH_SIZE):
-            for subject_id, _, object_id in self.relationships(batch, None, edge_filter):
+        for batch in self.batches(sources):
+            for subject_id, _, object_id in self.relationships(batch, edge_filter=edge_filter):
                 mapped[subject_id].add(object_id)
         standard_targets = self._standard_among(set().union(*mapped.values()))
         return {
@@ -848,7 +883,7 @@ class KnowledgeGraph(GraphBackend):
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:
         """Select the standard or classification concepts among *concept_ids*."""
         found: set[int] = set()
-        for batch in batched(set(concept_ids), self.LOOKUP_BATCH_SIZE):
+        for batch in self.batches(set(concept_ids)):
             found.update(
                 view.concept_id
                 for view in self.concept_views(batch, sort=False)
@@ -860,7 +895,7 @@ class KnowledgeGraph(GraphBackend):
         """Select the concepts among *concept_ids* that *concept_filter* selects."""
         found: set[int] = set()
         with self.session_factory() as session:
-            for batch in batched(set(concept_ids), self.LOOKUP_BATCH_SIZE):
+            for batch in self.batches(set(concept_ids)):
                 stmt = q_entities(replace(concept_filter, concept_ids=tuple(batch)))
                 found.update(session.execute(stmt).scalars())
         return found
@@ -954,8 +989,10 @@ class KnowledgeGraph(GraphBackend):
             (own, tuple(dict.fromkeys(subjects)), edge_filter),
             (inherited, tuple(set().union(*above.values())), self._without_is_a(edge_filter)),
         ):
-            for batch in batched(ids, self.LOOKUP_BATCH_SIZE):
-                for source, relationship_id, filler in self.relationships(batch, None, selected):
+            for batch in self.batches(ids):
+                for source, relationship_id, filler in self.relationships(
+                    batch, edge_filter=selected
+                ):
                     edges[source].append((relationship_id, filler))
         ancestors = self.closure(
             {filler for edges in (*own.values(), *inherited.values()) for _, filler in edges},
@@ -986,8 +1023,8 @@ class KnowledgeGraph(GraphBackend):
             for filler in (target, *below):
                 targets_by_filler[filler].append(target)
         asserted: list[tuple[int, str, int]] = []
-        for batch in batched(targets_by_filler, self.LOOKUP_BATCH_SIZE):
-            asserted.extend(self.relationships(None, batch, edge_filter))
+        for batch in self.batches(targets_by_filler):
+            asserted.extend(self.relationships(None, objects=batch, edge_filter=edge_filter))
         inheriting = {
             subject_id
             for subject_id, relationship_id, _ in asserted
@@ -1008,19 +1045,18 @@ class KnowledgeGraph(GraphBackend):
         """
         Yield the ids of the concepts selected by *concept_filter*.
 
-        Defaults to active standard and classification concepts.
+        Defaults to active standard and classification concepts. The ids are read through
+        a server-side cursor, so they are never all held in memory.
         """
-        with self.session_factory() as session:
-            for row in session.execute(q_entities(concept_filter)):
-                yield int(row.concept_id)
+        yield from self._stream_ids(q_entities(concept_filter))
 
     def roots(
         self,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         edge_filter: EdgeFilter | None = None,
-    ) -> tuple[int, ...]:
+    ) -> Generator[int, None, None]:
         """
-        Retrieve root concepts (no parents) among those selected by *concept_filter*.
+        Yield root concepts (no parents) among those selected by *concept_filter*.
 
         Without *edge_filter* the parents are the closure's level 1 ancestors. With it, a
         parent is the target of an outgoing edge it selects.
@@ -1031,9 +1067,9 @@ class KnowledgeGraph(GraphBackend):
         self,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         edge_filter: EdgeFilter | None = None,
-    ) -> tuple[int, ...]:
+    ) -> Generator[int, None, None]:
         """
-        Retrieve leaf concepts (no children) among those selected by *concept_filter*.
+        Yield leaf concepts (no children) among those selected by *concept_filter*.
 
         Without *edge_filter* the children are the closure's level 1 descendants. With it,
         a child is the source of an incoming edge it selects.
@@ -1044,9 +1080,9 @@ class KnowledgeGraph(GraphBackend):
         self,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         edge_filter: EdgeFilter | None = None,
-    ) -> tuple[int, ...]:
+    ) -> Generator[int, None, None]:
         """
-        Retrieve singleton concepts (no parents and no children) among those selected by
+        Yield singleton concepts (no parents and no children) among those selected by
         *concept_filter*. See :meth:`roots` for *edge_filter*.
         """
         return self._enumerate(q_singletons, concept_filter, edge_filter)
@@ -1056,15 +1092,19 @@ class KnowledgeGraph(GraphBackend):
         build: Callable[[ConceptFilter, EdgeFilter | None], Select],
         concept_filter: ConceptFilter,
         edge_filter: EdgeFilter | None,
-    ) -> tuple[int, ...]:
-        """Run *build* with *edge_filter* resolved, or list every concept when it selects no edge."""
+    ) -> Generator[int, None, None]:
+        """Stream *build* with *edge_filter* resolved, or every concept when it selects no edge."""
         if edge_filter is None:
             stmt = build(concept_filter, None)
         else:
             resolved = self._resolve_edge_filter(edge_filter)
             stmt = build(concept_filter, resolved) if resolved else q_entities(concept_filter)
+        return self._stream_ids(stmt)
+
+    def _stream_ids(self, stmt: Select) -> Generator[int, None, None]:
+        """Yield the first column of *stmt* through a server-side cursor."""
         with self.session_factory() as session:
-            return tuple(session.execute(stmt).scalars())
+            yield from session.execute(stream(stmt)).scalars()
 
     def obsolete_concepts(
         self, include_updated: bool = True, concept_filter: ConceptFilter | None = None
@@ -1080,9 +1120,7 @@ class KnowledgeGraph(GraphBackend):
         concept_filter : ConceptFilter, optional
             Narrows the concepts, for example to some vocabularies or domains.
         """
-        stmt = q_obsolete_concepts(include_updated, concept_filter)
-        with self.session_factory() as session:
-            yield from session.execute(stream(stmt)).scalars()
+        yield from self._stream_ids(q_obsolete_concepts(include_updated, concept_filter))
 
     def vocabularies(self) -> tuple[VocabularyView, ...]:
         """Return every vocabulary."""
@@ -1096,11 +1134,12 @@ class KnowledgeGraph(GraphBackend):
         with self.session_factory() as session:
             return {row.domain_id: row.domain_concept_id for row in session.execute(q_domains())}
 
-    def synonyms(self, concept_ids: tuple[int, ...]) -> tuple[SynonymView, ...]:
-        """Return the synonyms of *concept_ids*, ordered by concept and name."""
+    def synonyms(self, concept_ids: Iterable[int]) -> tuple[SynonymView, ...]:
+        """Return the synonyms of *concept_ids*, however many, ordered by concept and name."""
         with self.session_factory() as session:
             return tuple(
-                SynonymView(**row._mapping) for row in session.execute(q_synonyms(concept_ids))
+                SynonymView(**row._mapping)
+                for row in self._rows_in_batches(session, q_synonyms, sorted(set(concept_ids)))
             )
 
     def synonym_language_ids(self) -> frozenset[int]:
@@ -1178,7 +1217,7 @@ class KnowledgeGraph(GraphBackend):
 
         rows: list[Row] = []
         with self.session_factory() as session:
-            for batch in batched(child_ids, self.LOOKUP_BATCH_SIZE):
+            for batch in self.batches(child_ids):
                 rows.extend(session.execute(q_concept_potential_ancestors_batch(batch, parent_ids)))
 
         result: dict[int, dict[int, AncestorMatch]] = defaultdict(dict)

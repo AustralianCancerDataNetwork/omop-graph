@@ -18,7 +18,6 @@ import logging
 from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from itertools import batched
 from typing import (
     TYPE_CHECKING,
 )
@@ -657,7 +656,7 @@ def _load_views(
 ) -> None:
     """Add the views of the concepts in *concept_ids* that *views* lacks."""
     missing = {concept_id for concept_id in concept_ids if concept_id not in views}
-    for batch in batched(missing, kg.LOOKUP_BATCH_SIZE):
+    for batch in kg.batches(missing):
         views.update((view.concept_id, view) for view in kg.concept_views(batch, sort=False))
 
 
@@ -801,7 +800,7 @@ def find_standard_paths(
         if targets:
             multi_ancestors: dict[int, dict[int, AncestorMatch]] = {}
             standard_ids = {item.node.concept_id for item in standard_items}
-            for batch in batched(standard_ids, kg.LOOKUP_BATCH_SIZE):
+            for batch in kg.batches(standard_ids):
                 multi_ancestors.update(kg.get_potential_ancestors_batch(batch, targets))
 
             for item in standard_items:
@@ -830,8 +829,8 @@ def find_standard_paths(
         # Expand: Go to next best concept_id. One query reads the edges of the whole wave.
         object_ids_by_subject: defaultdict[int, list[int]] = defaultdict(list)
         subject_ids = {item.node.concept_id for item in expand_items}
-        for batch in batched(subject_ids, kg.LOOKUP_BATCH_SIZE):
-            for subject_id, _, object_id in kg.relationships(batch, None, edge_filter):
+        for batch in kg.batches(subject_ids):
+            for subject_id, _, object_id in kg.relationships(batch, edge_filter=edge_filter):
                 object_ids_by_subject[subject_id].append(object_id)
         _load_views(kg, views, (o for ids in object_ids_by_subject.values() for o in ids))
 

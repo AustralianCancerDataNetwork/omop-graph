@@ -388,14 +388,14 @@ def test_entities_resolves_against_the_vocab_connection(split_engines: _Engines)
 
 def test_relationships_resolves_against_the_vocab_connection(split_engines: _Engines) -> None:
     kg = _split_kg(split_engines)
-    triples = tuple(kg.relationships(subjects=(SUBJECT_CONCEPT_ID,), objects=None))
+    triples = tuple(kg.relationships((SUBJECT_CONCEPT_ID,)))
 
     assert triples == ((SUBJECT_CONCEPT_ID, "maps to", OBJECT_CONCEPT_ID),)
 
 
 def test_relationships_invert_swaps_subjects_and_objects(split_engines: _Engines) -> None:
     kg = _split_kg(split_engines)
-    triples = tuple(kg.relationships(subjects=(OBJECT_CONCEPT_ID,), objects=None, invert=True))
+    triples = tuple(kg.relationships((OBJECT_CONCEPT_ID,), invert=True))
 
     assert triples == ((OBJECT_CONCEPT_ID, "maps to", SUBJECT_CONCEPT_ID),)
 

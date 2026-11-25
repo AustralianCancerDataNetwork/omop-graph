@@ -21,6 +21,7 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 * **Semantic Predicates:** Resolves standard OMOP relationship IDs into rich `Predicate` objects that understand hierarchy and directionality, and selects edges with an `EdgeFilter`. See [here for more information](edges.md)
 * **Flexible Search:** Supports exact matches, fuzzy `ILIKE` searches, and full-text search (bag-of-words) across concept names and synonyms. See [documentation for more information](../reasoning/resolvers.md)
 * **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
+* **Large inputs and results:** Methods that take concept ids split them into batches of `KnowledgeGraph.LOOKUP_BATCH_SIZE`, so any number of ids works. `entities`, `roots`, `leaves`, `singletons` and `relationships` without subjects or objects read through a server-side cursor and return generators, so they never hold the whole table in memory.
 * **Standardisation and Mappings:** `standardise` finds the standard concepts a concept stands for, and `mappings` lists the mappings of concepts with their vocabularies.
 * **Extensibility:** Includes a dedicated namespace for embedding-based operations (requires `omop-emb` - see [Installation instructions](../usage/installation.md#embedding-rag) for more information).
 

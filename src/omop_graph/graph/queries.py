@@ -149,13 +149,14 @@ def q_concept_views(concept_ids: tuple[int, ...], sort: bool = True) -> Select:
     concept_ids : tuple[int, ...]
         A tuple of OMOP Concept IDs.
     sort : bool, default True
-        If True, preserve the input order using a CASE statement.
+        If True, order the concepts as label matches are ordered, see
+        :func:`_concept_match_order_terms`.
         If False, do not add an ORDER BY clause (DB returns arbitrary order).
 
     Returns
     -------
     Select
-        A statement selecting standard concept columns, optionally ordered by input list.
+        A statement selecting standard concept columns, optionally ordered by match quality.
     """
     stmt = select(
         Concept.concept_id,

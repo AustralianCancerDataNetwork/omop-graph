@@ -5,7 +5,6 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from functools import cached_property
-from itertools import batched
 
 from oaklib.datamodels.vocabulary import (
     DEPRECATED_PREDICATE,
@@ -359,13 +358,12 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         scope = concept_filter or (
             self._scope(filter_obsoletes) if filter_obsoletes else self._every_concept
         )
-        # Consume the generator so no session stays open.
-        for cid in tuple(self.kg.entities(scope)):
+        for cid in self.kg.entities(scope):
             yield self.codec.concept_curie(cid)
 
     def _enumerate(
         self,
-        build: Callable[[ConceptFilter, EdgeFilter | None], tuple[int, ...]],
+        build: Callable[[ConceptFilter, EdgeFilter | None], Iterable[int]],
         predicates: Iterable[PRED_CURIE] | None,
         scope: ConceptFilter,
     ) -> Iterator[CURIE]:
@@ -555,13 +553,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         triples: Iterable[tuple[int, str, int]]
         if not include_entailed:
-            triples = tuple(
-                self.kg.relationships(
-                    subjects=subject_ids,
-                    objects=object_ids,
-                    edge_filter=EdgeFilter(predicate_ids=predicate_ids),
-                    invert=invert,
-                )
+            triples = self.kg.relationships(
+                subject_ids,
+                objects=object_ids,
+                edge_filter=EdgeFilter(predicate_ids=predicate_ids),
+                invert=invert,
             )
         else:
             if subject_ids is None and object_ids is None:
@@ -656,7 +652,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         asserted = relationship_ids - entailing
         if asserted:
             yield from self.kg.relationships(
-                subject_ids, object_ids, EdgeFilter(predicate_ids=asserted)
+                subject_ids, objects=object_ids, edge_filter=EdgeFilter(predicate_ids=asserted)
             )
         if not entailing:
             return
@@ -692,7 +688,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def _stream_entailed(self, relationship_ids: frozenset[str]) -> Iterator[tuple[int, str, int]]:
         """Stream the relationships of every concept in scope, one batch of subjects at a time."""
-        for batch in batched(self.kg.entities(self.concept_filter), self.kg.LOOKUP_BATCH_SIZE):
+        for batch in self.kg.batches(self.kg.entities(self.concept_filter)):
             yield from self._entailed(batch, None, relationship_ids)
 
     def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
@@ -760,50 +756,61 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         ``owl:inverseOf``. A deprecated concept is ``owl:deprecated`` and names its
         replacements as ``IAO:0100001``. Empty for an unknown CURIE.
         """
-        predicate = self.predicates_by_curie.get(curie)
-        if predicate is not None:
-            metadata: METADATA_MAP = {"id": [curie], LABEL_PREDICATE: [predicate.name]}
-            if predicate.reverse_id:
-                metadata[INVERSE_OF] = [self.codec.predicate_curie(predicate.reverse_id)]
-            return metadata
+        return self._metadata_maps([curie]).get(curie, {})
 
-        cv = self._concept_views([curie]).get(curie)
-        if cv is None:
-            return {}
+    def _metadata_maps(self, curies: Iterable[CURIE]) -> dict[CURIE, METADATA_MAP]:
+        """
+        The metadata of each CURIE that names a concept or relationship, see
+        :meth:`entity_metadata_map`, read for all of them together.
+        """
+        curies = list(dict.fromkeys(curies))
+        maps: dict[CURIE, METADATA_MAP] = {}
+        for curie in curies:
+            predicate = self.predicates_by_curie.get(curie)
+            if predicate is not None:
+                maps[curie] = {"id": [curie], LABEL_PREDICATE: [predicate.name]}
+                if predicate.reverse_id:
+                    maps[curie][INVERSE_OF] = [self.codec.predicate_curie(predicate.reverse_id)]
 
-        m: METADATA_MAP = defaultdict(list)
+        views = self._concept_views(curie for curie in curies if curie not in maps)
+        replacements: dict[int, list[CURIE]] = defaultdict(list)
+        deprecated = tuple(view.concept_id for view in views.values() if not view.is_active)
+        for edge in self.kg.edges(
+            deprecated,
+            direction="out",
+            edge_filter=EdgeFilter(predicate_ids=frozenset({REPLACED_BY_RELATIONSHIP_ID})),
+        ):
+            replacements[edge.subject_id].append(self.codec.concept_curie(edge.object_id))
 
-        # required
-        m["id"].append(curie)
-        m[LABEL_PREDICATE].append(cv.concept_name)
+        for curie, cv in views.items():
+            m: METADATA_MAP = defaultdict(list)
 
-        # core OMOP metadata
-        m["omop:concept_id"].append(f"{cv.concept_id}")
-        m["omop:domain"].append(cv.domain_id)
-        m["omop:vocabulary"].append(cv.vocabulary_id)
-        m["omop:concept_class"].append(cv.concept_class_id)
-        m["omop:concept_code"].append(cv.concept_code)
+            # required
+            m["id"].append(curie)
+            m[LABEL_PREDICATE].append(cv.concept_name)
 
-        if cv.standard_concept:
-            m["omop:standard_concept"].append("S")
+            # core OMOP metadata
+            m["omop:concept_id"].append(f"{cv.concept_id}")
+            m["omop:domain"].append(cv.domain_id)
+            m["omop:vocabulary"].append(cv.vocabulary_id)
+            m["omop:concept_class"].append(cv.concept_class_id)
+            m["omop:concept_code"].append(cv.concept_code)
 
-        # validity
-        m["omop:valid_start_date"].append(f"{cv.valid_start_date}")
-        m["omop:valid_end_date"].append(f"{cv.valid_end_date}")
+            if cv.standard_concept:
+                m["omop:standard_concept"].append("S")
 
-        if cv.invalid_reason:
-            m["omop:invalid_reason"].append(cv.invalid_reason)
+            # validity
+            m["omop:valid_start_date"].append(f"{cv.valid_start_date}")
+            m["omop:valid_end_date"].append(f"{cv.valid_end_date}")
 
-        if not cv.is_active:
-            m[DEPRECATED_PREDICATE].append("true")
-            for edge in self.kg.edges(
-                cv.concept_id,
-                direction="out",
-                edge_filter=EdgeFilter(predicate_ids=frozenset({REPLACED_BY_RELATIONSHIP_ID})),
-            ):
-                m[TERM_REPLACED_BY].append(self.codec.concept_curie(edge.object_id))
+            if cv.invalid_reason:
+                m["omop:invalid_reason"].append(cv.invalid_reason)
 
-        # vocabulary-qualified identifier (important!)
-        m[HAS_DBXREF].append(self.codec.code_curie(cv.vocabulary_id, cv.concept_code))
+            if not cv.is_active:
+                m[DEPRECATED_PREDICATE].append("true")
+                m[TERM_REPLACED_BY].extend(replacements[cv.concept_id])
 
-        return dict(m)
+            # vocabulary-qualified identifier (important!)
+            m[HAS_DBXREF].append(self.codec.code_curie(cv.vocabulary_id, cv.concept_code))
+            maps[curie] = dict(m)
+        return maps

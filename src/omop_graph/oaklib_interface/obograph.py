@@ -1,7 +1,7 @@
 """The OBO graph interface over the OMOP knowledge graph."""
 
+from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from itertools import batched
 
 from oaklib.datamodels.obograph import (
     BasicPropertyValue,
@@ -81,28 +81,56 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         ValueError
             If ``strict`` is True and the entity does not exist.
         """
-        node_id = (self.curie_to_uri(curie) or curie) if expand_curies else curie
-        predicate = self.predicates_by_curie.get(curie)
-        if predicate is not None:
-            return Node(id=node_id, lbl=predicate.name, type="PROPERTY")
-        view = self._concept_views([curie]).get(curie)
-        if view is None:
-            if strict:
-                raise ValueError(f"Node {curie} does not exist")
-            return None
-        node = Node(id=node_id, lbl=view.concept_name, type="CLASS")
-        if include_metadata:
-            metadata = self.entity_metadata_map(curie)
-            node.meta = Meta(
-                synonyms=[spv for _, spv in self.synonym_property_values(curie)],
-                xrefs=[XrefPropertyValue(val=xref) for xref in metadata.get(HAS_DBXREF, [])],
-                basicPropertyValues=[
-                    BasicPropertyValue(pred=TERM_REPLACED_BY, val=replacement)
-                    for replacement in metadata.get(TERM_REPLACED_BY, [])
-                ],
-                deprecated=True if DEPRECATED_PREDICATE in metadata else None,
-            )
+        node = self._nodes([curie], include_metadata, expand_curies).get(curie)
+        if node is None and strict:
+            raise ValueError(f"Node {curie} does not exist")
         return node
+
+    def nodes(self, expand_curies=False) -> Iterator[Node]:
+        """
+        Yield a node, with its metadata, for every concept in scope.
+
+        The concepts are read in batches, so the number of queries does not grow with the
+        number of concepts.
+        """
+        for batch in self.kg.batches(self.entities()):
+            yield from self._nodes(batch, True, expand_curies).values()
+
+    def _nodes(
+        self, curies: Iterable[CURIE], include_metadata: bool, expand_curies: bool
+    ) -> dict[CURIE, Node]:
+        """The node of each CURIE that names a concept or relationship, read together."""
+        curies = list(dict.fromkeys(curies))
+        metadata = self._metadata_maps(curies) if include_metadata else {}
+        synonyms: dict[CURIE, list[dict | SynonymPropertyValue]] = defaultdict(list)
+        if include_metadata:
+            for curie, spv in self.synonym_property_values(curies):
+                synonyms[curie].append(spv)
+        views = self._concept_views(
+            curie for curie in curies if curie not in self.predicates_by_curie
+        )
+        nodes: dict[CURIE, Node] = {}
+        for curie in curies:
+            node_id = (self.curie_to_uri(curie) or curie) if expand_curies else curie
+            predicate = self.predicates_by_curie.get(curie)
+            if predicate is not None:
+                nodes[curie] = Node(id=node_id, lbl=predicate.name, type="PROPERTY")
+            elif curie in views:
+                nodes[curie] = Node(id=node_id, lbl=views[curie].concept_name, type="CLASS")
+                if include_metadata:
+                    nodes[curie].meta = Meta(
+                        synonyms=synonyms[curie],
+                        xrefs=[
+                            XrefPropertyValue(val=xref)
+                            for xref in metadata[curie].get(HAS_DBXREF, [])
+                        ],
+                        basicPropertyValues=[
+                            BasicPropertyValue(pred=TERM_REPLACED_BY, val=replacement)
+                            for replacement in metadata[curie].get(TERM_REPLACED_BY, [])
+                        ],
+                        deprecated=True if DEPRECATED_PREDICATE in metadata[curie] else None,
+                    )
+        return nodes
 
     def synonym_property_values(
         self, subject: CURIE | Iterable[CURIE]
@@ -258,7 +286,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         for reached in self._reached(starts, predicates, direction, scoped=False).values():
             members.update(dict.fromkeys(reached))
         triples = []
-        for batch in batched(members, self.kg.LOOKUP_BATCH_SIZE):
+        for batch in self.kg.batches(members):
             triples.extend(
                 triple
                 for triple in self.relationships(subjects=batch, predicates=predicates)

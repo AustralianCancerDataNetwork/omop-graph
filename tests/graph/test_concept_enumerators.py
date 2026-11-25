@@ -20,9 +20,9 @@ def test_roots_leaves_and_singletons_follow_the_given_concept_filter(
 ) -> None:
     nothing = ConceptFilter(domains=("No such domain",))
 
-    assert mock_cdm_kg.roots(nothing) == ()
-    assert mock_cdm_kg.leaves(nothing) == ()
-    assert mock_cdm_kg.singletons(nothing) == ()
+    assert list(mock_cdm_kg.roots(nothing)) == []
+    assert list(mock_cdm_kg.leaves(nothing)) == []
+    assert list(mock_cdm_kg.singletons(nothing)) == []
 
 
 def test_singletons_are_the_concepts_that_are_both_roots_and_leaves(

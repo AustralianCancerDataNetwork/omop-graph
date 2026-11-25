@@ -55,7 +55,7 @@ def test_filter_fields_combine_with_and(
     mock_cdm_kg: KnowledgeGraph, edge_filter: EdgeFilter, expected: int
 ) -> None:
     edges = mock_cdm_kg.edges(SOURCE, direction="out", edge_filter=edge_filter)
-    triples = tuple(mock_cdm_kg.relationships((SOURCE,), None, edge_filter=edge_filter))
+    triples = tuple(mock_cdm_kg.relationships((SOURCE,), edge_filter=edge_filter))
 
     assert len(edges) == len(triples) == expected
 
@@ -66,7 +66,7 @@ def test_an_empty_predicate_set_selects_no_edge_where_none_selects_all(
     nothing = EdgeFilter(predicate_ids=frozenset())
 
     assert len(mock_cdm_kg.edges(SOURCE, direction="out", edge_filter=nothing)) == 0
-    assert tuple(mock_cdm_kg.relationships((SOURCE,), None, edge_filter=nothing)) == ()
+    assert tuple(mock_cdm_kg.relationships((SOURCE,), edge_filter=nothing)) == ()
     assert mock_cdm_kg.closure([SOURCE], edge_filter=nothing) == {SOURCE: frozenset()}
     assert len(mock_cdm_kg.edges(SOURCE, direction="out", edge_filter=EdgeFilter())) > 0
 
