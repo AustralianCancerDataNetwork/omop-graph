@@ -173,6 +173,7 @@ def _predicate_from_rows(row: Row, mapping: RelationshipMappingElement) -> Predi
         predicate_kind=mapping.predicate_kind,
         predicate_subkind=mapping.predicate_subkind,
         direction=mapping.direction,
+        generalises=mapping.generalises,
     )
 
 

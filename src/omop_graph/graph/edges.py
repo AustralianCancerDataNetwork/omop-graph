@@ -163,6 +163,10 @@ class Predicate:
     direction : HierarchyDirection, optional
         For a Hierarchy predicate, whether the stored edge points up to the parent or
         group, or down to a child or member. None for every other kind.
+    generalises : bool
+        Whether a stored edge also holds for the ``Is a`` ancestors of its object. Set for
+        attribute, composition and association relationships such as ``Has finding site``.
+        A Hierarchy relationship uses its direction instead.
     """
 
     relationship_id: str
@@ -171,10 +175,24 @@ class Predicate:
     predicate_kind: PredicateKind
     predicate_subkind: str
     direction: HierarchyDirection | None
+    generalises: bool
 
     def __repr__(self) -> str:
         reverse = f" | reverse={self.reverse_id}" if self.reverse_id else ""
         return f"Predicate({self.relationship_id!r}: {self.name!r}{reverse})"
+
+    @property
+    def entails_along_is_a(self) -> bool:
+        """
+        Whether a stored ``A R B`` entails ``A R C`` for each ``Is a`` ancestor ``C`` of ``B``.
+
+        A hierarchy relationship does so in its up direction only, since ``A Subsumes B``
+        does not entail that ``A`` subsumes the ancestors of ``B``. Any other relationship
+        does so when it generalises.
+        """
+        if self.predicate_kind is PredicateKind.HIERARCHY:
+            return self.direction is HierarchyDirection.UP
+        return self.generalises
 
 
 def is_active(

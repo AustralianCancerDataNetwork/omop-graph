@@ -126,10 +126,18 @@ def relationship_class(
     )
 
 
-def classified(relationship_id: str, kind: PredicateKind, subkind: str) -> RelationshipMapping:
-    """The classification of a relationship under a kind and subkind."""
+def classified(
+    relationship_id: str,
+    kind: PredicateKind,
+    subkind: str,
+    generalises: bool = False,
+) -> RelationshipMapping:
+    """The classification of a relationship under a kind and subkind, and whether it generalises."""
     return RelationshipMapping(
-        relationship_id=relationship_id, predicate_kind=kind, predicate_subkind=subkind
+        relationship_id=relationship_id,
+        predicate_kind=kind,
+        predicate_subkind=subkind,
+        generalises=generalises,
     )
 
 

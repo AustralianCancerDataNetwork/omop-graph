@@ -21,6 +21,7 @@ def _predicate(
         predicate_kind=kind,
         predicate_subkind="x",
         direction=direction,
+        generalises=False,
     )
 
 
