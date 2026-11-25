@@ -12,17 +12,18 @@ class OMOPRelationGraphInterface(OMOPBasicOntologyInterface, RelationGraphInterf
     """
     Mixin implementing entailed relationships over the strict ``Is a`` hierarchy.
 
-    A relationship (C, R, E) is entailed when (C, R, D) is asserted and E is D or an
-    ``Is a`` ancestor of D. With R as ``rdfs:subClassOf`` this gives every ancestor of C.
-    Relationships of ancestors are not inherited by their descendants. Only ancestors, and
-    descendants for incoming relationships, within the adapter's ``concept_filter`` are
-    reported, though the climb passes through the others.
+    See Also
+    --------
+    omop_graph.graph.kg.KnowledgeGraph.entailed_relationships : The entailment rule.
 
     Notes
     -----
     oaklib has largely subsumed the relation graph interface into the basic ontology
     interface. The entailment is implemented there, as ``relationships`` with
-    ``include_entailed``, and the methods here wrap it.
+    ``include_entailed``, and the methods here wrap it. It applies to the relationships
+    that generalise, and the others are returned as stored. Only concepts within the
+    adapter's ``concept_filter`` are reported as entailed objects, and for incoming
+    relationships as entailed subjects, though the walk passes through the others.
     """
 
     def entailed_outgoing_relationships(

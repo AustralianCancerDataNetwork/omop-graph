@@ -111,6 +111,15 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             )
         )
 
+    @cached_property
+    def entailing_relationship_ids(self) -> frozenset[str]:
+        """The classified relationships whose fillers generalise up the ``Is a`` hierarchy."""
+        return frozenset(
+            predicate.relationship_id
+            for predicate in self.predicates_by_curie.values()
+            if predicate.entails_along_is_a
+        )
+
     def _scope(
         self, filter_obsoletes: bool, id_prefixes: Iterable[str] | None = None
     ) -> ConceptFilter:
@@ -517,10 +526,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         include_abox : bool
             Ignored.
         include_entailed : bool
-            If True, yield the relationships entailed by the strict ``Is a`` hierarchy:
-            (S, R, E) for every asserted (S, R, D) where E is D or an ancestor of D.
-            Relationships of ancestors are not inherited. Without subjects and objects
-            this streams the entailed relationships of every concept.
+            If True, also yield the relationships that follow through the strict ``Is a``
+            hierarchy, see :meth:`omop_graph.graph.kg.KnowledgeGraph.entailed_relationships`.
+            This applies to the relationships that generalise, and the others are yielded
+            as stored. Without subjects and objects this streams the relationships of
+            every concept.
         exclude_blank : bool
             Ignored.
         invert : bool
@@ -543,33 +553,25 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         if not predicate_ids:
             return
 
-        edge_filter = EdgeFilter(predicate_ids=predicate_ids)
-
-        if include_entailed:
-            if subject_ids is None and object_ids is None:
-                allowed = {self.codec.predicate_curie(p) for p in predicate_ids}
-                for s, p, o in self._all_entailed_relationships():
-                    if p in allowed:
-                        yield (o, p, s) if invert else (s, p, o)
-                return
-            if invert:
-                subject_ids, object_ids = object_ids, subject_ids
-            entailed = (
-                (o, p, s) if invert else (s, p, o)
-                for s, p, o in self._entailed(subject_ids, object_ids, edge_filter)
-            )
-            relationships = tuple(entailed)
-        else:
-            relationships = tuple(
+        triples: Iterable[tuple[int, str, int]]
+        if not include_entailed:
+            triples = tuple(
                 self.kg.relationships(
                     subjects=subject_ids,
                     objects=object_ids,
-                    edge_filter=edge_filter,
+                    edge_filter=EdgeFilter(predicate_ids=predicate_ids),
                     invert=invert,
                 )
             )
-
-        for s, p, o in relationships:
+        else:
+            if subject_ids is None and object_ids is None:
+                entailed = self._stream_entailed(predicate_ids)
+            else:
+                if invert:
+                    subject_ids, object_ids = object_ids, subject_ids
+                entailed = iter(self._entailed(subject_ids, object_ids, predicate_ids))
+            triples = ((o, p, s) if invert else (s, p, o) for s, p, o in entailed)
+        for s, p, o in triples:
             yield (
                 self.codec.concept_curie(s),
                 self.codec.predicate_curie(p),
@@ -640,13 +642,25 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         self,
         subject_ids: tuple[int, ...] | None,
         object_ids: tuple[int, ...] | None,
-        edge_filter: EdgeFilter,
+        relationship_ids: frozenset[str],
     ) -> Iterator[tuple[int, str, int]]:
         """
-        Entailed relationships of ids, where with ``standardise`` a concept also has those of
-        its standard concepts. The subjects, or the objects when there are no subjects,
-        are the ones that stand in, and are reported in place of their standard concepts.
+        The relationships of *relationship_ids* of the subjects, or of the objects when
+        there are no subjects.
+
+        A relationship that entails along ``Is a`` is followed up that hierarchy. The others
+        are the stored ones. With ``standardise`` a concept also has the entailing
+        relationships of the standard concepts it maps to, reported for the concept itself.
         """
+        entailing = relationship_ids & self.entailing_relationship_ids
+        asserted = relationship_ids - entailing
+        if asserted:
+            yield from self.kg.relationships(
+                subject_ids, object_ids, EdgeFilter(predicate_ids=asserted)
+            )
+        if not entailing:
+            return
+        edge_filter = EdgeFilter(predicate_ids=entailing)
         if not self.standardise:
             yield from self.kg.entailed_relationships(
                 subject_ids, object_ids, edge_filter, self.concept_filter
@@ -676,18 +690,19 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 seen.add(triple)
                 yield triple
 
-    def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
-        """Stream the entailed relationships of every concept, one batch of subjects at a time."""
-        edge_filter = EdgeFilter(predicate_ids=self.default_relationship_ids)
+    def _stream_entailed(self, relationship_ids: frozenset[str]) -> Iterator[tuple[int, str, int]]:
+        """Stream the relationships of every concept in scope, one batch of subjects at a time."""
         for batch in batched(self.kg.entities(self.concept_filter), self.kg.LOOKUP_BATCH_SIZE):
-            for s, p, o in self.kg.entailed_relationships(
-                batch, None, edge_filter, self.concept_filter
-            ):
-                yield (
-                    self.codec.concept_curie(s),
-                    self.codec.predicate_curie(p),
-                    self.codec.concept_curie(o),
-                )
+            yield from self._entailed(batch, None, relationship_ids)
+
+    def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
+        """Stream the entailed relationships of every concept, for the exposed relationships."""
+        for s, p, o in self._stream_entailed(self.default_relationship_ids):
+            yield (
+                self.codec.concept_curie(s),
+                self.codec.predicate_curie(p),
+                self.codec.concept_curie(o),
+            )
 
     @property
     def edge_index(self):

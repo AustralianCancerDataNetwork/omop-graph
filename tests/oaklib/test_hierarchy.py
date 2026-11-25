@@ -29,6 +29,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
+from omop_graph.graph.edges import Predicate
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.codec import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
@@ -49,6 +50,8 @@ from omop_graph.reasoning.concept_handlers import standardise_ids
 OUTDATED, OUTER_ROOT, SOURCE, SOURCE_TWO, ORPHAN = range(210, 215)
 SITE = "OMOP_REL:Has%20finding%20site"
 MAPS_TO = "OMOP_REL:Maps%20to"
+MAPPED_FROM = "OMOP_REL:Mapped%20from"
+SUBSUMES = "OMOP_REL:Subsumes"
 
 
 def curie(concept_id: int) -> str:
@@ -69,15 +72,23 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         relationship("Subsumes", "Is a"),
         relationship("Has finding site", "Finding site of"),
         relationship("Maps to", "Mapped from"),
+        relationship("Mapped from", "Maps to"),
         relationship_class(PredicateKind.IDENTITY, "Exact"),
         relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - down", HierarchyDirection.DOWN),
         relationship_class(PredicateKind.ATTRIBUTE, "Site"),
         classified("Maps to", PredicateKind.IDENTITY, "Exact"),
+        classified("Mapped from", PredicateKind.IDENTITY, "Exact"),
+        classified("Subsumes", PredicateKind.HIERARCHY, "Taxonomic - down"),
         classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
-        classified("Has finding site", PredicateKind.ATTRIBUTE, "Site"),
+        classified("Has finding site", PredicateKind.ATTRIBUTE, "Site", generalises=True),
+        classified("Finding site of", PredicateKind.ATTRIBUTE, "Site"),
         edge(SOURCE, "Maps to", LUNG_CANCER),
         edge(SOURCE_TWO, "Maps to", LUNG_CANCER),
         edge(SOURCE_TWO, "Maps to", LUNG),
+        edge(LUNG_CANCER, "Mapped from", SOURCE),
+        edge(DISEASE, "Subsumes", CANCER),
+        edge(CANCER, "Subsumes", LUNG_CANCER),
         edge(CANCER, "Is a", DISEASE),
         edge(SMOKING_RELATED, "Is a", DISEASE),
         edge(LUNG_CANCER, "Is a", CANCER),
@@ -138,6 +149,7 @@ def test_entailed_outgoing_generalises_the_fillers(adapter) -> None:
         (IS_A, curie(OUTER_ROOT)),
         (SITE, curie(LUNG)),
         (SITE, curie(THORAX_ORGAN)),
+        (MAPPED_FROM, curie(SOURCE)),
     }
 
 
@@ -148,7 +160,7 @@ def test_entailed_outgoing_respects_the_predicate_filter(adapter) -> None:
     }
 
 
-def test_entailed_outgoing_does_not_inherit_from_ancestors(adapter) -> None:
+def test_a_concept_with_no_site_on_it_or_above_it_has_none(adapter) -> None:
     assert list(adapter.entailed_outgoing_relationships(curie(CANCER), [SITE])) == []
 
 
@@ -156,7 +168,6 @@ def test_entailed_incoming_reaches_through_descendants(adapter) -> None:
     assert set(adapter.entailed_incoming_relationships(curie(THORAX_ORGAN))) == {
         (IS_A, curie(LUNG)),
         (SITE, curie(LUNG_CANCER)),
-        (MAPS_TO, curie(SOURCE_TWO)),
     }
     assert set(adapter.entailed_incoming_relationships(curie(DISEASE), [IS_A])) == {
         (IS_A, curie(CANCER)),
@@ -173,7 +184,8 @@ def test_entailed_incoming_is_the_mirror_of_outgoing(adapter) -> None:
     incoming = {
         (s, p, o)
         for o in (
-            curie(c) for c in (CANCER, SMOKING_RELATED, DISEASE, OUTER_ROOT, LUNG, THORAX_ORGAN)
+            curie(c)
+            for c in (CANCER, SMOKING_RELATED, DISEASE, OUTER_ROOT, LUNG, THORAX_ORGAN, SOURCE)
         )
         for p, s in adapter.entailed_incoming_relationships(o)
         if s == curie(LUNG_CANCER)
@@ -200,6 +212,58 @@ def test_by_curie_variants_delegate(adapter) -> None:
         (SITE, curie(LUNG_CANCER)),
         (MAPS_TO, curie(SOURCE_TWO)),
     }
+
+
+def test_a_mapping_is_not_generalised_up_the_hierarchy(adapter) -> None:
+    assert set(adapter.entailed_outgoing_relationships(curie(SOURCE_TWO), [MAPS_TO])) == {
+        (MAPS_TO, curie(LUNG_CANCER)),
+        (MAPS_TO, curie(LUNG)),
+    }
+    assert set(adapter.entailed_incoming_relationships(curie(THORAX_ORGAN), [MAPS_TO])) == set()
+
+
+@pytest.mark.parametrize(
+    ("kind", "direction", "generalises", "expected"),
+    [
+        (PredicateKind.HIERARCHY, HierarchyDirection.UP, False, True),
+        (PredicateKind.HIERARCHY, HierarchyDirection.DOWN, False, False),
+        (PredicateKind.ATTRIBUTE, None, True, True),
+        (PredicateKind.ATTRIBUTE, None, False, False),
+        (PredicateKind.COMPOSITION, None, True, True),
+        (PredicateKind.ASSOCIATION, None, True, True),
+        (PredicateKind.IDENTITY, None, False, False),
+    ],
+)
+def test_only_some_relationships_generalise_up_is_a(kind, direction, generalises, expected) -> None:
+    predicate = Predicate("R", "R", None, kind, "Any", direction, generalises)
+
+    assert predicate.entails_along_is_a is expected
+
+
+def test_a_relationship_that_does_not_generalise_is_stored_edges_only(adapter) -> None:
+    assert (
+        set(adapter.entailed_outgoing_relationships(curie(LUNG), ["OMOP_REL:Finding%20site%20of"]))
+        == set()
+    )
+
+
+def test_a_named_down_relationship_is_stored_edges_only(adapter) -> None:
+    stored = {
+        (curie(DISEASE), SUBSUMES, curie(CANCER)),
+        (curie(CANCER), SUBSUMES, curie(LUNG_CANCER)),
+    }
+
+    assert set(adapter.relationships(predicates=[SUBSUMES], include_entailed=True)) == stored
+    assert (
+        set(
+            adapter.relationships(
+                subjects=[curie(DISEASE), curie(CANCER)],
+                predicates=[SUBSUMES],
+                include_entailed=True,
+            )
+        )
+        == stored
+    )
 
 
 def test_relationships_with_include_entailed_inverts(adapter) -> None:
@@ -410,6 +474,14 @@ def test_a_non_standard_concept_takes_the_entailed_relationships_of_its_standard
         (SITE, curie(LUNG)),
         (SITE, curie(THORAX_ORGAN)),
     }
+
+
+def test_a_stand_in_does_not_lend_its_identity_relationships(adapter, standardising) -> None:
+    triples = set(standardising.relationships(subjects=[curie(SOURCE)], include_entailed=True))
+
+    assert triples >= {(curie(SOURCE), MAPS_TO, curie(LUNG_CANCER))}
+    assert not {t for t in triples if t[1] == MAPPED_FROM}
+    assert not {t for t in triples if t[0] == t[2]}
 
 
 def test_entailed_relationships_are_reported_for_the_concept_that_stands_in(standardising) -> None:

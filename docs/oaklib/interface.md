@@ -50,20 +50,31 @@ The primary adapter class that inherits from multiple OAK interfaces:
 * `entities(filter_obsoletes=False)` lists every concept in the filter's vocabularies and domains, whatever its standardness or validity, so it includes everything `obsoletes` yields. `obsoletes` stays within those vocabularies and domains.
 
 ### Entailed relationships
-A stored relationship `A -R-> B1` entails `A -R-> B2` for every `B2` reached from `B1` by following `Is a` upwards, repeatedly. `R` is any relationship, including `Is a` itself.
+Entailed relationships are the ones that follow from the stored ones through the `Is a` hierarchy. A stored relationship is carried in two directions:
+
+* The object moves up. Lung cancer `Has finding site` Lung also gives Lung cancer `Has finding site` Thoracic organ, since Lung `Is a` Thoracic organ.
+* The subject moves down. Small cell lung cancer `Is a` Lung cancer, so it also has the finding site Lung, and Thoracic organ.
 
 | Stored | Entailed |
 | --- | --- |
 | Lung cancer `Has finding site` Lung | Lung cancer `Has finding site` Thoracic organ |
-| Lung `Is a` Thoracic organ | |
+| Lung `Is a` Thoracic organ | Small cell lung cancer `Has finding site` Lung |
+| Small cell lung cancer `Is a` Lung cancer | Small cell lung cancer `Has finding site` Thoracic organ |
 | Lung cancer `Is a` Cancer | Lung cancer `Is a` Disease |
 | Cancer `Is a` Disease | |
 
+Only some relationships are carried along, see [Generalising Relationships](../graph/edges.md#generalising-relationships):
+
+* Carried along: `Is a`, and relationships such as `Has finding site`, `Has method` and `May treat`.
+* Reported as stored only: the reverse of those (`Finding site of`), mappings and lineage (`Maps to`, `Concept replaced by`), `Subsumes`, and any relationship the data could not decide.
+
+How the entailment is implemented:
+
 * oaklib has largely subsumed `RelationGraphInterface` into `BasicOntologyInterface`, so the entailment is implemented on `OMOPBasicOntologyInterface` as `relationships(include_entailed=True)`. The `RelationGraphInterface` methods wrap it.
-* Only `Is a` is followed upwards, not the other ancestry in `concept_ancestor` such as ATC or SPL classes.
-* The relationships of an ancestor are not inherited by its descendants.
-* Only concepts within the adapter's `concept_filter` are reported as entailed targets, though the climb passes through the others.
-* The incoming direction is the mirror image, and for a concept near the top of a hierarchy it returns very many relationships.
+* oaklib applies this to every relationship. The adapter applies it only to those that generalise. The other relation graph rules have nothing to act on here, since OMOP has no relationship hierarchy, declares no transitive relationships and stores both directions of each.
+* Only `Is a` is followed, not the other ancestry in `concept_ancestor` such as ATC or SPL classes.
+* Only concepts within the adapter's `concept_filter` are reported as entailed objects, and for incoming relationships as entailed subjects, though the walk passes through the others.
+* For a concept near the top of a hierarchy the incoming direction returns very many relationships, since each subtype below it is a subject.
 
 ### Walking the hierarchy
 `ancestors`, `descendants` and the graphs built on them follow the predicates you give, each walk taking one query for all start concepts. Without predicates they follow `rdfs:subClassOf`, the strict `Is a` hierarchy. oaklib walks every predicate in that case, but over all OMOP relationships a walk reaches most of the vocabulary within a few hops.
@@ -74,7 +85,7 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 ```
 
 * `ancestors` and `descendants` report only concepts within the adapter's `concept_filter`, though the walk passes through the others. `ancestor_graph` and `descendant_graph` keep every concept on the walk so the graph stays connected.
-* A non-standard concept has no ancestry, so its `ancestors` are empty. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the standard concepts it maps to: its walks include them and their ancestors, and its entailed relationships are theirs, reported for the concept itself. This is off by default because the result holds concepts that no stored edge connects to the concept.
+* A non-standard concept has no ancestry, so its `ancestors` are empty. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the standard concepts it maps to: its walks include them and their ancestors, and its entailed relationships are those of its standard concepts that generalise, reported for the concept itself. Mappings and lineage of the standard concepts are not lent to it. This is off by default because the result holds concepts that no stored edge connects to the concept.
 * `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary.
 * `descendants` of a concept near the top of a hierarchy return very many concepts.
 

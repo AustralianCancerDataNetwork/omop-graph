@@ -52,7 +52,14 @@ from ..extensions.omop_alchemy import (
 )
 from ._streaming import stream
 from .base import GraphBackend
-from .edges import IDENTITY_FILTER, IS_A_FILTER, EdgeFilter, EdgeView, Predicate
+from .edges import (
+    IDENTITY_FILTER,
+    IS_A_FILTER,
+    IS_A_RELATIONSHIP_ID,
+    EdgeFilter,
+    EdgeView,
+    Predicate,
+)
 from .nodes import (
     AncestorMatch,
     ConceptView,
@@ -866,11 +873,11 @@ class KnowledgeGraph(GraphBackend):
         concept_filter: ConceptFilter | None = None,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
-        Query relationships, including those entailed by the strict ``Is a`` hierarchy.
+        Query relationships, including those that follow through the ``Is a`` hierarchy.
 
-        A triple (S, R, E) is entailed when (S, R, D) is asserted and E is D or an
-        ``Is a`` ancestor of D. Relationships of ancestors are not inherited downwards.
-        Each triple is yielded once.
+        Each triple is yielded once. Every relationship *edge_filter* selects is treated
+        this way, so the caller selects only those for which that is sound, see
+        :attr:`omop_graph.graph.edges.Predicate.entails_along_is_a`.
 
         Parameters
         ----------
@@ -881,8 +888,8 @@ class KnowledgeGraph(GraphBackend):
         edge_filter : EdgeFilter, optional
             Which asserted relationships to start from, as in :meth:`relationships`.
         concept_filter : ConceptFilter, optional
-            Which ``Is a`` ancestors, or descendants for incoming relationships, count as
-            entailed objects, as in :meth:`closure`. Asserted edges are unaffected.
+            Which concepts count as entailed objects, and for incoming relationships as
+            entailed subjects, as in :meth:`closure`. Asserted edges are unaffected.
 
         Yields
         ------
@@ -893,6 +900,13 @@ class KnowledgeGraph(GraphBackend):
         ------
         ValueError
             If both *subjects* and *objects* are None.
+
+        Notes
+        -----
+        An asserted (T, R, D) also holds for every subtype of T, so the subject moves
+        down, and for every ancestor of D, so the object moves up. For example, "Lung
+        cancer Has finding site Lung" also gives "Small cell lung cancer Has finding site
+        Lung" and "Lung cancer Has finding site Thoracic organ".
         """
         if subjects is None and objects is None:
             raise ValueError("Entailed relationships need subjects or objects")
@@ -907,6 +921,20 @@ class KnowledgeGraph(GraphBackend):
                 seen.add(triple)
                 yield triple
 
+    @staticmethod
+    def _without_is_a(edge_filter: EdgeFilter | None) -> EdgeFilter | None:
+        """
+        *edge_filter* without the ``Is a`` relationship, when it names its relationships.
+
+        Inheriting ``Is a`` edges between the subtypes of a subject adds nothing to the
+        ancestors the closure already gives.
+        """
+        if edge_filter is None or edge_filter.predicate_ids is None:
+            return edge_filter
+        return replace(
+            edge_filter, predicate_ids=edge_filter.predicate_ids - {IS_A_RELATIONSHIP_ID}
+        )
+
     def _entailed_from_subjects(
         self,
         subjects: tuple[int, ...],
@@ -914,18 +942,33 @@ class KnowledgeGraph(GraphBackend):
         edge_filter: EdgeFilter | None,
         concept_filter: ConceptFilter | None,
     ) -> Generator[tuple[int, str, int], None, None]:
-        """Generalise the filler of every asserted edge of *subjects* up the ``Is a`` hierarchy."""
+        """
+        Find the asserted edges of *subjects* and of their ``Is a`` ancestors, and
+        generalise the filler of each up the ``Is a`` hierarchy.
+        """
         wanted = None if objects is None else frozenset(objects)
-        asserted: list[tuple[int, str, int]] = []
-        for batch in batched(subjects, self.LOOKUP_BATCH_SIZE):
-            asserted.extend(self.relationships(batch, None, edge_filter))
+        above = self.closure(subjects)
+        own: dict[int, list[tuple[str, int]]] = defaultdict(list)
+        inherited: dict[int, list[tuple[str, int]]] = defaultdict(list)
+        for edges, ids, selected in (
+            (own, tuple(dict.fromkeys(subjects)), edge_filter),
+            (inherited, tuple(set().union(*above.values())), self._without_is_a(edge_filter)),
+        ):
+            for batch in batched(ids, self.LOOKUP_BATCH_SIZE):
+                for source, relationship_id, filler in self.relationships(batch, None, selected):
+                    edges[source].append((relationship_id, filler))
         ancestors = self.closure(
-            {filler for _, _, filler in asserted}, concept_filter=concept_filter
+            {filler for edges in (*own.values(), *inherited.values()) for _, filler in edges},
+            concept_filter=concept_filter,
         )
-        for subject_id, relationship_id, filler in asserted:
-            for reached in (filler, *ancestors[filler]):
-                if wanted is None or reached in wanted:
-                    yield subject_id, relationship_id, reached
+        for subject_id in subjects:
+            held = own[subject_id] + [
+                edge for source in above[subject_id] for edge in inherited[source]
+            ]
+            for relationship_id, filler in held:
+                for reached in (filler, *ancestors[filler]):
+                    if wanted is None or reached in wanted:
+                        yield subject_id, relationship_id, reached
 
     def _entailed_into_objects(
         self,
@@ -933,16 +976,31 @@ class KnowledgeGraph(GraphBackend):
         edge_filter: EdgeFilter | None,
         concept_filter: ConceptFilter | None,
     ) -> Generator[tuple[int, str, int], None, None]:
-        """Find the edges into *objects* and into their ``Is a`` descendants."""
+        """
+        Find the edges into *objects* and into their ``Is a`` descendants, and give each
+        to the ``Is a`` descendants of its subject.
+        """
         descendants = self.closure(objects, HierarchyDirection.DOWN, concept_filter=concept_filter)
         targets_by_filler: dict[int, list[int]] = defaultdict(list)
         for target, below in descendants.items():
             for filler in (target, *below):
                 targets_by_filler[filler].append(target)
+        asserted: list[tuple[int, str, int]] = []
         for batch in batched(targets_by_filler, self.LOOKUP_BATCH_SIZE):
-            for subject_id, relationship_id, filler in self.relationships(None, batch, edge_filter):
-                for target in targets_by_filler[filler]:
-                    yield subject_id, relationship_id, target
+            asserted.extend(self.relationships(None, batch, edge_filter))
+        inheriting = {
+            subject_id
+            for subject_id, relationship_id, _ in asserted
+            if relationship_id != IS_A_RELATIONSHIP_ID
+        }
+        subtypes = self.closure(inheriting, HierarchyDirection.DOWN, concept_filter=concept_filter)
+        for subject_id, relationship_id, filler in asserted:
+            holders = (subject_id,)
+            if relationship_id != IS_A_RELATIONSHIP_ID:
+                holders = (subject_id, *subtypes[subject_id])
+            for target in targets_by_filler[filler]:
+                for holder in holders:
+                    yield holder, relationship_id, target
 
     def entities(
         self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER
