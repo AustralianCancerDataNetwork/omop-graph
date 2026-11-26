@@ -3,6 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from fixtures.cdm_builders import (
+    classified,
+    concept,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+    synonym,
+)
 from fixtures.search_cdm import (
     CANCER,
     CONTAINING,
@@ -12,9 +20,20 @@ from fixtures.search_cdm import (
     SOURCE,
     search_cdm,
 )
+from omop_alchemy.cdm.model.vocabulary.concept import Concept
+from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
+from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
+from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
+from omop_graph.extensions.omop_alchemy import (
+    HierarchyDirection,
+    PredicateKind,
+    RelationshipClass,
+    RelationshipMapping,
+)
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.language import OMOPLanguage
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
 
@@ -121,3 +140,40 @@ def test_narrowing_a_scope_without_vocabularies_takes_them_all() -> None:
         "ICD10CM",
         "SNOMED",
     )
+
+
+@pytest.mark.parametrize("synonyms", [False, True])
+def test_a_limit_keeps_the_leading_concepts_however_many_synonyms_match(kg, synonyms) -> None:
+    everything = list(kg.search("cancer", RANKED, synonyms=synonyms))
+
+    for limit in range(len(everything) + 2):
+        assert (
+            list(kg.search("cancer", RANKED, synonyms=synonyms, limit=limit))
+            == (everything[:limit])
+        )
+
+
+def test_one_concept_with_many_synonyms_does_not_use_up_the_limit() -> None:
+    models = (
+        Concept,
+        Concept_Synonym,
+        Relationship,
+        Vocabulary,
+        RelationshipClass,
+        RelationshipMapping,
+    )
+    rows = [
+        relationship("Is a", "Subsumes"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        concept(700, "Plain one"),
+        concept(701, "Plain two"),
+        concept(702, "Plain three"),
+        *(synonym(700, f"alpha {n}", OMOPLanguage.ENGLISH) for n in range(6)),
+        synonym(701, "alpha two", OMOPLanguage.ENGLISH),
+        synonym(702, "alpha three", OMOPLanguage.ENGLISH),
+    ]
+    with sqlite_cdm(models, rows) as sessions:
+        found = list(KnowledgeGraph(sessions).search("alpha", (PARTIAL,), synonyms=True, limit=3))
+
+    assert sorted(found) == [700, 701, 702]

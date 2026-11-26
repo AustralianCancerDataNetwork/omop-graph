@@ -133,7 +133,9 @@ class SearchMixin(EnumerationMixin):
         concept_filter : ConceptFilter
             The concepts that can match. By default every concept.
         limit : int, optional
-            The most concepts to yield. Zero or less yields none.
+            The most concepts to yield. Zero or less yields none. A concept with several
+            matching synonyms counts once, so more rows are read until the limit is met
+            or the matches run out.
         identifiers : Iterable[int]
             Concepts the term names as an identifier, such as by code.
 
@@ -155,21 +157,24 @@ class SearchMixin(EnumerationMixin):
                 yield concept_id
         for kind in kinds:
             for on_synonyms in (False, True) if synonyms else (False,):
-                if full():
-                    return
-                matches = self.concept_lookup(
-                    term,
-                    match_kind=kind,
-                    synonym=on_synonyms,
-                    concept_filter=concept_filter,
-                    limit=None if limit is None else limit + len(found),
-                )
-                for match in matches:
-                    if match.matched_concept_id not in found:
-                        found[match.matched_concept_id] = None
-                        yield match.matched_concept_id
-                        if full():
-                            return
+                rows = None if limit is None else limit + len(found)
+                while not full():
+                    matches = self.concept_lookup(
+                        term,
+                        match_kind=kind,
+                        synonym=on_synonyms,
+                        concept_filter=concept_filter,
+                        limit=rows,
+                    )
+                    for match in matches:
+                        if match.matched_concept_id not in found:
+                            found[match.matched_concept_id] = None
+                            yield match.matched_concept_id
+                            if full():
+                                return
+                    if rows is None or len(matches) < rows:
+                        break
+                    rows *= 2
 
     def concept_ids_by_label(self, label: str) -> tuple[int, ...]:
         """
