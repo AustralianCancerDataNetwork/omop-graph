@@ -1,7 +1,6 @@
 """The summary statistics interface over the OMOP knowledge graph."""
 
 import logging
-from functools import cached_property
 from typing import Any
 
 from oaklib.datamodels.summary_statistics_datamodel import FacetedCount, UngroupedStatistics
@@ -75,13 +74,6 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
             return counts.by_domain()
         return {}
 
-    @cached_property
-    def _grouped_counts(
-        self,
-    ) -> dict[Grouping, tuple[dict[str, dict[str, int]], dict[str, SynonymCounts]]]:
-        """The edge and synonym counts of every group, filled when a grouping is first asked for."""
-        return {}
-
     def _edge_and_synonym_counts(
         self,
         concept_filter: ConceptFilter,
@@ -91,10 +83,10 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         """
         The counts of the exposed relationships and of the synonyms of the concepts in scope.
 
-        A single vocabulary or domain is read from counts of every group made in one pass
-        and kept, when the adapter does not restrict its vocabularies and domains.
+        A single vocabulary or domain is read from the counts of every group when the
+        adapter does not restrict its vocabularies and domains, see
+        :meth:`omop_graph.graph.kg.KnowledgeGraph.group_statistics`.
         """
-        every = every_concept(concept_filter)
         groups = {
             OMOPMetadataKey.VOCABULARY: Grouping.VOCABULARY,
             OMOPMetadataKey.DOMAIN: Grouping.DOMAIN,
@@ -106,16 +98,11 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
             and every_concept(self._population) == ALL_CONCEPTS
         ):
             [(key, value)] = property_values.items()
-            grouping = groups[OMOPMetadataKey(key)]
-            if grouping not in self._grouped_counts:
-                self._grouped_counts[grouping] = (
-                    self.kg.relationship_counts_by(grouping),
-                    self.kg.synonym_counts_by(grouping),
-                )
-            by_relationship, by_synonym = self._grouped_counts[grouping]
-            counts = by_relationship.get(value, {})
-            synonyms = by_synonym.get(value, SynonymCounts(0, 0))
+            group = self.kg.group_statistics(groups[OMOPMetadataKey(key)]).get(value)
+            counts = group.relationships if group else {}
+            synonyms = group.synonyms if group else SynonymCounts(0, 0)
         else:
+            every = every_concept(concept_filter)
             counts = self.kg.relationship_counts(every)
             synonyms = self.kg.synonym_counts(every)
         return {
@@ -168,7 +155,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         statistics.class_count = counts.total
         statistics.deprecated_class_count = counts.deprecated
         statistics.class_count_with_text_definitions = 0
-        statistics.object_property_count = len(self.kg.default_relationship_ids)
+        statistics.object_property_count = len(self.predicates_by_curie)
         statistics.deprecated_object_property_count = 0
         statistics.ontology_count = len(counts.by_vocabulary())
         edges, synonyms = self._edge_and_synonym_counts(concept_filter, property_values, prefixes)

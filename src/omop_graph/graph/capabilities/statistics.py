@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+
 from omop_alchemy.cdm.query import ConceptFilter
 
 from ..queries import (
@@ -12,7 +14,7 @@ from ..queries import (
     q_synonym_counts_by,
 )
 from ..scope import ALL_CONCEPTS, scope_only
-from ..statistics import ConceptCount, ConceptCounts, Grouping, SynonymCounts
+from ..statistics import ConceptCount, ConceptCounts, Grouping, GroupStatistics, SynonymCounts
 from ._core import GraphCore
 
 
@@ -81,3 +83,32 @@ class StatisticsMixin(GraphCore):
                 row.group: SynonymCounts(row.statements, row.distinct)
                 for row in session.execute(q_synonym_counts_by(grouping))
             }
+
+    @functools.cached_property
+    def _group_statistics(self) -> dict[Grouping, dict[str, GroupStatistics]]:
+        """The statistics of every group, filled when a grouping is first asked for."""
+        return {}
+
+    def group_statistics(self, grouping: Grouping) -> dict[str, GroupStatistics]:
+        """
+        The relationships and synonyms of each vocabulary or domain, counted in one pass.
+
+        The first call for a grouping counts every group together, which takes a minute on a
+        full Athena release, and the result is kept for the life of the graph. It is cheaper
+        than counting each group on its own when several groups are wanted.
+
+        Returns
+        -------
+        dict[str, GroupStatistics]
+            The statistics of each group that has a relationship or a synonym.
+        """
+        if grouping not in self._group_statistics:
+            relationships = self.relationship_counts_by(grouping)
+            synonyms = self.synonym_counts_by(grouping)
+            self._group_statistics[grouping] = {
+                group: GroupStatistics(
+                    relationships.get(group, {}), synonyms.get(group, SynonymCounts(0, 0))
+                )
+                for group in sorted(relationships.keys() | synonyms.keys())
+            }
+        return self._group_statistics[grouping]

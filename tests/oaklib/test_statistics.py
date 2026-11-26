@@ -7,7 +7,7 @@ from collections.abc import Iterator
 import pytest
 from fixtures.hierarchy_cdm import CANCER, DISEASE, LUNG_CANCER, SMOKING_RELATED, hierarchy_cdm
 from fixtures.mappings_cdm import mappings_cdm
-from oaklib.datamodels.vocabulary import IS_A
+from oaklib.datamodels.vocabulary import IS_A, OWL_OBJECT_PROPERTY
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
@@ -148,3 +148,18 @@ def test_a_domain_does_not_widen_the_domains_of_the_adapter(adapter) -> None:
     )
 
     assert statistics.class_count == statistics.deprecated_class_count
+
+
+@pytest.mark.parametrize("fixture", ["adapter", "hierarchy"])
+def test_the_statistics_describe_what_the_adapter_enumerates(request, fixture) -> None:
+    adapter = request.getfixturevalue(fixture)
+    statistics = adapter.branch_summary_statistics()
+    concept_ids = tuple(adapter.kg.entities(ConceptFilter()))
+
+    assert statistics.class_count == len(list(adapter.entities(filter_obsoletes=False)))
+    assert statistics.deprecated_class_count == len(list(adapter.obsoletes()))
+    assert statistics.object_property_count == len(
+        list(adapter.entities(owl_type=OWL_OBJECT_PROPERTY))
+    )
+    assert statistics.edge_count == len(list(adapter.relationships()))
+    assert statistics.synonym_statement_count == len(adapter.kg.synonyms(concept_ids))

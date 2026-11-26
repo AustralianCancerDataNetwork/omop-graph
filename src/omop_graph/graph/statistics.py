@@ -89,3 +89,20 @@ class SynonymCounts:
 
     statements: int
     distinct: int
+
+
+@dataclass(frozen=True, slots=True)
+class GroupStatistics:
+    """
+    The relationships and synonyms of the concepts of one vocabulary or one domain.
+
+    Parameters
+    ----------
+    relationships : dict[str, int]
+        The active relationships of each relationship id, counted by the group of their subject.
+    synonyms : SynonymCounts
+        The synonyms of the concepts of the group.
+    """
+
+    relationships: dict[str, int]
+    synonyms: SynonymCounts

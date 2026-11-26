@@ -102,3 +102,22 @@ def test_the_relationships_of_every_group_are_counted_in_one_pass(kg) -> None:
 
 def test_the_synonyms_of_every_group_are_counted_in_one_pass(kg) -> None:
     assert kg.synonym_counts_by(Grouping.VOCABULARY) == {"SNOMED": kg.synonym_counts()}
+
+
+@pytest.mark.parametrize("grouping", list(Grouping))
+def test_the_statistics_of_each_group_are_those_counted_for_the_group_alone(kg, grouping) -> None:
+    grouped = kg.group_statistics(grouping)
+
+    assert grouped
+    for group, statistics in grouped.items():
+        alone = (
+            ConceptFilter(vocabularies=(group,))
+            if grouping is Grouping.VOCABULARY
+            else ConceptFilter(domains=(group,))
+        )
+        assert statistics.relationships == kg.relationship_counts(alone)
+        assert statistics.synonyms == kg.synonym_counts(alone)
+
+
+def test_the_statistics_of_every_group_are_counted_once(kg) -> None:
+    assert kg.group_statistics(Grouping.VOCABULARY) is kg.group_statistics(Grouping.VOCABULARY)
