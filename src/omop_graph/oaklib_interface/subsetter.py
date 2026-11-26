@@ -44,11 +44,6 @@ class OMOPSubsetterInterface(OMOPBasicOntologyInterface, SubsetterInterface):
             else self.kg.default_relationship_ids
         )
         ids = tuple(dict.fromkeys(self._resolve_concepts(seed_curies).values()))
-        for s, p, o in self.kg.gap_filled_relationships(
-            ids, EdgeFilter(predicate_ids=predicate_ids)
-        ):
-            yield (
-                self.codec.concept_curie(s),
-                self.codec.predicate_curie(p),
-                self.codec.concept_curie(o),
-            )
+        yield from self.triple_curies(
+            self.kg.gap_filled_relationships(ids, EdgeFilter(predicate_ids=predicate_ids))
+        )

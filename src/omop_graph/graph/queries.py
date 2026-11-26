@@ -432,6 +432,7 @@ def q_edges(
     direction: Literal["in", "out"],
     edge_filter: EdgeFilter,
     ordered: bool = False,
+    others: tuple[int, ...] | None = None,
 ) -> Select:
     """Query edges for a batch of concept IDs, in either direction.
 
@@ -446,6 +447,8 @@ def q_edges(
         If True, order by source concept, target concept, and relationship ID
         to make results reproducible. If False, row order is unspecified and
         may differ between runs and backends.
+    others : tuple[int, ...], optional
+        Only the edges whose other end is one of these concepts.
     """
     if isinstance(concept_ids, int):
         concept_ids = (concept_ids,)
@@ -462,8 +465,12 @@ def q_edges(
 
     if direction == "in":
         stmt = stmt.where(Concept_Relationship.concept_id_2.in_(concept_ids))
+        if others is not None:
+            stmt = stmt.where(Concept_Relationship.concept_id_1.in_(others))
     elif direction == "out":
         stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
+        if others is not None:
+            stmt = stmt.where(Concept_Relationship.concept_id_2.in_(others))
 
     if ordered:
         stmt = stmt.order_by(

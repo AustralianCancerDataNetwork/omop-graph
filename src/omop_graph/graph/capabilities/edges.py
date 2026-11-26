@@ -7,6 +7,7 @@ from dataclasses import replace
 from itertools import product
 from typing import Literal
 
+from sqlalchemy import Row
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 
@@ -163,14 +164,52 @@ class EdgesMixin(PredicatesMixin):
             ids,
         )
         for row in rows:
-            mapping = self._relationship_mapping.get(row.predicate_id)
-            if mapping is None:
-                continue
-            yield EdgeView(
-                **row._mapping,
-                predicate_kind=mapping.predicate_kind,
-                predicate_subkind=mapping.predicate_subkind,
-            )
+            if (edge := self._edge_view(row)) is not None:
+                yield edge
+
+    def edges_between(
+        self,
+        subject_ids: Iterable[int],
+        object_ids: Iterable[int],
+        edge_filter: EdgeFilter | None = None,
+    ) -> tuple[EdgeView, ...]:
+        """
+        Retrieve the edges that run from one of *subject_ids* to one of *object_ids*.
+
+        Parameters
+        ----------
+        subject_ids : Iterable[int]
+            The concepts the edges start from, however many.
+        object_ids : Iterable[int]
+            The concepts the edges end at, however many.
+        edge_filter : EdgeFilter, optional
+            Which edges to return. Defaults to ``EdgeFilter()``.
+        """
+        resolved = self._resolve_edge_filter(edge_filter)
+        if resolved is None:
+            return ()
+        subjects, objects = tuple(dict.fromkeys(subject_ids)), tuple(dict.fromkeys(object_ids))
+        found: list[EdgeView] = []
+        with self.session_factory() as session:
+            for subject_batch in self.batches(subjects):
+                for object_batch in self.batches(objects):
+                    for row in session.execute(
+                        q_edges(subject_batch, "out", resolved, others=object_batch)
+                    ):
+                        if (edge := self._edge_view(row)) is not None:
+                            found.append(edge)
+        return tuple(found)
+
+    def _edge_view(self, row: Row) -> EdgeView | None:
+        """The edge of a row, or None when its relationship has no classification."""
+        mapping = self._relationship_mapping.get(row.predicate_id)
+        if mapping is None:
+            return None
+        return EdgeView(
+            **row._mapping,
+            predicate_kind=mapping.predicate_kind,
+            predicate_subkind=mapping.predicate_subkind,
+        )
 
     def _resolve_edge_filter(self, edge_filter: EdgeFilter | None) -> EdgeFilter | None:
         """Fold the kind and subkind fields of *edge_filter* into ``predicate_ids``.

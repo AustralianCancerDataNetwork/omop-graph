@@ -17,7 +17,6 @@ Supported Relationships (``PredicateKind``)
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
@@ -30,7 +29,6 @@ from ..extensions.omop_alchemy import HierarchyDirection, PredicateKind, Predica
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
 
-logger = logging.getLogger(__name__)
 
 IS_A_RELATIONSHIP_ID = "Is a"
 """The relationship id of the subclass edge. Its transitive closure is the strict hierarchy."""

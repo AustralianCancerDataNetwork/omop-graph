@@ -26,6 +26,7 @@ from oaklib.types import CURIE, PRED_CURIE
 from omop_graph.extensions.omop_alchemy import HierarchyDirection
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.language import OMOPLanguage
+from omop_graph.oaklib_interface.base import as_list
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
@@ -143,7 +144,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         OMOP does not scope synonyms, so all are exact. The language is the ISO 639-1 code,
         or None for a language concept that has none.
         """
-        curies = [subject] if isinstance(subject, str) else list(subject)
+        curies = as_list(subject)
         ids = self._resolve_concepts(curies)
         spellings = self._spellings(ids)
         for synonym in self.kg.synonyms(tuple(dict.fromkeys(ids.values()))):
@@ -166,7 +167,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         scoped: bool,
     ) -> dict[CURIE, list[CURIE]]:
         """Map each start CURIE to the CURIEs reached from it, in one query per batch."""
-        starts = [start_curies] if isinstance(start_curies, str) else list(start_curies)
+        starts = as_list(start_curies)
         ids = self._resolve_concepts(starts)
         edge_filter = EdgeFilter(
             predicate_ids=self.codec.relationship_ids(self._traversal_predicates(predicates))
@@ -192,7 +193,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         direction: HierarchyDirection,
     ) -> Iterator[CURIE]:
         """Yield the concepts reached from the starts, with the starts when reflexive."""
-        starts = [start_curies] if isinstance(start_curies, str) else list(start_curies)
+        starts = as_list(start_curies)
         predicates = self._traversal_predicates(predicates)
         if method == GraphTraversalMethod.ENTAILMENT:
             walker = (
@@ -310,18 +311,13 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         direction: HierarchyDirection,
     ) -> tuple[list[tuple[CURIE, PRED_CURIE, CURIE]], dict[CURIE, None]]:
         """The edges between the starts and the concepts reached from them, and those concepts."""
-        starts = [start_curies] if isinstance(start_curies, str) else list(start_curies)
+        starts = as_list(start_curies)
         predicates = self._traversal_predicates(predicates)
-        members = dict.fromkeys(starts)
-        for reached in self._reached(starts, predicates, direction, scoped=False).values():
-            members.update(dict.fromkeys(reached))
-        triples = []
-        for batch in self.kg.batches(members):
-            triples.extend(
-                triple
-                for triple in self.relationships(subjects=batch, predicates=predicates)
-                if triple[2] in members
-            )
+        reached = self._reached(starts, predicates, direction, scoped=False)
+        members = dict.fromkeys(reached)
+        for others in reached.values():
+            members.update(dict.fromkeys(others))
+        triples = list(self.relationships(subjects=members, objects=members, predicates=predicates))
         return triples, members
 
     def _walked_graph(

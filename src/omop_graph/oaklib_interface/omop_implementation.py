@@ -1,4 +1,3 @@
-import logging
 from typing import ClassVar
 
 from oa_configurator import ResolvedCDMDatabase
@@ -35,8 +34,6 @@ from omop_graph.oaklib_interface.summary_statistics import OMOPSummaryStatistics
 from omop_graph.oaklib_interface.text_annotator import OMOPTextAnnotatorInterface
 from omop_graph.oaklib_interface.unsupported import ReadOnlyMixin
 from omop_graph.render import bind_default_renderers
-
-logger = logging.getLogger(__name__)
 
 
 class OMOPAlchemyImplementation(

@@ -29,7 +29,6 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.edges import (
     EdgeFilter,
-    EdgeView,
     Predicate,
 )
 from omop_graph.graph.language import OMOPLanguage
@@ -603,12 +602,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                     subject_ids, object_ids, edge_filter, self._population, self.standardise
                 )
             triples = ((o, p, s) if invert else (s, p, o) for s, p, o in entailed)
-        for s, p, o in triples:
-            yield (
-                self.codec.concept_curie(s),
-                self.codec.predicate_curie(p),
-                self.codec.concept_curie(o),
-            )
+        yield from self.triple_curies(triples)
 
     def relationships_metadata(
         self, relationships: Iterable[tuple[CURIE, PRED_CURIE, CURIE]], **kwargs
@@ -621,14 +615,15 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         relationships = list(relationships)
         concept_ids = self._resolve_concepts({c for s, _, o in relationships for c in (s, o)})
-        subject_ids = tuple({concept_ids[s] for s, _, _ in relationships if s in concept_ids})
-        predicate_ids = self.codec.relationship_ids(p for _, p, _ in relationships)
-        edges: dict[tuple[int | None, str | None, int | None], EdgeView] = {
+        edges = {
             (edge.subject_id, edge.predicate_id, edge.object_id): edge
-            for edge in self.kg.edges(
-                subject_ids,
-                direction="out",
-                edge_filter=EdgeFilter(predicate_ids=predicate_ids, active_only=False),
+            for edge in self.kg.edges_between(
+                {concept_ids[s] for s, _, _ in relationships if s in concept_ids},
+                {concept_ids[o] for _, _, o in relationships if o in concept_ids},
+                EdgeFilter(
+                    predicate_ids=self.codec.relationship_ids(p for _, p, _ in relationships),
+                    active_only=False,
+                ),
             )
         }
         for relationship in relationships:
@@ -648,27 +643,19 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def _all_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """Stream every active edge of the exposed relationships, without loading them all."""
-        for s, p, o in self.kg.all_relationships(
-            EdgeFilter(predicate_ids=self.kg.default_relationship_ids)
-        ):
-            yield (
-                self.codec.concept_curie(s),
-                self.codec.predicate_curie(p),
-                self.codec.concept_curie(o),
-            )
+        yield from self.triple_curies(
+            self.kg.all_relationships(EdgeFilter(predicate_ids=self.kg.default_relationship_ids))
+        )
 
     def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """Stream the entailed relationships of every concept, for the exposed relationships."""
-        for s, p, o in self.kg.all_entailed_relationships(
-            EdgeFilter(predicate_ids=self.kg.default_relationship_ids),
-            self._population,
-            self.standardise,
-        ):
-            yield (
-                self.codec.concept_curie(s),
-                self.codec.predicate_curie(p),
-                self.codec.concept_curie(o),
+        yield from self.triple_curies(
+            self.kg.all_entailed_relationships(
+                EdgeFilter(predicate_ids=self.kg.default_relationship_ids),
+                self._population,
+                self.standardise,
             )
+        )
 
     @property
     def edge_index(self):

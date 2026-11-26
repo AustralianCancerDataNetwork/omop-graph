@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Iterable
 
 # Local Application Imports
@@ -22,12 +23,17 @@ from ._core import GraphCore
 class VocabularyMixin(GraphCore):
     """Vocabularies, domains and synonyms."""
 
-    def vocabularies(self) -> tuple[VocabularyView, ...]:
-        """Return every vocabulary."""
+    @functools.cached_property
+    def _vocabularies(self) -> tuple[VocabularyView, ...]:
+        """The vocabularies, read once for the life of the graph."""
         with self.session_factory() as session:
             return tuple(
                 VocabularyView(**row._mapping) for row in session.execute(q_vocabularies())
             )
+
+    def vocabularies(self) -> tuple[VocabularyView, ...]:
+        """Return every vocabulary, read once for the life of the graph."""
+        return self._vocabularies
 
     def domain_concept_ids(self) -> dict[str, int]:
         """Return the concept id of each domain, keyed by ``domain_id``."""

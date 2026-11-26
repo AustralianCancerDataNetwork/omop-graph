@@ -1,6 +1,5 @@
 """The summary statistics interface over the OMOP knowledge graph."""
 
-import logging
 from typing import Any
 
 from oaklib.datamodels.summary_statistics_datamodel import FacetedCount, UngroupedStatistics
@@ -18,8 +17,6 @@ from omop_graph.graph.statistics import ConceptCounts, Grouping, SynonymCounts
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
-
-logger = logging.getLogger(__name__)
 
 
 class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisticsInterface):
@@ -160,9 +157,10 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         statistics.ontology_count = len(counts.by_vocabulary())
         edges, synonyms = self._edge_and_synonym_counts(concept_filter, property_values, prefixes)
         statistics.edge_count_by_predicate = {
-            curie: FacetedCount(curie, filtered_count=count)
+            self.codec.predicate_curie(relationship_id): FacetedCount(
+                self.codec.predicate_curie(relationship_id), filtered_count=count
+            )
             for relationship_id, count in edges.items()
-            if (curie := self.codec.predicate_curie(relationship_id))
         }
         statistics.edge_count = sum(edges.values())
         statistics.synonym_statement_count = synonyms.statements

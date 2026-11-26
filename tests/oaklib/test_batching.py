@@ -95,6 +95,10 @@ def as_comparable(result: Any) -> Any:
     return result if isinstance(result, (str, int, float, bool, type(None))) else repr(result)
 
 
+def _edge_triples(edges) -> set[tuple[int, str, int]]:
+    return {(edge.subject_id, edge.predicate_id, edge.object_id) for edge in edges}
+
+
 CALLS: dict[str, Callable[[OMOPAlchemyImplementation], Any]] = {
     "concept_views": lambda a: sorted(v.concept_id for v in a.kg.concept_views(IDS)),
     "concept_views_unsorted": lambda a: {v.concept_id for v in a.kg.concept_views(IDS, sort=False)},
@@ -147,6 +151,7 @@ CALLS: dict[str, Callable[[OMOPAlchemyImplementation], Any]] = {
     "entailed_by_object": lambda a: set(a.kg.entailed_relationships(None, IDS)),
     "entailed_between": lambda a: set(a.kg.entailed_relationships(IDS, IDS)),
     "gap_filled": lambda a: a.kg.gap_filled_relationships(IDS[:-1]),
+    "edges_between": lambda a: _edge_triples(a.kg.edges_between(IDS, IDS)),
 }
 
 ID_CALLS = {
@@ -170,6 +175,7 @@ ID_CALLS = {
     "entailed_by_subject",
     "entailed_by_object",
     "gap_filled",
+    "edges_between",
 }
 """The calls that take ids, and whose statements bind fewer of them in a batch."""
 
@@ -177,6 +183,7 @@ SWEPT_METHODS = {
     "closure",
     "concept_views",
     "edges",
+    "edges_between",
     "entailed_relationships",
     "gap_filled_relationships",
     "get_num_ancestors",
@@ -202,7 +209,15 @@ UNSWEPT_METHODS = {
 
 
 def test_every_method_that_takes_many_ids_is_swept() -> None:
-    parameters = {"concept_ids", "child_ids", "parent_ids", "subjects", "objects"}
+    parameters = {
+        "concept_ids",
+        "child_ids",
+        "parent_ids",
+        "subjects",
+        "objects",
+        "subject_ids",
+        "object_ids",
+    }
     taking_ids = {
         name
         for name, method in inspect.getmembers(KnowledgeGraph, inspect.isfunction)

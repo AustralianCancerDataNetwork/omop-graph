@@ -12,7 +12,6 @@ These classes are primarily used for:
 
 from __future__ import annotations
 
-import logging
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -24,8 +23,6 @@ from typing import Self
 
 from omop_alchemy.cdm.model import normalised_flag
 from sqlalchemy import Row
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

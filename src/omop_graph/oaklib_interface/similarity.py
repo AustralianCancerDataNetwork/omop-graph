@@ -1,6 +1,5 @@
 """The semantic similarity interface over the OMOP knowledge graph."""
 
-import logging
 from collections.abc import Iterable, Iterator
 from typing import ClassVar
 
@@ -17,8 +16,6 @@ from oaklib.types import CURIE, PRED_CURIE
 from omop_graph.graph.structural_similarity import ICSource
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
-
-logger = logging.getLogger(__name__)
 
 
 class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimilarityInterface):

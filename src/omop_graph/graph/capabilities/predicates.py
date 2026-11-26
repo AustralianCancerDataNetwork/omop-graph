@@ -109,10 +109,9 @@ class PredicatesMixin(GraphCore):
         """
         return self.predicate(relationship_id).reverse_id
 
-    def predicates(self) -> tuple[Predicate, ...]:
-        """
-        Return all predicates known to the knowledge graph.
-        """
+    @functools.cached_property
+    def _predicates(self) -> tuple[Predicate, ...]:
+        """The classified predicates, read once for the life of the graph."""
         with self.session_factory() as session:
             rows = session.execute(q_all_predicates()).all()
         return tuple(
@@ -120,3 +119,11 @@ class PredicatesMixin(GraphCore):
             for row in rows
             if row.relationship_id in self._relationship_mapping
         )
+
+    def predicates(self) -> tuple[Predicate, ...]:
+        """
+        Return all predicates known to the knowledge graph.
+
+        They are read once, like the relationship classification they are built from.
+        """
+        return self._predicates

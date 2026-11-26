@@ -1,6 +1,5 @@
 """The embedding provider interface over the OMOP knowledge graph."""
 
-import logging
 from collections.abc import Iterable, Iterator
 
 import numpy as np
@@ -9,8 +8,6 @@ from oaklib.types import CURIE
 
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
-
-logger = logging.getLogger(__name__)
 
 
 class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProviderInterface):

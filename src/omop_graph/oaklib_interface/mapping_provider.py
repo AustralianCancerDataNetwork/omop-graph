@@ -17,6 +17,7 @@ from sssom_schema import Mapping
 from omop_graph.graph.edges import EdgeFilter, MappingStrength
 from omop_graph.graph.nodes import ConceptView, MappingView
 from omop_graph.graph.scope import narrowed_to_vocabularies
+from omop_graph.oaklib_interface.base import as_list
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
@@ -129,7 +130,7 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
                     self.kg.concept_views(batch, sort=False), source, subject
                 )
             return
-        requested = [curies] if isinstance(curies, str) else list(curies)
+        requested = as_list(curies)
         ids = self._resolve_concepts(requested)
         concept_ids = tuple(dict.fromkeys(ids.values()))
         for edge in self.kg.mappings(concept_ids, edge_filter, source):

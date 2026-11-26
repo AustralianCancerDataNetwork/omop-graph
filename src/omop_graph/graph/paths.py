@@ -14,7 +14,6 @@ but does not inherently score or explain them (that is handled by the `reasoning
 from __future__ import annotations
 
 import heapq
-import logging
 from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -32,7 +31,6 @@ from omop_graph.reasoning.resolvers import CandidateHit
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
 
-logger = logging.getLogger(__name__)
 
 DEFAULT_PATH_FILTER = EdgeFilter(within_domain=True)
 """Edges path search follows by default: active, within one domain to limit noise."""

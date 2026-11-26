@@ -14,7 +14,6 @@ Capabilities
   lookups, and the optional embedding store.
 """
 
-import logging
 from collections.abc import Callable
 
 from sqlalchemy.engine import Engine
@@ -38,8 +37,6 @@ from .capabilities.search import SearchMixin
 from .capabilities.statistics import StatisticsMixin
 from .capabilities.structural_similarity import StructuralSimilarityMixin
 from .capabilities.vocabulary import VocabularyMixin
-
-logger = logging.getLogger(__name__)
 
 
 class KnowledgeGraph(
