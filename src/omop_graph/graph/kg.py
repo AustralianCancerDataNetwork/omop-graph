@@ -97,9 +97,4 @@ class KnowledgeGraph(
                 "Run `omop-graph relationship-classification` to populate it."
             )
 
-        # Embedding-specific private args
         self._emb_config = emb_config
-        self._emb = None
-
-        self._descendant_counts = {}
-        self._scope_sizes = {}

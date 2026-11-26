@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -15,6 +15,7 @@ from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
 from omop_graph.graph.capabilities import embeddings as emb_module
 from omop_graph.graph.capabilities.embeddings import (
+    EmbeddingBackendNotWritableError,
     EmbeddingError,
     EmbeddingModelNotRegisteredError,
     EmbeddingsNotConfiguredError,
@@ -89,6 +90,7 @@ def test_the_errors_share_one_base() -> None:
     for error in (
         EmbeddingsNotConfiguredError,
         EmbeddingWriterRequiredError,
+        EmbeddingBackendNotWritableError,
         EmbeddingModelNotRegisteredError,
         MissingEmbeddingError,
     ):
@@ -164,7 +166,7 @@ def test_the_guards_keep_the_name_and_docstring_of_the_method() -> None:
 def test_a_write_configuration_needs_a_write_capable_backend() -> None:
     kg = _bare_graph(_configuration(write=True))
 
-    with pytest.raises(EmbeddingWriterRequiredError):
+    with pytest.raises(EmbeddingBackendNotWritableError, match="open_vector_store_writer"):
         _ = kg.emb
 
 
@@ -467,3 +469,20 @@ def test_embedding_resolver_needs_the_extension(monkeypatch: pytest.MonkeyPatch)
 
     with pytest.raises(MissingExtensionError):
         resolvers_ext.EmbeddingResolver()
+
+
+def test_a_registered_model_is_checked_once() -> None:
+    interface = _registered_interface()
+    kg = _bare_graph(_configuration(), interface=interface)
+
+    for _ in range(3):
+        kg._registered()
+
+    assert interface.is_model_registered.call_count == 1
+
+
+def test_a_missing_package_that_is_found_but_does_not_import_is_missing() -> None:
+    from omop_graph.graph.capabilities.embeddings import _omop_emb_installed
+
+    with patch("importlib.import_module", side_effect=ImportError("broken")):
+        assert not _omop_emb_installed()

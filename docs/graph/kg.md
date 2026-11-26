@@ -193,6 +193,7 @@ Embeddings are optional, and every method that needs them raises a typed error i
 | `MissingExtensionError` | `omop-emb` is not installed. It is also an `ImportError`. |
 | `EmbeddingsNotConfiguredError` | The graph has no `emb_config`. |
 | `EmbeddingWriterRequiredError` | The method embeds text or computes embeddings, and the configuration is read-only. |
+| `EmbeddingBackendNotWritableError` | The configuration has `write=True`, and the backend cannot write embeddings. |
 | `EmbeddingModelNotRegisteredError` | The configured model is not registered in the vector store. |
 | `MissingEmbeddingError` | `embedding_similarity` is asked for a concept with no stored vector. |
 

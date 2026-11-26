@@ -20,7 +20,7 @@ import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
 from ..scope import ALL_CONCEPTS, scope_only
-from .concepts import ConceptsMixin
+from ._core import GraphCore
 
 if TYPE_CHECKING:
     from oa_configurator import ResolvedModel
@@ -37,8 +37,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
-"""Whether the optional ``omop-emb`` package is installed."""
+
+def _omop_emb_installed() -> bool:
+    """Whether the optional ``omop-emb`` package can be imported."""
+    if importlib.util.find_spec("omop_emb") is None:
+        return False
+    try:
+        importlib.import_module("omop_emb")
+    except ImportError:
+        return False
+    return True
+
+
+HAS_OMOP_EMB = _omop_emb_installed()
+"""Whether the optional ``omop-emb`` package is installed and imports."""
 
 
 class EmbeddingError(Exception):
@@ -72,6 +84,16 @@ class EmbeddingWriterRequiredError(EmbeddingError):
         super().__init__(
             f"{capability} needs a write-capable embedding configuration. "
             "Configure the knowledge graph with write=True."
+        )
+
+
+class EmbeddingBackendNotWritableError(EmbeddingError):
+    """Raised when ``write=True`` is configured with a backend that cannot write embeddings."""
+
+    def __init__(self, backend: object) -> None:
+        super().__init__(
+            f"write=True needs a backend that can write embeddings, and {type(backend).__name__} "
+            "cannot. Open the vector store with omop_emb.backends.open_vector_store_writer."
         )
 
 
@@ -223,7 +245,7 @@ def embedding_filter(concept_filter: ConceptFilter) -> EmbeddingConceptFilter:
     )
 
 
-class EmbeddingsMixin(ConceptsMixin):
+class EmbeddingsMixin(GraphCore):
     """
     Nearest concepts and similarity over the stored concept embeddings.
 
@@ -232,8 +254,9 @@ class EmbeddingsMixin(ConceptsMixin):
     :attr:`has_embeddings` and :attr:`can_embed_text` first.
     """
 
-    _emb_config: KnowledgeGraphEmbeddingConfiguration | None
-    _emb: EmbeddingWriterInterface | EmbeddingReaderInterface | None
+    _emb_config: KnowledgeGraphEmbeddingConfiguration | None = None
+    _emb: EmbeddingWriterInterface | EmbeddingReaderInterface | None = None
+    _model_registered: bool = False
 
     @property
     def embedding_configuration(self) -> KnowledgeGraphEmbeddingConfiguration | None:
@@ -253,7 +276,10 @@ class EmbeddingsMixin(ConceptsMixin):
     @property
     def can_embed_text(self) -> bool:
         """Whether the graph can embed text, which needs a write-capable configuration."""
-        return self.has_embeddings and self._emb_config is not None and self._emb_config.write
+        return (
+            self.has_embeddings
+            and cast("KnowledgeGraphEmbeddingConfiguration", self._emb_config).write
+        )
 
     def _check_embeddings(self) -> None:
         """Raise the error that names why the embedding store is unavailable."""
@@ -284,8 +310,8 @@ class EmbeddingsMixin(ConceptsMixin):
             If ``omop-emb`` is not installed.
         EmbeddingsNotConfiguredError
             If the graph has no embedding configuration.
-        EmbeddingWriterRequiredError
-            If ``write=True`` but the backend is not write-capable.
+        EmbeddingBackendNotWritableError
+            If ``write=True`` but the backend cannot write embeddings.
         """
         if self._emb is not None:
             return self._emb
@@ -296,9 +322,7 @@ class EmbeddingsMixin(ConceptsMixin):
         assert config is not None
         if config.write:
             if not isinstance(config.backend, EmbeddingBackend):
-                raise EmbeddingWriterRequiredError(
-                    f"A write-capable embedding backend, not {type(config.backend).__name__},"
-                )
+                raise EmbeddingBackendNotWritableError(config.backend)
             self._emb = EmbeddingWriterInterface(
                 backend=config.backend,
                 metric_type=config.metric_type,
@@ -324,8 +348,10 @@ class EmbeddingsMixin(ConceptsMixin):
     def _registered(self) -> EmbeddingReaderInterface:
         """The interface, once its model is known to be registered in the store."""
         interface = self.emb
-        if not interface.is_model_registered():
-            raise EmbeddingModelNotRegisteredError(interface.canonical_model_name)
+        if not self._model_registered:
+            if not interface.is_model_registered():
+                raise EmbeddingModelNotRegisteredError(interface.canonical_model_name)
+            self._model_registered = True
         return interface
 
     @requires_embeddings

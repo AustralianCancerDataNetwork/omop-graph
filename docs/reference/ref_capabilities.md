@@ -5,6 +5,7 @@
         - MissingExtensionError
         - EmbeddingsNotConfiguredError
         - EmbeddingWriterRequiredError
+        - EmbeddingBackendNotWritableError
         - EmbeddingModelNotRegisteredError
         - MissingEmbeddingError
         - KnowledgeGraphEmbeddingConfiguration

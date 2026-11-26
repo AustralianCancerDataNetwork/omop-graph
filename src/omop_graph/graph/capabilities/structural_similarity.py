@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Iterable
 
@@ -24,8 +25,15 @@ class StructuralSimilarityMixin(HierarchyMixin):
     concepts that are reported and counted, while the walk still passes through the others.
     """
 
-    _descendant_counts: dict[tuple[ICSource, ConceptFilter, int], int]
-    _scope_sizes: dict[ConceptFilter, int]
+    @functools.cached_property
+    def _descendant_counts(self) -> dict[tuple[ICSource, ConceptFilter, int], int]:
+        """The descendants counted for each concept, by source and scope, kept for this graph."""
+        return {}
+
+    @functools.cached_property
+    def _scope_sizes(self) -> dict[ConceptFilter, int]:
+        """The number of concepts each scope selects, kept for this graph."""
+        return {}
 
     def _lineage(
         self,
