@@ -14,8 +14,8 @@ from oaklib.datamodels.search import (
 from oaklib.interfaces import SearchInterface
 from oaklib.types import CURIE
 
-from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.graph.scope import every_concept
+from omop_graph.graph.model.nodes import LabelMatchKind
+from omop_graph.graph.model.scope import every_concept
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 
 logger = logging.getLogger(__name__)

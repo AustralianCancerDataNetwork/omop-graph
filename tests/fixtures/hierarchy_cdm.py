@@ -21,7 +21,7 @@ from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
 )
-from omop_graph.graph.language import OMOPLanguage
+from omop_graph.graph.model.language import OMOPLanguage
 
 (
     DISEASE,

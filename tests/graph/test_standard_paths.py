@@ -19,9 +19,9 @@ from sqlalchemy import event
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
 )
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept, find_standard_paths
 from omop_graph.reasoning.resolvers import CandidateHit
 

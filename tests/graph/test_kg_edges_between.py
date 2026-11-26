@@ -5,8 +5,8 @@ from collections.abc import Iterator
 import pytest
 from fixtures.hierarchy_cdm import CANCER, DISEASE, LUNG_CANCER, RETIRED_PARENT, hierarchy_cdm
 
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter
 
 
 @pytest.fixture(scope="module")

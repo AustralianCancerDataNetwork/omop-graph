@@ -6,8 +6,8 @@ import functools
 from collections.abc import Iterable
 
 # Local Application Imports
-from ..language import OMOPLanguage
-from ..nodes import (
+from ..model.language import OMOPLanguage
+from ..model.nodes import (
     SynonymView,
     VocabularyView,
 )

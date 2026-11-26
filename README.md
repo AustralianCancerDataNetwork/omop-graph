@@ -36,7 +36,7 @@ The extras for a DuckDB CDM (`[duckdb]`) and for embeddings (`[emb]`, `[pgvector
 ```python
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.model.nodes import LabelMatchKind
 
 kg = KnowledgeGraph(cdm_session_factory())  # the configured cdm_db
 
@@ -66,7 +66,7 @@ This classification drives traversal filtering and scoring.
 ### Traversal and Paths
 
 ```python
-from omop_graph.graph.edges import EdgeFilter
+from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.paths import find_shortest_paths
 from omop_graph.extensions.omop_alchemy import PredicateKind
 

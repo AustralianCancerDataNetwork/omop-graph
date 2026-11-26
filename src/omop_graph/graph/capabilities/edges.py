@@ -15,7 +15,7 @@ from ...extensions.omop_alchemy import (
     PredicateSubkind,
 )
 from .._streaming import stream
-from ..edges import (
+from ..model.edges import (
     DEFAULT_EDGE_FILTER,
     EdgeFilter,
     EdgeView,

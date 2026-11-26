@@ -9,7 +9,7 @@ from sqlalchemy.sql import Select
 
 # Local Application Imports
 from .._streaming import stream
-from ..edges import (
+from ..model.edges import (
     EdgeFilter,
 )
 from ..queries import (

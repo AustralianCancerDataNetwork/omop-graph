@@ -7,8 +7,8 @@ from typing import cast
 from sqlalchemy.dialects import postgresql
 
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeFilter, EdgeView
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter, EdgeView
 from omop_graph.graph.queries import q_edges
 from omop_graph.graph.traverse import traverse
 

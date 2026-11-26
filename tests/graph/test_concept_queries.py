@@ -17,7 +17,7 @@ from orm_loader.backends import resolve_backend
 from orm_loader.helpers import Base
 from sqlalchemy.orm import Session
 
-from omop_graph.graph.nodes import ConceptView
+from omop_graph.graph.model.nodes import ConceptView
 from omop_graph.graph.queries import (
     DEFAULT_CONCEPT_FILTER,
     q_concept_name_match,

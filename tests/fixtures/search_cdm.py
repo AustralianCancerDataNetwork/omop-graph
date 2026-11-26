@@ -16,7 +16,7 @@ from fixtures.cdm_builders import (
     synonym,
 )
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.language import OMOPLanguage
+from omop_graph.graph.model.language import OMOPLanguage
 
 CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED, PERCENT = range(400, 407)
 SPACED_CODE = "C34 9"

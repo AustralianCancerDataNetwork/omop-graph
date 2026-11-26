@@ -69,7 +69,7 @@ The edges of a relationship without a classification are skipped, so a filter ne
 
 ```python
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeFilter
+from omop_graph.graph.model.edges import EdgeFilter
 
 hierarchy = EdgeFilter(predicate_kinds=frozenset({PredicateKind.HIERARCHY}))
 for subject_id, relationship_id, object_id in kg.relationships(

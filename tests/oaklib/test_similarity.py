@@ -22,7 +22,7 @@ from oaklib.datamodels.vocabulary import IS_A, OWL_THING
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.structural_similarity import ICSource
+from omop_graph.graph.model.similarity import ICSource
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 

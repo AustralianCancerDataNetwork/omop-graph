@@ -13,13 +13,13 @@ from omop_alchemy.cdm.query import ConceptFilter
 from ...extensions.omop_alchemy import (
     HierarchyDirection,
 )
-from ..edges import (
+from ..model.edges import (
     DEFAULT_EDGE_FILTER,
     IS_A_RELATIONSHIP_ID,
     EdgeFilter,
 )
+from ..model.scope import _require_scope
 from ..queries import DEFAULT_CONCEPT_FILTER
-from ..scope import _require_scope
 
 # Local Application Imports
 from .enumeration import EnumerationMixin
@@ -52,7 +52,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         Query relationships, including those that follow through the ``Is a`` hierarchy.
 
         Of the relationships edge_filter selects, those that generalise, see
-        :attr:`omop_graph.graph.edges.Predicate.generalises`, are entailed. The others are
+        :attr:`omop_graph.graph.model.edges.Predicate.generalises`, are entailed. The others are
         yielded as stored, and first. Each entailed triple is yielded once.
 
         Parameters

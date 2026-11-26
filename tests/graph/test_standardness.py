@@ -16,7 +16,7 @@ from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
 )
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import Standardness
+from omop_graph.graph.model.nodes import Standardness
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 

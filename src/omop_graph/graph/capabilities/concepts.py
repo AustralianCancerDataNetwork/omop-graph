@@ -8,7 +8,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy.exc import NoResultFound
 
 # Local Application Imports
-from ..nodes import (
+from ..model.nodes import (
     ConceptView,
 )
 from ..queries import (

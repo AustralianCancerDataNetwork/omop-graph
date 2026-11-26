@@ -7,13 +7,13 @@ from dataclasses import replace
 
 from omop_alchemy.cdm.query import ConceptFilter
 
+from ..model.counts import ConceptCount, ConceptCounts, Grouping, GroupStatistics, SynonymCounts
+from ..model.scope import ALL_CONCEPTS, every_concept
 from ..queries import (
     q_concept_counts,
     q_relationship_counts,
     q_synonym_counts,
 )
-from ..scope import ALL_CONCEPTS, every_concept
-from ..statistics import ConceptCount, ConceptCounts, Grouping, GroupStatistics, SynonymCounts
 from ._core import GraphCore
 
 

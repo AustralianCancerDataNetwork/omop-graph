@@ -1,1 +1,1 @@
-::: omop_graph.graph.edges
+::: omop_graph.graph.model.edges

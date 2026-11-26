@@ -35,7 +35,7 @@ The `KnowledgeGraph` takes a factory of sessions on the OMOP CDM. `cdm_session_f
 ```python
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.model.nodes import LabelMatchKind
 
 kg = KnowledgeGraph(cdm_session_factory())  # the configured cdm_db
 
@@ -70,7 +70,7 @@ Every `concept_filter` a method takes is a scope, a membership rule that decides
 * A scope that sets `concept_ids` restricts what is reported to those ids. The ids are sent to the database as one list and are never batched, so a scope with more than about 65,000 ids fails on PostgreSQL. Use a vocabulary or a domain, or pass the ids to the method that takes ids.
 * A scope only filters what is reported. A walk still passes through the concepts it excludes. A scope also applies to the concepts you name, and a relationship asserted to a concept is reported whatever the scope. In `entailed_relationships`, a requested object the scope excludes gets only the relationships asserted to it, and a warning lists it.
 * The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, and the counts and lookups to `ALL_CONCEPTS`.
-* `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
+* `omop_graph.graph.model.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
 
 #### Unknown concepts
 

@@ -6,8 +6,8 @@ import pytest
 from oaklib.datamodels.vocabulary import IS_A
 
 from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
-from omop_graph.graph.edges import EdgeFilter, Predicate
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter, Predicate
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 

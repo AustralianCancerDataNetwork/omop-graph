@@ -12,14 +12,17 @@ from sqlalchemy import Row
 from ...extensions.omop_alchemy import (
     HierarchyDirection,
 )
-from ..edges import (
+from ..model.edges import (
     IDENTITY_FILTER,
     IS_A_FILTER,
     EdgeFilter,
 )
-from ..nodes import (
+from ..model.nodes import (
     AncestorMatch,
 )
+
+# Local Application Imports
+from ..model.scope import restricted_to_ids
 from ..queries import (
     q_children,
     q_closure,
@@ -29,9 +32,6 @@ from ..queries import (
     q_entities,
     q_parents,
 )
-
-# Local Application Imports
-from ..scope import restricted_to_ids
 from .concepts import ConceptsMixin
 from .edges import EdgesMixin
 

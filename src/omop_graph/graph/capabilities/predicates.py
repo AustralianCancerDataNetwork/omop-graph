@@ -12,7 +12,7 @@ from ...extensions.omop_alchemy import (
     PredicateKind,
     RelationshipMappingElement,
 )
-from ..edges import (
+from ..model.edges import (
     Predicate,
 )
 from ..queries import q_all_predicates

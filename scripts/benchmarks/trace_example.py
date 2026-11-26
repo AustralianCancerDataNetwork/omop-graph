@@ -36,9 +36,9 @@ from sqlalchemy.exc import NoResultFound
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (

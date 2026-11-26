@@ -7,8 +7,8 @@ from typing import Literal
 from sqlalchemy.orm import Session
 
 from ..extensions.omop_alchemy import PredicateKind
-from .edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
-from .nodes import ConceptView
+from .model.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
+from .model.nodes import ConceptView
 
 
 class GraphBackend(ABC):

@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
-from ..extensions.omop_alchemy import (
+from ...extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
     PredicateSubkind,
@@ -32,7 +32,7 @@ from ..extensions.omop_alchemy import (
 )
 
 if TYPE_CHECKING:
-    from .kg import KnowledgeGraph
+    from ..kg import KnowledgeGraph
 
 
 IS_A_RELATIONSHIP_ID = "Is a"

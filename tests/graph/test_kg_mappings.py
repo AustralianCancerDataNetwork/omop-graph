@@ -29,9 +29,9 @@ from fixtures.mappings_cdm import (
 
 from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
-from omop_graph.graph.edges import EdgeFilter, MappingStrength
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import MappingCardinality
+from omop_graph.graph.model.edges import EdgeFilter, MappingStrength
+from omop_graph.graph.model.nodes import MappingCardinality
 
 
 @pytest.fixture(scope="module")

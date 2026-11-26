@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from html import escape
 
-from omop_graph.graph.nodes import ConceptView
+from omop_graph.graph.model.nodes import ConceptView
 from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import GraphTrace, Subgraph
 

@@ -50,9 +50,9 @@ from sqlalchemy.orm import InstrumentedAttribute, aliased
 from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
 from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
-from .edges import EdgeFilter
-from .scope import _apply_scope, limited
-from .statistics import Grouping
+from .model.counts import Grouping
+from .model.edges import EdgeFilter
+from .model.scope import _apply_scope, limited
 
 
 def _concept_has_standardness_expr():

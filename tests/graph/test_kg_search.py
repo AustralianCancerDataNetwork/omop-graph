@@ -27,9 +27,9 @@ from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
 )
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.language import OMOPLanguage
-from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
+from omop_graph.graph.model.language import OMOPLanguage
+from omop_graph.graph.model.nodes import LabelMatchKind
+from omop_graph.graph.model.scope import every_concept, narrowed_to_vocabularies
 
 RANKED = (LabelMatchKind.EXACT, LabelMatchKind.STARTS_WITH, LabelMatchKind.PARTIAL)
 

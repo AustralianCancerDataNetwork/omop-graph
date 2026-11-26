@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 # Local Application Imports
-from omop_graph.graph.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
+from omop_graph.graph.model.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph

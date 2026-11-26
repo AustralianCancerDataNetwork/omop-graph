@@ -24,7 +24,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.graph.language import OMOPLanguage
+from omop_graph.graph.model.language import OMOPLanguage
 
 START = date(2020, 1, 1)
 META_CONCEPT_ID = 0

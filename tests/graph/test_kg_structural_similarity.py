@@ -20,8 +20,8 @@ from fixtures.hierarchy_cdm import (
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.scope import ALL_CONCEPTS
-from omop_graph.graph.structural_similarity import ICSource
+from omop_graph.graph.model.scope import ALL_CONCEPTS
+from omop_graph.graph.model.similarity import ICSource
 
 
 @pytest.fixture(scope="module")

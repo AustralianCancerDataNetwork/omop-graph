@@ -15,10 +15,10 @@
         - MissingEmbeddingError
         - KnowledgeGraphEmbeddingConfiguration
 
-::: omop_graph.graph.structural_similarity
+::: omop_graph.graph.model.similarity
 
-::: omop_graph.graph.statistics
+::: omop_graph.graph.model.counts
 
-::: omop_graph.graph.scope
+::: omop_graph.graph.model.scope
 
-::: omop_graph.graph.language
+::: omop_graph.graph.model.language

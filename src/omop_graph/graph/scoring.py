@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 # Local Application Imports
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.model.nodes import LabelMatchKind
 from omop_graph.graph.paths import StandardConcept
 
 if TYPE_CHECKING:

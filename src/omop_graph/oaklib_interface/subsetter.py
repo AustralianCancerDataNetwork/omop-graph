@@ -6,7 +6,7 @@ from oaklib.interfaces.basic_ontology_interface import BasicOntologyInterface
 from oaklib.interfaces.subsetter_interface import SubsetStrategy, SubsetterInterface
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.graph.edges import EdgeFilter
+from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 

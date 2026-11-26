@@ -9,8 +9,8 @@ Structural plausibility
     (PathProfile, hierarchy constraints)
 """
 
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.paths import GraphPath, PathExplanation, PathProfile
 from omop_graph.graph.traverse import GraphTrace, Subgraph
 
