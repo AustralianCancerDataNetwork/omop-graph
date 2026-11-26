@@ -19,7 +19,7 @@ import numpy as np
 
 # Local Application Imports
 from omop_graph.graph.model.matches import LabelMatchKind
-from omop_graph.graph.paths import StandardConcept
+from omop_graph.reasoning.standard_paths import StandardConcept
 
 if TYPE_CHECKING:
     from omop_emb.utils.embedding_utils import NearestConceptMatch

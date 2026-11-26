@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from omop_graph.graph.model.edges import EdgeView
-from omop_graph.graph.paths import GraphPath, PathExplanation
+from omop_graph.graph.paths import GraphPath
 from omop_graph.graph.traverse import GraphTrace, Subgraph
+from omop_graph.reasoning.explanation import PathExplanation
 
 
 def edge_text(kg, edge: EdgeView) -> str:

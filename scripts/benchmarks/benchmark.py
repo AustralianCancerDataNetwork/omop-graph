@@ -32,7 +32,6 @@ from omop_graph.db.session import cdm_session_factory
 from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.graph.capabilities.embeddings import MissingExtensionError
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
-from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (
@@ -45,6 +44,7 @@ from omop_graph.reasoning.resolvers.resolvers import (
     PartialLabelResolver,
     PartialSynonymResolver,
 )
+from omop_graph.reasoning.scoring import StandardConceptWithScore
 
 app = typer.Typer()
 

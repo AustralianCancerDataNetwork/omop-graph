@@ -22,8 +22,8 @@ from omop_graph.extensions.relationship_classification import (
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.model.matches import LabelMatchKind
-from omop_graph.graph.paths import StandardConcept, find_standard_paths
 from omop_graph.reasoning.resolvers import CandidateHit
+from omop_graph.reasoning.standard_paths import StandardConcept, find_standard_paths
 
 TARGET_A, TARGET_B, LEAF, DEEP_LEAF = 10, 11, 20, 21
 SOURCE, SOURCE_TWO, SOURCE_CHAINED, SOURCE_DANGLING, SOURCE_CROSS, ORPHAN = 30, 31, 32, 33, 34, 35

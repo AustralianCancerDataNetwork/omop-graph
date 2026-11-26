@@ -134,7 +134,7 @@ In clinical coding, we often prefer a specific match, but when choosing between 
 Scoring is performed in a batch operation to minimize database overhead:
 
 ```python
-from omop_graph.graph.scoring import score_standard_concepts
+from omop_graph.reasoning.scoring import score_standard_concepts
 
 scored = score_standard_concepts(
     text="Hodgkin lymphoma",

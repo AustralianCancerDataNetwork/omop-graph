@@ -4,8 +4,8 @@ from fixtures.mock_cdm import CONCEPT_META_ID, PARENT_CANCER_ID
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.matches import LabelMatchKind
-from omop_graph.graph.paths import find_standard_paths
 from omop_graph.reasoning.resolvers.resolvers import CandidateHit
+from omop_graph.reasoning.standard_paths import find_standard_paths
 
 
 def test_get_potential_ancestors_batch_returns_only_real_ancestors(

@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal
 
-from omop_graph.graph.paths import GraphPath, PathExplanation
+from omop_graph.graph.paths import GraphPath
 from omop_graph.graph.traverse import GraphTrace, Subgraph
+from omop_graph.reasoning.explanation import PathExplanation
 
 from .html import (
     explained_path_html,
