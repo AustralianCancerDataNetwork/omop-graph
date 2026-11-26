@@ -223,7 +223,8 @@ def find_shortest_paths(
         ``within_domain=False`` to allow cross-domain edges such as SNOMED
         attribute relationships (Has asso morph, Has finding site, etc.).
     max_depth : int
-        Maximum path length. Defaults to ``6``.
+        Maximum depth searched from each end, so a path can have up to twice as many
+        steps. Defaults to ``6``.
     max_paths : int
         Maximum number of paths to return. Defaults to ``20``.
     traced : bool
@@ -401,7 +402,8 @@ def find_shortest_paths_batch(
         ``within_domain=False`` to allow cross-domain edges such as SNOMED
         attribute relationships (Has asso morph, Has finding site, etc.).
     max_depth : int
-        Maximum path length. Defaults to ``6``.
+        Maximum depth searched from each end, so a path can have up to twice as many
+        steps. Defaults to ``6``.
     max_paths : int
         Maximum number of paths to return. Defaults to ``20``.
 
