@@ -1,6 +1,6 @@
 # Architecture
 
-The package is layered. The first four layers import only from the layers listed before them.
+The package is layered. At runtime, the first four layers import only from the layers listed before them. Annotations are the one exception, since `graph.model.edges` names `KnowledgeGraph` under `TYPE_CHECKING`.
 
 | Layer | Package | Holds |
 |---|---|---|
@@ -30,7 +30,7 @@ A scope is a `ConceptFilter` from omop-alchemy. The methods that report or count
 
 ## Optional parts
 
-Embeddings need the optional `omop-emb` package. Only `omop_graph.graph.capabilities.embeddings` touches it, and its types are imported under `TYPE_CHECKING`, so the rest of the package imports without it.
+Embeddings need the optional `omop-emb` package. Only `omop_graph.graph.capabilities.embeddings` imports it when it is used. `omop_graph.graph.scoring` and `omop_graph.reasoning.grounding` import its types under `TYPE_CHECKING`, so the whole package imports without it.
 
 ## Package root
 

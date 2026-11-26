@@ -117,7 +117,10 @@ display(HTML(render_trace(kg, trace)))
 
 ```
 omop_graph/
-├── graph/          # graph logic, traversal, paths, scoring
+├── graph/          # the knowledge graph, traversal, path search and scoring
+│   ├── model/      # immutable value types and scopes
+│   ├── capabilities/  # the behaviour of the graph, as mixins
+│   └── queries.py  # SQLAlchemy statement builders
 ├── render/         # HTML / text / Mermaid renderers
 ├── reasoning/      # ontology traversal methods for specific reasoner tasks
 │   ├── resolvers/  # resolve labels via exact / fuzzy / full-text / synonym search
