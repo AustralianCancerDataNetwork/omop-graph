@@ -26,6 +26,11 @@ from sqlalchemy import Select
 ALL_CONCEPTS = ConceptFilter()
 """A scope that selects every concept."""
 
+DEFAULT_CONCEPT_FILTER = ConceptFilter(
+    require_standard=True, include_classification=True, require_active=True
+)
+"""Concepts the graph enumerators list by default: active, standard or classification."""
+
 
 def _require_scope(concept_filter: ConceptFilter) -> ConceptFilter:
     """

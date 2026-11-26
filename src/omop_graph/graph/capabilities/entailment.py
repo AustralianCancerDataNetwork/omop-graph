@@ -18,8 +18,7 @@ from ..model.edges import (
     IS_A_RELATIONSHIP_ID,
     EdgeFilter,
 )
-from ..model.scope import _require_scope
-from ..queries import DEFAULT_CONCEPT_FILTER
+from ..model.scope import DEFAULT_CONCEPT_FILTER, _require_scope
 
 # Local Application Imports
 from .enumeration import EnumerationMixin

@@ -18,8 +18,8 @@ from orm_loader.helpers import Base
 from sqlalchemy.orm import Session
 
 from omop_graph.graph.model.nodes import ConceptView
+from omop_graph.graph.model.scope import DEFAULT_CONCEPT_FILTER
 from omop_graph.graph.queries import (
-    DEFAULT_CONCEPT_FILTER,
     q_concept_name_match,
     q_concept_views,
     q_entities,

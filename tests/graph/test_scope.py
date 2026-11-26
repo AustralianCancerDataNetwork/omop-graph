@@ -13,13 +13,13 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.nodes import LabelMatchKind
 from omop_graph.graph.model.scope import (
+    DEFAULT_CONCEPT_FILTER,
     _require_scope,
     limited,
     narrowed_to_domains,
     narrowed_to_vocabularies,
     restricted_to_ids,
 )
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 
 SCOPED_CALLS: dict[str, Callable[[KnowledgeGraph, ConceptFilter], object]] = {
     "all_entailed_relationships": lambda kg, scope: kg.all_entailed_relationships(

@@ -621,34 +621,6 @@ class StandardConcept:
     identity_hops: int = 0
 
 
-def get_unique_standard_concepts(
-    concepts: list[StandardConcept],
-) -> list[StandardConcept]:
-    """
-    Filter a list of StandardConcepts to keep only the best match per Concept ID.
-
-    Ranking criteria:
-    1. Separation (lower is better)
-    2. Match Kind (lower value is better in this enum)
-    3. Hierarchy Cost (lower is better)
-    """
-    sorted_concepts = sorted(
-        concepts,
-        key=lambda x: (
-            x.separation,
-            x.match_kind.value,
-            x.hierarchy_cost,
-        ),
-    )
-
-    unique_best_concepts = {}
-    for concept in sorted_concepts:
-        if concept.concept_id not in unique_best_concepts:
-            unique_best_concepts[concept.concept_id] = concept
-
-    return list(unique_best_concepts.values())
-
-
 def _load_views(
     kg: KnowledgeGraph, views: dict[int, ConceptView], concept_ids: Iterable[int]
 ) -> None:

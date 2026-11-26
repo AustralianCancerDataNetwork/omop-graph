@@ -12,8 +12,8 @@ from .._streaming import stream
 from ..model.edges import (
     EdgeFilter,
 )
+from ..model.scope import DEFAULT_CONCEPT_FILTER
 from ..queries import (
-    DEFAULT_CONCEPT_FILTER,
     q_entities,
     q_leaves,
     q_obsolete_concepts,

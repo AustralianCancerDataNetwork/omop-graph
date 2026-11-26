@@ -22,7 +22,7 @@ from fixtures.hierarchy_cdm import (
 from omop_graph.extensions.omop_alchemy import HierarchyDirection
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
+from omop_graph.graph.model.scope import DEFAULT_CONCEPT_FILTER
 
 
 @pytest.fixture(scope="module")

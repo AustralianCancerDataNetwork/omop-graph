@@ -36,9 +36,12 @@ from omop_graph.graph.model.edges import (
 )
 from omop_graph.graph.model.language import OMOPLanguage
 from omop_graph.graph.model.nodes import ConceptView, Standardness
-from omop_graph.graph.model.scope import every_concept, narrowed_to_vocabularies
+from omop_graph.graph.model.scope import (
+    DEFAULT_CONCEPT_FILTER,
+    every_concept,
+    narrowed_to_vocabularies,
+)
 from omop_graph.graph.model.similarity import ICSource
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import (
