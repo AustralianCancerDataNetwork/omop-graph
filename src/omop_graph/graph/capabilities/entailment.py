@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from dataclasses import replace
 
 from omop_alchemy.cdm.query import ConceptFilter
@@ -104,6 +104,50 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
                 concept_filter,
                 standardise,
             )
+
+    def gap_filled_relationships(
+        self, concept_ids: Iterable[int], edge_filter: EdgeFilter | None = None
+    ) -> tuple[tuple[int, str, int], ...]:
+        """
+        Find the non-redundant relationships that connect a set of concepts.
+
+        The entailed relationships between the concepts are taken, and for each relationship
+        a triple is dropped when another concept of the set lies between its ends by the
+        same relationship. This may leave edges that are formally redundant.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts to connect.
+        edge_filter : EdgeFilter, optional
+            Which relationships to consider, as in :meth:`entailed_relationships`.
+
+        Returns
+        -------
+        tuple[tuple[int, str, int], ...]
+            Triples of (subject_concept_id, relationship_id, object_concept_id), sorted.
+        """
+        ids = tuple(dict.fromkeys(concept_ids))
+        triples = {
+            (subject_id, relationship_id, object_id)
+            for subject_id, relationship_id, object_id in self.entailed_relationships(
+                ids, ids, edge_filter
+            )
+            if subject_id != object_id
+        }
+        above: dict[tuple[str, int], set[int]] = defaultdict(set)
+        for subject_id, relationship_id, object_id in triples:
+            above[relationship_id, subject_id].add(object_id)
+        return tuple(
+            sorted(
+                (subject_id, relationship_id, object_id)
+                for subject_id, relationship_id, object_id in triples
+                if not any(
+                    object_id in above[relationship_id, between]
+                    for between in above[relationship_id, subject_id]
+                )
+            )
+        )
 
     def all_entailed_relationships(
         self,

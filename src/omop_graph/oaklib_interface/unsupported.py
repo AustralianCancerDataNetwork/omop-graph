@@ -49,6 +49,13 @@ UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.entailed_edge_index": _NO_EDGE_INDEX,
     "MappingProviderInterface.get_mapping_clusters": _NO_CLUSTERS,
     "TextAnnotatorInterface.annotate_text": _NO_SPANS,
+    "SubsetterInterface.extract_subset_ontology": (
+        "Extracting a subset ontology needs an in-memory ontology. "
+        "Use gap_fill_relationships, or extract_gap_filled_graph for a graph."
+    ),
+    "SummaryStatisticsInterface.summary_statistic_description": (
+        "No data dictionary of the statistics is bundled."
+    ),
     "SemanticSimilarityInterface.load_information_content_scores": _IC_COMPUTED,
     "SemanticSimilarityInterface.set_information_content_scores": _IC_COMPUTED,
     "EmbeddingProviderInterface.nearest_entities": _NO_CLOSURE_SCAN,
@@ -75,18 +82,14 @@ class UnclaimedInterface:
 
 
 NOT_CLAIMED: dict[str, UnclaimedInterface] = {
-    "SubsetterInterface": UnclaimedInterface(
-        "Gap filling from the ancestry. Extracting a subset needs an in-memory ontology.",
-        planned=True,
-    ),
-    "SummaryStatisticsInterface": UnclaimedInterface(
-        "Counts over concepts and relationships.", planned=True
-    ),
     "MetadataInterface": UnclaimedInterface(
-        "OMOP has no contributors or creators, and annotation statements are thin.", planned=True
+        "OMOP has no definitions, contributors or creators, and no annotated statements, "
+        "so every method would be empty."
     ),
     "SkosInterface": UnclaimedInterface(
-        "It fits OMOP, but no oaklib implementation uses it.", planned=True
+        "It fits OMOP, with Is a as broader and narrower and the mappings as exact and "
+        "related, but nothing in oaklib uses it and the methods already exist as "
+        "hierarchical_parents, descendants and sssom_mappings."
     ),
     "ValidatorInterface": UnclaimedInterface("Its OBO lint checks have no OMOP meaning."),
     "OwlInterface": UnclaimedInterface("OMOP has no axioms and no OWL reasoner."),

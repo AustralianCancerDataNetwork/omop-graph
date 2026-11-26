@@ -46,11 +46,13 @@ from sqlalchemy import (
     true,
     union_all,
 )
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
 from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
 from .edges import EdgeFilter
+from .scope import ALL_CONCEPTS
+from .statistics import Grouping
 
 
 def _concept_has_standardness_expr():
@@ -615,6 +617,77 @@ def q_entities(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select
 def q_concept_count(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
     """Count the concepts *concept_filter* selects."""
     return select(func.count()).select_from(q_entities(concept_filter).subquery())
+
+
+def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
+    """Count the concepts *concept_filter* selects by vocabulary, domain and validity."""
+    deprecated = ~Concept.is_valid_expr()
+    return concept_filter.apply(
+        select(
+            Concept.vocabulary_id,
+            Concept.domain_id,
+            deprecated.label("deprecated"),
+            func.count().label("n"),
+        ).group_by(Concept.vocabulary_id, Concept.domain_id, deprecated)
+    )
+
+
+def _subjects_in_scope(
+    stmt: Select, concept_id: InstrumentedAttribute[int], scope: ConceptFilter
+) -> Select:
+    """Restrict *stmt* to the rows whose concept *scope* selects, joining only when it restricts."""
+    if scope == ALL_CONCEPTS:
+        return stmt
+    return scope.apply(stmt.join(Concept, Concept.concept_id == concept_id))
+
+
+def q_relationship_counts(scope: ConceptFilter) -> Select:
+    """Count the active relationships by id, from the concepts *scope* selects."""
+    stmt = (
+        select(Concept_Relationship.relationship_id, func.count().label("n"))
+        .where(Concept_Relationship.is_valid_expr())
+        .group_by(Concept_Relationship.relationship_id)
+    )
+    return _subjects_in_scope(stmt, Concept_Relationship.concept_id_1, scope)
+
+
+def q_synonym_counts(scope: ConceptFilter) -> Select:
+    """Count the synonyms, and the distinct synonym names, of the concepts *scope* selects."""
+    stmt = select(
+        func.count().label("statements"),
+        func.count(Concept_Synonym.concept_synonym_name.distinct()).label("distinct"),
+    ).select_from(Concept_Synonym)
+    return _subjects_in_scope(stmt, Concept_Synonym.concept_id, scope)
+
+
+def _grouping_column(grouping: Grouping) -> InstrumentedAttribute[str]:
+    """The concept column that concepts are grouped by."""
+    return Concept.vocabulary_id if grouping is Grouping.VOCABULARY else Concept.domain_id
+
+
+def q_relationship_counts_by(grouping: Grouping) -> Select:
+    """Count the active relationships by group of the subject concept and relationship id."""
+    group = _grouping_column(grouping)
+    return (
+        select(group.label("group"), Concept_Relationship.relationship_id, func.count().label("n"))
+        .join(Concept, Concept.concept_id == Concept_Relationship.concept_id_1)
+        .where(Concept_Relationship.is_valid_expr())
+        .group_by(group, Concept_Relationship.relationship_id)
+    )
+
+
+def q_synonym_counts_by(grouping: Grouping) -> Select:
+    """Count the synonyms, and the distinct synonym names, by group of the concept."""
+    group = _grouping_column(grouping)
+    return (
+        select(
+            group.label("group"),
+            func.count().label("statements"),
+            func.count(Concept_Synonym.concept_synonym_name.distinct()).label("distinct"),
+        )
+        .join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
+        .group_by(group)
+    )
 
 
 def q_synonyms(concept_ids: tuple[int, ...]) -> Select:

@@ -14,6 +14,8 @@ from oaklib.interfaces.basic_ontology_interface import (
 )
 from oaklib.interfaces.embedding_provider_interface import EmbeddingProviderInterface
 from oaklib.interfaces.semsim_interface import SemanticSimilarityInterface
+from oaklib.interfaces.subsetter_interface import SubsetterInterface
+from oaklib.interfaces.summary_statistics_interface import SummaryStatisticsInterface
 from oaklib.resource import OntologyResource
 from omop_alchemy.cdm.query import ConceptFilter
 
@@ -28,6 +30,8 @@ from omop_graph.oaklib_interface.omop_resource import OMOPOntologyResource
 from omop_graph.oaklib_interface.relation_graph import OMOPRelationGraphInterface
 from omop_graph.oaklib_interface.search import OMOPSearchInterface
 from omop_graph.oaklib_interface.similarity import OMOPSemanticSimilarityInterface
+from omop_graph.oaklib_interface.subsetter import OMOPSubsetterInterface
+from omop_graph.oaklib_interface.summary_statistics import OMOPSummaryStatisticsInterface
 from omop_graph.oaklib_interface.text_annotator import OMOPTextAnnotatorInterface
 from omop_graph.oaklib_interface.unsupported import ReadOnlyMixin
 from omop_graph.render import bind_default_renderers
@@ -43,11 +47,15 @@ class OMOPAlchemyImplementation(
     OMOPSearchInterface,
     OMOPSemanticSimilarityInterface,
     OMOPEmbeddingProviderInterface,
+    OMOPSubsetterInterface,
+    OMOPSummaryStatisticsInterface,
     OMOPBasicOntologyInterface,
     OMOPTextAnnotatorInterface,
     SearchInterface,
     SemanticSimilarityInterface,
     EmbeddingProviderInterface,
+    SubsetterInterface,
+    SummaryStatisticsInterface,
     TextAnnotatorInterface,
     MappingProviderInterface,
     OboGraphInterface,
