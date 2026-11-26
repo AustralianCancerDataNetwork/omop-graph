@@ -5,14 +5,17 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from fixtures.cdm_builders import (
-    START,
-    classified,
-    concept,
-    edge_pair,
-    relationship,
-    relationship_class,
-    sqlite_cdm,
+from fixtures.cdm_builders import START
+from fixtures.mappings_cdm import (
+    BRAND,
+    ICDO,
+    INGREDIENT,
+    REPLACED,
+    SOURCE_ICD,
+    SOURCE_READ,
+    SPACED,
+    STANDARD,
+    mappings_cdm,
 )
 from oaklib.datamodels.vocabulary import (
     HAS_DBXREF,
@@ -20,29 +23,11 @@ from oaklib.datamodels.vocabulary import (
     SKOS_EXACT_MATCH,
     SKOS_RELATED_MATCH,
 )
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
-from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from sssom.constants import SEMAPV
 
-from omop_graph.extensions.omop_alchemy import (
-    PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
-)
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
-
-STANDARD, SOURCE_ICD, SOURCE_READ, BRAND, INGREDIENT, REPLACED, ICDO, SPACED = range(300, 308)
-PAIRS = (
-    ("Maps to", "Mapped from", PredicateKind.IDENTITY, "Exact equivalence"),
-    ("Brand name of", "Has brand name", PredicateKind.IDENTITY, "Near equivalence"),
-    ("ICDO - SNOMED", "SNOMED - ICDO", PredicateKind.ASSOCIATION, "Mapping"),
-    ("Concept replaced by", "Concept replaces", PredicateKind.IDENTITY, "Version lineage"),
-)
 
 
 def curie(concept_id: int) -> str:
@@ -51,50 +36,7 @@ def curie(concept_id: int) -> str:
 
 @pytest.fixture(scope="module")
 def adapter() -> Iterator[OMOPAlchemyImplementation]:
-    vocabularies = ("SNOMED", "ICD10CM", "Read", "RxNorm", "ICDO3", "Nebraska Lexicon")
-    rows = [
-        concept(STANDARD),
-        concept(SOURCE_ICD, vocabulary_id="ICD10CM", standard_concept=None),
-        concept(SOURCE_READ, vocabulary_id="Read", standard_concept=None),
-        concept(BRAND, vocabulary_id="RxNorm", standard_concept=None),
-        concept(INGREDIENT, vocabulary_id="RxNorm"),
-        concept(REPLACED, standard_concept=None, invalid_reason="U"),
-        concept(ICDO, vocabulary_id="ICDO3", standard_concept=None),
-        concept(SPACED, vocabulary_id="Nebraska Lexicon", standard_concept=None),
-        *(
-            Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
-            for i, v in enumerate(vocabularies)
-        ),
-        *(
-            relationship(r, reverse)
-            for pair in PAIRS
-            for r, reverse in ((pair[0], pair[1]), (pair[1], pair[0]))
-        ),
-        *(relationship_class(kind, subkind) for kind, subkind in {(p[2], p[3]) for p in PAIRS}),
-        *(
-            classified(r, kind, subkind)
-            for forward, backward, kind, subkind in PAIRS
-            for r in (forward, backward)
-        ),
-        *edge_pair(SOURCE_ICD, "Maps to", "Mapped from", STANDARD),
-        *edge_pair(SOURCE_READ, "Maps to", "Mapped from", STANDARD),
-        *edge_pair(SOURCE_READ, "Maps to", "Mapped from", REPLACED, invalid_reason="D"),
-        *edge_pair(STANDARD, "Maps to", "Mapped from", STANDARD),
-        *edge_pair(BRAND, "Brand name of", "Has brand name", INGREDIENT),
-        *edge_pair(ICDO, "ICDO - SNOMED", "SNOMED - ICDO", STANDARD),
-        *edge_pair(REPLACED, "Concept replaced by", "Concept replaces", STANDARD),
-        *edge_pair(SPACED, "Maps to", "Mapped from", STANDARD),
-    ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Relationship,
-        Concept_Synonym,
-        Vocabulary,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with mappings_cdm() as sessions:
         yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 

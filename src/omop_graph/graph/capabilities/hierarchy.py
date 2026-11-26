@@ -47,10 +47,24 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             return 1.0
         return 1.0 / len(out_edges)
 
-    def parents(self, concept_id: int) -> tuple[int, ...]:
+    def parents(self, concept_id: int, isa_only: bool = False) -> tuple[int, ...]:
         """
-        Retrieve parent Concept IDs of concept using Concept_Ancestor table.
+        Retrieve the parent concept ids of a concept.
+
+        Parameters
+        ----------
+        concept_id : int
+            The concept.
+        isa_only : bool
+            If True, the parents are the targets of its active ``Is a`` edges. Otherwise
+            they are its level 1 ancestors in the ``concept_ancestor`` table, which hold
+            classification and cohort ancestry besides ``Is a``.
         """
+        if isa_only:
+            return tuple(
+                edge.object_id
+                for edge in self.edges(concept_id, direction="out", edge_filter=IS_A_FILTER)
+            )
         with self.session_factory() as session:
             parents = tuple(session.execute(q_parents(concept_id)).scalars())
         return parents

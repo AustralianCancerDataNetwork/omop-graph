@@ -28,8 +28,6 @@ from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.edges import (
-    IS_A_RELATIONSHIP_ID,
-    REPLACED_BY_RELATIONSHIP_ID,
     EdgeFilter,
     EdgeView,
     Predicate,
@@ -630,17 +628,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         cid = self.codec.resolve_concept(curie)
         if cid is None:
             return []
-        if isa_only:
-            parents = [
-                edge.object_id
-                for edge in self.kg.edges(
-                    cid,
-                    direction="out",
-                    edge_filter=EdgeFilter(predicate_ids=frozenset({IS_A_RELATIONSHIP_ID})),
-                )
-            ]
-        else:
-            parents = self.kg.parents(cid)
+        parents = self.kg.parents(cid, isa_only)
         return [self.codec.concept_curie(p) for p in parents]
 
     def entity_alias_map(self, curie: CURIE) -> ALIAS_MAP:
@@ -685,14 +673,8 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                     maps[curie][INVERSE_OF] = [self.codec.predicate_curie(predicate.reverse_id)]
 
         views = self._concept_views(curie for curie in curies if curie not in maps)
-        replacements: dict[int, list[CURIE]] = defaultdict(list)
         deprecated = tuple(view.concept_id for view in views.values() if not view.is_active)
-        for edge in self.kg.edges(
-            deprecated,
-            direction="out",
-            edge_filter=EdgeFilter(predicate_ids=frozenset({REPLACED_BY_RELATIONSHIP_ID})),
-        ):
-            replacements[edge.subject_id].append(self.codec.concept_curie(edge.object_id))
+        replacements = self.kg.replacements(deprecated)
 
         for curie, cv in views.items():
             m: METADATA_MAP = defaultdict(list)
@@ -720,7 +702,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
             if not cv.is_active:
                 m[DEPRECATED_PREDICATE].append("true")
-                m[TERM_REPLACED_BY].extend(replacements[cv.concept_id])
+                m[TERM_REPLACED_BY].extend(
+                    self.codec.concept_curie(replacement)
+                    for replacement in replacements[cv.concept_id]
+                )
 
             # vocabulary-qualified identifier (important!)
             m[HAS_DBXREF].append(self.codec.code_curie(cv.vocabulary_id, cv.concept_code))

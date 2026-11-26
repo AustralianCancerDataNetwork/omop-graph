@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
@@ -146,6 +147,31 @@ class EdgeView:
         return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
 
 
+class MappingStrength(Enum):
+    """How closely a mapping relationship equates its two concepts."""
+
+    EXACT = "exact"
+    CLOSE = "close"
+    RELATED = "related"
+
+    @classmethod
+    def of(cls, subkind: PredicateSubkind) -> MappingStrength | None:
+        """
+        Classify a relationship subkind as a mapping.
+
+        Exact and near equivalence are identity relationships, and a mapping association is
+        a related one. Every other subkind, such as version lineage, is not a mapping.
+        """
+        return _MAPPING_SUBKINDS.get(subkind)
+
+
+_MAPPING_SUBKINDS: dict[PredicateSubkind, MappingStrength] = {
+    PredicateSubkind(PredicateKind.IDENTITY, "Exact equivalence"): MappingStrength.EXACT,
+    PredicateSubkind(PredicateKind.IDENTITY, "Near equivalence"): MappingStrength.CLOSE,
+    PredicateSubkind(PredicateKind.ASSOCIATION, "Mapping"): MappingStrength.RELATED,
+}
+
+
 @dataclass(frozen=True)
 class Predicate:
     """
@@ -179,6 +205,11 @@ class Predicate:
     predicate_subkind: str
     direction: HierarchyDirection | None
     generalises: bool
+
+    @property
+    def mapping_strength(self) -> MappingStrength | None:
+        """How closely this relationship maps its concepts, or None when it is no mapping."""
+        return MappingStrength.of(PredicateSubkind(self.predicate_kind, self.predicate_subkind))
 
     def __repr__(self) -> str:
         reverse = f" | reverse={self.reverse_id}" if self.reverse_id else ""

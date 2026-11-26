@@ -15,8 +15,7 @@ from oaklib.types import CURIE, PRED_CURIE
 from sssom.constants import SEMAPV
 from sssom_schema import Mapping
 
-from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
-from omop_graph.graph.edges import EdgeFilter
+from omop_graph.graph.edges import EdgeFilter, MappingStrength
 from omop_graph.graph.nodes import ConceptView, MappingView
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
@@ -40,21 +39,19 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
     ``concept_filter``.
     """
 
-    MAPPING_PREDICATES: ClassVar[dict[PredicateSubkind, PRED_CURIE]] = {
-        PredicateSubkind(PredicateKind.IDENTITY, "Exact equivalence"): SKOS_EXACT_MATCH,
-        PredicateSubkind(PredicateKind.IDENTITY, "Near equivalence"): SKOS_CLOSE_MATCH,
-        PredicateSubkind(PredicateKind.ASSOCIATION, "Mapping"): SKOS_RELATED_MATCH,
+    SKOS_PREDICATES: ClassVar[dict[MappingStrength, PRED_CURIE]] = {
+        MappingStrength.EXACT: SKOS_EXACT_MATCH,
+        MappingStrength.CLOSE: SKOS_CLOSE_MATCH,
+        MappingStrength.RELATED: SKOS_RELATED_MATCH,
     }
-    """The SKOS predicate of each relationship subkind that is a mapping."""
+    """The SKOS predicate of each strength of mapping."""
 
     @property
     def _mapping_predicates(self) -> dict[str, PRED_CURIE]:
         """The SKOS predicate of each mapping relationship id."""
         return {
-            predicate.relationship_id: self.MAPPING_PREDICATES[subkind]
-            for predicate in self.kg.predicates()
-            if (subkind := PredicateSubkind(predicate.predicate_kind, predicate.predicate_subkind))
-            in self.MAPPING_PREDICATES
+            relationship_id: self.SKOS_PREDICATES[strength]
+            for relationship_id, strength in self.kg.mapping_predicates().items()
         }
 
     def _mapping(
@@ -179,12 +176,10 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         chains is the horizontal transitive closure, see
         https://github.com/AustralianCancerDataNetwork/omop-graph/issues/20
         """
-        exact = frozenset(r for r, p in self._mapping_predicates.items() if p == SKOS_EXACT_MATCH)
         concept_id = self._resolve_concepts([curie]).get(curie)
         if concept_id is None:
             return
-        reached = self.kg.standardise([concept_id], EdgeFilter(predicate_ids=exact))[concept_id]
-        targets = tuple(other for other in reached if other != concept_id)
+        targets = self.kg.standard_mappings([concept_id])[concept_id]
         views = {
             view.concept_id: view
             for view in self.kg.concept_views((concept_id, *targets), sort=False)

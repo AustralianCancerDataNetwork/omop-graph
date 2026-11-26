@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Generator, Iterable
+
+from ...extensions.omop_alchemy import PredicateSubkind
 
 # Local Application Imports
 from .._streaming import stream
 from ..edges import (
+    REPLACED_BY_RELATIONSHIP_ID,
     EdgeFilter,
+    MappingStrength,
 )
 from ..nodes import (
     MappingView,
@@ -15,10 +20,10 @@ from ..nodes import (
 from ..queries import (
     q_mappings,
 )
-from .edges import EdgesMixin
+from .hierarchy import HierarchyMixin
 
 
-class MappingsMixin(EdgesMixin):
+class MappingsMixin(HierarchyMixin):
     """Mappings between concepts of different vocabularies."""
 
     def mappings(
@@ -55,3 +60,68 @@ class MappingsMixin(EdgesMixin):
                 for row in session.execute(stmt):
                     if row.predicate_id in self._relationship_mapping:
                         yield MappingView(**row._mapping)
+
+    def mapping_predicates(self) -> dict[str, MappingStrength]:
+        """Return the strength of each relationship that is a mapping, by relationship id."""
+        return {
+            relationship_id: strength
+            for relationship_id, mapping in self._relationship_mapping.items()
+            if (
+                strength := MappingStrength.of(
+                    PredicateSubkind(mapping.predicate_kind, mapping.predicate_subkind)
+                )
+            )
+        }
+
+    def standard_mappings(
+        self, concept_ids: Iterable[int], strength: MappingStrength = MappingStrength.EXACT
+    ) -> dict[int, tuple[int, ...]]:
+        """
+        Find the standard concepts each concept maps to by relationships of one strength.
+
+        The chain ends at a standard concept, so a standard concept maps to none. Only one
+        step is taken from a non-standard concept, see :meth:`standardise`.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            Concepts to look up.
+        strength : MappingStrength
+            Which mapping relationships to follow.
+
+        Returns
+        -------
+        dict[int, tuple[int, ...]]
+            Every requested concept mapped to its standard concepts in ascending order,
+            empty when it has none, is standard itself or does not exist.
+        """
+        followed = frozenset(
+            relationship_id
+            for relationship_id, kind in self.mapping_predicates().items()
+            if kind is strength
+        )
+        return {
+            concept_id: tuple(other for other in reached if other != concept_id)
+            for concept_id, reached in self.standardise(
+                concept_ids, EdgeFilter(predicate_ids=followed)
+            ).items()
+        }
+
+    def replacements(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
+        """
+        Find the concepts that replace each concept, by its ``Concept replaced by`` edges.
+
+        Returns
+        -------
+        dict[int, tuple[int, ...]]
+            Every requested concept mapped to its replacements, empty when it has none.
+        """
+        ids = tuple(dict.fromkeys(concept_ids))
+        found: dict[int, list[int]] = defaultdict(list)
+        for edge in self.edges(
+            ids,
+            direction="out",
+            edge_filter=EdgeFilter(predicate_ids=frozenset({REPLACED_BY_RELATIONSHIP_ID})),
+        ):
+            found[edge.subject_id].append(edge.object_id)
+        return {concept_id: tuple(found[concept_id]) for concept_id in ids}
