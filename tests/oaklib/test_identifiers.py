@@ -33,6 +33,7 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 
 PARENT, CHILD, BRACES, BRACKETS, COLON, SPACE = range(400, 406)
 VALID_DUPLICATE, RETIRED_DUPLICATE, AMBIGUOUS_ONE, AMBIGUOUS_TWO = range(410, 414)
+MIXED_VALID_ONE, MIXED_VALID_TWO, MIXED_RETIRED_ONE, MIXED_RETIRED_TWO = range(414, 418)
 SPACED_VOCABULARY, DASHED_VOCABULARY, SOURCE = 420, 421, 430
 UNKNOWN = "SNOMED:nope"
 
@@ -55,6 +56,10 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         concept(RETIRED_DUPLICATE, vocabulary_id="DRG", concept_code="014", invalid_reason="D"),
         concept(AMBIGUOUS_ONE, vocabulary_id="DRG", concept_code="015"),
         concept(AMBIGUOUS_TWO, vocabulary_id="DRG", concept_code="015"),
+        concept(MIXED_VALID_ONE, vocabulary_id="DRG", concept_code="016"),
+        concept(MIXED_VALID_TWO, vocabulary_id="DRG", concept_code="016"),
+        concept(MIXED_RETIRED_ONE, vocabulary_id="DRG", concept_code="016", invalid_reason="D"),
+        concept(MIXED_RETIRED_TWO, vocabulary_id="DRG", concept_code="016", invalid_reason="U"),
         concept(SPACED_VOCABULARY, vocabulary_id="A B", concept_code="1"),
         concept(DASHED_VOCABULARY, vocabulary_id="A-B", concept_code="1"),
         concept(SOURCE, vocabulary_id="ICD10CM", concept_code="I48.9", standard_concept=None),
@@ -169,6 +174,21 @@ def test_a_search_by_an_ambiguous_code_yields_every_candidate(adapter) -> None:
     }
     limited = SearchConfiguration(properties=[SearchProperty.IDENTIFIER.text], limit=1)
     assert len(list(adapter.basic_search("DRG:015", limited))) == 1
+
+
+def test_a_search_by_a_code_shared_by_valid_and_retired_concepts_names_only_the_valid_ones(
+    adapter,
+) -> None:
+    valid = {curie(MIXED_VALID_ONE), curie(MIXED_VALID_TWO)}
+    for include_obsoletes in (False, True):
+        configuration = SearchConfiguration(
+            properties=[SearchProperty.IDENTIFIER.text],
+            include_obsoletes_in_results=include_obsoletes,
+        )
+        assert set(adapter.basic_search("DRG:016", configuration)) == valid
+
+    limited = SearchConfiguration(properties=[SearchProperty.IDENTIFIER.text], limit=1)
+    assert len(list(adapter.basic_search("DRG:016", limited))) == 1
 
 
 def test_is_a_is_known_by_both_of_its_predicate_curies(adapter) -> None:
