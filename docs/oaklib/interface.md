@@ -29,6 +29,10 @@ The primary adapter class that inherits from multiple OAK interfaces:
 * **`OboGraphInterface`**: Nodes, `ancestors`, `descendants`, graphs and paths, see [Walking the hierarchy](#walking-the-hierarchy).
 * **`RelationGraphInterface`**: Relationships that follow from the stored ones through the `Is a` hierarchy, see [Entailed relationships](#entailed-relationships).
 * **`SearchInterface`**: Term-based searching across labels, synonyms and identifiers, see [Searching and Traversal](#searching-and-traversal).
+* **`SemanticSimilarityInterface`**: Common ancestors, information content and pairwise similarity from the `Is a` hierarchy, see [Similarity and embeddings](#similarity-and-embeddings).
+* **`EmbeddingProviderInterface`**: The closure models, and the stored `omop-emb` model when the graph has an embedding configuration.
+* **`SubsetterInterface`**: `gap_fill_relationships` and `extract_gap_filled_graph` over the entailed relationships.
+* **`SummaryStatisticsInterface`**: Counts of concepts, edges and synonyms, see [Summary statistics](#summary-statistics).
 * **`TextAnnotatorInterface`**: Grounds raw text to OMOP Concept IDs with the [grounding pipeline](../reasoning/grounding.md), see [Text Annotation](#text-annotation-grounding).
 
 ### Identifiers
@@ -107,6 +111,20 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 * The cross-reference is a mapping only, so it is not in `entity_alias_map`. It can be looked up from the concept or from `vocabulary_id:concept_code`.
 * Mappings are not limited to the adapter's `concept_filter`.
 * `get_transitive_mappings_by_curie` follows exact equivalence from a non-standard concept to the standard concepts it maps to, and a standard concept has none. OMOP maps many concepts to one and stores each mapping in both directions, so following them both ways would join every concept that shares a target, and the result would be most of a vocabulary. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
+
+### Similarity and embeddings
+The similarity methods wrap [the graph's](../graph/kg.md#similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. `OMOPAlchemyImplementation.information_content_source` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
+
+* `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one.
+* The stored model serves `entity_embeddings`, `embedding_similarity` and the nearest searches through the vector index of `omop-emb`. Embedding a text, and so `nearest_entities_to_text`, needs `write=True`, and raises `EmbeddingWriterRequiredError` otherwise.
+* The closure models are not searched without `candidates`, since that would compare against every concept.
+
+### Summary statistics
+The counts come from the database, where oaklib's default would read every concept and relationship.
+
+* Concepts are those of the adapter's `concept_filter` and its deprecated concepts. Edges are the active ones of the exposed relationships whose subject is in the adapter's vocabularies and domains.
+* Groups are made by `omop:vocabulary` or `omop:domain`. Branches below roots and entailed edges are not counted, and raise `ValueError`.
+* On a full Athena release the whole count takes about 20 s, and a group by vocabulary or domain about a minute, since every group is counted in one pass.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.

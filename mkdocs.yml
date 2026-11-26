@@ -42,6 +42,7 @@ nav:
       - "Semantic Grounding": reasoning/grounding.md
       - "Resolvers": reasoning/resolvers.md
   - API Reference:
+      - "Capabilities": reference/ref_capabilities.md
       - "Edges": reference/ref_edges.md
       - "Grounding": reference/ref_grounding.md
       - "KnowledgeGraph": reference/ref_kg.md

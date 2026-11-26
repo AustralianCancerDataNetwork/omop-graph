@@ -23,7 +23,8 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 * **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
 * **Large inputs and results:** Methods that take concept ids split them into batches of `KnowledgeGraph.LOOKUP_BATCH_SIZE`, so any number of ids works. `entities`, `roots`, `leaves`, `singletons` and `relationships` without subjects or objects read through a server-side cursor and return generators, so they never hold the whole table in memory.
 * **Standardisation and Mappings:** `standardise` finds the standard concepts a concept stands for, and `mappings` lists the mappings of concepts with their vocabularies.
-* **Extensibility:** Includes a dedicated namespace for embedding-based operations (requires `omop-emb` - see [Installation instructions](../usage/installation.md#embedding-rag) for more information).
+* **Structural similarity and statistics:** Common ancestors, information content, pairwise similarity and counts, see [Capabilities](#capabilities).
+* **Embeddings:** Nearest concepts, stored vectors and cosine similarity over `omop-emb`, which is optional - see [Embedding Configuration](#embedding-configuration) and the [installation instructions](../usage/installation.md#embedding-rag).
 
 ---
 
@@ -47,6 +48,50 @@ if matches:
     parents = kg.parents(matches[0].matched_concept_id)
     print(f"Parent IDs: {parents}")
 ```
+
+---
+
+### Capabilities
+
+`KnowledgeGraph` holds construction and the relationship classification, and takes its methods from capability mixins in `omop_graph.graph.capabilities`. Each mixin builds on the ones it lists, and the oaklib adapter only translates CURIEs and oaklib types around these methods.
+
+| Capability | Builds on | Methods |
+| --- | --- | --- |
+| Concepts | core | `concept_view`, `concept_views`, `concepts_by_code` |
+| Predicates | core | `predicate`, `predicates`, `predicate_kind`, `default_relationship_ids` |
+| Edges | predicates | `relationships`, `edges`, `iter_edges` |
+| Enumeration | edges | `entities`, `roots`, `leaves`, `singletons`, `obsolete_concepts` |
+| Hierarchy | edges, concepts | `parents`, `children`, `closure`, `standardise` |
+| Entailment | hierarchy, enumeration | `entailed_relationships`, `all_entailed_relationships`, `gap_filled_relationships`, `entailing_relationship_ids` |
+| Mappings | hierarchy | `mappings`, `mapping_predicates`, `standard_mappings`, `replacements` |
+| Vocabulary | core | `vocabularies`, `domain_concept_ids`, `synonyms`, `translations`, `synonym_languages` |
+| Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_search_constraints` |
+| Similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
+| Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, and their `_by` forms |
+| Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `embed_text`, `embed_concepts` |
+
+* A *scope* is a `ConceptFilter`. Methods that report or count concepts take one, `DEFAULT_CONCEPT_FILTER` (active standard and classification concepts) for the hierarchy methods and `ALL_CONCEPTS` for lookups. `omop_graph.graph.scope` derives one scope from another.
+* `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the standard concepts it maps to. A stand-in reports the entailed relationships of the standard concepts for itself, and not the mappings.
+* `entailed_relationships` entails the relationships that generalise and returns the others as stored, first.
+* `search` ranks the matches of the kinds you give, on concept names and then, if asked, synonyms, with the concepts you name as identifiers first.
+
+#### Similarity
+
+Similarity runs over the strict `Is a` hierarchy, and counts each concept as its own ancestor and descendant.
+
+```python
+similarity = kg.pairwise_similarity(afib_id, flutter_id)
+similarity.ancestor_id, similarity.jaccard, similarity.phenodigm
+```
+
+* The most recent common ancestors come from the ancestor sets alone. Only they and the two concepts have their descendants counted, so the cost does not grow with the number of common ancestors.
+* The information content of a concept is `-log2(descendants / concepts in scope)`. The counts are cached for the life of the graph. Counting the descendants of a broad concept takes seconds the first time, such as 14 s for Clinical finding, and a pair whose only common ancestor is broad takes about as long.
+* `ICSource.CONCEPT_ANCESTOR` counts from the precomputed `concept_ancestor` table instead, which is fast in bulk. It also holds classification and cohort ancestry. For conditions the two sources scored within 0.05 of each other on the pairs tried.
+* The strict hierarchy has no ancestry for RxNorm ingredients, whose ATC classes are only in `concept_ancestor`, so two drugs have no common ancestor and score zero.
+
+#### Statistics
+
+`concept_counts` counts concepts by vocabulary, domain and deprecation, `relationship_counts` the active relationships by id, and `synonym_counts` the synonyms. The database counts them, and a scope that selects every concept counts the relationship table without joining the concepts. On a full Athena release the relationship count takes about 20 s, and counting by vocabulary or domain takes about a minute for every group together.
 
 ---
 
@@ -124,6 +169,27 @@ kg = KnowledgeGraph(cdm_session_factory(), emb_config=emb_config)
 ```
 
 `faiss_cache_dir` (optional `str`) is read-only-path-only: a directory to cache FAISS index files, passed straight through to `EmbeddingReaderInterface`.
+
+#### What the graph offers
+
+Embeddings are optional, and every method that needs them raises a typed error instead of returning `None`. All errors derive from `EmbeddingError`, in `omop_graph.graph.capabilities.embeddings`.
+
+| Error | Raised when |
+| --- | --- |
+| `MissingExtensionError` | `omop-emb` is not installed. It is also an `ImportError`. |
+| `EmbeddingsNotConfiguredError` | The graph has no `emb_config`. |
+| `EmbeddingWriterRequiredError` | The method embeds text or computes embeddings, and the configuration is read-only. |
+| `EmbeddingModelNotRegisteredError` | The configured model is not registered in the vector store. |
+| `MissingEmbeddingError` | `embedding_similarity` is asked for a concept with no stored vector. |
+
+Code that degrades gracefully asks first: `kg.has_embeddings` is true when `omop-emb` is installed and a configuration is set, and `kg.can_embed_text` when the configuration can also write.
+
+```python
+matches = kg.nearest_concepts(vector, scope=ConceptFilter(domains=("Condition",)), k=10)
+matches = kg.nearest_concepts(concept_id)  # through its stored vector
+matches = kg.nearest_concepts("kidney cancer")  # needs write=True
+kg.embedding_similarity(concept_a, concept_b)  # cosine of the stored vectors
+```
 
 #### Fallback embedding calculation
 
