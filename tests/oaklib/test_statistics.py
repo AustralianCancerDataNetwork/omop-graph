@@ -136,3 +136,15 @@ def test_a_gap_filled_graph_holds_the_seeds_and_their_edges(hierarchy) -> None:
 
 def test_unknown_seeds_are_left_out(hierarchy) -> None:
     assert list(hierarchy.gap_fill_relationships(["OMOP:abc", curie(CANCER)])) == []
+
+
+def test_a_domain_does_not_widen_the_domains_of_the_adapter(adapter) -> None:
+    scoped = OMOPAlchemyImplementation(
+        kg=adapter.kg, concept_filter=ConceptFilter(domains=("Measurement",), require_active=True)
+    )
+
+    statistics = scoped.branch_summary_statistics(
+        property_values={OMOPMetadataKey.DOMAIN: "Condition"}
+    )
+
+    assert statistics.class_count == statistics.deprecated_class_count

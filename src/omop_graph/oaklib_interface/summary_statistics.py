@@ -1,7 +1,6 @@
 """The summary statistics interface over the OMOP knowledge graph."""
 
 import logging
-from dataclasses import replace
 from functools import cached_property
 from typing import Any
 
@@ -10,7 +9,12 @@ from oaklib.interfaces.summary_statistics_interface import SummaryStatisticsInte
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph.scope import ALL_CONCEPTS, every_concept, narrowed_to_vocabularies
+from omop_graph.graph.scope import (
+    ALL_CONCEPTS,
+    every_concept,
+    narrowed_to_domains,
+    narrowed_to_vocabularies,
+)
 from omop_graph.graph.statistics import ConceptCounts, Grouping, SynonymCounts
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
@@ -34,7 +38,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         self, property_values: dict[CURIE, Any] | None, prefixes: list[CURIE] | None
     ) -> ConceptFilter:
         """The adapter's concepts narrowed to the vocabularies, domains and prefixes asked for."""
-        concept_filter = self.concept_filter
+        concept_filter = self._population
         if prefixes:
             concept_filter = narrowed_to_vocabularies(
                 concept_filter, (self.codec.vocabulary_id(prefix) for prefix in prefixes)
@@ -43,7 +47,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
             if key == OMOPMetadataKey.VOCABULARY:
                 concept_filter = narrowed_to_vocabularies(concept_filter, [value])
             elif key == OMOPMetadataKey.DOMAIN:
-                concept_filter = replace(concept_filter, domains=(value,))
+                concept_filter = narrowed_to_domains(concept_filter, [value])
             else:
                 raise ValueError(
                     f"Only {OMOPMetadataKey.VOCABULARY} and {OMOPMetadataKey.DOMAIN} group."
@@ -64,7 +68,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
 
     def metadata_property_summary_statistics(self, metadata_property: PRED_CURIE) -> dict[Any, int]:
         """Count the concepts of each vocabulary or domain, with the deprecated ones."""
-        counts = self._counts(self.concept_filter)
+        counts = self._counts(self._population)
         if metadata_property == OMOPMetadataKey.VOCABULARY:
             return counts.by_vocabulary()
         if metadata_property == OMOPMetadataKey.DOMAIN:
@@ -99,7 +103,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
             property_values
             and len(property_values) == 1
             and not prefixes
-            and every_concept(self.concept_filter) == ALL_CONCEPTS
+            and every_concept(self._population) == ALL_CONCEPTS
         ):
             [(key, value)] = property_values.items()
             grouping = groups[OMOPMetadataKey(key)]

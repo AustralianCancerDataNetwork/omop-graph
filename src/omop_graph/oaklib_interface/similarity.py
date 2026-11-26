@@ -58,7 +58,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         ids = self._resolve_concepts([subject, object])
         found = (
             self.kg.most_recent_common_ancestors(
-                ids[subject], ids[object], concept_filter=self.concept_filter
+                ids[subject], ids[object], concept_filter=self._population
             )
             if len(ids) == 2
             else frozenset()
@@ -81,7 +81,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         self._check_predicates(predicates)
         ids = self._resolve_concepts([subject, object])
         found = (
-            self.kg.common_ancestors(ids[subject], ids[object], concept_filter=self.concept_filter)
+            self.kg.common_ancestors(ids[subject], ids[object], concept_filter=self._population)
             if len(ids) == 2
             else frozenset()
         )
@@ -103,7 +103,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         if len(ids) == 2:
             for concept_id in sorted(
                 self.kg.common_descendants(
-                    ids[subject], ids[object], concept_filter=self.concept_filter
+                    ids[subject], ids[object], concept_filter=self._population
                 )
             ):
                 yield self.codec.concept_curie(concept_id)
@@ -156,7 +156,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         for batch in batches:
             ids = self._resolve_concepts(batch)
             scores = self.kg.information_content(
-                ids.values(), self.information_content_source, self.concept_filter
+                ids.values(), self.information_content_source, self._population
             )
             for curie, concept_id in ids.items():
                 yield curie, scores[concept_id]
@@ -202,7 +202,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         if len(ids) < 2:
             return None
         similarity = self.kg.pairwise_similarity(
-            ids[subject], ids[object], self.information_content_source, self.concept_filter
+            ids[subject], ids[object], self.information_content_source, self._population
         )
         if min_jaccard_similarity is not None and similarity.jaccard < min_jaccard_similarity:
             return None

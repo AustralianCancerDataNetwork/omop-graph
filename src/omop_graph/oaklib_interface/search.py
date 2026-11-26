@@ -128,7 +128,7 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
             kinds.append(LabelMatchKind.FTS)
 
         concept_filter = replace(
-            every_concept(self.concept_filter),
+            every_concept(self._population),
             require_active=not config.include_obsoletes_in_results,
         )
         identifiers: tuple[int, ...] = ()

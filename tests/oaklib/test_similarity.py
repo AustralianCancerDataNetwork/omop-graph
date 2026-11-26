@@ -16,6 +16,7 @@ from fixtures.hierarchy_cdm import (
     hierarchy_cdm,
 )
 from oaklib.datamodels.vocabulary import IS_A, OWL_THING
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
@@ -136,3 +137,15 @@ def test_the_set_wise_similarity_is_built_from_the_pairs(adapter) -> None:
         curie(SMOKING_RELATED),
     }
     assert similarity.average_score > 0
+
+
+def test_the_information_content_counts_the_concepts_the_adapter_lists() -> None:
+    with hierarchy_cdm() as sessions:
+        adapter = OMOPAlchemyImplementation(
+            kg=KnowledgeGraph(sessions), concept_filter=ConceptFilter(vocabularies=("SNOMED",))
+        )
+        listed = len(list(adapter.entities()))
+
+        [(_, score)] = adapter.information_content_scores([curie(LUNG)])
+
+    assert score == pytest.approx(math.log2(listed))

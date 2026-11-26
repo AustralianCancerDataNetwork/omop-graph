@@ -1,7 +1,6 @@
 """The mapping provider interface over the OMOP knowledge graph."""
 
 from collections.abc import Iterable, Iterator
-from dataclasses import replace
 from typing import ClassVar, cast
 
 from oaklib.datamodels.vocabulary import (
@@ -17,6 +16,7 @@ from sssom_schema import Mapping
 
 from omop_graph.graph.edges import EdgeFilter, MappingStrength
 from omop_graph.graph.nodes import ConceptView, MappingView
+from omop_graph.graph.scope import narrowed_to_vocabularies
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
@@ -119,9 +119,9 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
             for edge in self.kg.mappings(None, edge_filter, source):
                 yield self._edge_mapping(edge, predicates)
             concept_filter = (
-                self.concept_filter
+                self._population
                 if source is None
-                else replace(self.concept_filter, vocabularies=(source,))
+                else narrowed_to_vocabularies(self._population, (source,))
             )
             for batch in self.kg.batches(self.kg.entities(concept_filter)):
                 subject = {concept_id: self.codec.concept_curie(concept_id) for concept_id in batch}

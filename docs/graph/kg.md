@@ -70,10 +70,20 @@ if matches:
 | Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, and their `_by` forms |
 | Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `embed_text`, `embed_concepts` |
 
-* A *scope* is a `ConceptFilter`. Methods that report or count concepts take one, `DEFAULT_CONCEPT_FILTER` (active standard and classification concepts) for the hierarchy methods and `ALL_CONCEPTS` for lookups. `omop_graph.graph.scope` derives one scope from another.
+* A scope is a `ConceptFilter` that decides which concepts a method reports or counts, see [Scopes](#scopes).
 * `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the standard concepts it maps to. A stand-in reports the entailed relationships of the standard concepts for itself, and not the mappings.
 * `entailed_relationships` entails the relationships that generalise and returns the others as stored, first.
 * `search` ranks the matches of the kinds you give, on concept names and then, if asked, synonyms, with the concepts you name as identifiers first.
+
+#### Scopes
+
+A `ConceptFilter` has two roles. `entities`, `roots`, `leaves`, `singletons` and `obsolete_concepts` take it as a query, where `concept_ids` and `limit` select and truncate the answer. Every other method that takes a `concept_filter` takes it as a scope, a membership rule that decides which concepts are reported or counted.
+
+* A scope that sets `limit` is refused when the method is called, since a limit truncates a list and cannot decide membership.
+* A scope that sets `concept_ids` restricts what is reported to those ids.
+* A scope only filters what is reported. A walk still passes through the concepts it excludes, and the concepts you ask about are always reported.
+* The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, or to `ALL_CONCEPTS` for lookups.
+* `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
 
 #### Structural similarity
 

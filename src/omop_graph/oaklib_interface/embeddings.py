@@ -72,7 +72,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
     ) -> Iterator[tuple[CURIE, float]]:
         """Yield the stored concepts nearest to a concept or vector, best first."""
         matches = self.kg.nearest_concepts(
-            query, concept_filter=self.concept_filter, k=limit + (exclude is not None)
+            query, concept_filter=self._population, k=limit + (exclude is not None)
         )
         kept = (match for match in matches if match.concept_id != exclude)
         for _, match in zip(range(limit), kept, strict=False):

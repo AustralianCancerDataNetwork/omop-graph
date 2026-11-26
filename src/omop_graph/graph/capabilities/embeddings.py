@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Concatenate, cast
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from ..scope import ALL_CONCEPTS
+from ..scope import ALL_CONCEPTS, scope_only
 from .concepts import ConceptsMixin
 
 if TYPE_CHECKING:
@@ -342,6 +342,7 @@ class EmbeddingsMixin(ConceptsMixin):
         writer = cast("EmbeddingWriterInterface", self.emb)
         return writer.embed_texts((text,), role=EmbeddingRole.QUERY)
 
+    @scope_only
     @requires_embeddings
     def nearest_concepts(
         self,

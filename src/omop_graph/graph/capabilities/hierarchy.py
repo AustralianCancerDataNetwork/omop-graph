@@ -9,7 +9,6 @@ from dataclasses import replace
 from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy import Row
 
-# Local Application Imports
 from ...extensions.omop_alchemy import (
     HierarchyDirection,
 )
@@ -30,6 +29,9 @@ from ..queries import (
     q_entities,
     q_parents,
 )
+
+# Local Application Imports
+from ..scope import restricted_to_ids, scope_only
 from .concepts import ConceptsMixin
 from .edges import EdgesMixin
 
@@ -77,6 +79,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
 
+    @scope_only
     def closure(
         self,
         concept_ids: Iterable[int],
@@ -103,7 +106,8 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             The edges to follow. Relationships without a classification are not followed.
         concept_filter : ConceptFilter, optional
             Report only the concepts it selects. The walk still passes through the others,
-            so a concept above an excluded one is still reached. ``concept_ids`` must be unset.
+            so a concept above an excluded one is still reached. It is a scope, so it
+            must not set ``limit``.
         standardise : bool
             If True, a non-standard concept stands in for the standard concepts it maps to,
             see :meth:`standardise`. It reaches those concepts and everything reached from
@@ -213,7 +217,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         found: set[int] = set()
         with self.session_factory() as session:
             for batch in self.batches(set(concept_ids)):
-                stmt = q_entities(replace(concept_filter, concept_ids=tuple(batch)))
+                stmt = q_entities(restricted_to_ids(concept_filter, batch))
                 found.update(session.execute(stmt).scalars())
         return found
 

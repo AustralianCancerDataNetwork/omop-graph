@@ -135,6 +135,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             concept_filter, (self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
         )
 
+    @cached_property
+    def _population(self) -> ConceptFilter:
+        """The concepts the adapter exposes: those its ``concept_filter`` selects, active ones only."""
+        return self._scope(filter_obsoletes=True)
+
     def _resolve_concepts(self, curies: Iterable[CURIE]) -> dict[CURIE, int]:
         """Concept ids of the CURIEs that name a concept in the graph, others left out."""
         curies = list(curies)
@@ -229,7 +234,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             If True, include the concepts updated into a replacement (``invalid_reason``
             ``U``) besides the deleted ones (``D``).
         """
-        for cid in self.kg.obsolete_concepts(include_merged, every_concept(self.concept_filter)):
+        for cid in self.kg.obsolete_concepts(include_merged, every_concept(self._population)):
             yield self.codec.concept_curie(cid)
 
     def dangling(self, curies: Iterable[CURIE] | None = None) -> Iterable[CURIE]:
@@ -534,13 +539,13 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         else:
             if subject_ids is None and object_ids is None:
                 entailed = self.kg.all_entailed_relationships(
-                    edge_filter, self.concept_filter, self.standardise
+                    edge_filter, self._population, self.standardise
                 )
             else:
                 if invert:
                     subject_ids, object_ids = object_ids, subject_ids
                 entailed = self.kg.entailed_relationships(
-                    subject_ids, object_ids, edge_filter, self.concept_filter, self.standardise
+                    subject_ids, object_ids, edge_filter, self._population, self.standardise
                 )
             triples = ((o, p, s) if invert else (s, p, o) for s, p, o in entailed)
         for s, p, o in triples:
@@ -601,7 +606,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """Stream the entailed relationships of every concept, for the exposed relationships."""
         for s, p, o in self.kg.all_entailed_relationships(
             EdgeFilter(predicate_ids=self.kg.default_relationship_ids),
-            self.concept_filter,
+            self._population,
             self.standardise,
         ):
             yield (

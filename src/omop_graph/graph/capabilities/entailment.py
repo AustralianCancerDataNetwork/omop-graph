@@ -9,7 +9,6 @@ from dataclasses import replace
 
 from omop_alchemy.cdm.query import ConceptFilter
 
-# Local Application Imports
 from ...extensions.omop_alchemy import (
     HierarchyDirection,
 )
@@ -18,6 +17,9 @@ from ..edges import (
     EdgeFilter,
 )
 from ..queries import DEFAULT_CONCEPT_FILTER
+
+# Local Application Imports
+from ..scope import scope_only
 from .enumeration import EnumerationMixin
 from .hierarchy import HierarchyMixin
 
@@ -34,6 +36,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             if mapping.generalises
         )
 
+    @scope_only
     def entailed_relationships(
         self,
         subjects: tuple[int, ...] | None,
@@ -149,6 +152,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             )
         )
 
+    @scope_only
     def all_entailed_relationships(
         self,
         edge_filter: EdgeFilter | None = None,
@@ -276,8 +280,12 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         """
         Find the edges into *objects* and into their ``Is a`` descendants, and give each
         to the ``Is a`` descendants of its subject.
+
+        The descendants of the objects are all followed, whatever *concept_filter* selects,
+        since an edge can end on a concept outside it. The filter limits only the subjects
+        that receive an edge, and the objects asked for are always reported.
         """
-        descendants = self.closure(objects, HierarchyDirection.DOWN, concept_filter=concept_filter)
+        descendants = self.closure(objects, HierarchyDirection.DOWN)
         targets_by_filler: dict[int, list[int]] = defaultdict(list)
         for target, below in descendants.items():
             for filler in (target, *below):

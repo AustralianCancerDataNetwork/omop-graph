@@ -10,6 +10,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from ...extensions.omop_alchemy import HierarchyDirection
 from ..edges import IS_A_FILTER, EdgeFilter
 from ..queries import DEFAULT_CONCEPT_FILTER, q_concept_count, q_concept_num_descendants
+from ..scope import scope_only
 from ..structural_similarity import ConceptSimilarity, ICSource
 from .hierarchy import HierarchyMixin
 
@@ -37,6 +38,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         reached = self.closure(concept_ids, direction, edge_filter, concept_filter)
         return {concept_id: others | {concept_id} for concept_id, others in reached.items()}
 
+    @scope_only
     def common_ancestors(
         self,
         concept_a: int,
@@ -50,6 +52,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         )
         return lineage[concept_a] & lineage[concept_b]
 
+    @scope_only
     def common_descendants(
         self,
         concept_a: int,
@@ -63,6 +66,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         )
         return lineage[concept_a] & lineage[concept_b]
 
+    @scope_only
     def most_recent_common_ancestors(
         self,
         concept_a: int,
@@ -88,6 +92,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         above = self.closure(common, HierarchyDirection.UP, edge_filter, concept_filter)
         return common - frozenset().union(*above.values())
 
+    @scope_only
     def jaccard_similarity(
         self,
         concept_a: int,
@@ -103,6 +108,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             lineage[concept_a] | lineage[concept_b]
         )
 
+    @scope_only
     def information_content(
         self,
         concept_ids: Iterable[int],
@@ -175,6 +181,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             for concept_id in concept_ids
         }
 
+    @scope_only
     def pairwise_similarity(
         self,
         concept_a: int,

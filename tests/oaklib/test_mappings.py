@@ -23,6 +23,7 @@ from oaklib.datamodels.vocabulary import (
     SKOS_EXACT_MATCH,
     SKOS_RELATED_MATCH,
 )
+from omop_alchemy.cdm.query import ConceptFilter
 from sssom.constants import SEMAPV
 
 from omop_graph.graph.kg import KnowledgeGraph
@@ -158,3 +159,17 @@ def test_transitive_mappings_do_not_join_the_concepts_sharing_a_target(adapter) 
 def test_clusters_are_unsupported(adapter) -> None:
     with pytest.raises(OMOPUnsupportedError, match="get_mapping_clusters"):
         adapter.get_mapping_clusters()
+
+
+def test_a_source_does_not_widen_the_vocabularies_of_the_adapter(adapter) -> None:
+    scoped = OMOPAlchemyImplementation(
+        kg=adapter.kg, concept_filter=ConceptFilter(vocabularies=("ICD10CM",), require_active=True)
+    )
+
+    cross_references = {
+        mapping
+        for mapping in summary(scoped.sssom_mappings(None, "SNOMED"))
+        if mapping[1] == HAS_DBXREF
+    }
+
+    assert cross_references == set()

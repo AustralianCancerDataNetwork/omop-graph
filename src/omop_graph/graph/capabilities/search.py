@@ -6,7 +6,6 @@ import functools
 import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import replace
 
 from omop_alchemy.backends import BackendNotSupportedError, FullTextError
 from omop_alchemy.cdm.model.vocabulary import Concept
@@ -24,7 +23,7 @@ from ..queries import (
     q_concept_name_match,
     q_concept_vocabulary_ids,
 )
-from ..scope import ALL_CONCEPTS
+from ..scope import ALL_CONCEPTS, restricted_to_ids, scope_only
 from .enumeration import EnumerationMixin
 
 logger = logging.getLogger(__name__)
@@ -33,6 +32,7 @@ logger = logging.getLogger(__name__)
 class SearchMixin(EnumerationMixin):
     """Lookup of concepts by name and the validation of search constraints."""
 
+    @scope_only
     def concept_lookup(
         self,
         query_term: str,
@@ -104,6 +104,7 @@ class SearchMixin(EnumerationMixin):
             )
         return matches
 
+    @scope_only
     def search(
         self,
         term: str,
@@ -148,7 +149,7 @@ class SearchMixin(EnumerationMixin):
 
         named = tuple(identifiers)
         if named and not full():
-            in_scope = tuple(self.entities(replace(concept_filter, concept_ids=named)))
+            in_scope = tuple(self.entities(restricted_to_ids(concept_filter, named)))
             for concept_id in in_scope[:limit]:
                 found[concept_id] = None
                 yield concept_id

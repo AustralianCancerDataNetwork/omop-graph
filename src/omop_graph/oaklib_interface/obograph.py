@@ -173,7 +173,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             ids.values(),
             direction,
             edge_filter,
-            self.concept_filter if scoped else None,
+            self._population if scoped else None,
             standardise=self.standardise,
         )
         return {
