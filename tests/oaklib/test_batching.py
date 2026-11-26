@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -127,7 +128,88 @@ CALLS: dict[str, Callable[[OMOPAlchemyImplementation], Any]] = {
     "entity_metadata": lambda a: {c: a.entity_metadata_map(c) for c in curies()},
     "nodes": lambda a: [(node.id, node.lbl, node.meta) for node in a.nodes()],
     "node": lambda a: [a.node(c, include_metadata=True) for c in curies()],
+    "closure_up": lambda a: a.kg.closure(IDS[:-1]),
+    "closure_down": lambda a: a.kg.closure(IDS[:-1], HierarchyDirection.DOWN),
+    "closure_standardised": lambda a: a.kg.closure(IDS[:-1], standardise=True),
+    "standardise": lambda a: a.kg.standardise(IDS),
+    "standard_mappings": lambda a: a.kg.standard_mappings(IDS),
+    "replacements": lambda a: a.kg.replacements(IDS),
+    "mappings": lambda a: list(a.kg.mappings(IDS)),
+    "translations": lambda a: a.kg.translations(IDS, OMOPLanguage.SPANISH),
+    "missing_concepts": lambda a: a.kg.missing_concepts((*IDS, 999999, 999998)),
+    "information_content": lambda a: a.kg.information_content(IDS[:-1]),
+    "num_ancestors": lambda a: a.kg.get_num_ancestors(IDS),
+    "potential_ancestors": lambda a: {
+        child: set(parents)
+        for child, parents in a.kg.get_potential_ancestors_batch((LEFT_LEAF,), IDS).items()
+    },
+    "entailed_by_subject": lambda a: set(a.kg.entailed_relationships(IDS, None)),
+    "entailed_by_object": lambda a: set(a.kg.entailed_relationships(None, IDS)),
+    "entailed_between": lambda a: set(a.kg.entailed_relationships(IDS, IDS)),
+    "gap_filled": lambda a: a.kg.gap_filled_relationships(IDS[:-1]),
 }
+
+ID_CALLS = {
+    "concept_views",
+    "synonyms",
+    "relationships_by_subject",
+    "relationships_by_object",
+    "edges_out",
+    "edges_in",
+    "closure_up",
+    "closure_down",
+    "standardise",
+    "standard_mappings",
+    "replacements",
+    "mappings",
+    "translations",
+    "missing_concepts",
+    "information_content",
+    "num_ancestors",
+    "potential_ancestors",
+    "entailed_by_subject",
+    "entailed_by_object",
+    "gap_filled",
+}
+"""The calls that take ids, and whose statements bind fewer of them in a batch."""
+
+SWEPT_METHODS = {
+    "closure",
+    "concept_views",
+    "edges",
+    "entailed_relationships",
+    "gap_filled_relationships",
+    "get_num_ancestors",
+    "get_potential_ancestors_batch",
+    "information_content",
+    "mappings",
+    "missing_concepts",
+    "relationships",
+    "replacements",
+    "standard_mappings",
+    "standardise",
+    "synonyms",
+    "translations",
+}
+UNSWEPT_METHODS = {
+    "concept_embeddings",
+    "concepts_without_embedding",
+    "embed_concepts",
+    "iter_edges",
+    "require_concepts",
+}
+"""The methods the embedding store or another sweep handles, and the one that checks only."""
+
+
+def test_every_method_that_takes_many_ids_is_swept() -> None:
+    parameters = {"concept_ids", "child_ids", "parent_ids", "subjects", "objects"}
+    taking_ids = {
+        name
+        for name, method in inspect.getmembers(KnowledgeGraph, inspect.isfunction)
+        if not name.startswith("_") and parameters & set(inspect.signature(method).parameters)
+    }
+
+    assert taking_ids - UNSWEPT_METHODS == SWEPT_METHODS
 
 
 @pytest.mark.parametrize("name", CALLS)
@@ -140,6 +222,33 @@ def test_a_method_gives_the_same_answer_when_it_splits_the_ids_into_batches(
     monkeypatch.setattr(KnowledgeGraph, "LOOKUP_BATCH_SIZE", TINY_BATCH)
 
     assert as_comparable(call(adapter)) == whole
+
+
+def _largest_binding(adapter: OMOPAlchemyImplementation, call: Callable[..., Any]) -> int:
+    """The most parameters any statement of *call* binds."""
+    bound: list[int] = []
+    with adapter.kg.session_factory() as session:
+        engine = session.get_bind()
+
+    def record(conn, cursor, statement, parameters, *args):
+        bound.append(len(parameters))
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        call(adapter)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    return max(bound, default=0)
+
+
+@pytest.mark.parametrize("name", [name for name in CALLS if name in ID_CALLS])
+def test_a_batch_binds_fewer_ids_than_the_whole_list(
+    adapter: OMOPAlchemyImplementation, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    whole = _largest_binding(adapter, CALLS[name])
+    monkeypatch.setattr(KnowledgeGraph, "LOOKUP_BATCH_SIZE", TINY_BATCH)
+
+    assert _largest_binding(adapter, CALLS[name]) < whole
 
 
 def test_the_batched_methods_find_something_to_compare(adapter: OMOPAlchemyImplementation) -> None:

@@ -294,8 +294,11 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
 
         rows: list[Row] = []
         with self.session_factory() as session:
-            for batch in self.batches(child_ids):
-                rows.extend(session.execute(q_concept_potential_ancestors_batch(batch, parent_ids)))
+            for children in self.batches(child_ids):
+                for parents in self.batches(parent_ids):
+                    rows.extend(
+                        session.execute(q_concept_potential_ancestors_batch(children, parents))
+                    )
 
         result: dict[int, dict[int, AncestorMatch]] = defaultdict(dict)
         for row in rows:
@@ -311,5 +314,5 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         Get the count of ancestors for a batch of concepts.
         """
         with self.session_factory() as session:
-            rows = session.execute(q_concept_num_ancestors(concept_ids)).all()
+            rows = list(self._rows_in_batches(session, q_concept_num_ancestors, concept_ids))
         return {row.concept_id: row.num_ancestors for row in rows}

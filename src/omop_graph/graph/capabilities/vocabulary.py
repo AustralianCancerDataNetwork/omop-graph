@@ -60,9 +60,13 @@ class VocabularyMixin(GraphCore):
         Concepts without a synonym in the language are left out.
         """
         found: dict[int, str] = {}
-        for synonym in self.synonyms(concept_ids):
-            if synonym.language_concept_id == language.concept_id:
-                found.setdefault(synonym.concept_id, synonym.name)
+        with self.session_factory() as session:
+            for row in self._rows_in_batches(
+                session,
+                lambda batch: q_synonyms(batch, language.concept_id),
+                sorted(set(concept_ids)),
+            ):
+                found.setdefault(row.concept_id, row.name)
         return found
 
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:

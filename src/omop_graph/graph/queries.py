@@ -690,9 +690,13 @@ def q_synonym_counts_by(grouping: Grouping) -> Select:
     )
 
 
-def q_synonyms(concept_ids: tuple[int, ...]) -> Select:
-    """Query the synonyms of *concept_ids* with their language concept, ordered by name."""
-    return (
+def q_synonyms(concept_ids: tuple[int, ...], language_concept_id: int | None = None) -> Select:
+    """
+    Query the synonyms of *concept_ids* with their language concept, ordered by name.
+
+    Only the synonyms in the language *language_concept_id* are selected when it is given.
+    """
+    stmt = (
         select(
             Concept_Synonym.concept_id,
             Concept_Synonym.concept_synonym_name.label("name"),
@@ -701,6 +705,9 @@ def q_synonyms(concept_ids: tuple[int, ...]) -> Select:
         .where(Concept_Synonym.concept_id.in_(concept_ids))
         .order_by(Concept_Synonym.concept_id, Concept_Synonym.concept_synonym_name)
     )
+    if language_concept_id is not None:
+        stmt = stmt.where(Concept_Synonym.language_concept_id == language_concept_id)
+    return stmt
 
 
 def q_synonym_language_ids() -> Select:
