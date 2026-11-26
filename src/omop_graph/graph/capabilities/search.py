@@ -5,6 +5,8 @@ from __future__ import annotations
 import functools
 import logging
 import re
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import replace
 
 from omop_alchemy.backends import BackendNotSupportedError, FullTextError
 from omop_alchemy.cdm.model.vocabulary import Concept
@@ -22,12 +24,13 @@ from ..queries import (
     q_concept_name_match,
     q_concept_vocabulary_ids,
 )
-from ._core import GraphCore
+from ..scope import ALL_CONCEPTS
+from .enumeration import EnumerationMixin
 
 logger = logging.getLogger(__name__)
 
 
-class SearchMixin(GraphCore):
+class SearchMixin(EnumerationMixin):
     """Lookup of concepts by name and the validation of search constraints."""
 
     def concept_lookup(
@@ -100,6 +103,72 @@ class SearchMixin(GraphCore):
                 for cid, name, is_standard, is_active in session.execute(cn)
             )
         return matches
+
+    def search(
+        self,
+        term: str,
+        kinds: Sequence[LabelMatchKind] = (LabelMatchKind.EXACT,),
+        *,
+        synonyms: bool = False,
+        scope: ConceptFilter = ALL_CONCEPTS,
+        limit: int | None = None,
+        identifiers: Iterable[int] = (),
+    ) -> Iterator[int]:
+        """
+        Yield the concepts a term matches, best matches first, each once.
+
+        The concepts named as *identifiers* come first, when they are in scope. Then each
+        kind of match is tried in turn, on concept names and then, with *synonyms*, on
+        synonyms, as in :meth:`concept_lookup`.
+
+        Parameters
+        ----------
+        term : str
+            The term to search for.
+        kinds : Sequence[LabelMatchKind]
+            The kinds of match, in the order they rank.
+        synonyms : bool
+            If True, also match synonyms.
+        scope : ConceptFilter
+            The concepts that can match. By default every concept.
+        limit : int, optional
+            The most concepts to yield. Zero or less yields none.
+        identifiers : Iterable[int]
+            Concepts the term names as an identifier, such as by code.
+
+        Yields
+        ------
+        int
+            Concept ids.
+        """
+        found: dict[int, None] = {}
+
+        def full() -> bool:
+            return limit is not None and len(found) >= limit
+
+        named = tuple(identifiers)
+        if named and not full():
+            in_scope = tuple(self.entities(replace(scope, concept_ids=named)))
+            for concept_id in in_scope[:limit]:
+                found[concept_id] = None
+                yield concept_id
+        for kind in kinds:
+            for on_synonyms in (False, True) if synonyms else (False,):
+                if full():
+                    return
+                matches = self.concept_lookup(
+                    term,
+                    match_kind=kind,
+                    synonym=on_synonyms,
+                    search_constraint=scope,
+                    limit=None if limit is None else limit + len(found),
+                )
+                for match in matches:
+                    if match.matched_concept_id not in found:
+                        found[match.matched_concept_id] = None
+                        yield match.matched_concept_id
+                        if full():
+                            return
 
     def concept_ids_by_label(self, label: str) -> tuple[int, ...]:
         """

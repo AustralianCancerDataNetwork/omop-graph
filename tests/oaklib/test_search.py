@@ -6,27 +6,23 @@ import logging
 from collections.abc import Iterator
 
 import pytest
-from fixtures.cdm_builders import (
-    classified,
-    concept,
-    relationship_class,
-    sqlite_cdm,
-    synonym,
+from fixtures.search_cdm import (
+    CANCER,
+    CONTAINING,
+    LOWER,
+    PERCENT,
+    PREFIXED,
+    RETIRED,
+    SOURCE,
+    SPACED_CODE,
+    search_cdm,
 )
 from oaklib.datamodels.search import SearchConfiguration, SearchProperty, SearchTermSyntax
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import PredicateKind, RelationshipClass, RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import search as search_module
-from omop_graph.oaklib_interface.codec import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-
-CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED, PERCENT = range(400, 407)
-SPACED_CODE = "C34 9"
 
 
 def curie(concept_id: int) -> str:
@@ -39,31 +35,7 @@ def config(**fields) -> SearchConfiguration:
 
 @pytest.fixture(scope="module")
 def adapter() -> Iterator[OMOPAlchemyImplementation]:
-    rows = [
-        *(
-            Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
-            for i, v in enumerate(("SNOMED", "ICD10CM"))
-        ),
-        relationship_class(PredicateKind.IDENTITY, "Exact equivalence"),
-        classified("Maps to", PredicateKind.IDENTITY, "Exact equivalence"),
-        concept(CANCER, "Cancer"),
-        concept(PREFIXED, "Cancer of lung"),
-        concept(CONTAINING, "Small cell lung cancer"),
-        concept(LOWER, "cancer", standard_concept=None),
-        concept(
-            SOURCE,
-            "Malignant neoplasm",
-            standard_concept=None,
-            vocabulary_id="ICD10CM",
-            concept_code=SPACED_CODE,
-        ),
-        concept(RETIRED, "Cancer old", standard_concept=None, invalid_reason="U"),
-        concept(PERCENT, "Dose of 100% oxygen"),
-        synonym(CONTAINING, "Oat cell carcinoma", OMOPLanguage.ENGLISH),
-        synonym(CANCER, "Cancer", OMOPLanguage.ENGLISH),
-    ]
-    models = (Concept, Concept_Synonym, Vocabulary, RelationshipClass, RelationshipMapping)
-    with sqlite_cdm(models, rows) as sessions:
+    with search_cdm() as sessions:
         yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 

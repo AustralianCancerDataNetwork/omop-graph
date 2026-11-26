@@ -36,6 +36,7 @@ from omop_graph.graph.edges import (
 )
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
+from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import OMOPLanguage, OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
@@ -131,28 +132,8 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         scope = replace(self.concept_filter, require_active=filter_obsoletes)
         if not id_prefixes or any(map(self.codec.is_omop_prefix, id_prefixes)):
             return scope
-        vocabularies = dict.fromkeys(self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
-        return replace(
-            scope,
-            vocabularies=tuple(
-                vocabulary
-                for vocabulary in vocabularies
-                if scope.vocabularies is None or vocabulary in scope.vocabularies
-            ),
-        )
-
-    @property
-    def _every_concept(self) -> ConceptFilter:
-        """
-        The adapter's vocabularies and domains, whatever the standardness or validity.
-
-        Search and ``obsoletes`` select from these concepts.
-        """
-        return replace(
-            self.concept_filter,
-            require_standard=False,
-            include_classification=False,
-            require_active=False,
+        return narrowed_to_vocabularies(
+            scope, (self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
         )
 
     def _resolve_concepts(self, curies: Iterable[CURIE]) -> dict[CURIE, int]:
@@ -249,7 +230,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             If True, include the concepts updated into a replacement (``invalid_reason``
             ``U``) besides the deleted ones (``D``).
         """
-        for cid in self.kg.obsolete_concepts(include_merged, self._every_concept):
+        for cid in self.kg.obsolete_concepts(include_merged, every_concept(self.concept_filter)):
             yield self.codec.concept_curie(cid)
 
     def dangling(self, curies: Iterable[CURIE] | None = None) -> Iterable[CURIE]:

@@ -15,6 +15,7 @@ from oaklib.interfaces import SearchInterface
 from oaklib.types import CURIE
 
 from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.scope import every_concept
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 
 logger = logging.getLogger(__name__)
@@ -126,38 +127,19 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
         if config.is_fuzzy:
             kinds.append(LabelMatchKind.FTS)
 
-        constraint = replace(
-            self._every_concept, require_active=not config.include_obsoletes_in_results
+        scope = replace(
+            every_concept(self.concept_filter),
+            require_active=not config.include_obsoletes_in_results,
         )
-        found: dict[int, None] = {}
-
-        def full() -> bool:
-            return config.limit is not None and len(found) >= config.limit
-
-        if by_identifier and not full():
-            candidates = self.codec.concept_candidates(search_term)
-            if candidates:
-                in_scope = tuple(self.kg.entities(replace(constraint, concept_ids=candidates)))
-                for concept_id in in_scope[: None if config.limit is None else config.limit]:
-                    found[concept_id] = None
-                    yield self.codec.concept_curie(concept_id)
-
-        for kind in kinds:
-            for synonym in (False, True):
-                if full():
-                    return
-                if synonym and SearchProperty.ALIAS.text not in props:
-                    continue
-                matches = self.kg.concept_lookup(
-                    search_term,
-                    match_kind=kind,
-                    synonym=synonym,
-                    search_constraint=constraint,
-                    limit=None if config.limit is None else config.limit + len(found),
-                )
-                for match in matches:
-                    if match.matched_concept_id not in found:
-                        found[match.matched_concept_id] = None
-                        yield self.codec.concept_curie(match.matched_concept_id)
-                        if full():
-                            return
+        identifiers: tuple[int, ...] = ()
+        if by_identifier and not (config.limit is not None and config.limit <= 0):
+            identifiers = self.codec.concept_candidates(search_term)
+        for concept_id in self.kg.search(
+            search_term,
+            kinds,
+            synonyms=SearchProperty.ALIAS.text in props,
+            scope=scope,
+            limit=config.limit,
+            identifiers=identifiers,
+        ):
+            yield self.codec.concept_curie(concept_id)
