@@ -11,6 +11,8 @@ import sqlalchemy as sa
 from oa_configurator import ResolvedCDMDatabase, ResolvedDatabase
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 
+from omop_graph.graph.model.edges import EdgeFilter
+
 ATHENA_RELATIONSHIPS = Path(__file__).parent / "athena_relationships.csv"
 """Relationship id, name and reverse id of the Athena release v5.0 29-AUG-26.
 
@@ -34,6 +36,9 @@ def table_of(model: Any) -> sa.Table:
 # The minimal vocab bootstrap set every split/non-split fixture needs, in FK dependency order.
 VOCAB_TABLES = tuple(table_of(model) for model in (Domain, Vocabulary, Concept_Class, Concept))
 
+
+# An edge filter that follows only the Is a hierarchy.
+UP = EdgeFilter(predicate_ids=frozenset({"Is a"}))
 
 # The oaklib CURIEs of the relationships the oaklib tests use.
 SITE = "OMOP_REL:Has%20finding%20site"

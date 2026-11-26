@@ -4,7 +4,7 @@ Path search and traversal run on a `KnowledgeGraph` and follow the edges its rel
 
 ## Shortest paths
 
-`find_shortest_paths` searches from both ends at once and returns every shortest path up to `max_paths`, as `GraphPath` objects.
+`find_shortest_paths` searches from both ends at once and returns the shortest paths, each once, up to `max_paths`, as `GraphPath` objects.
 
 ```python
 from omop_graph.graph.paths import find_shortest_paths
@@ -16,10 +16,11 @@ for path in paths:
 
 * A path follows each edge from its subject to its object, so the search from the target walks edges backwards.
 * The default filter follows active edges within one domain. Pass `EdgeFilter(within_domain=False)` to cross domains, for example along `Has finding site`.
-* `max_depth` is the depth searched from each end, so a path can have up to twice as many steps.
+* `max_depth` is the depth searched from each end, so a shortest path of up to twice as many steps is found. Longer paths are not.
+* When there are more than `max_paths` shortest paths, the ones through the lowest concept id where the two searches meet come first. The order within them follows the order of the edges, which is not specified.
 * A concept to itself gives one empty path.
 * `traced=True` also returns a `GraphTrace` of the search, which shows why a path was or was not found.
-* `find_shortest_paths_batch` finds the same paths but reads the edges of a whole frontier in one query, which suits a database with many edges per concept.
+* `find_shortest_paths_batch` finds the same paths but reads the edges of a whole frontier in one query, which suits a database with many edges per concept. It holds the edges of one frontier in memory at a time.
 
 A `GraphPath` holds its `steps`, each a subject, a relationship id and an object. `nodes()` lists the concept ids along it.
 

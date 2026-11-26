@@ -8,12 +8,13 @@ including shortest paths and batch traversal.
 Scope
 -----
 Algorithms that find paths between nodes. This module answers "what paths exist"
-but does not score or explain them, which the `reasoning` package does.
+but does not score or explain them, which the ``reasoning`` package does.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -198,6 +199,37 @@ def reconstruct_paths(
     return [GraphPath(L + R) for L in left(meet) for R in right(meet)]
 
 
+def _distinct_paths(
+    kg: KnowledgeGraph,
+    source: int,
+    target: int,
+    meeting_nodes: Iterable[int],
+    parents_fwd: dict[int, list[tuple[int, str]]],
+    parents_bwd: dict[int, list[tuple[int, str]]],
+    max_paths: int,
+) -> list[GraphPath]:
+    """
+    Build the paths through the meeting nodes, each once, up to max_paths.
+
+    A path that passes through several meeting nodes is built from each of them, so the
+    paths are collected as a set before they are counted. The meeting nodes are taken in
+    ascending order, which makes the cut at max_paths the same on every run. The concepts
+    on the paths are read in one batch, so that every ``Node`` carries its standard flag.
+    """
+    discovered = tuple(set(parents_fwd) | set(parents_bwd) | {source, target})
+    standard = {view.concept_id: view.standard_concept for view in kg.concept_views(discovered)}
+    paths: dict[GraphPath, None] = {}
+    for meet in sorted(meeting_nodes):
+        paths.update(
+            dict.fromkeys(
+                reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, standard)
+            )
+        )
+        if len(paths) >= max_paths:
+            break
+    return list(paths)[:max_paths]
+
+
 def find_shortest_paths(
     kg: KnowledgeGraph,
     source: int,
@@ -223,10 +255,11 @@ def find_shortest_paths(
         ``within_domain=False`` to allow cross-domain edges such as SNOMED
         attribute relationships (Has asso morph, Has finding site, etc.).
     max_depth : int
-        Maximum depth searched from each end, so a path can have up to twice as many
-        steps. Defaults to ``6``.
+        Maximum depth searched from each end, so that a shortest path of up to twice as many
+        steps is found. Defaults to ``6``.
     max_paths : int
-        Maximum number of paths to return. Defaults to ``20``.
+        Maximum number of paths to return, each once. When there are more, the paths through
+        the lowest concept id where the two searches meet come first. Defaults to ``20``.
     traced : bool
         If True, returns a GraphTrace object recording the search process.
 
@@ -257,8 +290,8 @@ def find_shortest_paths(
     meeting_nodes: set[int] = set()
     trace_steps: list[TraceStep] = []
 
-    while q_fwd and q_bwd:
-        expand_forward = len(q_fwd) <= len(q_bwd)
+    while q_fwd or q_bwd:
+        expand_forward = bool(q_fwd) and (not q_bwd or len(q_fwd) <= len(q_bwd))
         expanded: list[EdgeView] = []
 
         if expand_forward:
@@ -271,9 +304,6 @@ def find_shortest_paths(
             for e in kg.edges(cur, "out", edge_filter):
                 nxt = e.object_id
                 nd = d + 1
-                if nd > max_depth:
-                    continue
-
                 expanded.append(e)
 
                 if nxt not in depth_fwd:
@@ -302,8 +332,6 @@ def find_shortest_paths(
                 expanded.append(e)
                 prev = e.subject_id
                 nd = d + 1
-                if nd > max_depth:
-                    continue
 
                 if prev not in depth_bwd:
                     depth_bwd[prev] = nd
@@ -347,20 +375,7 @@ def find_shortest_paths(
             else None
         )
 
-    # One batched lookup to get is_standard for every discovered concept so that
-    # reconstructed Node objects carry the correct flag (zero extra per-node DB calls).
-    all_discovered = tuple(set(depth_fwd.keys()) | set(depth_bwd.keys()))
-    concept_standard_map: dict[int, bool] = {
-        v.concept_id: v.standard_concept for v in kg.concept_views(all_discovered)
-    }
-
-    paths: list[GraphPath] = []
-    for meet in meeting_nodes:
-        paths.extend(
-            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
-        )
-        if len(paths) >= max_paths:
-            break
+    paths = _distinct_paths(kg, source, target, meeting_nodes, parents_fwd, parents_bwd, max_paths)
 
     graph_trace = (
         GraphTrace(
@@ -372,7 +387,7 @@ def find_shortest_paths(
         else None
     )
 
-    return paths[:max_paths], graph_trace
+    return paths, graph_trace
 
 
 def find_shortest_paths_batch(
@@ -402,10 +417,11 @@ def find_shortest_paths_batch(
         ``within_domain=False`` to allow cross-domain edges such as SNOMED
         attribute relationships (Has asso morph, Has finding site, etc.).
     max_depth : int
-        Maximum depth searched from each end, so a path can have up to twice as many
-        steps. Defaults to ``6``.
+        Maximum depth searched from each end, so that a shortest path of up to twice as many
+        steps is found. Defaults to ``6``.
     max_paths : int
-        Maximum number of paths to return. Defaults to ``20``.
+        Maximum number of paths to return, each once. When there are more, the paths through
+        the lowest concept id where the two searches meet come first. Defaults to ``20``.
 
     Returns
     -------
@@ -430,10 +446,12 @@ def find_shortest_paths_batch(
     best_total_depth: int | None = None
     meeting_nodes: set[int] = set()
 
-    # Loop until frontiers are empty
-    while fwd_frontier and bwd_frontier:
+    # Loop until both frontiers are empty
+    while fwd_frontier or bwd_frontier:
         # 1. Expand the smaller frontier (Optimization: Balanced Bi-BFS)
-        expand_forward = len(fwd_frontier) <= len(bwd_frontier)
+        expand_forward = bool(fwd_frontier) and (
+            not bwd_frontier or len(fwd_frontier) <= len(bwd_frontier)
+        )
 
         # Setup variables based on direction
         if expand_forward:
@@ -507,17 +525,4 @@ def find_shortest_paths_batch(
     if not meeting_nodes:
         return []
 
-    all_discovered = tuple(set(depth_fwd.keys()) | set(depth_bwd.keys()))
-    concept_standard_map: dict[int, bool] = {
-        v.concept_id: v.standard_concept for v in kg.concept_views(all_discovered)
-    }
-
-    paths: list[GraphPath] = []
-    for meet in meeting_nodes:
-        paths.extend(
-            reconstruct_paths(source, target, meet, parents_fwd, parents_bwd, concept_standard_map)
-        )
-        if len(paths) >= max_paths:
-            break
-
-    return paths[:max_paths]
+    return _distinct_paths(kg, source, target, meeting_nodes, parents_fwd, parents_bwd, max_paths)
