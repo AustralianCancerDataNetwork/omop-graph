@@ -35,7 +35,6 @@ from sqlalchemy.exc import NoResultFound
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
-from omop_graph.extensions.emb import get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
@@ -220,11 +219,8 @@ def _run_trace(
     # Stage 0: compute query embedding once (shared by individual resolvers + ground_term)
     query_embedding = None
     try:
-        from omop_emb.interface import EmbeddingRole
-
-        writer = get_embedding_writer_interface(kg)
-        if writer is not None:
-            query_embedding = writer.embed_texts(texts=(query,), role=EmbeddingRole.QUERY)
+        if kg.can_embed_text:
+            query_embedding = kg.embed_text(query)
             logger.info("Query embedding computed (shape=%s).", query_embedding.shape)
         else:
             logger.info("No embedding writer available; EmbeddingResolver will be skipped.")
