@@ -65,7 +65,9 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         """Yield the most recent common ancestors of two concepts."""
         pair = self._resolve_pair(subject, object)
         found = (
-            self.kg.most_recent_common_ancestors(*pair, concept_filter=self._population)
+            self.kg.most_recent_common_ancestors(
+                *pair, concept_filter=self._population, standardise=self.standardise
+            )
             if pair
             else frozenset()
         )
@@ -100,7 +102,9 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         """Yield the common ancestors of two concepts."""
         pair = self._resolve_pair(subject, object)
         found = (
-            self.kg.common_ancestors(*pair, concept_filter=self._population)
+            self.kg.common_ancestors(
+                *pair, concept_filter=self._population, standardise=self.standardise
+            )
             if pair
             else frozenset()
         )
@@ -131,7 +135,9 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         """Yield the common descendants of two concepts."""
         if pair := self._resolve_pair(subject, object):
             for concept_id in sorted(
-                self.kg.common_descendants(*pair, concept_filter=self._population)
+                self.kg.common_descendants(
+                    *pair, concept_filter=self._population, standardise=self.standardise
+                )
             ):
                 yield self.codec.concept_curie(concept_id)
 
@@ -241,7 +247,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         if pair is None:
             return None
         similarity = self.kg.pairwise_similarity(
-            *pair, self.information_content_source, self._population
+            *pair, self.information_content_source, self._population, self.standardise
         )
         if min_jaccard_similarity is not None and similarity.jaccard < min_jaccard_similarity:
             return None

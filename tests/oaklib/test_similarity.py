@@ -13,6 +13,7 @@ from fixtures.hierarchy_cdm import (
     LUNG_CANCER,
     OUTER_ROOT,
     SMOKING_RELATED,
+    SOURCE,
     hierarchy_cdm,
 )
 from oaklib.datamodels.vocabulary import IS_A, OWL_THING
@@ -149,3 +150,18 @@ def test_the_information_content_counts_the_concepts_the_adapter_lists() -> None
         [(_, score)] = adapter.information_content_scores([curie(LUNG)])
 
     assert score == pytest.approx(math.log2(listed))
+
+
+def test_a_non_standard_concept_stands_in_for_its_standard_concept_when_asked(adapter) -> None:
+    standardising = OMOPAlchemyImplementation(kg=adapter.kg, standardise=True)
+    pair = (curie(SOURCE), curie(CANCER))
+
+    plain = adapter.pairwise_similarity(*pair)
+    stood_in = standardising.pairwise_similarity(*pair)
+
+    assert plain is not None and stood_in is not None
+    assert plain.jaccard_similarity == 0.0
+    assert stood_in.jaccard_similarity > 0.0
+    assert curie(CANCER) in set(standardising.common_ancestors(*pair))
+    assert curie(CANCER) not in set(adapter.common_ancestors(*pair))
+    assert curie(CANCER) in list(standardising.most_recent_common_ancestors(*pair))

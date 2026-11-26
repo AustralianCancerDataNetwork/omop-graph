@@ -41,9 +41,10 @@ class StructuralSimilarityMixin(HierarchyMixin):
         direction: HierarchyDirection,
         edge_filter: EdgeFilter,
         concept_filter: ConceptFilter,
+        standardise: bool = False,
     ) -> dict[int, frozenset[int]]:
         """Map each concept to itself and the concepts reached from it."""
-        reached = self._closure(concept_ids, direction, edge_filter, concept_filter)
+        reached = self._closure(concept_ids, direction, edge_filter, concept_filter, standardise)
         return {concept_id: others | {concept_id} for concept_id, others in reached.items()}
 
     def _pair_lineage(
@@ -53,10 +54,13 @@ class StructuralSimilarityMixin(HierarchyMixin):
         direction: HierarchyDirection,
         edge_filter: EdgeFilter,
         concept_filter: ConceptFilter,
+        standardise: bool = False,
     ) -> dict[int, frozenset[int]]:
         """Map two concepts, which must exist, each to itself and the concepts reached from it."""
         self.require_concepts((concept_a, concept_b))
-        return self._lineage((concept_a, concept_b), direction, edge_filter, concept_filter)
+        return self._lineage(
+            (concept_a, concept_b), direction, edge_filter, concept_filter, standardise
+        )
 
     @scope_only
     def common_ancestors(
@@ -65,6 +69,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
     ) -> frozenset[int]:
         """
         Return the concepts that are, or are above, both concepts.
@@ -75,7 +80,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             If either concept does not exist.
         """
         lineage = self._pair_lineage(
-            concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter
+            concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter, standardise
         )
         return lineage[concept_a] & lineage[concept_b]
 
@@ -86,6 +91,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
     ) -> frozenset[int]:
         """
         Return the concepts that are, or are below, both concepts.
@@ -96,7 +102,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             If either concept does not exist.
         """
         lineage = self._pair_lineage(
-            concept_a, concept_b, HierarchyDirection.DOWN, edge_filter, concept_filter
+            concept_a, concept_b, HierarchyDirection.DOWN, edge_filter, concept_filter, standardise
         )
         return lineage[concept_a] & lineage[concept_b]
 
@@ -107,6 +113,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
     ) -> frozenset[int]:
         """
         Return the common ancestors that have no descendant among the common ancestors.
@@ -119,7 +126,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             If either concept does not exist.
         """
         lineage = self._pair_lineage(
-            concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter
+            concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter, standardise
         )
         return self._most_recent(
             lineage[concept_a] & lineage[concept_b], edge_filter, concept_filter
@@ -139,6 +146,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
     ) -> float:
         """
         Return the common ancestors over all ancestors of either concept.
@@ -149,7 +157,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             If either concept does not exist.
         """
         lineage = self._pair_lineage(
-            concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter
+            concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter, standardise
         )
         return len(lineage[concept_a] & lineage[concept_b]) / len(
             lineage[concept_a] | lineage[concept_b]
@@ -256,6 +264,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_b: int,
         source: ICSource = ICSource.IS_A,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
     ) -> ConceptSimilarity:
         """
         Score the similarity of two concepts through the strict ``Is a`` hierarchy.
@@ -273,6 +282,10 @@ class StructuralSimilarityMixin(HierarchyMixin):
             Where descendants are counted for the information content.
         concept_filter : ConceptFilter
             The concepts that are reported and counted.
+        standardise : bool
+            If True, a non-standard concept stands in for the standard concepts it maps to
+            when its ancestors are found, see :meth:`closure`. The information content is
+            that of the concept itself.
 
         Raises
         ------
@@ -280,7 +293,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             If either concept does not exist.
         """
         lineage = self._pair_lineage(
-            concept_a, concept_b, HierarchyDirection.UP, IS_A_FILTER, concept_filter
+            concept_a, concept_b, HierarchyDirection.UP, IS_A_FILTER, concept_filter, standardise
         )
         common = lineage[concept_a] & lineage[concept_b]
         recent = self._most_recent(common, IS_A_FILTER, concept_filter)
