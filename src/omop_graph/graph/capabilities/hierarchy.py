@@ -19,6 +19,7 @@ from ..edges import (
 )
 from ..nodes import (
     AncestorMatch,
+    Standardness,
 )
 from ..queries import (
     q_children,
@@ -158,10 +159,12 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         """
         Find the standard concepts each concept stands for.
 
-        A standard or classification concept stands for itself. Any other concept stands
-        for the standard concepts at the end of its identity edges, such as ``Maps to``
-        and ``Concept replaced by``, which may be several. Edges to non-standard concepts
-        are not followed further.
+        A standard concept stands for itself. Any other concept stands for the standard
+        concepts at the end of its identity edges, such as ``Maps to`` and ``Concept
+        replaced by``, which may be several. Edges to concepts that are not standard are
+        not followed further. A classification concept is not a valid mapping target, so
+        it stands for no standard concept, although a walk from it still passes through
+        itself, see :meth:`closure`.
 
         Parameters
         ----------
@@ -202,13 +205,13 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         }
 
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:
-        """Select the standard or classification concepts among *concept_ids*."""
+        """Select the standard concepts among *concept_ids*, the valid mapping targets."""
         found: set[int] = set()
         for batch in self.batches(set(concept_ids)):
             found.update(
                 view.concept_id
                 for view in self.concept_views(batch, sort=False)
-                if view.standard_concept
+                if view.standardness is Standardness.STANDARD
             )
         return found
 

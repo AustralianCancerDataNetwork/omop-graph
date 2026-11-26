@@ -201,6 +201,8 @@ matches = kg.nearest_concepts("kidney cancer")  # needs write=True
 kg.embedding_similarity(concept_a, concept_b)  # cosine of the stored vectors
 ```
 
+Vector search returns standard concepts when the scope requires them. It cannot return classification concepts, so `include_classification` has no effect on it.
+
 #### Fallback embedding calculation
 
 When some concepts in the OMOP DB have not been pre-indexed, similarity scoring will silently skip them.

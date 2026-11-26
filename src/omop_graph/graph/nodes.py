@@ -103,6 +103,20 @@ class MappingView:
     object_source: str
 
 
+class Standardness(Enum):
+    """
+    The standardness flag of a concept, with its value in the ``standard_concept`` column.
+
+    A standard concept is a valid target of a mapping. A classification concept is a
+    waypoint in the hierarchy and is not a valid mapping target. Any other concept carries
+    no flag.
+    """
+
+    STANDARD = "S"
+    CLASSIFICATION = "C"
+    NONE = None
+
+
 @dataclass(frozen=True)
 class ConceptView:
     """
@@ -154,6 +168,15 @@ class ConceptView:
     # Defaulted so rows projected before the classification label was added
     # still construct; the query layer always supplies it.
     classification_concept: bool = False
+
+    @property
+    def standardness(self) -> Standardness:
+        """The standardness flag of the concept, from ``standard_concept`` and ``classification_concept``."""
+        if self.standard_concept:
+            return Standardness.STANDARD
+        if self.classification_concept:
+            return Standardness.CLASSIFICATION
+        return Standardness.NONE
 
     @property
     def is_active(self) -> bool:

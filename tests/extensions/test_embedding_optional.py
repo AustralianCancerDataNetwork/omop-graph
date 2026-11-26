@@ -215,6 +215,12 @@ def test_the_scope_becomes_the_embedding_filter() -> None:
     )
 
 
+def test_classification_concepts_are_not_passed_to_the_embedding_filter() -> None:
+    translated = embedding_filter(ConceptFilter(require_standard=True, include_classification=True))
+
+    assert translated == EmbeddingConceptFilter(require_standard=True)
+
+
 def _registered_interface() -> Mock:
     interface = Mock()
     interface.is_model_registered.return_value = True

@@ -33,7 +33,7 @@ from omop_graph.graph.edges import (
     Predicate,
 )
 from omop_graph.graph.language import OMOPLanguage
-from omop_graph.graph.nodes import ConceptView
+from omop_graph.graph.nodes import ConceptView, Standardness
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
@@ -695,8 +695,8 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             m[OMOPMetadataKey.CONCEPT_CLASS].append(cv.concept_class_id)
             m[OMOPMetadataKey.CONCEPT_CODE].append(cv.concept_code)
 
-            if cv.standard_concept:
-                m[OMOPMetadataKey.STANDARD_CONCEPT].append("S")
+            if cv.standardness is not Standardness.NONE:
+                m[OMOPMetadataKey.STANDARD_CONCEPT].append(cv.standardness.value)
 
             # validity
             m[OMOPMetadataKey.VALID_START_DATE].append(f"{cv.valid_start_date}")
@@ -707,10 +707,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
             if not cv.is_active:
                 m[DEPRECATED_PREDICATE].append("true")
-                m[TERM_REPLACED_BY].extend(
-                    self.codec.concept_curie(replacement)
-                    for replacement in replacements[cv.concept_id]
-                )
+                if replacements[cv.concept_id]:
+                    m[TERM_REPLACED_BY].extend(
+                        self.codec.concept_curie(replacement)
+                        for replacement in replacements[cv.concept_id]
+                    )
 
             # vocabulary-qualified identifier (important!)
             m[HAS_DBXREF].append(self.codec.code_curie(cv.vocabulary_id, cv.concept_code))

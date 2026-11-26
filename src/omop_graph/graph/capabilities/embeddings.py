@@ -205,7 +205,13 @@ def requires_embedding_writer[S: EmbeddingsMixin, **P, R](
 
 
 def embedding_filter(concept_filter: ConceptFilter) -> EmbeddingConceptFilter:
-    """Translate a concept scope into the filter that omop-emb applies during retrieval."""
+    """
+    Translate a concept scope into the filter that omop-emb applies during retrieval.
+
+    omop-emb can require standard concepts but has no flag for classification concepts, so
+    ``include_classification`` is not passed on. A scope that requires standard concepts
+    retrieves standard concepts only, which are the valid mapping targets.
+    """
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
     return EmbeddingConceptFilter(
