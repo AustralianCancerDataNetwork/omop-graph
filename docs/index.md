@@ -19,6 +19,8 @@ Unlike generic graph libraries, `omop-graph` is built specifically for clinical 
 ### Core Components
 - [KnowledgeGraph](graph/kg.md): The VKG interface — connecting to OMOP and traversing the graph.
 - [Relationships](graph/edges.md): Pre-classification of OMOP edges into semantic kinds.
+- [Paths and Traversal](graph/paths.md): Shortest paths, traversal and path explanations.
+- [Rendering](graph/rendering.md): Text, HTML and Mermaid views of paths, subgraphs and traces.
 - [Architecture](graph/architecture.md): The layers of the package and what each holds.
 - [Oaklib Interface](oaklib/interface.md): OAK-compliant adapter for cross-ontology tooling.
 

@@ -37,6 +37,8 @@ nav:
   - Core Components:
       - "Knowledge Graph": graph/kg.md
       - "Relationships": graph/edges.md
+      - "Paths and Traversal": graph/paths.md
+      - "Rendering": graph/rendering.md
       - "Architecture": graph/architecture.md
       - "Oaklib Interface": oaklib/interface.md
   - Reasoning:
