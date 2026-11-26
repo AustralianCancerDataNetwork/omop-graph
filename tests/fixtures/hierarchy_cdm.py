@@ -29,7 +29,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.oaklib_interface.codec import OMOPLanguage
+from omop_graph.graph.language import OMOPLanguage
 
 (
     DISEASE,

@@ -22,7 +22,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.oaklib_interface.codec import OMOPLanguage
+from omop_graph.graph.language import OMOPLanguage
 
 START = date(2020, 1, 1)
 END = date(2099, 12, 31)

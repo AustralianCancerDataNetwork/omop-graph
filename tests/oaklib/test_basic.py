@@ -41,7 +41,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.oaklib_interface.codec import OMOPLanguage
+from omop_graph.graph.language import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 DISEASE, CANCER, DELETED, OUTDATED, ICD_CODE, LONELY = 100, 101, 102, 103, 104, 105

@@ -25,8 +25,8 @@ from oaklib.types import CURIE, PRED_CURIE
 
 from omop_graph.extensions.omop_alchemy import HierarchyDirection
 from omop_graph.graph.edges import EdgeFilter
+from omop_graph.graph.language import OMOPLanguage
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
-from omop_graph.oaklib_interface.codec import OMOPLanguage
 
 
 class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):

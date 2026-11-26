@@ -18,7 +18,7 @@ from fixtures.cdm_builders import (
     synonym,
 )
 from omop_graph.extensions.omop_alchemy import PredicateKind, RelationshipClass, RelationshipMapping
-from omop_graph.oaklib_interface.codec import OMOPLanguage
+from omop_graph.graph.language import OMOPLanguage
 
 CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED, PERCENT = range(400, 407)
 SPACED_CODE = "C34 9"

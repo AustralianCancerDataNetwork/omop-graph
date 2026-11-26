@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 # Local Application Imports
+from ..language import OMOPLanguage
 from ..nodes import (
     SynonymView,
     VocabularyView,
@@ -45,6 +46,24 @@ class VocabularyMixin(GraphCore):
         """Return the language concept ids that at least one synonym uses."""
         with self.session_factory() as session:
             return frozenset(session.execute(q_synonym_language_ids()).scalars())
+
+    def synonym_languages(self) -> tuple[OMOPLanguage, ...]:
+        """Return the languages, with a known code, that at least one synonym uses."""
+        used = self.synonym_language_ids()
+        return tuple(language for language in OMOPLanguage if language.concept_id in used)
+
+    def translations(self, concept_ids: Iterable[int], language: OMOPLanguage) -> dict[int, str]:
+        """
+        Return the first synonym of each concept in *language*.
+
+        OMOP does not rank synonyms, so the first is the one that sorts first by name.
+        Concepts without a synonym in the language are left out.
+        """
+        found: dict[int, str] = {}
+        for synonym in self.synonyms(concept_ids):
+            if synonym.language_concept_id == language.concept_id:
+                found.setdefault(synonym.concept_id, synonym.name)
+        return found
 
     def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
         """

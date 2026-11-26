@@ -34,11 +34,12 @@ from omop_graph.graph.edges import (
     EdgeView,
     Predicate,
 )
+from omop_graph.graph.language import OMOPLanguage
 from omop_graph.graph.nodes import ConceptView
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
-from omop_graph.oaklib_interface.codec import OMOPLanguage, OMOPMetadataKey
+from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 logger = logging.getLogger(__name__)
@@ -284,10 +285,8 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def languages(self) -> Iterable[str]:
         """The ISO 639-1 codes of the languages that synonyms are written in."""
-        for language_id in self.kg.synonym_language_ids():
-            language = OMOPLanguage.from_concept_id(language_id)
-            if language is not None:
-                yield language.code
+        for language in self.kg.synonym_languages():
+            yield language.code
 
     def entities(
         self,
@@ -427,10 +426,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         language = OMOPLanguage.from_code(lang)
         if language is None:
             return {}
-        by_concept: dict[int, str] = {}
-        for synonym in self.kg.synonyms(tuple(concept_ids.values())):
-            if synonym.language_concept_id == language.concept_id:
-                by_concept.setdefault(synonym.concept_id, synonym.name)
+        by_concept = self.kg.translations(concept_ids.values(), language)
         return {curie: by_concept[cid] for curie, cid in concept_ids.items() if cid in by_concept}
 
     def multilingual_labels(  # ty: ignore[invalid-method-override]

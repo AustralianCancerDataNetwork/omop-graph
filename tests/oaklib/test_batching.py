@@ -32,7 +32,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.oaklib_interface.codec import OMOPLanguage
+from omop_graph.graph.language import OMOPLanguage
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 ROOT, LEFT, RIGHT, LEFT_LEAF, RIGHT_LEAF, LONELY, DELETED = range(500, 507)
