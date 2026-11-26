@@ -85,7 +85,7 @@ def restricted_to_ids(concept_filter: ConceptFilter, concept_ids: Iterable[int])
     Returns
     -------
     ConceptFilter
-        ``concept_filter`` with the ids both name, in the order of *concept_ids*.
+        ``concept_filter`` with the ids both name, in the order of concept_ids.
     """
     ids = tuple(dict.fromkeys(concept_ids))
     if concept_filter.concept_ids is not None:
@@ -114,7 +114,7 @@ def every_concept(concept_filter: ConceptFilter) -> ConceptFilter:
 
 
 def _narrowed(allowed: tuple[str, ...] | None, requested: Iterable[str]) -> tuple[str, ...]:
-    """The requested values that *allowed* admits, in their order, all of them when it is None."""
+    """The requested values that allowed admits, in their order, all of them when it is None."""
     return tuple(value for value in dict.fromkeys(requested) if allowed is None or value in allowed)
 
 
@@ -134,7 +134,7 @@ def narrowed_to_vocabularies(
     Returns
     -------
     ConceptFilter
-        ``concept_filter`` with the vocabularies it shares with *vocabularies*, in their order. A scope
+        ``concept_filter`` with the vocabularies it shares with vocabularies, in their order. A scope
         without vocabularies allows all of them.
     """
     return replace(
@@ -156,7 +156,7 @@ def narrowed_to_domains(concept_filter: ConceptFilter, domains: Iterable[str]) -
     Returns
     -------
     ConceptFilter
-        ``concept_filter`` with the domains it shares with *domains*, in their order. A scope
+        ``concept_filter`` with the domains it shares with domains, in their order. A scope
         without domains allows all of them.
     """
     return replace(concept_filter, domains=_narrowed(concept_filter.domains, domains))

@@ -95,7 +95,7 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         self, curies: CURIE | Iterable[CURIE] | None = None, source: str | None = None
     ) -> Iterator[Mapping]:
         """
-        Yield the mappings of concepts, or of every concept without *curies*.
+        Yield the mappings of concepts, or of every concept without curies.
 
         Parameters
         ----------
@@ -108,7 +108,7 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         Yields
         ------
         Mapping
-            Mappings with the looked up concept as subject. Without *curies* they are
+            Mappings with the looked up concept as subject. Without curies they are
             all the stored mappings, in both directions of each pair, and then the
             cross-reference of each concept within the adapter's scope.
         """

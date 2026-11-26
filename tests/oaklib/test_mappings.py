@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 from fixtures.cdm_builders import START
+from fixtures.helpers import curie
 from fixtures.mappings_cdm import (
     BRAND,
     ICDO,
@@ -29,10 +30,6 @@ from sssom.constants import SEMAPV
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")

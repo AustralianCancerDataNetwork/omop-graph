@@ -178,7 +178,7 @@ class OMOPCodec:
     @classmethod
     def _is_concept_id(cls, local: str) -> bool:
         """
-        Whether *local* is the canonical decimal form of a concept id.
+        Whether local is the canonical decimal form of a concept id.
 
         Leading zeros are not canonical, so each concept has one ``OMOP`` spelling, and a
         number beyond the column is no concept, as the database would reject it.

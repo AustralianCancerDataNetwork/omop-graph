@@ -118,8 +118,8 @@ class SearchMixin(EnumerationMixin):
         """
         Yield the concepts a term matches, best matches first, each once.
 
-        The concepts named as *identifiers* come first, when they are in scope. Then each
-        kind of match is tried in turn, on concept names and then, with *synonyms*, on
+        The concepts named as identifiers come first, when they are in scope. Then each
+        kind of match is tried in turn, on concept names and then, with synonyms, on
         synonyms, as in :meth:`concept_lookup`.
 
         Parameters
@@ -192,6 +192,19 @@ class SearchMixin(EnumerationMixin):
         return re.sub(r"\s+", " ", query_term.strip().lower())
 
     def check_concept_filter(self, constraints: ConceptFilter) -> None:
+        """
+        Check that the domains and vocabularies of a concept filter exist.
+
+        Parameters
+        ----------
+        constraints : ConceptFilter
+            The filter to check.
+
+        Raises
+        ------
+        ValueError
+            If a domain or vocabulary is not in the vocabulary tables.
+        """
         if constraints.domains is not None:
             invalid = [d for d in constraints.domains if d not in self._valid_domains]
             if invalid:

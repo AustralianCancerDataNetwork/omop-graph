@@ -44,10 +44,7 @@ from omop_graph.graph.language import OMOPLanguage
     LOOP_B,
 ) = range(200, 210)
 OUTDATED, OUTER_ROOT, SOURCE, SOURCE_TWO, ORPHAN = range(210, 215)
-SITE = "OMOP_REL:Has%20finding%20site"
-MAPS_TO = "OMOP_REL:Maps%20to"
-MAPPED_FROM = "OMOP_REL:Mapped%20from"
-SUBSUMES = "OMOP_REL:Subsumes"
+IN_SCOPE = 11
 
 
 @contextmanager

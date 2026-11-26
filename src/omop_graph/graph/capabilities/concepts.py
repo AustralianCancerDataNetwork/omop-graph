@@ -1,4 +1,4 @@
-"""Concept views and enumeration of concepts."""
+"""Concept views, lookup by code and the check that concepts exist."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ class ConceptsMixin(GraphCore):
 
     def missing_concepts(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
         """
-        Find the concepts among *concept_ids* that do not exist.
+        Find the concepts among concept_ids that do not exist.
 
         Returns
         -------
@@ -80,7 +80,7 @@ class ConceptsMixin(GraphCore):
 
     def require_concepts(self, concept_ids: Iterable[int]) -> None:
         """
-        Check that every one of *concept_ids* exists.
+        Check that every one of concept_ids exists.
 
         Raises
         ------

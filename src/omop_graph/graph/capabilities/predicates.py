@@ -73,7 +73,7 @@ class PredicatesMixin(GraphCore):
         return self._mapping_for(relationship_id).predicate_kind
 
     def _mapping_for(self, relationship_id: str) -> RelationshipMappingElement:
-        """Classification of *relationship_id*, raising AttributeError if it has none."""
+        """Classification of relationship_id, raising AttributeError if it has none."""
         item = self._relationship_mapping.get(relationship_id)
         if item is None:
             raise AttributeError(f"`{relationship_id}` not in relationship mapping.")

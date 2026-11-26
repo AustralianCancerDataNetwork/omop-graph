@@ -213,7 +213,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def ontology_metadata_map(self, ontology: CURIE) -> METADATA_MAP:
         """
-        Name, version and reference of a vocabulary. Empty when *ontology* is not one.
+        Name, version and reference of a vocabulary. Empty when ontology is not one.
         """
         for vocabulary in self.kg.vocabularies():
             if self.codec.concept_curie(vocabulary.vocabulary_concept_id) != ontology:
@@ -272,7 +272,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         Yield the CURIEs that name no concept or relationship.
 
         Foreign keys keep relationships from pointing at missing concepts, so nothing is
-        dangling when *curies* is None.
+        dangling when curies is None.
         """
         if curies is None:
             return
@@ -316,10 +316,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         lang: str | None = None,
     ) -> Iterator[tuple]:
         """
-        OMOP has no text definitions, so nothing is yielded unless *include_missing* is set.
+        OMOP has no text definitions, so nothing is yielded unless include_missing is set.
 
-        With *include_missing* each CURIE is yielded with no definition, and with
-        *include_metadata* also with empty metadata.
+        With include_missing each CURIE is yielded with no definition, and with
+        include_metadata also with empty metadata.
         """
         if include_missing:
             for curie in curies:
@@ -328,7 +328,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     def comments(
         self, curies: Iterable[CURIE], allow_none: bool = True, lang: str | None = None
     ) -> Iterable[tuple[CURIE, str | None]]:
-        """OMOP has no comments, so each CURIE gets None when *allow_none* is set."""
+        """OMOP has no comments, so each CURIE gets None when allow_none is set."""
         if allow_none:
             for curie in curies:
                 yield curie, None
@@ -400,7 +400,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         predicates: Iterable[PRED_CURIE] | None,
         concept_filter: ConceptFilter,
     ) -> Iterator[CURIE]:
-        """Yield the concepts *build* selects, over the closure or over the named predicates."""
+        """Yield the concepts build selects, over the closure or over the named predicates."""
         edge_filter = (
             EdgeFilter(predicate_ids=self.codec.relationship_ids(predicates))
             if predicates
@@ -420,7 +420,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         Yield the concepts without a parent.
 
-        Without *predicates* the parents come from the ``concept_ancestor`` closure, which
+        Without predicates the parents come from the ``concept_ancestor`` closure, which
         is OMOP's own ancestry. With them, a parent is the target of an edge of one of the
         predicates. If no concept has an edge for a predicate, then no concept has a parent
         through it, so every concept is a root. ``ignore_owl_thing`` and
@@ -437,13 +437,13 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         ignore_owl_nothing: bool = True,
         filter_obsoletes: bool = True,
     ) -> Iterable[CURIE]:
-        """Yield the concepts without a child. See :meth:`roots` for *predicates*."""
+        """Yield the concepts without a child. See :meth:`roots` for predicates."""
         return self._enumerate(self.kg.leaves, predicates, self._scope(filter_obsoletes))
 
     def singletons(
         self, predicates: list[PRED_CURIE] | None = None, filter_obsoletes: bool = True
     ) -> Iterable[CURIE]:
-        """Yield the concepts without a parent or a child. See :meth:`roots` for *predicates*."""
+        """Yield the concepts without a parent or a child. See :meth:`roots` for predicates."""
         return self._enumerate(self.kg.singletons, predicates, self._scope(filter_obsoletes))
 
     def label(self, curie: CURIE, lang: str | None = None) -> str | None:
@@ -478,7 +478,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 yield curie, names.get(curie)
 
     def _translations(self, concept_ids: dict[CURIE, int], lang: str) -> dict[CURIE, str]:
-        """The first synonym of each concept in *lang*, by name."""
+        """The first synonym of each concept in lang, by name."""
         language = OMOPLanguage.from_code(lang)
         if language is None:
             return {}
@@ -493,7 +493,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterable[tuple[CURIE, str | None, str | None]]:
         """
         Yield each concept name with no language tag, then its synonyms in other languages
-        with theirs, restricted to *langs* when given.
+        with theirs, restricted to langs when given.
         """
         curies = list(curies)
         views = self._concept_views(curies)
@@ -566,7 +566,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             If True, swaps subjects and objects in the query and result.
 
         Yields
-        -------
+        ------
         Tuple[CURIE, PRED_CURIE, CURIE]
             Triples (subject, predicate, object).
 

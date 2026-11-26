@@ -24,7 +24,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
 
     The ancestry, the counts and the scope are those of the knowledge graph, see
     :meth:`omop_graph.graph.kg.KnowledgeGraph.pairwise_similarity`. Only ``rdfs:subClassOf``
-    can be followed, so a *predicates* argument must be empty or name it. Information
+    can be followed, so a predicates argument must be empty or name it. Information
     content is always computed from the hierarchy, so scores cannot be loaded.
     The ``subject_ancestors`` and ``object_ancestors`` arguments of ``pairwise_similarity``
     have no effect.
@@ -49,12 +49,12 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         """
         Yield the common ancestors that have no descendant among the common ancestors.
 
-        When there are none, ``owl:Thing`` is yielded if *include_owl_thing* is set.
+        When there are none, ``owl:Thing`` is yielded if include_owl_thing is set.
 
         Raises
         ------
         ValueError
-            At the call, if *predicates* names more than ``rdfs:subClassOf``.
+            At the call, if predicates names more than ``rdfs:subClassOf``.
         """
         self._check_predicates(predicates)
         return self._most_recent_common_ancestors(subject, object, include_owl_thing)
@@ -91,7 +91,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         Raises
         ------
         ValueError
-            At the call, if *predicates* names more than ``rdfs:subClassOf``.
+            At the call, if predicates names more than ``rdfs:subClassOf``.
         """
         self._check_predicates(predicates)
         return self._common_ancestors(subject, object, include_owl_thing)
@@ -126,7 +126,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         Raises
         ------
         ValueError
-            At the call, if *predicates* names more than ``rdfs:subClassOf``.
+            At the call, if predicates names more than ``rdfs:subClassOf``.
         """
         self._check_predicates(predicates)
         return self._common_descendants(subject, object)
@@ -175,14 +175,14 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         Yield each concept with its information content, ``-log2(descendants / concepts)``.
 
         The descendants include the concept and the concepts are those in scope. Without
-        *curies* every concept in scope is scored, which counts the descendants of each.
+        curies every concept in scope is scored, which counts the descendants of each.
         Associations are not supported.
 
         Raises
         ------
         ValueError
-            At the call, if *object_closure_predicates* names more than ``rdfs:subClassOf``,
-            or *use_associations* is set.
+            At the call, if object_closure_predicates names more than ``rdfs:subClassOf``,
+            or use_associations is set.
         """
         self._check_predicates(object_closure_predicates)
         if use_associations:

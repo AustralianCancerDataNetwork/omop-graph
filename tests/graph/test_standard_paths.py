@@ -34,7 +34,6 @@ from omop_graph.reasoning.resolvers import CandidateHit
 TARGET_A, TARGET_B, LEAF, DEEP_LEAF = 10, 11, 20, 21
 SOURCE, SOURCE_TWO, SOURCE_CHAINED, SOURCE_DANGLING, SOURCE_CROSS, ORPHAN = 30, 31, 32, 33, 34, 35
 REPLACED, CHAIN_HEAD, CHAIN_MIDDLE, DRUG = 40, 50, 51, 70
-DANGLING = 999
 IDENTITY = EdgeFilter(predicate_kinds=frozenset({PredicateKind.IDENTITY}), within_domain=True)
 
 
@@ -80,7 +79,7 @@ def kg() -> Iterator[KnowledgeGraph]:
         *edge_pair(SOURCE_TWO, "Maps to", "Mapped from", LEAF),
         *edge_pair(SOURCE_TWO, "Maps to", "Mapped from", DEEP_LEAF),
         *edge_pair(SOURCE_CHAINED, "Maps to", "Mapped from", SOURCE),
-        *edge_pair(SOURCE_DANGLING, "Maps to", "Mapped from", DANGLING),
+        *edge_pair(SOURCE_DANGLING, "Maps to", "Mapped from", 999),
         *edge_pair(SOURCE_CROSS, "Maps to", "Mapped from", DRUG),
         *edge_pair(REPLACED, "Concept replaced by", "Concept replaces", LEAF),
         *edge_pair(CHAIN_HEAD, "Concept replaced by", "Concept replaces", CHAIN_MIDDLE),

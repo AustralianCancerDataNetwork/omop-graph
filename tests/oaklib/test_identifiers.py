@@ -14,6 +14,7 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
+from fixtures.helpers import curie
 from oaklib.datamodels.search import SearchConfiguration, SearchProperty
 from oaklib.datamodels.vocabulary import HAS_DBXREF, IS_A, OWL_OBJECT_PROPERTY
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
@@ -36,10 +37,6 @@ VALID_DUPLICATE, RETIRED_DUPLICATE, AMBIGUOUS_ONE, AMBIGUOUS_TWO = range(410, 41
 MIXED_VALID_ONE, MIXED_VALID_TWO, MIXED_RETIRED_ONE, MIXED_RETIRED_TWO = range(414, 418)
 SPACED_VOCABULARY, DASHED_VOCABULARY, SOURCE = 420, 421, 430
 UNKNOWN = "SNOMED:nope"
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")

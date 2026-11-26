@@ -1157,7 +1157,7 @@ def _resolve_identity_hop(kg: KnowledgeGraph, candidate_id: int, standard_id: in
     candidate is already standard there is no hop (`object_id` is None). Otherwise, prefers the
     real edge landing on `standard_id` (when known, i.e. the candidate passed); falls back to the
     candidate's first Identity edge so a failed candidate still shows where Identity mapping
-    *would* have led. `invalid_reason` (None when current/active) lets callers tell a genuine,
+    would have led. `invalid_reason` (None when current/active) lets callers tell a genuine,
     no-mapping-exists dead end apart from a deprecated concept whose mappings were dropped from
     the live vocabulary snapshot -- both render as "no Identity mapping found" but only the
     former is a clean illustrative example.

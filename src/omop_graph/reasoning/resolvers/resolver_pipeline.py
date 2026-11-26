@@ -124,7 +124,7 @@ class ResolverPipeline:
             Determines also the number of candidates returned for each resolver using the `limit` field. If None, no additional filtering is applied.
 
         Yields
-        -------
+        ------
         CandidateHit
             Candidate concepts found by the resolvers.
         """

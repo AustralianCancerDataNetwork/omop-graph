@@ -30,7 +30,7 @@ class EnumerationMixin(EdgesMixin):
         self, concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER
     ) -> Generator[int, None, None]:
         """
-        Yield the ids of the concepts selected by *concept_filter*.
+        Yield the ids of the concepts selected by concept_filter.
 
         Defaults to active standard and classification concepts. The ids are read through
         a server-side cursor, so they are never all held in memory.
@@ -43,9 +43,9 @@ class EnumerationMixin(EdgesMixin):
         edge_filter: EdgeFilter | None = None,
     ) -> Generator[int, None, None]:
         """
-        Yield root concepts (no parents) among those selected by *concept_filter*.
+        Yield root concepts (no parents) among those selected by concept_filter.
 
-        Without *edge_filter* the parents are the closure's level 1 ancestors. With it, a
+        Without edge_filter the parents are the closure's level 1 ancestors. With it, a
         parent is the target of an outgoing edge it selects.
         """
         return self._enumerate(q_roots, concept_filter, edge_filter)
@@ -56,9 +56,9 @@ class EnumerationMixin(EdgesMixin):
         edge_filter: EdgeFilter | None = None,
     ) -> Generator[int, None, None]:
         """
-        Yield leaf concepts (no children) among those selected by *concept_filter*.
+        Yield leaf concepts (no children) among those selected by concept_filter.
 
-        Without *edge_filter* the children are the closure's level 1 descendants. With it,
+        Without edge_filter the children are the closure's level 1 descendants. With it,
         a child is the source of an incoming edge it selects.
         """
         return self._enumerate(q_leaves, concept_filter, edge_filter)
@@ -70,7 +70,7 @@ class EnumerationMixin(EdgesMixin):
     ) -> Generator[int, None, None]:
         """
         Yield singleton concepts (no parents and no children) among those selected by
-        *concept_filter*. See :meth:`roots` for *edge_filter*.
+        concept_filter. See :meth:`roots` for edge_filter.
         """
         return self._enumerate(q_singletons, concept_filter, edge_filter)
 
@@ -80,7 +80,7 @@ class EnumerationMixin(EdgesMixin):
         concept_filter: ConceptFilter,
         edge_filter: EdgeFilter | None,
     ) -> Generator[int, None, None]:
-        """Stream *build* with *edge_filter* resolved, or every concept when it selects no edge."""
+        """Stream build with edge_filter resolved, or every concept when it selects no edge."""
         if edge_filter is None:
             stmt = build(concept_filter, None)
         else:
@@ -89,7 +89,7 @@ class EnumerationMixin(EdgesMixin):
         return self._stream_ids(stmt)
 
     def _stream_ids(self, stmt: Select) -> Generator[int, None, None]:
-        """Yield the first column of *stmt* through a server-side cursor."""
+        """Yield the first column of stmt through a server-side cursor."""
         with self.session_factory() as session:
             yield from session.execute(stream(stmt)).scalars()
 

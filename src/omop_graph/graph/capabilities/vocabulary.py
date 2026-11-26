@@ -41,7 +41,7 @@ class VocabularyMixin(GraphCore):
             return {row.domain_id: row.domain_concept_id for row in session.execute(q_domains())}
 
     def synonyms(self, concept_ids: Iterable[int]) -> tuple[SynonymView, ...]:
-        """Return the synonyms of *concept_ids*, however many, ordered by concept and name."""
+        """Return the synonyms of concept_ids, however many, ordered by concept and name."""
         with self.session_factory() as session:
             return tuple(
                 SynonymView(**row._mapping)
@@ -60,7 +60,7 @@ class VocabularyMixin(GraphCore):
 
     def translations(self, concept_ids: Iterable[int], language: OMOPLanguage) -> dict[int, str]:
         """
-        Return the first synonym of each concept in *language*.
+        Return the first synonym of each concept in language.
 
         OMOP does not rank synonyms, so the first is the one that sorts first by name.
         Concepts without a synonym in the language are left out.

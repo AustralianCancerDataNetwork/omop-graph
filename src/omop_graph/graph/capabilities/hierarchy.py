@@ -112,7 +112,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         standardise : bool
             If True, a non-standard concept stands in for the standard concepts it maps to,
             see :meth:`standardise`. It reaches those concepts and everything reached from
-            them, whether or not *concept_filter* selects the standard concepts themselves.
+            them, whether or not concept_filter selects the standard concepts themselves.
 
         Returns
         -------
@@ -235,7 +235,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         }
 
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:
-        """Select the standard concepts among *concept_ids*, the valid mapping targets."""
+        """Select the standard concepts among concept_ids, the valid mapping targets."""
         found: set[int] = set()
         for batch in self.batches(set(concept_ids)):
             found.update(
@@ -246,7 +246,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         return found
 
     def _within(self, concept_ids: Iterable[int], concept_filter: ConceptFilter) -> set[int]:
-        """Select the concepts among *concept_ids* that *concept_filter* selects."""
+        """Select the concepts among concept_ids that concept_filter selects."""
         found: set[int] = set()
         with self.session_factory() as session:
             for batch in self.batches(set(concept_ids)):

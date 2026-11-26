@@ -2,9 +2,8 @@
 
 Almost every SNOMED procedure attribute crosses domains: ``Has method`` ->
 Observation, ``Has dir proc site`` -> Spec Anatomic Site, ``Has dir device`` ->
-Device. ``KnowledgeGraph.edges``/``iter_edges`` (and so ``traverse``) used to
-default ``within_domain=True``, which silently dropped all of them. The seed
-mirrors the real edges of SNOMED 40482788 "Total replacement of right knee
+Device. ``KnowledgeGraph.edges``/``iter_edges`` (and so ``traverse``) default to
+``within_domain=False``, so none of them is dropped. The seed mirrors the real edges of SNOMED 40482788 "Total replacement of right knee
 joint".
 """
 

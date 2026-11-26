@@ -398,7 +398,7 @@ def q_predicate_row(relationship_id: str) -> Select:
 
 
 def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Select:
-    """Apply the validity, date, domain and relationship id conditions of *edge_filter*.
+    """Apply the validity, date, domain and relationship id conditions of edge_filter.
 
     The kind and subkind fields are not applied here: the caller resolves them to
     ``predicate_ids`` first, since the classification is not in the SQL tables.
@@ -509,7 +509,7 @@ def q_closure(
     concept_ids: tuple[int, ...], direction: HierarchyDirection, edge_filter: EdgeFilter
 ) -> Select:
     """
-    Query the transitive closure of the edges of *edge_filter* as (origin, reached) pairs.
+    Query the transitive closure of the edges of edge_filter as (origin, reached) pairs.
 
     Follows the selected edges repeatedly from each concept. ``UP`` goes from the subject of
     an edge to its object, as from a concept to its ``Is a`` ancestors, and ``DOWN`` the
@@ -540,7 +540,7 @@ def q_mappings(
     concept_ids: tuple[int, ...] | None, edge_filter: EdgeFilter, source: str | None = None
 ) -> Select | CompoundSelect:
     """
-    Query the edges of *edge_filter* with the vocabularies of their concepts.
+    Query the edges of edge_filter with the vocabularies of their concepts.
 
     Parameters
     ----------
@@ -593,7 +593,7 @@ def q_relationships(
     objects: tuple[int, ...] | None,
     edge_filter: EdgeFilter,
 ) -> Select:
-    """Query (subject, relationship_id, object) triples. See :func:`q_edges` for *edge_filter*."""
+    """Query (subject, relationship_id, object) triples. See :func:`q_edges` for edge_filter."""
     stmt = select(
         Concept_Relationship.concept_id_1,
         Concept_Relationship.relationship_id,
@@ -622,12 +622,12 @@ def q_entities(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select
 
 
 def q_concept_count(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
-    """Count the concepts *concept_filter* selects."""
+    """Count the concepts concept_filter selects."""
     return select(func.count()).select_from(q_entities(concept_filter).subquery())
 
 
 def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
-    """Count the concepts *concept_filter* selects by vocabulary, domain and validity."""
+    """Count the concepts concept_filter selects by vocabulary, domain and validity."""
     deprecated = ~Concept.is_valid_expr()
     return concept_filter.apply(
         select(
@@ -642,7 +642,7 @@ def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> 
 def _subjects_in_scope(
     stmt: Select, concept_id: InstrumentedAttribute[int], concept_filter: ConceptFilter
 ) -> Select:
-    """Restrict *stmt* to the rows whose concept ``concept_filter`` selects, joining only when it restricts."""
+    """Restrict stmt to the rows whose concept ``concept_filter`` selects, joining only when it restricts."""
     if concept_filter == ALL_CONCEPTS:
         return stmt
     return concept_filter.apply(stmt.join(Concept, Concept.concept_id == concept_id))
@@ -699,9 +699,9 @@ def q_synonym_counts_by(grouping: Grouping) -> Select:
 
 def q_synonyms(concept_ids: tuple[int, ...], language_concept_id: int | None = None) -> Select:
     """
-    Query the synonyms of *concept_ids* with their language concept, ordered by name.
+    Query the synonyms of concept_ids with their language concept, ordered by name.
 
-    Only the synonyms in the language *language_concept_id* are selected when it is given.
+    Only the synonyms in the language language_concept_id are selected when it is given.
     """
     stmt = (
         select(
@@ -742,9 +742,9 @@ def q_obsolete_concepts(
     include_updated: bool = True, concept_filter: ConceptFilter | None = None
 ) -> Select:
     """
-    Query the ids of deleted concepts, and of updated ones when *include_updated*.
+    Query the ids of deleted concepts, and of updated ones when include_updated.
 
-    A *concept_filter* narrows them, by its vocabularies and domains and its other fields.
+    A concept_filter narrows them, by its vocabularies and domains and its other fields.
     """
     reasons = [InvalidReasonFlag.DELETED]
     if include_updated:
@@ -756,7 +756,7 @@ def q_obsolete_concepts(
 
 
 def _has_parent(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
-    """Correlated test that a concept has a parent: in the closure, or by *edge_filter* edges."""
+    """Correlated test that a concept has a parent: in the closure, or by edge_filter edges."""
     if edge_filter is None:
         return exists(
             select(1).where(
@@ -775,7 +775,7 @@ def _has_parent(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
 
 
 def _has_child(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
-    """Correlated test that a concept has a child: in the closure, or by *edge_filter* edges."""
+    """Correlated test that a concept has a child: in the closure, or by edge_filter edges."""
     if edge_filter is None:
         return exists(
             select(1).where(
@@ -799,7 +799,7 @@ def q_roots(
     """
     Query for root concepts (no parents).
 
-    Parents are the closure's level 1 ancestors, or with *edge_filter* the targets of
+    Parents are the closure's level 1 ancestors, or with edge_filter the targets of
     outgoing edges it selects.
     """
     return q_entities(concept_filter).where(~_has_parent(edge_filter))
@@ -811,7 +811,7 @@ def q_leaves(
     """
     Query for leaf concepts (no children).
 
-    Children are the closure's level 1 descendants, or with *edge_filter* the sources of
+    Children are the closure's level 1 descendants, or with edge_filter the sources of
     incoming edges it selects.
     """
     return q_entities(concept_filter).where(~_has_child(edge_filter))

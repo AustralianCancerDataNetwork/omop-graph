@@ -13,6 +13,7 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
+from fixtures.helpers import MAPS_TO, SITE, curie
 from oaklib.datamodels.vocabulary import IS_A
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
@@ -31,13 +32,7 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 DISEASE, LUNG_CANCER, SMALL_CELL, LUNG, THORAX, RIGHT_LUNG, SOURCE, SOURCE_CHILD = range(300, 308)
-SITE = "OMOP_REL:Has%20finding%20site"
 SITE_OF = "OMOP_REL:Finding%20site%20of"
-MAPS_TO = "OMOP_REL:Maps%20to"
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")

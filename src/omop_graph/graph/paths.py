@@ -652,7 +652,7 @@ def get_unique_standard_concepts(
 def _load_views(
     kg: KnowledgeGraph, views: dict[int, ConceptView], concept_ids: Iterable[int]
 ) -> None:
-    """Add the views of the concepts in *concept_ids* that *views* lacks."""
+    """Add the views of the concepts in concept_ids that views lacks."""
     missing = {concept_id for concept_id in concept_ids if concept_id not in views}
     for batch in kg.batches(missing):
         views.update((view.concept_id, view) for view in kg.concept_views(batch, sort=False))

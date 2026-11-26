@@ -48,7 +48,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         """
         Query relationships, including those that follow through the ``Is a`` hierarchy.
 
-        Of the relationships *edge_filter* selects, those that generalise, see
+        Of the relationships edge_filter selects, those that generalise, see
         :attr:`omop_graph.graph.edges.Predicate.generalises`, are entailed. The others are
         yielded as stored, and first. Each entailed triple is yielded once.
 
@@ -57,7 +57,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         subjects : tuple[int, ...] | None
             Subject concept ids.
         objects : tuple[int, ...] | None
-            Object concept ids. At least one of *subjects* and *objects* is required.
+            Object concept ids. At least one of subjects and objects is required.
         edge_filter : EdgeFilter, optional
             Which asserted relationships to start from, as in :meth:`relationships`.
         concept_filter : ConceptFilter, optional
@@ -76,7 +76,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         Raises
         ------
         ValueError
-            If both *subjects* and *objects* are None.
+            If both subjects and objects are None.
 
         Notes
         -----
@@ -160,7 +160,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         standardise: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
-        Yield the entailed relationships of every concept *concept_filter* selects.
+        Yield the entailed relationships of every concept concept_filter selects.
 
         The concepts are read in batches of subjects, so the table is never held in memory.
         The other parameters are those of :meth:`entailed_relationships`.
@@ -178,7 +178,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         concept_filter: ConceptFilter | None,
         standardise: bool,
     ) -> Generator[tuple[int, str, int], None, None]:
-        """Entail along the hierarchy, for the stand-ins of each concept when *standardise*."""
+        """Entail along the hierarchy, for the stand-ins of each concept when standardise."""
         if not standardise:
             yield from self._entailed_along_is_a(subjects, objects, edge_filter, concept_filter)
             return
@@ -210,7 +210,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         edge_filter: EdgeFilter,
         concept_filter: ConceptFilter | None,
     ) -> Generator[tuple[int, str, int], None, None]:
-        """Entail every relationship *edge_filter* selects, each triple once."""
+        """Entail every relationship edge_filter selects, each triple once."""
         if subjects is not None:
             triples = self._entailed_from_subjects(subjects, objects, edge_filter, concept_filter)
         else:
@@ -225,7 +225,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
     @staticmethod
     def _without_is_a(edge_filter: EdgeFilter | None) -> EdgeFilter | None:
         """
-        *edge_filter* without the ``Is a`` relationship, when it names its relationships.
+        edge_filter without the ``Is a`` relationship, when it names its relationships.
 
         Inheriting ``Is a`` edges between the subtypes of a subject adds nothing to the
         ancestors the closure already gives.
@@ -244,7 +244,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         concept_filter: ConceptFilter | None,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
-        Find the asserted edges of *subjects* and of their ``Is a`` ancestors, and
+        Find the asserted edges of subjects and of their ``Is a`` ancestors, and
         generalise the filler of each up the ``Is a`` hierarchy.
         """
         wanted = None if objects is None else frozenset(objects)
@@ -280,10 +280,10 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         concept_filter: ConceptFilter | None,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
-        Find the edges into *objects* and into their ``Is a`` descendants, and give each
+        Find the edges into objects and into their ``Is a`` descendants, and give each
         to the ``Is a`` descendants of its subject.
 
-        The descendants of the objects are all followed, whatever *concept_filter* selects,
+        The descendants of the objects are all followed, whatever concept_filter selects,
         since an edge can end on a concept outside it. The filter limits only the subjects
         that receive an edge, and the objects asked for are always reported.
         """

@@ -58,7 +58,7 @@ class EdgesMixin(PredicatesMixin):
             If True, swaps subjects and objects in the query and result.
 
         Yields
-        -------
+        ------
         Tuple[int, str, int]
             Triples of (subject_concept_id, relationship_id, object_concept_id).
             When ``invert=True``, the triple is (object_concept_id, relationship_id, subject_concept_id).
@@ -90,7 +90,7 @@ class EdgesMixin(PredicatesMixin):
     def all_relationships(
         self, edge_filter: EdgeFilter | None = None
     ) -> Generator[tuple[int, str, int], None, None]:
-        """Yield every relationship selected by *edge_filter*, as :meth:`relationships` does."""
+        """Yield every relationship selected by edge_filter, as :meth:`relationships` does."""
         yield from self.relationships(None, edge_filter=edge_filter)
 
     def _classified_triples(
@@ -140,7 +140,7 @@ class EdgesMixin(PredicatesMixin):
         edge_filter: EdgeFilter | None = None,
         ordered: bool = False,
     ) -> Generator[EdgeView, None, None]:
-        """Yield edges of *concept_ids* on *session*, classified from the relationship mapping.
+        """Yield edges of concept_ids on session, classified from the relationship mapping.
 
         Edges whose relationship has no classification are skipped. If
         ``ordered=True``, edges are ordered by source concept, target concept,
@@ -174,7 +174,7 @@ class EdgesMixin(PredicatesMixin):
         edge_filter: EdgeFilter | None = None,
     ) -> tuple[EdgeView, ...]:
         """
-        Retrieve the edges that run from one of *subject_ids* to one of *object_ids*.
+        Retrieve the edges that run from one of subject_ids to one of object_ids.
 
         Parameters
         ----------
@@ -212,7 +212,7 @@ class EdgesMixin(PredicatesMixin):
         )
 
     def _resolve_edge_filter(self, edge_filter: EdgeFilter | None) -> EdgeFilter | None:
-        """Fold the kind and subkind fields of *edge_filter* into ``predicate_ids``.
+        """Fold the kind and subkind fields of edge_filter into ``predicate_ids``.
 
         Returns None when they select no relationship, so the caller has nothing
         to query. An empty ``predicate_ids`` selects none, where None selects all.

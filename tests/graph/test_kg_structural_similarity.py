@@ -7,6 +7,7 @@ import pytest
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
+    IN_SCOPE,
     LUNG,
     LUNG_CANCER,
     OUTER_ROOT,
@@ -14,12 +15,11 @@ from fixtures.hierarchy_cdm import (
     SOURCE,
     hierarchy_cdm,
 )
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.scope import ALL_CONCEPTS
 from omop_graph.graph.structural_similarity import ICSource
-
-IN_SCOPE = 11
 
 
 @pytest.fixture(scope="module")
@@ -77,6 +77,15 @@ def test_a_concept_outside_the_scope_counts_itself(kg) -> None:
 
 def test_the_information_content_is_the_same_when_read_again(kg) -> None:
     assert kg.information_content([DISEASE]) == kg.information_content([DISEASE])
+
+
+def test_the_counts_are_kept_for_each_scope_and_source(kg) -> None:
+    narrow = ConceptFilter(concept_ids=(DISEASE, CANCER))
+    broad = kg.information_content([DISEASE])[DISEASE]
+
+    assert kg.information_content([DISEASE], concept_filter=narrow)[DISEASE] == 0.0
+    assert kg.information_content([DISEASE])[DISEASE] == broad
+    assert kg.information_content([DISEASE], ICSource.CONCEPT_ANCESTOR)[DISEASE] != broad
 
 
 def test_the_concept_ancestor_table_can_count_the_descendants(kg) -> None:

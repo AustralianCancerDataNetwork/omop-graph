@@ -56,7 +56,7 @@ class GraphBackend(ABC):
             relationship, across domains.
 
         Yields
-        -------
+        ------
         EdgeView
             Edges matching criteria.
         """

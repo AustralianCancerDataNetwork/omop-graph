@@ -270,7 +270,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         Raises
         ------
         OMOPUnsupportedError
-            If *shortest* is False, since every path between two concepts is unbounded.
+            If shortest is False, since every path between two concepts is unbounded.
         """
         if not shortest:
             raise OMOPUnsupportedError("OboGraphInterface.paths(shortest=False)")

@@ -70,8 +70,8 @@ from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.paths import find_shortest_paths
 from omop_graph.extensions.omop_alchemy import PredicateKind
 
-ingredient = kg.concept_id_by_code("RxNorm", "6809")  # Metformin
-drug = kg.concept_id_by_code("RxNorm", "860975")  # Metformin 500 MG Oral Tablet
+[ingredient] = kg.concepts_by_code("RxNorm", "6809")  # Metformin
+[drug] = kg.concepts_by_code("RxNorm", "860975")  # Metformin 500 MG Oral Tablet
 
 paths, trace = find_shortest_paths(
     kg,

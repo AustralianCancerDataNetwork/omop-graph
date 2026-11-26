@@ -141,7 +141,7 @@ class ConceptView:
         target.
     classification_concept : bool
         True only for a Classification Concept (raw flag ``'C'``). Valid for
-        hierarchy navigation but *not* as a mapping target. Kept distinct from
+        hierarchy navigation but not as a mapping target. Kept distinct from
         ``standard_concept`` so consumers can tell a classification node from a
         concept carrying no standardness flag at all.
     valid_start_date : date

@@ -15,8 +15,8 @@ The `omop-graph` command prepares a CDM for the graph. It has two commands: `rel
 
 ---
 
-!!! info "Vocabulary loading moved to `omop-alchemy`"
-    Athena vocabularies are loaded with the [`omop-alchemy` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) of [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy), which replaced `omop-graph omop-cdm`.
+!!! info "Loading vocabularies"
+    Athena vocabularies are loaded with the [`omop-alchemy` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) of [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy).
 
 ## `populate-with-test-data`
 
@@ -30,7 +30,7 @@ This command loads the classification of the OMOP relationships into the databas
 The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. The `KnowledgeGraph` reads this classification when it starts, and skips the edges of any relationship without one.
 
 !!! warning "Run it again after upgrading"
-    The command drops and recreates both classification tables. A database classified by an earlier release has no `direction` column on `relationship_class`, and the `KnowledgeGraph` refuses to start on it with an error naming this command.
+    The command drops and recreates both classification tables. A database classified by an earlier release has no `direction` column on `relationship_class` and no `generalises` column on `relationship_mapping`, and the `KnowledgeGraph` refuses to start on it with an error naming this command.
 
 ### Prerequisites
 1. Prepopulated OMOP CDM (e.g. using [`omop-alchemy load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))

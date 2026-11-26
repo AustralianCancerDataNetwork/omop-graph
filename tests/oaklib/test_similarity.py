@@ -6,9 +6,11 @@ import math
 from collections.abc import Iterator
 
 import pytest
+from fixtures.helpers import curie
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
+    IN_SCOPE,
     LUNG,
     LUNG_CANCER,
     OUTER_ROOT,
@@ -21,12 +23,6 @@ from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-
-IN_SCOPE = 11
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")
@@ -161,7 +157,7 @@ def test_a_non_standard_concept_stands_in_for_its_standard_concept_when_asked(ad
 
     assert plain is not None and stood_in is not None
     assert plain.jaccard_similarity == 0.0
-    assert stood_in.jaccard_similarity > 0.0
+    assert stood_in.jaccard_similarity
     assert curie(CANCER) in set(standardising.common_ancestors(*pair))
     assert curie(CANCER) not in set(adapter.common_ancestors(*pair))
     assert curie(CANCER) in list(standardising.most_recent_common_ancestors(*pair))

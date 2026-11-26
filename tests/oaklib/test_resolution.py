@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 
 import pytest
+from fixtures.helpers import curie
 from fixtures.hierarchy_cdm import CANCER, LUNG_CANCER, hierarchy_cdm
 from oaklib.datamodels.vocabulary import IS_A, OWL_THING
 
@@ -14,10 +15,6 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 
 MISSING = "OMOP:999999"
 UNCODED = ("OMOP:99999999999999999999", "OMOP:03", "OMOP:" + "9" * 5000, "OMOP:-1", "OMOP:1.5")
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")

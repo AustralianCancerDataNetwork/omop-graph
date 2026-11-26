@@ -15,6 +15,7 @@ from fixtures.cdm_builders import (
     sqlite_cdm,
     synonym,
 )
+from fixtures.helpers import SUBSUMES
 from oaklib.datamodels.vocabulary import (
     DEPRECATED_PREDICATE,
     INVERSE_OF,
@@ -46,7 +47,6 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 
 DISEASE, CANCER, DELETED, OUTDATED, ICD_CODE, LONELY = 100, 101, 102, 103, 104, 105
 SNOMED_ONTOLOGY, ICD_ONTOLOGY, CONDITION_DOMAIN = 44819097, 44819098, 3
-SUBSUMES = "OMOP_REL:Subsumes"
 
 
 @pytest.fixture(scope="module")

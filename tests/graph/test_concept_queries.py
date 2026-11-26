@@ -138,11 +138,10 @@ def test_concept_filter_applies_canonical_graph_constraints(
             session.scalars(with_classification.apply(sa.select(Concept.concept_id)))
         )
 
-    # omop-alchemy >= 1.1: require_standard means raw 'S' only, so the
-    # classification concept (2) is no longer a mapping target. Concept 2 also
-    # pins that a blank invalid_reason still reads as active.
+    # require_standard means raw 'S' only, so the classification concept (2) is not
+    # a mapping target. Concept 2 also pins that a blank invalid_reason reads as active.
     assert strict_ids == (1,)
-    # Callers that want the pre-1.1 union opt in explicitly.
+    # Including classification concepts widens the selection to them.
     assert widened_ids == (1, 2)
 
 

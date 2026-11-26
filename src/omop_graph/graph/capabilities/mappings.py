@@ -36,7 +36,7 @@ class MappingsMixin(HierarchyMixin):
         Yield the edges starting from concepts, with the vocabularies of both ends.
 
         Edges from a concept to itself and edges without a classification are left out.
-        Without *concept_ids* every edge is read through a server-side cursor.
+        Without concept_ids every edge is read through a server-side cursor.
 
         Parameters
         ----------

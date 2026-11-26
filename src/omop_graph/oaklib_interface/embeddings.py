@@ -34,7 +34,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         return self._store_model
 
     def _is_store_model(self, model: str | None) -> bool:
-        """Whether *model*, or the default, is the stored one."""
+        """Whether model, or the default, is the stored one."""
         return self._store_model is not None and self._resolve_model(model) == self._store_model
 
     def embedding_models(self) -> list[str]:
@@ -63,7 +63,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         omop_graph.graph.capabilities.embeddings.EmbeddingWriterRequiredError
             If the configuration is read-only.
         NotImplementedError
-            If *model* is a closure model, which cannot embed text.
+            If model is a closure model, which cannot embed text.
         """
         if self._is_store_model(model):
             return self.kg.embed_text(text)[0]
@@ -90,7 +90,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         """
         Find the entities whose embeddings are most similar to that of an entity.
 
-        The stored model searches its vector index. Without *candidates* the closure
+        The stored model searches its vector index. Without candidates the closure
         models are not supported.
         """
         if candidates is not None:
@@ -110,7 +110,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         """
         Find the entities whose embeddings are most similar to a vector.
 
-        The stored model searches its vector index. Without *candidates* the closure
+        The stored model searches its vector index. Without candidates the closure
         models are not supported.
         """
         if candidates is not None:

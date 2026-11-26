@@ -55,10 +55,12 @@ class KnowledgeGraph(
     GraphBackend,
 ):
     """
-    The main entry point for interacting with the OMOP Graph.
+    The OMOP concepts and relationships as a graph.
 
-    This class wraps a SQLAlchemy session and provides high-level methods
-    to query concepts, relationships, and metadata.
+    The methods come from the capability mixins in
+    ``omop_graph.graph.capabilities``: concepts, predicates, edges,
+    enumeration, hierarchy, entailment, mappings, vocabulary, search,
+    structural similarity, statistics and embeddings.
 
     Parameters
     ----------
@@ -69,6 +71,15 @@ class KnowledgeGraph(
         is read once at construction and applied to vocabulary rows in
         Python, so no query joins the two databases.
     emb_config : KnowledgeGraphEmbeddingConfiguration, optional
+        Where the embeddings are stored and which model made them. Without it, the
+        methods that need embeddings raise EmbeddingsNotConfiguredError.
+
+    Raises
+    ------
+    TypeError
+        If cdm_sessions is an Engine or is not callable.
+    RuntimeError
+        If the relationship classification is missing or empty.
     """
 
     def __init__(

@@ -9,7 +9,7 @@ The `omop-graph` library provides an adapter for the [Ontology Access Kit (OAK)]
 The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements the OAK interfaces for labels and metadata, relationships and entailment, graph traversal, mappings, searching, and text annotation. The adapter only reads: vocabularies are loaded with `omop-alchemy`, and embeddings with `omop-emb`.
 
 ### Compliance Status
-The adapter implements the oaklib interfaces below and raises `OMOPUnsupportedError`, with the reason, for the methods that have no OMOP meaning. These tables are generated from the code, and a test checks that every method that raises `NotImplementedError` in an implemented interface is either implemented or listed here.
+The adapter implements the oaklib interfaces below and raises `OMOPUnsupportedError`, with the reason, for the methods that have no OMOP meaning. These tables are generated from the code, and a test reads the oaklib sources and checks that every method that raises `NotImplementedError` in an implemented interface is implemented, listed here, or guarded by a check the adapter always passes.
 
 {{ oaklib_compliance() }}
 
@@ -48,7 +48,7 @@ The primary adapter class that inherits from multiple OAK interfaces:
 * A vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`, is written `Nebraska_Lexicon` in CURIEs, and either spelling is accepted as input, including in `id_prefixes`.
 * A concept code is percent-encoded in a CURIE, so the code `[iU]/L` of the `UCUM` vocabulary is `UCUM:%5BiU%5D%2FL`.
 * OMOP does not keep a code unique within its vocabulary. A `vocabulary_id:concept_code` names the valid concept when only one has the code. When several do, it names none and a warning lists their `OMOP:<concept_id>` CURIEs, which are always unambiguous.
-* A CURIE that names no concept, and a predicate CURIE that names no OMOP relationship such as `BFO:0000050`, are left out of the result instead of raising.
+* A CURIE that names no concept, and a predicate CURIE that names no OMOP relationship such as `BFO:0000050`, are left out of the result instead of raising, and one info message names them.
 * `prefix_map` holds the oaklib defaults, `OMOP` and `OMOP_REL`, and each vocabulary that is a canonical prefix of the [Bioregistry](https://bioregistry.io), matched by name. A vocabulary the Bioregistry does not have, such as `Nebraska_Lexicon`, has no URI.
 * `entities`, `roots`, `leafs` and `singletons` list active standard and classification concepts. Pass `concept_filter=ConceptFilter(...)` to the constructor to change that.
 * `roots`, `leafs` and `singletons` take the parents and children from the predicates you name. If no concept has an edge for a predicate, such as `BFO:0000050` (part of), then no concept has a parent through it, so every concept is a root.
@@ -90,7 +90,8 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 ```
 
 * `ancestors` and `descendants` report only concepts within the adapter's `concept_filter`, though the walk passes through the others. `ancestor_graph` and `descendant_graph` keep every concept on the walk so the graph stays connected.
-* A non-standard concept has no ancestry, so its `ancestors` are empty. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the standard concepts it maps to: its walks include them and their ancestors, and its entailed relationships are those of its standard concepts that generalise, reported for the concept itself. Mappings and lineage of the standard concepts are not lent to it. This is off by default because the result holds concepts that no stored edge connects to the concept.
+* A non-standard concept has no ancestry, so its `ancestors` are empty with `reflexive=False`. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the standard concepts it maps to: its walks include them and their ancestors, and its entailed relationships are those of its standard concepts that generalise, reported for the concept itself. Mappings and lineage of the standard concepts are not lent to it, and `standardise` applies likewise to the similarity methods, while `hierarchical_parents` and `hierarchical_children` stay literal. This is off by default because the result holds concepts that no stored edge connects to the concept.
+* `paths` finds shortest paths only, and `shortest=False` raises `OMOPUnsupportedError`.
 * `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary.
 * `descendants` of a concept near the top of a hierarchy return very many concepts.
 
@@ -100,7 +101,7 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 | OMOP relationship | SSSOM predicate |
 | --- | --- |
 | Identity, exact equivalence (`Maps to`, `Mapped from`) | `skos:exactMatch` |
-| Identity, near equivalence (`Brand name of`) | `skos:closeMatch` |
+| Identity, near equivalence (`Tradename of`) | `skos:closeMatch` |
 | Association, mapping (`ICDO - SNOMED`) | `skos:relatedMatch` |
 | Concept vocabulary and code | `oio:hasDbXref` |
 
@@ -115,16 +116,16 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 ### Similarity and embeddings
 The similarity methods wrap [the graph's](../graph/kg.md#structural-similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. `OMOPAlchemyImplementation.information_content_source` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
 
-* `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one.
+* `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one. That stored model is `default_embedding_model`, and otherwise the default is oaklib's `closure` model.
 * The stored model serves `entity_embeddings`, `embedding_similarity` and the nearest searches through the vector index of `omop-emb`. Embedding a text, and so `nearest_entities_to_text`, needs `write=True`, and raises `EmbeddingWriterRequiredError` otherwise.
 * The closure models are not searched without `candidates`, since that would compare against every concept.
 
 ### Summary statistics
 The counts come from the database, where oaklib's default would read every concept and relationship.
 
-* Concepts are those of the adapter's `concept_filter` and its deprecated concepts. Edges are the active ones of the exposed relationships whose subject is in the adapter's vocabularies and domains.
+* The counts describe the adapter's view. Concepts are those of the adapter's `concept_filter` and its deprecated concepts. Edges are the active ones of the exposed relationships whose subject is in the adapter's vocabularies and domains. Synonyms are those of the concepts counted, and the distinct names are counted over them.
 * Groups are made by `omop:vocabulary` or `omop:domain`. Branches below roots and entailed edges are not counted, and raise `ValueError`.
-* On a full Athena release the whole count takes about 20 s, and a group by vocabulary or domain about a minute, since every group is counted in one pass.
+* On a full Athena release the whole count takes about 15 s, and the first group by vocabulary or domain about a minute, since every group is counted in one pass and kept.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.
@@ -185,7 +186,7 @@ for parent in adapter.hierarchical_parents("OMOP:313217"):
 * Matching is case-insensitive, and `%`, `_` and `\` in the term match themselves. Deprecated concepts are left out unless `include_obsoletes_in_results` is set.
 * The adapter's `concept_filter` narrows the vocabularies and domains searched, but not standardness.
 * `categories`, `cursor`, `is_complete` and the `REPLACEMENT_IDENTIFIER` and `COMMENT` properties have no effect. An info message names the ones that were set.
-* Regular expression, SQL and Lucene syntax raise `ValueError`.
+* Regular expression, SQL and Lucene syntax raise `ValueError` when the method is called.
 
 ### Text Annotation (Grounding)
 The whole text is grounded as one term, which requires to set `matches_whole_text=True`. Spans within a longer text are not annotated, and a configuration without `matches_whole_text` (including no configuration) raises `OMOPUnsupportedError`.

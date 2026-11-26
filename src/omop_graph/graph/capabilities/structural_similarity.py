@@ -135,7 +135,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
     def _most_recent(
         self, common: frozenset[int], edge_filter: EdgeFilter, concept_filter: ConceptFilter
     ) -> frozenset[int]:
-        """Drop the concepts of *common* that lie above another concept of it."""
+        """Drop the concepts of common that lie above another concept of it."""
         above = self._closure(common, HierarchyDirection.UP, edge_filter, concept_filter)
         return common - frozenset().union(*above.values())
 

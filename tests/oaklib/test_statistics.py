@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from fixtures.helpers import MAPS_TO, curie
 from fixtures.hierarchy_cdm import CANCER, DISEASE, LUNG_CANCER, SMOKING_RELATED, hierarchy_cdm
 from fixtures.mappings_cdm import mappings_cdm
 from oaklib.datamodels.vocabulary import IS_A, OWL_OBJECT_PROPERTY
@@ -13,12 +14,6 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-
-MAPS_TO = "OMOP_REL:Maps%20to"
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")

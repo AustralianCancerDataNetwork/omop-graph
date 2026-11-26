@@ -6,6 +6,7 @@ import logging
 from collections.abc import Iterator
 
 import pytest
+from fixtures.helpers import curie
 from fixtures.search_cdm import (
     CANCER,
     CONTAINING,
@@ -23,10 +24,6 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import search as search_module
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 def config(**fields) -> SearchConfiguration:

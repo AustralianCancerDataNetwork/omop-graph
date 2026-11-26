@@ -393,7 +393,7 @@ class EmbeddingsMixin(GraphCore):
             embedding, or a text, which is embedded first and so needs a write-capable
             configuration.
         concept_filter : ConceptFilter
-            The concepts that can match. ``limit`` is ignored, use *k*.
+            The concepts that can match. ``limit`` is ignored, use k.
         k : int, optional
             The most matches to return, the default of the store when omitted.
 
@@ -407,7 +407,7 @@ class EmbeddingsMixin(GraphCore):
         EmbeddingModelNotRegisteredError
             If the configured model is not registered in the store.
         EmbeddingWriterRequiredError
-            If *query* is a text and the configuration is read-only.
+            If query is a text and the configuration is read-only.
         ValueError
             If a vector query holds more than one vector.
         """
@@ -438,7 +438,7 @@ class EmbeddingsMixin(GraphCore):
 
     @requires_embeddings
     def concepts_without_embedding(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
-        """Return the concepts among *concept_ids* that have no stored embedding."""
+        """Return the concepts among concept_ids that have no stored embedding."""
         ids = tuple(dict.fromkeys(concept_ids))
         if not ids:
             return ()

@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from fixtures.helpers import curie
 from fixtures.hierarchy_cdm import CANCER, LUNG, LUNG_CANCER, hierarchy_cdm
 from oa_configurator.resolver import ResolvedModel, ResolvedProvider
 from oaklib.interfaces.embedding_provider_interface import CLOSURE_IC_MODEL, CLOSURE_MODEL
@@ -21,10 +22,6 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 STORED = "nomic-embed-text:v1.5"
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 def _configuration(write: bool) -> KnowledgeGraphEmbeddingConfiguration:

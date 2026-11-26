@@ -7,7 +7,7 @@ from sqlalchemy.sql import Executable
 
 def stream[T: Executable](stmt: T, batch_size: int = 10_000) -> T:
     """
-    Return *stmt* set to fetch its rows from a server-side cursor in batches.
+    Return stmt set to fetch its rows from a server-side cursor in batches.
 
     Only dialects with server-side cursors (psycopg, psycopg2) act on it, the others
     ignore it. It costs a named cursor per result, so use it for results that can be

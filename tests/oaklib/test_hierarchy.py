@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from fixtures.helpers import MAPPED_FROM, MAPS_TO, SITE, SUBSUMES, curie
 from fixtures.hierarchy_cdm import (
     CANCER,
     COHORT,
@@ -13,16 +14,12 @@ from fixtures.hierarchy_cdm import (
     LOOP_B,
     LUNG,
     LUNG_CANCER,
-    MAPPED_FROM,
-    MAPS_TO,
     ORPHAN,
     OUTDATED,
     OUTER_ROOT,
-    SITE,
     SMOKING_RELATED,
     SOURCE,
     SOURCE_TWO,
-    SUBSUMES,
     THORAX_ORGAN,
     hierarchy_cdm,
 )
@@ -34,10 +31,6 @@ from omop_graph.extensions.omop_alchemy import (
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from omop_graph.reasoning.concept_handlers import standardise_ids
-
-
-def curie(concept_id: int) -> str:
-    return f"OMOP:{concept_id}"
 
 
 @pytest.fixture(scope="module")

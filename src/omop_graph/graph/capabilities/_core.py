@@ -28,7 +28,7 @@ class GraphCore:
     @classmethod
     def batches[T](cls, ids: Iterable[T]) -> Iterator[tuple[T, ...]]:
         """
-        Split *ids* into tuples of at most ``LOOKUP_BATCH_SIZE`` ids, in order.
+        Split ids into tuples of at most ``LOOKUP_BATCH_SIZE`` ids, in order.
 
         Every query that takes a list of ids runs once for each batch, which keeps the
         number of bind parameters of a statement under the limit of the database. The ids
@@ -39,6 +39,6 @@ class GraphCore:
     def _rows_in_batches(
         self, session: Session, build: Callable[[tuple[int, ...]], Select], ids: Iterable[int]
     ) -> Iterator[Row]:
-        """Yield the rows of ``build(batch)`` for each batch of *ids*, in the order of *ids*."""
+        """Yield the rows of ``build(batch)`` for each batch of ids, in the order of ids."""
         for batch in self.batches(ids):
             yield from session.execute(build(batch))

@@ -57,9 +57,9 @@ if matches:
 
 | Capability | Builds on | Methods |
 | --- | --- | --- |
-| Concepts | core | `concept_view`, `concept_views`, `concepts_by_code` |
+| Concepts | core | `concept_view`, `concept_views`, `concepts_by_code`, `missing_concepts`, `require_concepts` |
 | Predicates | core | `predicate`, `predicates`, `predicate_kind`, `default_relationship_ids` |
-| Edges | predicates | `relationships`, `edges`, `iter_edges` |
+| Edges | predicates | `relationships`, `all_relationships`, `edges`, `edges_between`, `iter_edges` |
 | Enumeration | edges | `entities`, `roots`, `leaves`, `singletons`, `obsolete_concepts` |
 | Hierarchy | edges, concepts | `parents`, `children`, `closure`, `standardise` |
 | Entailment | hierarchy, enumeration | `entailed_relationships`, `all_entailed_relationships`, `gap_filled_relationships`, `entailing_relationship_ids` |
@@ -67,11 +67,11 @@ if matches:
 | Vocabulary | core | `vocabularies`, `domain_concept_ids`, `synonyms`, `translations`, `synonym_languages` |
 | Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_concept_filter` |
 | Structural similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
-| Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, and their `_by` forms |
-| Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `embed_text`, `embed_concepts` |
+| Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, their `_by` forms for relationships and synonyms, and `group_statistics` |
+| Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `concepts_without_embedding`, `embed_text`, `embed_concepts` |
 
 * A scope is a `ConceptFilter` that decides which concepts a method reports or counts, see [Scopes](#scopes).
-* `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the standard concepts it maps to. A stand-in reports the entailed relationships of the standard concepts for itself, and not the mappings.
+* `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the standard concepts it maps to. A stand-in reports the entailed relationships of the standard concepts for itself, and not the mappings. With both subjects and objects, the stand-ins apply to the subjects.
 * `entailed_relationships` entails the relationships that generalise and returns the others as stored, first.
 * `search` ranks the matches of the kinds you give, on concept names and then, if asked, synonyms, with the concepts you name as identifiers first.
 
@@ -82,7 +82,7 @@ A `ConceptFilter` has two roles. `entities`, `roots`, `leaves`, `singletons` and
 * A scope that sets `limit` is refused when the method is called, since a limit truncates a list and cannot decide membership.
 * A scope that sets `concept_ids` restricts what is reported to those ids.
 * A scope only filters what is reported. A walk still passes through the concepts it excludes, and the concepts you ask about are always reported.
-* The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, or to `ALL_CONCEPTS` for lookups.
+* The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, and the counts and lookups to `ALL_CONCEPTS`.
 * `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
 
 #### Unknown concepts
@@ -100,12 +100,12 @@ similarity.ancestor_id, similarity.jaccard, similarity.phenodigm
 
 * The most recent common ancestors come from the ancestor sets alone. Only they and the two concepts have their descendants counted, so the cost does not grow with the number of common ancestors.
 * The information content of a concept is `-log2(descendants / concepts in scope)`. The counts are cached for the life of the graph. Counting the descendants of a broad concept takes seconds the first time, such as 14 s for Clinical finding, and a pair whose only common ancestor is broad takes about as long.
-* `ICSource.CONCEPT_ANCESTOR` counts from the precomputed `concept_ancestor` table instead, which is fast in bulk. It also holds classification and cohort ancestry. For conditions the two sources scored within 0.05 of each other on the pairs tried.
+* `ICSource.CONCEPT_ANCESTOR` counts from the precomputed `concept_ancestor` table instead, which is fast in bulk. It also holds classification and cohort ancestry, so its scores can differ from those of the strict hierarchy.
 * The strict hierarchy has no ancestry for RxNorm ingredients, whose ATC classes are only in `concept_ancestor`, so two drugs have no common ancestor and score zero.
 
 #### Statistics
 
-`concept_counts` counts concepts by vocabulary, domain and deprecation, `relationship_counts` the active relationships by id, and `synonym_counts` the synonyms. The database counts them, and a scope that selects every concept counts the relationship table without joining the concepts. On a full Athena release the relationship count takes about 20 s, and counting by vocabulary or domain takes about a minute for every group together.
+`concept_counts` counts concepts by vocabulary, domain and deprecation, `relationship_counts` the active relationships by id, and `synonym_counts` the synonyms. `relationship_counts_by` and `synonym_counts_by` count them by vocabulary or domain, and `group_statistics` joins both per group and keeps the result for the life of the graph. The database counts them, and a scope that selects every concept counts the relationship table without joining the concepts. On a full Athena release the relationship count and the synonym count take about 6 s each, and counting by vocabulary or domain takes about a minute for every group together.
 
 ---
 
@@ -116,7 +116,7 @@ The graph has two notions of ancestry, and they differ:
 | | Source | Holds |
 |---|---|---|
 | `parents`, `children`, and the ancestor checks of [grounding](../reasoning/grounding.md) | OMOP's `concept_ancestor` table | All ancestry OMOP precomputes: `Is a`, but also classification such as ATC classes, SPL labels and cohorts. Only standard and classification concepts. |
-| `closure`, `entailed_relationships` and the [OAK adapter](../oaklib/interface.md) | The active `Is a` edges | Strict `Is a` ancestors and descendants, including concepts that are not standard. |
+| `closure`, `entailed_relationships` and the [OAK adapter](../oaklib/interface.md) | The active `Is a` edges | Strict `Is a` ancestors and descendants, including concepts that are not standard. The hierarchy is assumed acyclic, as it is in the OMOP vocabularies, and `closure` ends on a cycle without repeating a concept. |
 
 Grounding keeps `concept_ancestor` because it needs the distance to a parent, `min_levels_of_separation`, which `closure` does not return. For example Metformin has no `Is a` ancestors but six ancestors in `concept_ancestor`, ATC classes such as "Biguanides". `closure` walks one query for a whole batch of concepts, and takes an `EdgeFilter` to follow other relationships:
 
@@ -134,7 +134,7 @@ A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg
 ### Embedding Configuration
 
 To enable semantic similarity and RAG-based retrieval, pass a `KnowledgeGraphEmbeddingConfiguration` when initialising the graph.
-This requires the optional `omop-emb` package — see the [installation guide](../usage/installation.md#embedding-rag).
+This requires the optional `omop-emb` package, see the [installation guide](../usage/installation.md#embedding-rag).
 
 !!! info "omop-emb documentation"
     `omop-emb` manages all embedding storage, backends, and retrieval. Full documentation, including backend setup, CLI reference, FAISS sidecar, and configuration, is available at [australiancancerdatanetwork.github.io/omop-emb](https://australiancancerdatanetwork.github.io/omop-emb/).
@@ -211,8 +211,8 @@ Vector search returns standard concepts when the scope requires them. It cannot 
 #### Fallback embedding calculation
 
 When some concepts in the OMOP DB have not been pre-indexed, similarity scoring will silently skip them.
-Setting `compute_missing_embeddings=True` instructs the graph to compute and persist embeddings
-for any missing concepts on-the-fly during a similarity call.
+Setting `compute_missing_embeddings=True` instructs grounding to compute and persist the embeddings
+of any missing concepts before it scores them. `embedding_similarity` never writes, and raises `MissingEmbeddingError` for a concept without a vector. `embed_concepts` is the explicit write.
 
 !!! warning
     `compute_missing_embeddings=True` requires `write=True`. This is validated at construction and raises `ValueError` immediately if `write` is `False`.

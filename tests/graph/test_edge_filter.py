@@ -15,7 +15,6 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.queries import q_edges, q_relationships
 
 SOURCE = 900001
-IDENTITY_MAPPING = PredicateSubkind(PredicateKind.IDENTITY, "mapping")
 
 
 def test_kinds_and_subkinds_must_be_the_typed_values() -> None:
@@ -28,7 +27,12 @@ def test_kinds_and_subkinds_must_be_the_typed_values() -> None:
 @pytest.mark.parametrize(
     ("edge_filter", "expected"),
     [
-        (EdgeFilter(predicate_subkinds=frozenset({IDENTITY_MAPPING})), 1),
+        (
+            EdgeFilter(
+                predicate_subkinds=frozenset({PredicateSubkind(PredicateKind.IDENTITY, "mapping")})
+            ),
+            1,
+        ),
         (EdgeFilter(predicate_ids=frozenset({"maps to"})), 1),
         (EdgeFilter(predicate_ids=frozenset({"mapped from"})), 0),
         (

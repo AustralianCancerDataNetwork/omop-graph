@@ -133,7 +133,7 @@ def create_extension_tables(
     *,
     resolved: ResolvedCDMDatabase,
 ) -> None:
-    """Create the extension tables as they can physically exist on *resolved*.
+    """Create the extension tables as they can physically exist on resolved.
 
     Goes through ``orm_loader``'s ``create_tables``: on a split deployment the
     foreign key to the vocabulary is left out, since no dialect can express a
