@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import SUBSUMES_FILTER
 
 
 @dataclass
@@ -21,42 +22,38 @@ def descendants_exhaustive_subsumes(
     exclude_roots: set[int] | None = None,
 ) -> set[int]:
     """
-    Exhaustive descendant closure using ONLY 'Subsumes'.
+    Find every descendant of a concept by following only the ``Subsumes`` relationship.
 
-    Currently disabled: always raises ``NotImplementedError``. The predicate
-    search this relied on changed and the body below was never updated to
-    match (it also still calls ``kg.iter_edges(predicate=...)``, a parameter
-    that no longer exists; see ``predicate_ids``/``predicate_kinds``).
+    One query reads the edges of a whole level, so the number of queries is the depth
+    of the hierarchy below the root.
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The graph to read.
+    root_id : int
+        The concept to start from. It is not one of its own descendants.
+    exclude_roots : set[int], optional
+        Concepts that are included as descendants but whose own descendants are not followed.
+
+    Returns
+    -------
+    set[int]
+        The descendants of the root, empty if it has none.
     """
-
-    if exclude_roots is None:
-        exclude_roots = set()
-
+    excluded = exclude_roots or set()
     descendants: set[int] = set()
-    frontier: list[int] = [root_id]
-
-    raise NotImplementedError(
-        "predicate search has changed. Needs to change here too. Subsumes no longer valid."
-    )
-
-    with kg.session_factory() as session:
-        while frontier:
-            current = frontier.pop()
-            for e in kg.iter_edges(
-                session=session,
-                concept_ids=current,
-                direction="out",
-                predicate="Subsumes",
-            ):
-                child = e.object_id
-                if child == current or child in descendants:
-                    continue
-                descendants.add(child)
-                if child in exclude_roots:
-                    continue
-                frontier.append(child)
-
-    return descendants
+    frontier = {root_id}
+    while frontier:
+        children = {
+            child
+            for subject, _, child in kg.relationships(frontier, edge_filter=SUBSUMES_FILTER)
+            if child != subject
+        }
+        found = children - descendants
+        descendants |= found
+        frontier = found - excluded
+    return descendants - {root_id}
 
 
 def find_common_parents(

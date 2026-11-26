@@ -1,4 +1,4 @@
-"""Common parents of seeds that are standardised through ``Maps to``."""
+"""Common parents of seeds, and the descendants of a parent followed through ``Subsumes`` alone."""
 
 from __future__ import annotations
 
@@ -14,13 +14,25 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
+from fixtures.hierarchy_cdm import (
+    CANCER,
+    COHORT,
+    DISEASE,
+    LUNG_CANCER,
+    SMOKING_RELATED,
+    SOURCE,
+    hierarchy_cdm,
+)
 
 from omop_graph.extensions.relationship_classification import (
     PredicateKind,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.phenotypes import phenotype_simplifier
-from omop_graph.reasoning.phenotypes.phenotype_simplifier import find_common_parents
+from omop_graph.reasoning.phenotypes.phenotype_simplifier import (
+    descendants_exhaustive_subsumes,
+    find_common_parents,
+)
 
 (
     SEED_ONE,
@@ -114,3 +126,58 @@ def test_a_parent_with_two_standard_concepts_cannot_be_standardised(kg, below) -
 def test_a_seed_with_two_standard_concepts_cannot_be_standardised(kg, below) -> None:
     with pytest.raises(ValueError, match="several standard concepts"):
         find_common_parents([AMBIGUOUS, SEED_ONE], kg)
+
+
+@pytest.fixture(scope="module")
+def hierarchy_kg() -> Iterator[KnowledgeGraph]:
+    with hierarchy_cdm() as sessions:
+        yield KnowledgeGraph(sessions)
+
+
+def test_the_descendants_follow_subsumes_and_no_other_relationship(hierarchy_kg) -> None:
+    assert descendants_exhaustive_subsumes(hierarchy_kg, DISEASE) == {CANCER, LUNG_CANCER}
+    assert SMOKING_RELATED not in descendants_exhaustive_subsumes(hierarchy_kg, DISEASE)
+
+
+def test_an_excluded_root_is_found_but_not_followed(hierarchy_kg) -> None:
+    assert descendants_exhaustive_subsumes(hierarchy_kg, DISEASE, {CANCER}) == {CANCER}
+    assert descendants_exhaustive_subsumes(hierarchy_kg, DISEASE, {LUNG_CANCER}) == {
+        CANCER,
+        LUNG_CANCER,
+    }
+
+
+def test_a_concept_with_nothing_below_it_has_no_descendants(hierarchy_kg) -> None:
+    assert descendants_exhaustive_subsumes(hierarchy_kg, LUNG_CANCER) == set()
+    assert descendants_exhaustive_subsumes(hierarchy_kg, 999_999) == set()
+
+
+def test_one_query_reads_each_level(hierarchy_kg, monkeypatch) -> None:
+    reads: list[set[int]] = []
+    relationships = hierarchy_kg.relationships
+
+    def spy(subjects, **kwargs):
+        reads.append(set(subjects))
+        return relationships(subjects, **kwargs)
+
+    monkeypatch.setattr(hierarchy_kg, "relationships", spy)
+
+    descendants_exhaustive_subsumes(hierarchy_kg, DISEASE)
+
+    assert reads == [{DISEASE}, {CANCER}, {LUNG_CANCER}]
+
+
+def test_a_parent_is_counted_by_the_seeds_below_it_and_the_others_it_would_add(
+    hierarchy_kg,
+) -> None:
+    parents = find_common_parents([LUNG_CANCER, SOURCE], hierarchy_kg, min_coverage=1)
+
+    assert set(parents) == {DISEASE, COHORT}
+    assert parents[DISEASE].found == {LUNG_CANCER}
+    assert parents[DISEASE].descendants == {CANCER, LUNG_CANCER}
+    assert parents[DISEASE].coverage == 1
+    assert parents[DISEASE].pollution == 1
+    assert parents[DISEASE].purity == 0.5
+    assert parents[DISEASE].completeness == 0.5
+    assert parents[COHORT].pollution == 0
+    assert parents[COHORT].purity == 1.0

@@ -33,6 +33,9 @@ from ...extensions.relationship_classification import (
 IS_A_RELATIONSHIP_ID = "Is a"
 """The relationship id of the subclass edge. Its transitive closure is the strict hierarchy."""
 
+SUBSUMES_RELATIONSHIP_ID = "Subsumes"
+"""The relationship id from a concept to each concept that is a direct kind of it."""
+
 REPLACED_BY_RELATIONSHIP_ID = "Concept replaced by"
 """The relationship id from a deprecated concept to the concept that replaces it."""
 
@@ -93,6 +96,9 @@ concepts and carry no meaning of their own. Name ``PredicateKind.METADATA`` to r
 
 IS_A_FILTER = EdgeFilter(predicate_ids=frozenset({IS_A_RELATIONSHIP_ID}))
 """Selects the active ``Is a`` edges."""
+
+SUBSUMES_FILTER = EdgeFilter(predicate_ids=frozenset({SUBSUMES_RELATIONSHIP_ID}))
+"""Selects the active ``Subsumes`` edges."""
 
 IDENTITY_FILTER = EdgeFilter(predicate_kinds=frozenset({PredicateKind.IDENTITY}))
 """Selects the active identity edges, such as ``Maps to``."""
