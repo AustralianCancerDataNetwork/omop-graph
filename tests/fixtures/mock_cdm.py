@@ -100,12 +100,7 @@ def _create_mock_cdm_tables(engine: sa.Engine) -> None:
         ),
     ]
 )
-def mock_cdm_kg(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> KnowledgeGraph:
-    # Grounding tests here focus on SQL + resolver + path pipeline.
-    monkeypatch.setattr(
-        "omop_graph.reasoning.grounding.try_get_embedding_writer_interface",
-        lambda _kg: None,
-    )
+def mock_cdm_kg(request: pytest.FixtureRequest) -> KnowledgeGraph:
     fixture_name = "mock_cdm_engine_sqlite" if request.param == "sqlite" else "mock_cdm_engine"
     engine = request.getfixturevalue(fixture_name)
     return KnowledgeGraph(sessionmaker(bind=engine))

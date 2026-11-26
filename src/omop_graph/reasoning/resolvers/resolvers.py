@@ -19,13 +19,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.emb import (
+from omop_graph.graph.capabilities.embeddings import (
     HAS_OMOP_EMB,
+    EmbeddingModelNotRegisteredError,
     MissingExtensionError,
-    get_neareast_concepts,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
+from omop_graph.graph.scope import ALL_CONCEPTS
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -245,41 +246,27 @@ class EmbeddingResolver(CandidateResolver):
         if not HAS_OMOP_EMB:
             raise MissingExtensionError("EmbeddingResolver")
 
-        from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
-
-        concept_filter: EmbeddingConceptFilter | None = (
-            EmbeddingConceptFilter(
-                concept_ids=constraints.concept_ids,
-                domains=constraints.domains,
-                vocabularies=constraints.vocabularies,
-                require_standard=constraints.require_standard,
-            )
-            if isinstance(constraints, ConceptFilter)
-            else None
-        )
-
         if query_embedding is None:
             logger.warning(
                 f"No text embedding provided for {self.__class__.__name__}. Returning no matches."
             )
             return ()
-
-        matches = get_neareast_concepts(
-            kg=kg,
-            query_embedding=query_embedding,
-            concept_filter=concept_filter,
-            k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
+        assert query_embedding.shape[0] == 1, (
+            "query_embedding should have shape (1, embedding_dim) for a single query."
         )
-        if matches is None:
+        if not kg.has_embeddings:
+            logger.info("The KG has no embedding store. Returning no matches.")
             return ()
-        if query_embedding is not None:
-            assert query_embedding.shape[0] == 1, (
-                "query_embedding should have shape (1, embedding_dim) for a single query."
+
+        try:
+            matches = kg.nearest_concepts(
+                query_embedding,
+                scope=constraints if isinstance(constraints, ConceptFilter) else ALL_CONCEPTS,
+                k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
             )
-        assert len(matches) == 1, (
-            "Expected get_neareast_concepts to return a single dictionary given the query_embedding shape (1, embedding_dim)."
-        )
-        matches = matches[0]  # Unpack the single dictionary from the tuple
+        except EmbeddingModelNotRegisteredError as error:
+            logger.info(error)
+            return ()
         concept_views = kg.concept_views(
             concept_ids=tuple(m.concept_id for m in matches), sort=sort
         )

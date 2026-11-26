@@ -16,17 +16,15 @@ the full grounding pipeline:
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.emb import (
-    HAS_OMOP_EMB,
-    semantic_similarity,
-    try_get_embedding_writer_interface,
-)
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.capabilities.embeddings import EmbeddingModelNotRegisteredError
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
@@ -36,6 +34,9 @@ from omop_graph.reasoning.resolvers import (
     EmbeddingResolver,
     ResolverPipeline,
 )
+
+if TYPE_CHECKING:
+    from omop_emb import NearestConceptMatch
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,58 @@ def _query_text_with_context(query: str, context: str | None) -> str:
     return f"{query}\n\n{context}"
 
 
+def _embedding_matches(
+    kg: KnowledgeGraph,
+    standard_concepts: Sequence[StandardConcept],
+    query_embedding: np.ndarray,
+) -> tuple[tuple[NearestConceptMatch, ...], ...] | None:
+    """
+    Score standard concepts against a query embedding, as the matches of a single query.
+
+    Concepts without a stored embedding are embedded first when the KG computes missing
+    embeddings, and are otherwise left unscored.
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The knowledge graph holding the embedding store.
+    standard_concepts : Sequence[StandardConcept]
+        The concepts to score.
+    query_embedding : np.ndarray
+        The query vector, of shape ``(1, D)``.
+
+    Returns
+    -------
+    tuple[tuple[NearestConceptMatch, ...], ...] | None
+        The matches of the one query, or None when the KG has no embedding store, its model
+        is not registered or nothing matches.
+    """
+    if not kg.has_embeddings:
+        logger.info("The KG has no embedding store. Skipping similarity calculation.")
+        return None
+    concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
+    missing = kg.concepts_without_embedding(concept_ids)
+    if missing and kg.compute_missing_embeddings:
+        logger.debug(
+            f"Concepts missing embeddings: {missing}. Computing missing embeddings on-the-fly."
+        )
+        kg.embed_concepts(missing)
+    elif missing:
+        logger.info(
+            f"Concepts missing embeddings: {missing}.\n"
+            "compute_missing_embeddings is disabled; these concepts will be skipped in similarity scoring.\n"
+            "Expect missing embedding scores for these concepts in the results."
+        )
+    try:
+        matches = kg.nearest_concepts(
+            query_embedding, scope=ConceptFilter(concept_ids=concept_ids), k=len(concept_ids)
+        )
+    except EmbeddingModelNotRegisteredError as error:
+        logger.info(error)
+        return None
+    return (matches,) if matches else None
+
+
 def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
@@ -159,25 +212,17 @@ def ground_term(
     if search_constraints is not None:
         kg.check_search_constraints(search_constraints)
 
-    # Only do on demand embedding calculation if available and needed (having a EmbeddingResolver).
-    # Falls back to None to disable embedding-based features if not available or not required.
-    require_embedding = HAS_OMOP_EMB and any(
+    # Only embed the query on demand when an EmbeddingResolver needs it and the KG can embed text.
+    # Otherwise embedding-based features stay disabled for this call.
+    if query_embedding is None and any(
         isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers
-    )
-
-    if query_embedding is None and require_embedding:
-        embedding_writer = try_get_embedding_writer_interface(kg)
-        if embedding_writer is not None:
-            from omop_emb import EmbeddingRole
-
-            query_embedding = embedding_writer.embed_texts(
-                texts=(_query_text_with_context(query, context),),
-                role=EmbeddingRole.QUERY,
-            )
+    ):
+        if kg.can_embed_text:
+            query_embedding = kg.embed_text(_query_text_with_context(query, context))
         else:
             logger.info(
-                f"No embedding_writer available to embed query '{query}' on demand "
-                "(the KG's embedding configuration is read-only, or none was provided at all). "
+                f"The KG cannot embed the query '{query}' on demand "
+                "(its embedding configuration is read-only, or none was provided at all). "
                 "Embedding-based features will be disabled for this grounding operation."
             )
 
@@ -237,7 +282,7 @@ def ground_term(
             raise RuntimeError(
                 "Query embedding cannot be None if the EmbeddingResolver is used and returned matches."
             )
-        nearest_concept_matches_for_standard_embedding_concepts = semantic_similarity(
+        nearest_concept_matches_for_standard_embedding_concepts = _embedding_matches(
             kg=kg,
             standard_concepts=matched_standard_concepts_for_embedding,
             query_embedding=query_embedding,
