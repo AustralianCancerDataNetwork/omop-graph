@@ -267,34 +267,28 @@ def find_shortest_paths(
             if d >= max_depth:
                 continue
 
-            with kg.session_factory() as session:
-                for e in kg.iter_edges(
-                    session=session,
-                    concept_ids=cur,
-                    direction="out",
-                    edge_filter=edge_filter,
-                ):
-                    nxt = e.object_id
-                    nd = d + 1
-                    if nd > max_depth:
-                        continue
+            for e in kg.edges(cur, "out", edge_filter):
+                nxt = e.object_id
+                nd = d + 1
+                if nd > max_depth:
+                    continue
 
-                    expanded.append(e)
+                expanded.append(e)
 
-                    if nxt not in depth_fwd:
-                        depth_fwd[nxt] = nd
-                        q_fwd.append(nxt)
+                if nxt not in depth_fwd:
+                    depth_fwd[nxt] = nd
+                    q_fwd.append(nxt)
 
-                    if depth_fwd[nxt] == nd:
-                        parents_fwd[nxt].append((cur, e.predicate_id))
+                if depth_fwd[nxt] == nd:
+                    parents_fwd[nxt].append((cur, e.predicate_id))
 
-                    if nxt in depth_bwd:
-                        total = nd + depth_bwd[nxt]
-                        if best_total_depth is None or total < best_total_depth:
-                            best_total_depth = total
-                            meeting_nodes = {nxt}
-                        elif total == best_total_depth:
-                            meeting_nodes.add(nxt)
+                if nxt in depth_bwd:
+                    total = nd + depth_bwd[nxt]
+                    if best_total_depth is None or total < best_total_depth:
+                        best_total_depth = total
+                        meeting_nodes = {nxt}
+                    elif total == best_total_depth:
+                        meeting_nodes.add(nxt)
 
         else:
             cur = q_bwd.popleft()
@@ -303,33 +297,27 @@ def find_shortest_paths(
             if d >= max_depth:
                 continue
 
-            with kg.session_factory() as session:
-                for e in kg.iter_edges(
-                    session=session,
-                    concept_ids=cur,
-                    direction="in",
-                    edge_filter=edge_filter,
-                ):
-                    expanded.append(e)
-                    prev = e.subject_id
-                    nd = d + 1
-                    if nd > max_depth:
-                        continue
+            for e in kg.edges(cur, "in", edge_filter):
+                expanded.append(e)
+                prev = e.subject_id
+                nd = d + 1
+                if nd > max_depth:
+                    continue
 
-                    if prev not in depth_bwd:
-                        depth_bwd[prev] = nd
-                        q_bwd.append(prev)
+                if prev not in depth_bwd:
+                    depth_bwd[prev] = nd
+                    q_bwd.append(prev)
 
-                    if depth_bwd[prev] == nd:
-                        parents_bwd[prev].append((cur, e.predicate_id))
+                if depth_bwd[prev] == nd:
+                    parents_bwd[prev].append((cur, e.predicate_id))
 
-                    if prev in depth_fwd:
-                        total = depth_fwd[prev] + nd
-                        if best_total_depth is None or total < best_total_depth:
-                            best_total_depth = total
-                            meeting_nodes = {prev}
-                        elif total == best_total_depth:
-                            meeting_nodes.add(prev)
+                if prev in depth_fwd:
+                    total = depth_fwd[prev] + nd
+                    if best_total_depth is None or total < best_total_depth:
+                        best_total_depth = total
+                        meeting_nodes = {prev}
+                    elif total == best_total_depth:
+                        meeting_nodes.add(prev)
 
         if traced:
             trace_steps.append(TraceStep(depth=d, node=cur, expanded_edges=tuple(expanded)))
@@ -462,45 +450,39 @@ def find_shortest_paths_batch(
             current_parents = parents_bwd
 
         # 2. Batch Query: Get all edges for the current layer in ONE shot
-        with kg.session_factory() as session:
-            batch_edges = kg.iter_edges(
-                session=session,
-                concept_ids=current_layer_nodes,
-                direction=direction,
-                edge_filter=edge_filter,
-            )
+        batch_edges = kg.edges(current_layer_nodes, direction, edge_filter)
 
-            next_frontier = set()
+        next_frontier = set()
 
-            # 3. Process edges in memory
-            for e in batch_edges:
-                # Identify Start (u) and End (v) relative to traversal direction
-                u = e.subject_id if expand_forward else e.object_id
-                v = e.object_id if expand_forward else e.subject_id
+        # 3. Process edges in memory
+        for e in batch_edges:
+            # Identify Start (u) and End (v) relative to traversal direction
+            u = e.subject_id if expand_forward else e.object_id
+            v = e.object_id if expand_forward else e.subject_id
 
-                d = current_depth_map[u]
-                nd = d + 1
+            d = current_depth_map[u]
+            nd = d + 1
 
-                if nd > max_depth:
-                    continue
+            if nd > max_depth:
+                continue
 
-                # Update visited/parents
-                if v not in current_depth_map:
-                    current_depth_map[v] = nd
-                    next_frontier.add(v)
-                    current_parents[v].append((u, e.predicate_id))
-                elif current_depth_map[v] == nd:
-                    # Found another path to the same node at the same optimal depth
-                    current_parents[v].append((u, e.predicate_id))
+            # Update visited/parents
+            if v not in current_depth_map:
+                current_depth_map[v] = nd
+                next_frontier.add(v)
+                current_parents[v].append((u, e.predicate_id))
+            elif current_depth_map[v] == nd:
+                # Found another path to the same node at the same optimal depth
+                current_parents[v].append((u, e.predicate_id))
 
-                # Check for collision (Did we meet the other side?)
-                if v in other_depth_map:
-                    total = nd + other_depth_map[v]
-                    if best_total_depth is None or total < best_total_depth:
-                        best_total_depth = total
-                        meeting_nodes = {v}
-                    elif total == best_total_depth:
-                        meeting_nodes.add(v)
+            # Check for collision (Did we meet the other side?)
+            if v in other_depth_map:
+                total = nd + other_depth_map[v]
+                if best_total_depth is None or total < best_total_depth:
+                    best_total_depth = total
+                    meeting_nodes = {v}
+                elif total == best_total_depth:
+                    meeting_nodes.add(v)
 
         # 4. Stop Condition check
         if best_total_depth is not None:
