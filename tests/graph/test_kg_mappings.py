@@ -25,6 +25,7 @@ from fixtures.mappings_cdm import (
 )
 
 from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
+from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.edges import MappingStrength
 from omop_graph.graph.kg import KnowledgeGraph
 
@@ -80,11 +81,14 @@ def test_a_non_standard_concept_maps_to_the_standard_concepts_by_exact_mappings(
 
 
 def test_a_standard_concept_and_an_unmapped_one_map_to_nothing(kg) -> None:
-    assert kg.standard_mappings([STANDARD, INGREDIENT, 999999]) == {
-        STANDARD: (),
-        INGREDIENT: (),
-        999999: (),
-    }
+    assert kg.standard_mappings([STANDARD, INGREDIENT]) == {STANDARD: (), INGREDIENT: ()}
+
+
+def test_mappings_are_not_worked_out_for_a_concept_that_does_not_exist(kg) -> None:
+    with pytest.raises(UnknownConceptError) as raised:
+        kg.standard_mappings([STANDARD, 999999, 999998])
+
+    assert raised.value.concept_ids == (999999, 999998)
 
 
 def test_the_strength_chooses_which_mappings_are_followed(kg) -> None:

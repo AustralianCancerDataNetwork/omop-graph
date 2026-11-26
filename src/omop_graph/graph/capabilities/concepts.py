@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from omop_alchemy.cdm.query import ConceptFilter
+from sqlalchemy.exc import NoResultFound
+
 # Local Application Imports
 from ..nodes import (
     ConceptView,
@@ -12,8 +15,24 @@ from ..queries import (
     q_concept_view,
     q_concept_views,
     q_concepts_by_code,
+    q_entities,
 )
 from ._core import GraphCore
+
+
+class UnknownConceptError(KeyError):
+    """
+    Raised when a method that works out a property of concepts is given concepts that do not exist.
+
+    Parameters
+    ----------
+    concept_ids : Iterable[int]
+        Every requested concept that does not exist.
+    """
+
+    def __init__(self, concept_ids: Iterable[int]):
+        self.concept_ids = tuple(concept_ids)
+        super().__init__(f"These concepts do not exist: {list(self.concept_ids)}")
 
 
 class ConceptsMixin(GraphCore):
@@ -34,8 +53,42 @@ class ConceptsMixin(GraphCore):
             The immutable view of the concept.
         """
         with self.session_factory() as session:
-            row = session.execute(q_concept_view(concept_id)).one()
+            try:
+                row = session.execute(q_concept_view(concept_id)).one()
+            except NoResultFound:
+                raise UnknownConceptError([concept_id]) from None
         return ConceptView.from_row(row)
+
+    def missing_concepts(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
+        """
+        Find the concepts among *concept_ids* that do not exist.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The ids with no concept, in the order given and each once.
+        """
+        ids = tuple(dict.fromkeys(concept_ids))
+        with self.session_factory() as session:
+            found = {
+                row[0]
+                for row in self._rows_in_batches(
+                    session, lambda batch: q_entities(ConceptFilter(concept_ids=batch)), ids
+                )
+            }
+        return tuple(concept_id for concept_id in ids if concept_id not in found)
+
+    def require_concepts(self, concept_ids: Iterable[int]) -> None:
+        """
+        Check that every one of *concept_ids* exists.
+
+        Raises
+        ------
+        UnknownConceptError
+            Naming every concept that does not exist.
+        """
+        if missing := self.missing_concepts(concept_ids):
+            raise UnknownConceptError(missing)
 
     def concept_views(
         self, concept_ids: Iterable[int], sort: bool = True

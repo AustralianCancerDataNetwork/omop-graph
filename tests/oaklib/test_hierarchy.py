@@ -251,9 +251,9 @@ def test_descendants_and_their_count(adapter) -> None:
     }
 
 
-def test_cycles_end_and_unknown_starts_are_kept_only_when_reflexive(adapter) -> None:
+def test_cycles_end_and_unknown_starts_are_left_out(adapter) -> None:
     assert set(adapter.ancestors(curie(LOOP_A), reflexive=False)) == {curie(LOOP_B)}
-    assert set(adapter.ancestors("OMOP:999999")) == {"OMOP:999999"}
+    assert list(adapter.ancestors("OMOP:999999")) == []
     assert list(adapter.ancestors("OMOP:999999", reflexive=False)) == []
 
 
@@ -330,12 +330,11 @@ def standardising(adapter) -> OMOPAlchemyImplementation:
 
 
 def test_a_concept_stands_for_its_standard_concepts(adapter) -> None:
-    assert adapter.kg.standardise([LUNG_CANCER, SOURCE, SOURCE_TWO, ORPHAN, 999999]) == {
+    assert adapter.kg.standardise([LUNG_CANCER, SOURCE, SOURCE_TWO, ORPHAN]) == {
         LUNG_CANCER: (LUNG_CANCER,),
         SOURCE: (LUNG_CANCER,),
         SOURCE_TWO: (LUNG_CANCER, LUNG),
         ORPHAN: (),
-        999999: (),
     }
 
 

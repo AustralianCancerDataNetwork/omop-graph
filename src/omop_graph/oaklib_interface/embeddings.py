@@ -95,7 +95,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
             return super().nearest_entities(curie, limit, model, candidates)
         if not self._is_store_model(model):
             raise OMOPUnsupportedError("EmbeddingProviderInterface.nearest_entities")
-        concept_id = self.codec.resolve_concept(curie)
+        concept_id = self._resolve_concepts([curie]).get(curie)
         return iter(()) if concept_id is None else self._nearest(concept_id, limit, concept_id)
 
     def nearest_entities_to_vector(

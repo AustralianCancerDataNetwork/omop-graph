@@ -85,6 +85,10 @@ A `ConceptFilter` has two roles. `entities`, `roots`, `leaves`, `singletons` and
 * The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, or to `ALL_CONCEPTS` for lookups.
 * `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
 
+#### Unknown concepts
+
+The methods that work out a property of the concepts you give them, `closure`, `standardise`, `standard_mappings`, `information_content`, the similarity methods and `concept_view`, raise `UnknownConceptError` when a concept does not exist. The error lists every missing id, and `missing_concepts` finds them beforehand. The queries that select rows by id, `relationships`, `edges` and `mappings`, return no rows for an id that does not exist. The oaklib adapter checks its CURIEs once, leaves out those that name no concept and logs them.
+
 #### Structural similarity
 
 Structural similarity compares two concepts by their place in the strict `Is a` hierarchy, and counts each concept as its own ancestor and descendant. Embedding similarity, by contrast, compares their stored vectors, see [Embeddings](#embedding-configuration).

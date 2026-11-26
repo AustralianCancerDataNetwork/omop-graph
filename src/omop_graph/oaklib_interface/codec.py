@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from enum import StrEnum
 from functools import cached_property
+from typing import ClassVar
 from urllib.parse import quote, unquote
 
 from oaklib.datamodels.vocabulary import IS_A
@@ -164,11 +165,30 @@ class OMOPCodec:
 
         Raises
         ------
-        AssertionError
+        TypeError
             If ``concept_id`` is not an integer.
         """
-        assert isinstance(concept_id, int), "Expected concept_id to be an integer"
+        if not isinstance(concept_id, int) or isinstance(concept_id, bool):
+            raise TypeError(f"Expected concept_id to be an integer, got {concept_id!r}")
         return ":".join((OMOP_PREFIX, str(concept_id)))
+
+    MAX_CONCEPT_ID: ClassVar[int] = 2**31 - 1
+    """The largest concept id the OMOP ``integer`` column holds."""
+
+    @classmethod
+    def _is_concept_id(cls, local: str) -> bool:
+        """
+        Whether *local* is the canonical decimal form of a concept id.
+
+        Leading zeros are not canonical, so each concept has one ``OMOP`` spelling, and a
+        number beyond the column is no concept, as the database would reject it.
+        """
+        return (
+            local.isascii()
+            and local.isdigit()
+            and local == str(int(local[:12]))
+            and int(local) <= cls.MAX_CONCEPT_ID
+        )
 
     @staticmethod
     def is_omop_prefix(prefix: str) -> bool:
@@ -216,13 +236,13 @@ class OMOPCodec:
         -------
         tuple[int, ...]
             The concept ids, empty when the CURIE names no concept. An ``OMOP`` CURIE is
-            not checked against the concept table.
+            only parsed, so the adapter checks it against the concept table.
         """
         prefix, separator, local = curie.partition(":")
         if not separator or self.is_predicate_curie(curie):
             return ()
         if self.is_omop_prefix(prefix):
-            return (int(local),) if local.isascii() and local.isdigit() else ()
+            return (int(local),) if self._is_concept_id(local) else ()
         matches = self.kg.concepts_by_code(self.vocabulary_id(prefix), unquote(local))
         candidates = [concept_id for concept_id, is_valid in matches.items() if is_valid]
         return tuple(candidates or matches)
@@ -243,7 +263,7 @@ class OMOPCodec:
         -------
         int | None
             The OMOP concept id, or None when the CURIE names no concept or is ambiguous.
-            An ``OMOP`` CURIE is not checked against the concept table.
+            An ``OMOP`` CURIE is only parsed, so the adapter checks it against the concept table.
         """
         candidates = self.concept_candidates(curie)
         if not candidates:

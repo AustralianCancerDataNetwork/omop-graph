@@ -140,18 +140,47 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """The concepts the adapter exposes: those its ``concept_filter`` selects, active ones only."""
         return self._scope(filter_obsoletes=True)
 
-    def _resolve_concepts(self, curies: Iterable[CURIE]) -> dict[CURIE, int]:
-        """Concept ids of the CURIEs that name a concept in the graph, others left out."""
-        curies = list(curies)
+    def _resolve_concepts(
+        self, curies: Iterable[CURIE], *, verify: bool = True
+    ) -> dict[CURIE, int]:
+        """
+        Concept ids of the CURIEs that name a concept, each CURIE once, others left out.
+
+        A CURIE that names no concept, or an ``OMOP`` CURIE of a concept that does not
+        exist, is left out and one info message names them. Verifying costs one query.
+        A caller that reads the concepts anyway passes ``verify=False`` and takes the
+        absent ones from what it reads.
+        """
+        curies = list(dict.fromkeys(curies))
         resolved = {
             curie: concept_id
             for curie in curies
             if (concept_id := self.codec.resolve_concept(curie)) is not None
         }
-        if len(resolved) < len(set(curies)):
-            left_out = [curie for curie in dict.fromkeys(curies) if curie not in resolved]
-            logger.debug("%d CURIEs name no concept, such as %s.", len(left_out), left_out[:3])
+        if verify and resolved:
+            missing = set(self.kg.missing_concepts(resolved.values()))
+            resolved = {
+                curie: concept_id
+                for curie, concept_id in resolved.items()
+                if concept_id not in missing
+            }
+        if len(resolved) < len(curies):
+            left_out = [curie for curie in curies if curie not in resolved]
+            logger.info("%d CURIEs name no concept, such as %s.", len(left_out), left_out[:3])
         return resolved
+
+    def _resolve_pair(self, first: CURIE, second: CURIE) -> tuple[int, int] | None:
+        """The concept ids of two CURIEs in order, which may be one concept, or None if either is missing."""
+        ids = self._resolve_concepts([first, second])
+        return (ids[first], ids[second]) if first in ids and second in ids else None
+
+    @staticmethod
+    def _spellings(resolved: dict[CURIE, int]) -> dict[int, list[CURIE]]:
+        """Every CURIE that was asked for, by the concept it names."""
+        spellings: dict[int, list[CURIE]] = defaultdict(list)
+        for curie, concept_id in resolved.items():
+            spellings[concept_id].append(curie)
+        return spellings
 
     def _concept_ids(self, curies: Iterable[CURIE] | None) -> tuple[int, ...] | None:
         """
@@ -170,7 +199,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def _concept_views(self, curies: Iterable[CURIE]) -> dict[CURIE, ConceptView]:
         """The concept views of the CURIEs that name an existing concept, others left out."""
-        ids = self._resolve_concepts(curies)
+        ids = self._resolve_concepts(curies, verify=False)
         views = {
             view.concept_id: view for view in self.kg.concept_views(tuple(ids.values()), sort=False)
         }
@@ -443,10 +472,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         with theirs, restricted to *langs* when given.
         """
         curies = list(curies)
-        ids = self._resolve_concepts(curies)
         views = self._concept_views(curies)
-        synonyms = self.kg.synonyms(tuple(ids.values()))
-        curie_by_id = {cid: curie for curie, cid in ids.items()}
+        ids = {curie: view.concept_id for curie, view in views.items()}
+        synonyms = self.kg.synonyms(tuple(dict.fromkeys(ids.values())))
+        spellings = self._spellings(ids)
         for curie in curies:
             view = views.get(curie)
             if view is None:
@@ -459,8 +488,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             language = OMOPLanguage.from_concept_id(synonym.language_concept_id)
             if language is None or language.code == self.default_language:
                 continue
-            if synonym.concept_id in curie_by_id and (langs is None or language.code in langs):
-                yield curie_by_id[synonym.concept_id], synonym.name, language.code
+            if langs is None or language.code in langs:
+                for curie in spellings.get(synonym.concept_id, ()):
+                    yield curie, synonym.name, language.code
 
     def curies_by_label(self, label: str) -> list[CURIE]:
         """
@@ -630,7 +660,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         With ``isa_only`` the parents are the targets of ``Is a`` edges. Otherwise they are
         the level 1 ancestors of ``concept_ancestor``, OMOP's own ancestry.
         """
-        cid = self.codec.resolve_concept(curie)
+        cid = self._resolve_concepts([curie]).get(curie)
         if cid is None:
             return []
         parents = self.kg.parents(cid, isa_only)

@@ -55,12 +55,10 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         When there are none, ``owl:Thing`` is yielded if *include_owl_thing* is set.
         """
         self._check_predicates(predicates)
-        ids = self._resolve_concepts([subject, object])
+        pair = self._resolve_pair(subject, object)
         found = (
-            self.kg.most_recent_common_ancestors(
-                ids[subject], ids[object], concept_filter=self._population
-            )
-            if len(ids) == 2
+            self.kg.most_recent_common_ancestors(*pair, concept_filter=self._population)
+            if pair
             else frozenset()
         )
         for concept_id in sorted(found):
@@ -79,10 +77,10 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
     ) -> Iterable[CURIE]:
         """Yield the concepts that are, or are above, both concepts, and ``owl:Thing`` if asked."""
         self._check_predicates(predicates)
-        ids = self._resolve_concepts([subject, object])
+        pair = self._resolve_pair(subject, object)
         found = (
-            self.kg.common_ancestors(ids[subject], ids[object], concept_filter=self._population)
-            if len(ids) == 2
+            self.kg.common_ancestors(*pair, concept_filter=self._population)
+            if pair
             else frozenset()
         )
         for concept_id in sorted(found):
@@ -99,12 +97,9 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
     ) -> Iterable[CURIE]:
         """Yield the concepts that are, or are below, both concepts."""
         self._check_predicates(predicates)
-        ids = self._resolve_concepts([subject, object])
-        if len(ids) == 2:
+        if pair := self._resolve_pair(subject, object):
             for concept_id in sorted(
-                self.kg.common_descendants(
-                    ids[subject], ids[object], concept_filter=self._population
-                )
+                self.kg.common_descendants(*pair, concept_filter=self._population)
             ):
                 yield self.codec.concept_curie(concept_id)
 
@@ -198,11 +193,11 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
             CURIE names no concept, or a minimum is not met.
         """
         self._check_predicates(predicates)
-        ids = self._resolve_concepts([subject, object])
-        if len(ids) < 2:
+        pair = self._resolve_pair(subject, object)
+        if pair is None:
             return None
         similarity = self.kg.pairwise_similarity(
-            ids[subject], ids[object], self.information_content_source, self._population
+            *pair, self.information_content_source, self._population
         )
         if min_jaccard_similarity is not None and similarity.jaccard < min_jaccard_similarity:
             return None

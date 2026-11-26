@@ -118,11 +118,29 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         -------
         dict[int, frozenset[int]]
             Every requested concept mapped to the concepts reached from it, never itself.
+
+        Raises
+        ------
+        UnknownConceptError
+            If a requested concept does not exist.
         """
+        starts = tuple(dict.fromkeys(concept_ids))
+        self.require_concepts(starts)
+        return self._closure(starts, direction, edge_filter, concept_filter, standardise)
+
+    def _closure(
+        self,
+        concept_ids: Iterable[int],
+        direction: HierarchyDirection = HierarchyDirection.UP,
+        edge_filter: EdgeFilter = IS_A_FILTER,
+        concept_filter: ConceptFilter | None = None,
+        standardise: bool = False,
+    ) -> dict[int, frozenset[int]]:
+        """Walk as :meth:`closure` does, without checking that the concepts exist."""
         starts = tuple(dict.fromkeys(concept_ids))
         if standardise:
             stands_in = self._stands_in(starts)
-            walked = self.closure(
+            walked = self._closure(
                 {stand_in for group in stands_in.values() for stand_in in group},
                 direction,
                 edge_filter,
@@ -177,9 +195,21 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         -------
         dict[int, tuple[int, ...]]
             Every requested concept mapped to its standard concepts in ascending order,
-            empty when it has none or does not exist.
+            empty when it has none.
+
+        Raises
+        ------
+        UnknownConceptError
+            If a requested concept does not exist.
         """
         ids = tuple(dict.fromkeys(concept_ids))
+        self.require_concepts(ids)
+        return self._standardise(ids, edge_filter)
+
+    def _standardise(
+        self, ids: tuple[int, ...], edge_filter: EdgeFilter = IDENTITY_FILTER
+    ) -> dict[int, tuple[int, ...]]:
+        """Standardise as :meth:`standardise` does, without checking that the concepts exist."""
         standard = self._standard_among(ids)
         mapped: dict[int, set[int]] = {concept_id: set() for concept_id in ids}
         sources = tuple(concept_id for concept_id in ids if concept_id not in standard)
@@ -201,7 +231,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         ids = tuple(dict.fromkeys(concept_ids))
         return {
             concept_id: tuple(dict.fromkeys((concept_id, *targets)))
-            for concept_id, targets in self.standardise(ids).items()
+            for concept_id, targets in self._standardise(ids).items()
         }
 
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:

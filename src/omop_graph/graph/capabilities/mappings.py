@@ -93,7 +93,12 @@ class MappingsMixin(HierarchyMixin):
         -------
         dict[int, tuple[int, ...]]
             Every requested concept mapped to its standard concepts in ascending order,
-            empty when it has none, is standard itself or does not exist.
+            empty when it has none or is standard itself.
+
+        Raises
+        ------
+        UnknownConceptError
+            If a requested concept does not exist.
         """
         followed = frozenset(
             relationship_id

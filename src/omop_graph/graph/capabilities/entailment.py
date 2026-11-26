@@ -183,7 +183,9 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             yield from self._entailed_along_is_a(subjects, objects, edge_filter, concept_filter)
             return
         by_subject = subjects is not None
-        stands_in = self._stands_in(subjects if subjects is not None else objects or ())
+        requested = subjects if subjects is not None else objects
+        assert requested is not None
+        stands_in = self._stands_in(requested)
         origins: dict[int, list[int]] = defaultdict(list)
         for origin, group in stands_in.items():
             for stand_in in group:
@@ -246,7 +248,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         generalise the filler of each up the ``Is a`` hierarchy.
         """
         wanted = None if objects is None else frozenset(objects)
-        above = self.closure(subjects)
+        above = self._closure(subjects)
         own: dict[int, list[tuple[str, int]]] = defaultdict(list)
         inherited: dict[int, list[tuple[str, int]]] = defaultdict(list)
         for edges, ids, selected in (
@@ -258,7 +260,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
                     batch, edge_filter=selected
                 ):
                     edges[source].append((relationship_id, filler))
-        ancestors = self.closure(
+        ancestors = self._closure(
             {filler for edges in (*own.values(), *inherited.values()) for _, filler in edges},
             concept_filter=concept_filter,
         )
@@ -285,7 +287,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         since an edge can end on a concept outside it. The filter limits only the subjects
         that receive an edge, and the objects asked for are always reported.
         """
-        descendants = self.closure(objects, HierarchyDirection.DOWN)
+        descendants = self._closure(objects, HierarchyDirection.DOWN)
         targets_by_filler: dict[int, list[int]] = defaultdict(list)
         for target, below in descendants.items():
             for filler in (target, *below):
@@ -298,7 +300,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             for subject_id, relationship_id, _ in asserted
             if relationship_id != IS_A_RELATIONSHIP_ID
         }
-        subtypes = self.closure(inheriting, HierarchyDirection.DOWN, concept_filter=concept_filter)
+        subtypes = self._closure(inheriting, HierarchyDirection.DOWN, concept_filter=concept_filter)
         for subject_id, relationship_id, filler in asserted:
             holders = (subject_id,)
             if relationship_id != IS_A_RELATIONSHIP_ID:

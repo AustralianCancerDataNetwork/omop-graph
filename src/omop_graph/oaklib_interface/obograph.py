@@ -144,17 +144,18 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         """
         curies = [subject] if isinstance(subject, str) else list(subject)
         ids = self._resolve_concepts(curies)
-        curie_by_id = {concept_id: curie for curie, concept_id in ids.items()}
-        for synonym in self.kg.synonyms(tuple(ids.values())):
+        spellings = self._spellings(ids)
+        for synonym in self.kg.synonyms(tuple(dict.fromkeys(ids.values()))):
             language = OMOPLanguage.from_concept_id(synonym.language_concept_id)
-            yield (
-                curie_by_id[synonym.concept_id],
-                SynonymPropertyValue(
-                    pred=HAS_EXACT_SYNONYM.removeprefix("oio:"),
-                    val=synonym.name,
-                    lang=language.code if language else None,
-                ),
-            )
+            for curie in spellings[synonym.concept_id]:
+                yield (
+                    curie,
+                    SynonymPropertyValue(
+                        pred=HAS_EXACT_SYNONYM.removeprefix("oio:"),
+                        val=synonym.name,
+                        lang=language.code if language else None,
+                    ),
+                )
 
     def _reached(
         self,
@@ -198,11 +199,12 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             )
             yield from walker(starts, predicates, reflexive, method)
             return
-        found = dict.fromkeys(starts) if reflexive else {}
-        for reached in self._reached(starts, predicates, direction, scoped=True).values():
-            found.update(dict.fromkeys(reached))
+        reached = self._reached(starts, predicates, direction, scoped=True)
+        found = dict.fromkeys(reached)
+        for others in reached.values():
+            found.update(dict.fromkeys(others))
         if not reflexive:
-            for curie in starts:
+            for curie in reached:
                 found.pop(curie, None)
         yield from found
 
@@ -224,14 +226,16 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             The predicates to follow. Defaults to ``rdfs:subClassOf``, the strict ``Is a``
             hierarchy, where oaklib follows every predicate.
         reflexive : bool
-            If True, include the starting concepts.
+            If True, include the starting concepts. If False, no starting concept is
+            yielded, also one that is an ancestor of another, as oaklib does.
         method : GraphTraversalMethod | None
             ``ENTAILMENT`` reads the entailed relationships instead of walking.
 
         Yields
         ------
         CURIE
-            Ancestor concepts within the adapter's scope.
+            Ancestor concepts within the adapter's scope. A start that names no concept
+            is left out.
         """
         yield from self._walk(start_curies, predicates, reflexive, method, HierarchyDirection.UP)
 

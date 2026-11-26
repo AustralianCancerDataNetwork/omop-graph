@@ -19,6 +19,7 @@ from fixtures.hierarchy_cdm import (
 )
 
 from omop_graph.extensions.omop_alchemy import HierarchyDirection
+from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 
@@ -59,7 +60,14 @@ def test_standardise_walks_down_from_the_standard_concepts(kg) -> None:
 
 
 def test_standardise_keeps_every_requested_concept_and_none_twice(kg) -> None:
-    reached = kg.closure([SOURCE, SOURCE, 999999], standardise=True)
+    reached = kg.closure([SOURCE, SOURCE, ORPHAN], standardise=True)
 
-    assert set(reached) == {SOURCE, 999999}
-    assert reached[999999] == frozenset()
+    assert set(reached) == {SOURCE, ORPHAN}
+    assert reached[ORPHAN] == frozenset()
+
+
+def test_a_walk_from_a_concept_that_does_not_exist_names_every_missing_concept(kg) -> None:
+    with pytest.raises(UnknownConceptError) as raised:
+        kg.closure([SOURCE, 999999, 999998], standardise=True)
+
+    assert raised.value.concept_ids == (999999, 999998)
