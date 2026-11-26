@@ -1,0 +1,53 @@
+"""Vocabularies, domains and synonyms."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+
+# Local Application Imports
+from ..nodes import (
+    SynonymView,
+    VocabularyView,
+)
+from ..queries import (
+    q_domains,
+    q_synonym_language_ids,
+    q_synonyms,
+    q_vocabularies,
+)
+from ._core import GraphCore
+
+
+class VocabularyMixin(GraphCore):
+    """Vocabularies, domains and synonyms."""
+
+    def vocabularies(self) -> tuple[VocabularyView, ...]:
+        """Return every vocabulary."""
+        with self.session_factory() as session:
+            return tuple(
+                VocabularyView(**row._mapping) for row in session.execute(q_vocabularies())
+            )
+
+    def domain_concept_ids(self) -> dict[str, int]:
+        """Return the concept id of each domain, keyed by ``domain_id``."""
+        with self.session_factory() as session:
+            return {row.domain_id: row.domain_concept_id for row in session.execute(q_domains())}
+
+    def synonyms(self, concept_ids: Iterable[int]) -> tuple[SynonymView, ...]:
+        """Return the synonyms of *concept_ids*, however many, ordered by concept and name."""
+        with self.session_factory() as session:
+            return tuple(
+                SynonymView(**row._mapping)
+                for row in self._rows_in_batches(session, q_synonyms, sorted(set(concept_ids)))
+            )
+
+    def synonym_language_ids(self) -> frozenset[int]:
+        """Return the language concept ids that at least one synonym uses."""
+        with self.session_factory() as session:
+            return frozenset(session.execute(q_synonym_language_ids()).scalars())
+
+    def synonyms_for_concept(self, concept_id: int) -> tuple[str, ...]:
+        """
+        Retrieve all synonyms for a concept.
+        """
+        return tuple(synonym.name for synonym in self.synonyms((concept_id,)))
