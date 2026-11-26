@@ -9,7 +9,7 @@
         - MissingEmbeddingError
         - KnowledgeGraphEmbeddingConfiguration
 
-::: omop_graph.graph.similarity
+::: omop_graph.graph.structural_similarity
 
 ::: omop_graph.graph.statistics
 

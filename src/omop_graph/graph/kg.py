@@ -35,8 +35,8 @@ from .capabilities.hierarchy import HierarchyMixin
 from .capabilities.mappings import MappingsMixin
 from .capabilities.predicates import PredicatesMixin
 from .capabilities.search import SearchMixin
-from .capabilities.similarity import SimilarityMixin
 from .capabilities.statistics import StatisticsMixin
+from .capabilities.structural_similarity import StructuralSimilarityMixin
 from .capabilities.vocabulary import VocabularyMixin
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 class KnowledgeGraph(
     EmbeddingsMixin,
-    SimilarityMixin,
+    StructuralSimilarityMixin,
     SearchMixin,
     StatisticsMixin,
     VocabularyMixin,

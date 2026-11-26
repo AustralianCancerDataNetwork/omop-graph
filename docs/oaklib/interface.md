@@ -113,7 +113,7 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 * `get_transitive_mappings_by_curie` follows exact equivalence from a non-standard concept to the standard concepts it maps to, and a standard concept has none. OMOP maps many concepts to one and stores each mapping in both directions, so following them both ways would join every concept that shares a target, and the result would be most of a vocabulary. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
 
 ### Similarity and embeddings
-The similarity methods wrap [the graph's](../graph/kg.md#similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. `OMOPAlchemyImplementation.information_content_source` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
+The similarity methods wrap [the graph's](../graph/kg.md#structural-similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. `OMOPAlchemyImplementation.information_content_source` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
 
 * `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one.
 * The stored model serves `entity_embeddings`, `embedding_similarity` and the nearest searches through the vector index of `omop-emb`. Embedding a text, and so `nearest_entities_to_text`, needs `write=True`, and raises `EmbeddingWriterRequiredError` otherwise.

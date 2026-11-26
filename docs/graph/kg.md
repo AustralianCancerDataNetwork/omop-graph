@@ -66,7 +66,7 @@ if matches:
 | Mappings | hierarchy | `mappings`, `mapping_predicates`, `standard_mappings`, `replacements` |
 | Vocabulary | core | `vocabularies`, `domain_concept_ids`, `synonyms`, `translations`, `synonym_languages` |
 | Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_search_constraints` |
-| Similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
+| Structural similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
 | Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, and their `_by` forms |
 | Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `embed_text`, `embed_concepts` |
 
@@ -75,9 +75,9 @@ if matches:
 * `entailed_relationships` entails the relationships that generalise and returns the others as stored, first.
 * `search` ranks the matches of the kinds you give, on concept names and then, if asked, synonyms, with the concepts you name as identifiers first.
 
-#### Similarity
+#### Structural similarity
 
-Similarity runs over the strict `Is a` hierarchy, and counts each concept as its own ancestor and descendant.
+Structural similarity compares two concepts by their place in the strict `Is a` hierarchy, and counts each concept as its own ancestor and descendant. Embedding similarity, by contrast, compares their stored vectors, see [Embeddings](#embedding-configuration).
 
 ```python
 similarity = kg.pairwise_similarity(afib_id, flutter_id)

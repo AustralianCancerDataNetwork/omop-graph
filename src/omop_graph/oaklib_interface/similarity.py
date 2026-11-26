@@ -14,7 +14,7 @@ from oaklib.datamodels.vocabulary import IS_A, OWL_THING
 from oaklib.interfaces.semsim_interface import SemanticSimilarityInterface
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.graph.similarity import ICSource
+from omop_graph.graph.structural_similarity import ICSource
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
