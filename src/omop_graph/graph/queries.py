@@ -612,6 +612,11 @@ def q_entities(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select
     return concept_filter.apply(select(Concept.concept_id))
 
 
+def q_concept_count(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
+    """Count the concepts *concept_filter* selects."""
+    return select(func.count()).select_from(q_entities(concept_filter).subquery())
+
+
 def q_synonyms(concept_ids: tuple[int, ...]) -> Select:
     """Query the synonyms of *concept_ids* with their language concept, ordered by name."""
     return (
