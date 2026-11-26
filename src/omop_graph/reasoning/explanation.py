@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -13,8 +12,6 @@ from omop_graph.graph.traverse import GraphTrace, TraceStep
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

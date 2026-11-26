@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import heapq
-import logging
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -17,8 +16,6 @@ from omop_graph.reasoning.resolvers import CandidateHit
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(order=True)

@@ -8,13 +8,12 @@ class OMOPOntologyResource(OntologyResource):
     """
     Ontology resource naming an oa-configurator CDM database.
 
-    Selected by oaklib as ``get_adapter("omop:<database_name>")``.
+    Selected by oaklib as ``get_adapter("omop:<database_name>")``. The inherited ``slug``
+    names the ``[databases.*]`` entry to resolve, and ``None`` resolves
+    ``OmopGraphConfig.cdm_db``.
 
     Parameters
     ----------
-    slug : str, optional
-        Name of the ``[databases.*]`` entry to resolve. ``None`` resolves
-        ``OmopGraphConfig.cdm_db``.
     scheme : str, optional
         The oaklib scheme. Defaults to 'omop'.
     readonly : bool, optional
