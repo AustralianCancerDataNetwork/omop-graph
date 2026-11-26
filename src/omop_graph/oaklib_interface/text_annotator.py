@@ -162,7 +162,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
 
         constraints = GroundingConstraints(
             parent_ids=tuple(self._parent_id(pid) for pid in parent_ids) if parent_ids else None,
-            search_constraint=ConceptFilter(
+            concept_filter=ConceptFilter(
                 domains=domains,
                 vocabularies=vocabs,
                 require_standard=False,

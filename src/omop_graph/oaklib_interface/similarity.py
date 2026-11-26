@@ -58,7 +58,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         ids = self._resolve_concepts([subject, object])
         found = (
             self.kg.most_recent_common_ancestors(
-                ids[subject], ids[object], scope=self.concept_filter
+                ids[subject], ids[object], concept_filter=self.concept_filter
             )
             if len(ids) == 2
             else frozenset()
@@ -81,7 +81,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         self._check_predicates(predicates)
         ids = self._resolve_concepts([subject, object])
         found = (
-            self.kg.common_ancestors(ids[subject], ids[object], scope=self.concept_filter)
+            self.kg.common_ancestors(ids[subject], ids[object], concept_filter=self.concept_filter)
             if len(ids) == 2
             else frozenset()
         )
@@ -102,7 +102,9 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         ids = self._resolve_concepts([subject, object])
         if len(ids) == 2:
             for concept_id in sorted(
-                self.kg.common_descendants(ids[subject], ids[object], scope=self.concept_filter)
+                self.kg.common_descendants(
+                    ids[subject], ids[object], concept_filter=self.concept_filter
+                )
             ):
                 yield self.codec.concept_curie(concept_id)
 

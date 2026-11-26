@@ -35,7 +35,7 @@ class TestQueryTextWithContext:
 def _constraints() -> GroundingConstraints:
     return GroundingConstraints(
         parent_ids=(PARENT_CANCER_ID,),
-        search_constraint=ConceptFilter(
+        concept_filter=ConceptFilter(
             domains=("Condition",),
             vocabularies=("SNOMED",),
             require_standard=False,
@@ -50,7 +50,7 @@ def _unconstrained_constraints() -> GroundingConstraints:
     # depend on OmopGraphConfig's package config being set up in the environment.
     return GroundingConstraints(
         parent_ids=None,
-        search_constraint=ConceptFilter(
+        concept_filter=ConceptFilter(
             domains=("Condition",),
             vocabularies=("SNOMED",),
             require_standard=False,

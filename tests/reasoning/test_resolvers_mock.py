@@ -29,7 +29,7 @@ class _KG:
         query_term: str,
         match_kind: LabelMatchKind,
         synonym: bool = False,
-        search_constraint=None,
+        concept_filter=None,
         sort: bool = False,
     ):
         key = _key(match_kind, synonym)

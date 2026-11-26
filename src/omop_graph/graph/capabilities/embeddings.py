@@ -204,16 +204,16 @@ def requires_embedding_writer[S: EmbeddingsMixin, **P, R](
     return guarded
 
 
-def embedding_filter(scope: ConceptFilter) -> EmbeddingConceptFilter:
+def embedding_filter(concept_filter: ConceptFilter) -> EmbeddingConceptFilter:
     """Translate a concept scope into the filter that omop-emb applies during retrieval."""
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
     return EmbeddingConceptFilter(
-        concept_ids=scope.concept_ids,
-        domains=scope.domains,
-        vocabularies=scope.vocabularies,
-        require_standard=scope.require_standard,
-        require_active=scope.require_active,
+        concept_ids=concept_filter.concept_ids,
+        domains=concept_filter.domains,
+        vocabularies=concept_filter.vocabularies,
+        require_standard=concept_filter.require_standard,
+        require_active=concept_filter.require_active,
     )
 
 
@@ -347,7 +347,7 @@ class EmbeddingsMixin(ConceptsMixin):
         self,
         query: np.ndarray | int | str,
         *,
-        scope: ConceptFilter = ALL_CONCEPTS,
+        concept_filter: ConceptFilter = ALL_CONCEPTS,
         k: int | None = None,
     ) -> tuple[NearestConceptMatch, ...]:
         """
@@ -359,7 +359,7 @@ class EmbeddingsMixin(ConceptsMixin):
             A vector of shape ``(D,)`` or ``(1, D)``, the id of a concept with a stored
             embedding, or a text, which is embedded first and so needs a write-capable
             configuration.
-        scope : ConceptFilter
+        concept_filter : ConceptFilter
             The concepts that can match. ``limit`` is ignored, use *k*.
         k : int, optional
             The most matches to return, the default of the store when omitted.
@@ -384,12 +384,14 @@ class EmbeddingsMixin(ConceptsMixin):
         reader = self._registered()
         if isinstance(query, int | np.integer):
             return reader.get_similar_concepts(
-                int(query), k, concept_filter=embedding_filter(scope)
+                int(query), k, concept_filter=embedding_filter(concept_filter)
             )[0]
         vector = np.atleast_2d(query)
         if vector.shape[0] != 1:
             raise ValueError(f"nearest_concepts takes one query vector, got {vector.shape[0]}.")
-        return reader.get_nearest_concepts(vector, concept_filter=embedding_filter(scope), k=k)[0]
+        return reader.get_nearest_concepts(
+            vector, concept_filter=embedding_filter(concept_filter), k=k
+        )[0]
 
     @requires_embeddings
     def concept_embeddings(self, concept_ids: Iterable[int]) -> dict[int, np.ndarray]:

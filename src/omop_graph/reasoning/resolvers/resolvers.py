@@ -118,7 +118,7 @@ class CandidateResolver:
                 query_term=query,
                 match_kind=self.match_kind,
                 synonym=self.synonym,
-                search_constraint=constraints,
+                concept_filter=constraints,
                 sort=sort,
             )
         )
@@ -261,7 +261,9 @@ class EmbeddingResolver(CandidateResolver):
         try:
             matches = kg.nearest_concepts(
                 query_embedding,
-                scope=constraints if isinstance(constraints, ConceptFilter) else ALL_CONCEPTS,
+                concept_filter=constraints
+                if isinstance(constraints, ConceptFilter)
+                else ALL_CONCEPTS,
                 k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
             )
         except EmbeddingModelNotRegisteredError as error:

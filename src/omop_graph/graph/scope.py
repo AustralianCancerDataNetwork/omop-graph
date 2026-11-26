@@ -11,32 +11,34 @@ ALL_CONCEPTS = ConceptFilter()
 """A scope that selects every concept."""
 
 
-def every_concept(scope: ConceptFilter) -> ConceptFilter:
+def every_concept(concept_filter: ConceptFilter) -> ConceptFilter:
     """
-    The vocabularies and domains of *scope*, whatever the standardness or validity of a concept.
+    The vocabularies and domains of ``concept_filter``, whatever the standardness or validity of a concept.
 
     Parameters
     ----------
-    scope : ConceptFilter
+    concept_filter : ConceptFilter
         The scope to widen.
 
     Returns
     -------
     ConceptFilter
-        *scope* without its standard, classification and active requirements.
+        ``concept_filter`` without its standard, classification and active requirements.
     """
     return replace(
-        scope, require_standard=False, include_classification=False, require_active=False
+        concept_filter, require_standard=False, include_classification=False, require_active=False
     )
 
 
-def narrowed_to_vocabularies(scope: ConceptFilter, vocabularies: Iterable[str]) -> ConceptFilter:
+def narrowed_to_vocabularies(
+    concept_filter: ConceptFilter, vocabularies: Iterable[str]
+) -> ConceptFilter:
     """
-    Restrict *scope* to some vocabularies, keeping only those it already allows.
+    Restrict ``concept_filter`` to some vocabularies, keeping only those it already allows.
 
     Parameters
     ----------
-    scope : ConceptFilter
+    concept_filter : ConceptFilter
         The scope to narrow.
     vocabularies : Iterable[str]
         Vocabulary ids to keep.
@@ -44,14 +46,14 @@ def narrowed_to_vocabularies(scope: ConceptFilter, vocabularies: Iterable[str]) 
     Returns
     -------
     ConceptFilter
-        *scope* with the vocabularies it shares with *vocabularies*, in their order. A scope
+        ``concept_filter`` with the vocabularies it shares with *vocabularies*, in their order. A scope
         without vocabularies allows all of them.
     """
     return replace(
-        scope,
+        concept_filter,
         vocabularies=tuple(
             vocabulary
             for vocabulary in dict.fromkeys(vocabularies)
-            if scope.vocabularies is None or vocabulary in scope.vocabularies
+            if concept_filter.vocabularies is None or vocabulary in concept_filter.vocabularies
         ),
     )

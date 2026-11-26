@@ -38,7 +38,7 @@ class SearchMixin(EnumerationMixin):
         query_term: str,
         match_kind: LabelMatchKind,
         synonym: bool = False,
-        search_constraint: ConceptFilter | None = None,
+        concept_filter: ConceptFilter | None = None,
         sort: bool = True,
         limit: int | None = None,
     ) -> tuple[LabelMatch, ...]:
@@ -53,7 +53,7 @@ class SearchMixin(EnumerationMixin):
             The kind of match to perform (exact, starts with, fulltext, partial).
         synonym : bool
             If True, searches in Concept_Synonym instead of Concept.
-        search_constraint : ConceptFilter, optional
+        concept_filter : ConceptFilter, optional
             Additional filters for domain/vocabulary.
         sort : bool
             Whether to order the matches by quality.
@@ -78,7 +78,7 @@ class SearchMixin(EnumerationMixin):
             try:
                 cn = fn(
                     input_query_term,
-                    search_constraint=search_constraint,
+                    concept_filter=concept_filter,
                     synonym=synonym,
                     sort=sort,
                 )
@@ -110,7 +110,7 @@ class SearchMixin(EnumerationMixin):
         kinds: Sequence[LabelMatchKind] = (LabelMatchKind.EXACT,),
         *,
         synonyms: bool = False,
-        scope: ConceptFilter = ALL_CONCEPTS,
+        concept_filter: ConceptFilter = ALL_CONCEPTS,
         limit: int | None = None,
         identifiers: Iterable[int] = (),
     ) -> Iterator[int]:
@@ -129,7 +129,7 @@ class SearchMixin(EnumerationMixin):
             The kinds of match, in the order they rank.
         synonyms : bool
             If True, also match synonyms.
-        scope : ConceptFilter
+        concept_filter : ConceptFilter
             The concepts that can match. By default every concept.
         limit : int, optional
             The most concepts to yield. Zero or less yields none.
@@ -148,7 +148,7 @@ class SearchMixin(EnumerationMixin):
 
         named = tuple(identifiers)
         if named and not full():
-            in_scope = tuple(self.entities(replace(scope, concept_ids=named)))
+            in_scope = tuple(self.entities(replace(concept_filter, concept_ids=named)))
             for concept_id in in_scope[:limit]:
                 found[concept_id] = None
                 yield concept_id
@@ -160,7 +160,7 @@ class SearchMixin(EnumerationMixin):
                     term,
                     match_kind=kind,
                     synonym=on_synonyms,
-                    search_constraint=scope,
+                    concept_filter=concept_filter,
                     limit=None if limit is None else limit + len(found),
                 )
                 for match in matches:
@@ -185,7 +185,7 @@ class SearchMixin(EnumerationMixin):
         """
         return re.sub(r"\s+", " ", query_term.strip().lower())
 
-    def check_search_constraints(self, constraints: ConceptFilter) -> None:
+    def check_concept_filter(self, constraints: ConceptFilter) -> None:
         if constraints.domains is not None:
             invalid = [d for d in constraints.domains if d not in self._valid_domains]
             if invalid:

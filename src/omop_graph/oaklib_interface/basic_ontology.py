@@ -128,11 +128,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         vocabularies, each named by its ``vocabulary_id`` or its CURIE prefix. The ``OMOP``
         prefix is every concept's own prefix, so naming it does not narrow.
         """
-        scope = replace(self.concept_filter, require_active=filter_obsoletes)
+        concept_filter = replace(self.concept_filter, require_active=filter_obsoletes)
         if not id_prefixes or any(map(self.codec.is_omop_prefix, id_prefixes)):
-            return scope
+            return concept_filter
         return narrowed_to_vocabularies(
-            scope, (self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
+            concept_filter, (self.codec.vocabulary_id(prefix) for prefix in id_prefixes)
         )
 
     def _resolve_concepts(self, curies: Iterable[CURIE]) -> dict[CURIE, int]:
@@ -340,7 +340,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         self,
         build: Callable[[ConceptFilter, EdgeFilter | None], Iterable[int]],
         predicates: Iterable[PRED_CURIE] | None,
-        scope: ConceptFilter,
+        concept_filter: ConceptFilter,
     ) -> Iterator[CURIE]:
         """Yield the concepts *build* selects, over the closure or over the named predicates."""
         edge_filter = (
@@ -348,7 +348,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             if predicates
             else None
         )
-        for cid in build(scope, edge_filter):
+        for cid in build(concept_filter, edge_filter):
             yield self.codec.concept_curie(cid)
 
     def roots(

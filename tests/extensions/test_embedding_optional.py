@@ -197,7 +197,7 @@ class TestEmbeddingConfigurationValidation:
 
 
 def test_the_scope_becomes_the_embedding_filter() -> None:
-    scope = ConceptFilter(
+    concept_filter = ConceptFilter(
         concept_ids=(1, 2),
         domains=("Condition",),
         vocabularies=("SNOMED",),
@@ -206,7 +206,7 @@ def test_the_scope_becomes_the_embedding_filter() -> None:
         limit=9,
     )
 
-    assert embedding_filter(scope) == EmbeddingConceptFilter(
+    assert embedding_filter(concept_filter) == EmbeddingConceptFilter(
         concept_ids=(1, 2),
         domains=("Condition",),
         vocabularies=("SNOMED",),
@@ -228,7 +228,7 @@ def test_the_nearest_concepts_of_a_vector_are_those_of_its_one_query() -> None:
     kg = _bare_graph(_configuration(), interface)
     vector = np.zeros(3, dtype=np.float32)
 
-    matches = kg.nearest_concepts(vector, scope=ConceptFilter(domains=("Condition",)), k=5)
+    matches = kg.nearest_concepts(vector, concept_filter=ConceptFilter(domains=("Condition",)), k=5)
 
     assert matches == ("near",)
     call = interface.get_nearest_concepts.call_args
@@ -396,7 +396,7 @@ def test_grounding_searches_the_given_concepts_with_k_set_to_their_number() -> N
 
     assert matches == (("match",),)
     call = kg.nearest_concepts.call_args
-    assert call.kwargs["scope"] == ConceptFilter(concept_ids=(196653, 4038835))
+    assert call.kwargs["concept_filter"] == ConceptFilter(concept_ids=(196653, 4038835))
     assert call.kwargs["k"] == 2
 
 
@@ -436,7 +436,7 @@ def test_embedding_resolver_threads_constraints_limit_as_k(
 
     call = kg.nearest_concepts.call_args
     assert call.kwargs["k"] == 5
-    assert call.kwargs["scope"] == constraints
+    assert call.kwargs["concept_filter"] == constraints
 
 
 def test_embedding_resolver_returns_nothing_without_a_store_or_a_registered_model(

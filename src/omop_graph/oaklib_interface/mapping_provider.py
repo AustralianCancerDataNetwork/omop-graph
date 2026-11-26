@@ -118,12 +118,12 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         if curies is None:
             for edge in self.kg.mappings(None, edge_filter, source):
                 yield self._edge_mapping(edge, predicates)
-            scope = (
+            concept_filter = (
                 self.concept_filter
                 if source is None
                 else replace(self.concept_filter, vocabularies=(source,))
             )
-            for batch in self.kg.batches(self.kg.entities(scope)):
+            for batch in self.kg.batches(self.kg.entities(concept_filter)):
                 subject = {concept_id: self.codec.concept_curie(concept_id) for concept_id in batch}
                 yield from self._cross_references(
                     self.kg.concept_views(batch, sort=False), source, subject

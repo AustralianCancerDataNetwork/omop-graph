@@ -19,7 +19,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
     Common ancestors, information content and pairwise similarity of concepts.
 
     The ancestors are those of :meth:`closure`, the strict ``Is a`` hierarchy by default,
-    and each concept counts as its own ancestor and descendant. A *scope* narrows the
+    and each concept counts as its own ancestor and descendant. A ``concept_filter`` narrows the
     concepts that are reported and counted, while the walk still passes through the others.
     """
 
@@ -31,10 +31,10 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_ids: Iterable[int],
         direction: HierarchyDirection,
         edge_filter: EdgeFilter,
-        scope: ConceptFilter,
+        concept_filter: ConceptFilter,
     ) -> dict[int, frozenset[int]]:
         """Map each concept to itself and the concepts reached from it."""
-        reached = self.closure(concept_ids, direction, edge_filter, scope)
+        reached = self.closure(concept_ids, direction, edge_filter, concept_filter)
         return {concept_id: others | {concept_id} for concept_id, others in reached.items()}
 
     def common_ancestors(
@@ -42,10 +42,12 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_a: int,
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
-        scope: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> frozenset[int]:
         """Return the concepts that are, or are above, both concepts."""
-        lineage = self._lineage((concept_a, concept_b), HierarchyDirection.UP, edge_filter, scope)
+        lineage = self._lineage(
+            (concept_a, concept_b), HierarchyDirection.UP, edge_filter, concept_filter
+        )
         return lineage[concept_a] & lineage[concept_b]
 
     def common_descendants(
@@ -53,10 +55,12 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_a: int,
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
-        scope: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> frozenset[int]:
         """Return the concepts that are, or are below, both concepts."""
-        lineage = self._lineage((concept_a, concept_b), HierarchyDirection.DOWN, edge_filter, scope)
+        lineage = self._lineage(
+            (concept_a, concept_b), HierarchyDirection.DOWN, edge_filter, concept_filter
+        )
         return lineage[concept_a] & lineage[concept_b]
 
     def most_recent_common_ancestors(
@@ -64,7 +68,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_a: int,
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
-        scope: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> frozenset[int]:
         """
         Return the common ancestors that have no descendant among the common ancestors.
@@ -72,14 +76,16 @@ class StructuralSimilarityMixin(HierarchyMixin):
         They are found from the ancestor sets alone, so no descendants are counted.
         """
         return self._most_recent(
-            self.common_ancestors(concept_a, concept_b, edge_filter, scope), edge_filter, scope
+            self.common_ancestors(concept_a, concept_b, edge_filter, concept_filter),
+            edge_filter,
+            concept_filter,
         )
 
     def _most_recent(
-        self, common: frozenset[int], edge_filter: EdgeFilter, scope: ConceptFilter
+        self, common: frozenset[int], edge_filter: EdgeFilter, concept_filter: ConceptFilter
     ) -> frozenset[int]:
         """Drop the concepts of *common* that lie above another concept of it."""
-        above = self.closure(common, HierarchyDirection.UP, edge_filter, scope)
+        above = self.closure(common, HierarchyDirection.UP, edge_filter, concept_filter)
         return common - frozenset().union(*above.values())
 
     def jaccard_similarity(
@@ -87,10 +93,12 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_a: int,
         concept_b: int,
         edge_filter: EdgeFilter = IS_A_FILTER,
-        scope: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> float:
         """Return the common ancestors over all ancestors of either concept."""
-        lineage = self._lineage((concept_a, concept_b), HierarchyDirection.UP, edge_filter, scope)
+        lineage = self._lineage(
+            (concept_a, concept_b), HierarchyDirection.UP, edge_filter, concept_filter
+        )
         return len(lineage[concept_a] & lineage[concept_b]) / len(
             lineage[concept_a] | lineage[concept_b]
         )
@@ -99,13 +107,13 @@ class StructuralSimilarityMixin(HierarchyMixin):
         self,
         concept_ids: Iterable[int],
         source: ICSource = ICSource.IS_A,
-        scope: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> dict[int, float]:
         """
         Return the information content of each concept, ``-log2(descendants / concepts)``.
 
         The descendants include the concept itself, and the concepts are all those in
-        *scope*, so the top of a hierarchy is near zero and a leaf is high. Counts are
+        ``concept_filter``, so the top of a hierarchy is near zero and a leaf is high. Counts are
         cached for the lifetime of the graph.
 
         Parameters
@@ -115,7 +123,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         source : ICSource
             Where the descendants are counted. With ``CONCEPT_ANCESTOR`` the scope only sets
             the number of concepts.
-        scope : ConceptFilter
+        concept_filter : ConceptFilter
             The concepts that count, as descendants and in total.
 
         Returns
@@ -124,31 +132,33 @@ class StructuralSimilarityMixin(HierarchyMixin):
             Every requested concept mapped to its information content, never below zero.
         """
         ids = tuple(dict.fromkeys(concept_ids))
-        counts = self._count_descendants(ids, source, scope)
-        total = self._scope_size(scope)
+        counts = self._count_descendants(ids, source, concept_filter)
+        total = self._scope_size(concept_filter)
         return {
             concept_id: max(0.0, -math.log2(counts[concept_id] / total)) if total else 0.0
             for concept_id in ids
         }
 
-    def _scope_size(self, scope: ConceptFilter) -> int:
-        """The number of concepts *scope* selects."""
-        if scope not in self._scope_sizes:
+    def _scope_size(self, concept_filter: ConceptFilter) -> int:
+        """The number of concepts ``concept_filter`` selects."""
+        if concept_filter not in self._scope_sizes:
             with self.session_factory() as session:
-                self._scope_sizes[scope] = session.execute(q_concept_count(scope)).scalar_one()
-        return self._scope_sizes[scope]
+                self._scope_sizes[concept_filter] = session.execute(
+                    q_concept_count(concept_filter)
+                ).scalar_one()
+        return self._scope_sizes[concept_filter]
 
     def _count_descendants(
-        self, concept_ids: tuple[int, ...], source: ICSource, scope: ConceptFilter
+        self, concept_ids: tuple[int, ...], source: ICSource, concept_filter: ConceptFilter
     ) -> dict[int, int]:
         """Count each concept and its descendants, reading the ones not cached."""
         missing = tuple(
             concept_id
             for concept_id in concept_ids
-            if (source, scope, concept_id) not in self._descendant_counts
+            if (source, concept_filter, concept_id) not in self._descendant_counts
         )
         if missing and source is ICSource.IS_A:
-            below = self.closure(missing, HierarchyDirection.DOWN, IS_A_FILTER, scope)
+            below = self.closure(missing, HierarchyDirection.DOWN, IS_A_FILTER, concept_filter)
             counts = {concept_id: len(others) + 1 for concept_id, others in below.items()}
         elif missing:
             counts = {concept_id: 1 for concept_id in missing}
@@ -159,9 +169,9 @@ class StructuralSimilarityMixin(HierarchyMixin):
         else:
             counts = {}
         for concept_id, count in counts.items():
-            self._descendant_counts[(source, scope, concept_id)] = count
+            self._descendant_counts[(source, concept_filter, concept_id)] = count
         return {
-            concept_id: self._descendant_counts[(source, scope, concept_id)]
+            concept_id: self._descendant_counts[(source, concept_filter, concept_id)]
             for concept_id in concept_ids
         }
 
@@ -170,7 +180,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_a: int,
         concept_b: int,
         source: ICSource = ICSource.IS_A,
-        scope: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> ConceptSimilarity:
         """
         Score the similarity of two concepts through the strict ``Is a`` hierarchy.
@@ -186,13 +196,15 @@ class StructuralSimilarityMixin(HierarchyMixin):
             The second concept.
         source : ICSource
             Where descendants are counted for the information content.
-        scope : ConceptFilter
+        concept_filter : ConceptFilter
             The concepts that are reported and counted.
         """
-        lineage = self._lineage((concept_a, concept_b), HierarchyDirection.UP, IS_A_FILTER, scope)
+        lineage = self._lineage(
+            (concept_a, concept_b), HierarchyDirection.UP, IS_A_FILTER, concept_filter
+        )
         common = lineage[concept_a] & lineage[concept_b]
-        recent = self._most_recent(common, IS_A_FILTER, scope)
-        scores = self.information_content({concept_a, concept_b, *recent}, source, scope)
+        recent = self._most_recent(common, IS_A_FILTER, concept_filter)
+        scores = self.information_content({concept_a, concept_b, *recent}, source, concept_filter)
         best = max(sorted(recent), key=lambda concept_id: scores[concept_id], default=None)
         ancestor_ic = scores[best] if best is not None else 0.0
         jaccard = len(common) / len(lineage[concept_a] | lineage[concept_b])

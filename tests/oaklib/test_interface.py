@@ -193,12 +193,14 @@ def test_an_explicit_concept_filter_replaces_the_standing_scope_as_given() -> No
     assert kg.scopes == [explicit]
 
 
-@pytest.mark.parametrize("scope", [ConceptFilter(limit=5), ConceptFilter(concept_ids=(1,))])
+@pytest.mark.parametrize(
+    "concept_filter", [ConceptFilter(limit=5), ConceptFilter(concept_ids=(1,))]
+)
 def test_a_standing_scope_must_not_truncate_enumeration(
-    mock_cdm_kg: KnowledgeGraph, scope: ConceptFilter
+    mock_cdm_kg: KnowledgeGraph, concept_filter: ConceptFilter
 ) -> None:
     with pytest.raises(ValueError, match="limit or concept_ids"):
-        OMOPAlchemyImplementation(kg=mock_cdm_kg, concept_filter=scope)
+        OMOPAlchemyImplementation(kg=mock_cdm_kg, concept_filter=concept_filter)
 
 
 def test_relationships_follow_the_oaklib_flags(mock_cdm_kg: KnowledgeGraph) -> None:

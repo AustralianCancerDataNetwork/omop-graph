@@ -19,23 +19,23 @@ from ._core import GraphCore
 class StatisticsMixin(GraphCore):
     """Counts, computed by the database and never by reading the concepts."""
 
-    def concept_counts(self, scope: ConceptFilter = ALL_CONCEPTS) -> ConceptCounts:
-        """Count the concepts in *scope* by vocabulary, domain and validity."""
+    def concept_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> ConceptCounts:
+        """Count the concepts in ``concept_filter`` by vocabulary, domain and validity."""
         with self.session_factory() as session:
             return ConceptCounts(
                 tuple(
                     ConceptCount(row.vocabulary_id, row.domain_id, bool(row.deprecated), row.n)
-                    for row in session.execute(q_concept_counts(scope))
+                    for row in session.execute(q_concept_counts(concept_filter))
                 )
             )
 
-    def relationship_counts(self, scope: ConceptFilter = ALL_CONCEPTS) -> dict[str, int]:
+    def relationship_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> dict[str, int]:
         """
         Count the active relationships of each relationship id.
 
         Parameters
         ----------
-        scope : ConceptFilter
+        concept_filter : ConceptFilter
             Only the relationships whose subject it selects are counted. A scope that
             selects every concept counts the whole table without joining the concepts.
 
@@ -46,13 +46,14 @@ class StatisticsMixin(GraphCore):
         """
         with self.session_factory() as session:
             return {
-                row.relationship_id: row.n for row in session.execute(q_relationship_counts(scope))
+                row.relationship_id: row.n
+                for row in session.execute(q_relationship_counts(concept_filter))
             }
 
-    def synonym_counts(self, scope: ConceptFilter = ALL_CONCEPTS) -> SynonymCounts:
-        """Count the synonyms of the concepts in *scope*, and their distinct names."""
+    def synonym_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> SynonymCounts:
+        """Count the synonyms of the concepts in ``concept_filter``, and their distinct names."""
         with self.session_factory() as session:
-            row = session.execute(q_synonym_counts(scope)).one()
+            row = session.execute(q_synonym_counts(concept_filter)).one()
         return SynonymCounts(row.statements, row.distinct)
 
     def relationship_counts_by(self, grouping: Grouping) -> dict[str, dict[str, int]]:

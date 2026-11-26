@@ -31,11 +31,14 @@ def kg() -> Iterator[KnowledgeGraph]:
 
 
 def test_an_exact_search_ignores_case(kg) -> None:
-    assert list(kg.search("CANCER", scope=ConceptFilter(require_active=True))) == [CANCER, LOWER]
+    assert list(kg.search("CANCER", concept_filter=ConceptFilter(require_active=True))) == [
+        CANCER,
+        LOWER,
+    ]
 
 
 def test_the_kinds_rank_exact_then_prefix_then_substring(kg) -> None:
-    found = list(kg.search("cancer", RANKED, scope=ConceptFilter(require_active=True)))
+    found = list(kg.search("cancer", RANKED, concept_filter=ConceptFilter(require_active=True)))
 
     assert found == [CANCER, LOWER, PREFIXED, CONTAINING]
 
@@ -47,11 +50,13 @@ def test_each_concept_is_found_once(kg) -> None:
 
 
 def test_the_limit_keeps_the_best_matches(kg) -> None:
-    scope = ConceptFilter(require_active=True)
-    everything = list(kg.search("cancer", RANKED, scope=scope))
+    concept_filter = ConceptFilter(require_active=True)
+    everything = list(kg.search("cancer", RANKED, concept_filter=concept_filter))
 
-    assert list(kg.search("cancer", RANKED, scope=scope, limit=2)) == everything[:2]
-    assert list(kg.search("cancer", RANKED, scope=scope, limit=0)) == []
+    assert (
+        list(kg.search("cancer", RANKED, concept_filter=concept_filter, limit=2)) == everything[:2]
+    )
+    assert list(kg.search("cancer", RANKED, concept_filter=concept_filter, limit=0)) == []
 
 
 def test_synonyms_are_searched_on_request(kg) -> None:
@@ -60,34 +65,36 @@ def test_synonyms_are_searched_on_request(kg) -> None:
 
 
 def test_named_identifiers_come_first_when_in_scope(kg) -> None:
-    scope = ConceptFilter(require_active=True)
+    concept_filter = ConceptFilter(require_active=True)
 
-    assert list(kg.search("cancer", RANKED, scope=scope, identifiers=[PREFIXED])) == [
+    assert list(
+        kg.search("cancer", RANKED, concept_filter=concept_filter, identifiers=[PREFIXED])
+    ) == [
         PREFIXED,
         CANCER,
         LOWER,
         CONTAINING,
     ]
-    assert list(kg.search("nothing", scope=scope, identifiers=[RETIRED])) == []
+    assert list(kg.search("nothing", concept_filter=concept_filter, identifiers=[RETIRED])) == []
 
 
 def test_identifiers_count_towards_the_limit(kg) -> None:
-    scope = ConceptFilter(require_active=True)
+    concept_filter = ConceptFilter(require_active=True)
 
-    assert list(kg.search("cancer", RANKED, scope=scope, limit=1, identifiers=[PREFIXED])) == [
-        PREFIXED
-    ]
+    assert list(
+        kg.search("cancer", RANKED, concept_filter=concept_filter, limit=1, identifiers=[PREFIXED])
+    ) == [PREFIXED]
 
 
 def test_a_scope_narrows_the_matches(kg) -> None:
-    scope = ConceptFilter(vocabularies=("ICD10CM",))
+    concept_filter = ConceptFilter(vocabularies=("ICD10CM",))
 
-    assert list(kg.search("malignant neoplasm", scope=scope)) == [SOURCE]
-    assert list(kg.search("cancer", scope=scope)) == []
+    assert list(kg.search("malignant neoplasm", concept_filter=concept_filter)) == [SOURCE]
+    assert list(kg.search("cancer", concept_filter=concept_filter)) == []
 
 
 def test_every_concept_drops_standardness_and_validity() -> None:
-    scope = ConceptFilter(
+    concept_filter = ConceptFilter(
         vocabularies=("SNOMED",),
         domains=("Condition",),
         require_standard=True,
@@ -95,14 +102,18 @@ def test_every_concept_drops_standardness_and_validity() -> None:
         require_active=True,
     )
 
-    assert every_concept(scope) == ConceptFilter(vocabularies=("SNOMED",), domains=("Condition",))
+    assert every_concept(concept_filter) == ConceptFilter(
+        vocabularies=("SNOMED",), domains=("Condition",)
+    )
 
 
 def test_narrowing_keeps_the_vocabularies_both_allow() -> None:
-    scope = ConceptFilter(vocabularies=("SNOMED", "LOINC"))
+    concept_filter = ConceptFilter(vocabularies=("SNOMED", "LOINC"))
 
-    assert narrowed_to_vocabularies(scope, ["LOINC", "ICD10CM", "LOINC"]).vocabularies == ("LOINC",)
-    assert narrowed_to_vocabularies(scope, ["ICD10CM"]).vocabularies == ()
+    assert narrowed_to_vocabularies(concept_filter, ["LOINC", "ICD10CM", "LOINC"]).vocabularies == (
+        "LOINC",
+    )
+    assert narrowed_to_vocabularies(concept_filter, ["ICD10CM"]).vocabularies == ()
 
 
 def test_narrowing_a_scope_without_vocabularies_takes_them_all() -> None:

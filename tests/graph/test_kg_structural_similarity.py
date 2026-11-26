@@ -51,9 +51,9 @@ def test_common_descendants_are_below_both(kg) -> None:
 
 def test_the_scope_hides_concepts_but_the_walk_passes_through_them(kg) -> None:
     assert OUTER_ROOT in kg.common_ancestors(LUNG_CANCER, CANCER)
-    assert kg.common_ancestors(LUNG_CANCER, CANCER, scope=ALL_CONCEPTS) > kg.common_ancestors(
-        LUNG_CANCER, CANCER
-    )
+    assert kg.common_ancestors(
+        LUNG_CANCER, CANCER, concept_filter=ALL_CONCEPTS
+    ) > kg.common_ancestors(LUNG_CANCER, CANCER)
 
 
 def test_jaccard_is_common_over_all_ancestors(kg) -> None:

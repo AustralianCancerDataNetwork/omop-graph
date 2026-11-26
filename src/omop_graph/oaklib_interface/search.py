@@ -127,7 +127,7 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
         if config.is_fuzzy:
             kinds.append(LabelMatchKind.FTS)
 
-        scope = replace(
+        concept_filter = replace(
             every_concept(self.concept_filter),
             require_active=not config.include_obsoletes_in_results,
         )
@@ -138,7 +138,7 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
             search_term,
             kinds,
             synonyms=SearchProperty.ALIAS.text in props,
-            scope=scope,
+            concept_filter=concept_filter,
             limit=config.limit,
             identifiers=identifiers,
         ):

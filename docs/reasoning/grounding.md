@@ -22,7 +22,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 
 1. **Configuration**: Determine graph restrictions using [`GroundingConstraints`](#grounding-constraints)
     - `parent_ids`: OMOP Concept IDs that act as required ancestors — any valid result must be a descendant of at least one of these.
-    - `search_constraint`: A [`ConceptFilter`](#conceptfilter) that filters the initial resolver query by domain, vocabulary, active status, and/or standard status.
+    - `concept_filter`: A [`ConceptFilter`](#conceptfilter) that filters the initial resolver query by domain, vocabulary, active status, and/or standard status.
     - `max_depth` / `predicate_kinds`: Control how far the ancestry check and the anchor walk may go, and along which relationship kinds.
 
 2.  **Resolve**: Use the [`ResolverPipeline`](resolvers.md) to find any concepts (Standard or Non-Standard) matching the text.
@@ -39,12 +39,12 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 
 ## Grounding Constraints
 
-`GroundingConstraints` has four fields. `parent_ids` and `search_constraint` have no default, and either can be `None`:
+`GroundingConstraints` has four fields. `parent_ids` and `concept_filter` have no default, and either can be `None`:
 
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `parent_ids` | `tuple[int, ...] \| None` | required | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). With `None` grounding runs unconstrained: candidates are standardised through identity edges but not checked against a hierarchy, which gives coverage but less disambiguation. |
-| `search_constraint` | `ConceptFilter \| None` | required | Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit). |
+| `concept_filter` | `ConceptFilter \| None` | required | Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit). |
 | `max_depth` | `int` | `6` | With `parent_ids`, the largest `concept_ancestor` distance between a standard concept and a parent, and the identity hops to the standard concept are not capped. Without `parent_ids`, the largest number of identity hops from the candidate to a standard concept. |
 | `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. Currently locked: `__post_init__` raises `ValueError` for any value other than exactly `frozenset({PredicateKind.IDENTITY})` — not yet configurable in practice, despite being a normal dataclass field. |
 
@@ -73,7 +73,7 @@ from omop_graph.reasoning.resolvers import ResolverPipeline
 
 constraints = GroundingConstraints(
     parent_ids=(441840,),  # 'Clinical finding': only accept descendants of this ancestor
-    search_constraint=ConceptFilter(
+    concept_filter=ConceptFilter(
         domains=("Condition",),
         vocabularies=("SNOMED",),
         require_standard=True,

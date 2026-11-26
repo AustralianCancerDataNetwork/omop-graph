@@ -212,7 +212,7 @@ def _run_trace(
     query: str,
     case_id: str,
     parent_ids: tuple[int, ...],
-    search_constraint: ConceptFilter | None,
+    concept_filter: ConceptFilter | None,
     expected_concept_id: int | None,
     top_n: int,
 ) -> dict:
@@ -238,7 +238,7 @@ def _run_trace(
         previously_unseen_hits = 0
         try:
             for hit in resolver.resolve(
-                kg=kg, query=query, constraints=search_constraint, query_embedding=query_embedding
+                kg=kg, query=query, constraints=concept_filter, query_embedding=query_embedding
             ):
                 hit_count += 1
                 if hit.concept_id not in seen:
@@ -256,7 +256,7 @@ def _run_trace(
     pipeline = ResolverPipeline(resolvers=tuple(ORDERED_RESOLVERS))
     grounding_constraints = GroundingConstraints(
         parent_ids=parent_ids,
-        search_constraint=search_constraint,
+        concept_filter=concept_filter,
     )
     scored = ground_term(
         resolver_pipeline=pipeline,
@@ -320,7 +320,7 @@ def _run_trace(
         return {
             "case_id": case_id,
             "query": query,
-            "constraints": _constraints_dict(search_constraint, parent_ids, kg),
+            "constraints": _constraints_dict(concept_filter, parent_ids, kg),
             "resolver_stages": resolver_stages,
             "hierarchy_validation": hierarchy_validation,
             "resolver_scoring": [],
@@ -485,7 +485,7 @@ def _run_trace(
     return {
         "case_id": case_id,
         "query": query,
-        "constraints": _constraints_dict(search_constraint, parent_ids, kg),
+        "constraints": _constraints_dict(concept_filter, parent_ids, kg),
         "resolver_stages": resolver_stages,
         "hierarchy_validation": hierarchy_validation,
         "resolver_scoring": resolver_scoring,
@@ -1983,7 +1983,7 @@ def trace(
                 progress.advance(task_id)
                 continue
 
-            search_constraint = ConceptFilter(
+            concept_filter = ConceptFilter(
                 domains=tuple([str(c) for c in case_domains])
                 if isinstance(case_domains, list)
                 else None,
@@ -1999,7 +1999,7 @@ def trace(
                 kg=kg,
                 query=case_query,
                 parent_ids=tuple(case_parent_ids),
-                search_constraint=search_constraint,
+                concept_filter=concept_filter,
                 expected_concept_id=case_expected,
                 top_n=top_n,
             )

@@ -65,7 +65,7 @@ if matches:
 | Entailment | hierarchy, enumeration | `entailed_relationships`, `all_entailed_relationships`, `gap_filled_relationships`, `entailing_relationship_ids` |
 | Mappings | hierarchy | `mappings`, `mapping_predicates`, `standard_mappings`, `replacements` |
 | Vocabulary | core | `vocabularies`, `domain_concept_ids`, `synonyms`, `translations`, `synonym_languages` |
-| Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_search_constraints` |
+| Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_concept_filter` |
 | Structural similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
 | Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, and their `_by` forms |
 | Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `embed_text`, `embed_concepts` |
@@ -185,7 +185,7 @@ Embeddings are optional, and every method that needs them raises a typed error i
 Code that degrades gracefully asks first: `kg.has_embeddings` is true when `omop-emb` is installed and a configuration is set, and `kg.can_embed_text` when the configuration can also write.
 
 ```python
-matches = kg.nearest_concepts(vector, scope=ConceptFilter(domains=("Condition",)), k=10)
+matches = kg.nearest_concepts(vector, concept_filter=ConceptFilter(domains=("Condition",)), k=10)
 matches = kg.nearest_concepts(concept_id)  # through its stored vector
 matches = kg.nearest_concepts("kidney cancer")  # needs write=True
 kg.embedding_similarity(concept_a, concept_b)  # cosine of the stored vectors

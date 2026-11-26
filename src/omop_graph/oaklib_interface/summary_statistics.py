@@ -34,27 +34,31 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         self, property_values: dict[CURIE, Any] | None, prefixes: list[CURIE] | None
     ) -> ConceptFilter:
         """The adapter's concepts narrowed to the vocabularies, domains and prefixes asked for."""
-        scope = self.concept_filter
+        concept_filter = self.concept_filter
         if prefixes:
-            scope = narrowed_to_vocabularies(
-                scope, (self.codec.vocabulary_id(prefix) for prefix in prefixes)
+            concept_filter = narrowed_to_vocabularies(
+                concept_filter, (self.codec.vocabulary_id(prefix) for prefix in prefixes)
             )
         for key, value in (property_values or {}).items():
             if key == OMOPMetadataKey.VOCABULARY:
-                scope = narrowed_to_vocabularies(scope, [value])
+                concept_filter = narrowed_to_vocabularies(concept_filter, [value])
             elif key == OMOPMetadataKey.DOMAIN:
-                scope = replace(scope, domains=(value,))
+                concept_filter = replace(concept_filter, domains=(value,))
             else:
                 raise ValueError(
                     f"Only {OMOPMetadataKey.VOCABULARY} and {OMOPMetadataKey.DOMAIN} group."
                 )
-        return scope
+        return concept_filter
 
-    def _counts(self, scope: ConceptFilter) -> ConceptCounts:
-        """Count the active concepts of *scope* and the deprecated ones of its vocabularies and domains."""
-        active = tuple(row for row in self.kg.concept_counts(scope).rows if not row.deprecated)
+    def _counts(self, concept_filter: ConceptFilter) -> ConceptCounts:
+        """Count the active concepts of ``concept_filter`` and the deprecated ones of its vocabularies and domains."""
+        active = tuple(
+            row for row in self.kg.concept_counts(concept_filter).rows if not row.deprecated
+        )
         deprecated = tuple(
-            row for row in self.kg.concept_counts(every_concept(scope)).rows if row.deprecated
+            row
+            for row in self.kg.concept_counts(every_concept(concept_filter)).rows
+            if row.deprecated
         )
         return ConceptCounts((*active, *deprecated))
 
@@ -76,7 +80,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
 
     def _edge_and_synonym_counts(
         self,
-        scope: ConceptFilter,
+        concept_filter: ConceptFilter,
         property_values: dict[CURIE, Any] | None,
         prefixes: list[CURIE] | None,
     ) -> tuple[dict[str, int], SynonymCounts]:
@@ -86,7 +90,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         A single vocabulary or domain is read from counts of every group made in one pass
         and kept, when the adapter does not restrict its vocabularies and domains.
         """
-        every = every_concept(scope)
+        every = every_concept(concept_filter)
         groups = {
             OMOPMetadataKey.VOCABULARY: Grouping.VOCABULARY,
             OMOPMetadataKey.DOMAIN: Grouping.DOMAIN,
@@ -152,8 +156,8 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
             raise ValueError("Counting the branches below roots is not supported.")
         if include_entailed:
             raise ValueError("Counting entailed edges is not supported.")
-        scope = self._statistics_scope(property_values, prefixes)
-        counts = self._counts(scope)
+        concept_filter = self._statistics_scope(property_values, prefixes)
+        counts = self._counts(concept_filter)
         statistics = UngroupedStatistics(branch_name or "AllBranches")
         if not parent:
             self._add_statistics_metadata(statistics)
@@ -163,7 +167,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         statistics.object_property_count = len(self.kg.default_relationship_ids)
         statistics.deprecated_object_property_count = 0
         statistics.ontology_count = len(counts.by_vocabulary())
-        edges, synonyms = self._edge_and_synonym_counts(scope, property_values, prefixes)
+        edges, synonyms = self._edge_and_synonym_counts(concept_filter, property_values, prefixes)
         statistics.edge_count_by_predicate = {
             curie: FacetedCount(curie, filtered_count=count)
             for relationship_id, count in edges.items()

@@ -240,7 +240,7 @@ def q_concept_synonym() -> Select:
 
 def q_concept_name_match(
     query_concept_name: str,
-    search_constraint: ConceptFilter | None = None,
+    concept_filter: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -251,7 +251,7 @@ def q_concept_name_match(
     ----------
     query_concept_name : str
         The concept name to match.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -269,10 +269,10 @@ def q_concept_name_match(
         )
     else:
         base_stmt = q_concept_name().where(func.lower(name_expr) == func.lower(query_concept_name))
-    if search_constraint:
-        if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError("search_constraint must be an instance of ConceptFilter")
-        base_stmt = search_constraint.apply(base_stmt)
+    if concept_filter:
+        if not isinstance(concept_filter, ConceptFilter):
+            raise TypeError("concept_filter must be an instance of ConceptFilter")
+        base_stmt = concept_filter.apply(base_stmt)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
     return base_stmt
@@ -280,7 +280,7 @@ def q_concept_name_match(
 
 def q_concept_name_ilike(
     query_concept_name: str,
-    search_constraint: ConceptFilter | None = None,
+    concept_filter: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
     anchored: bool = False,
@@ -292,7 +292,7 @@ def q_concept_name_ilike(
     ----------
     query_concept_name : str
         The concept name to search for. ``%``, ``_`` and ``\\`` match themselves.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Additional filters.
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -311,10 +311,10 @@ def q_concept_name_ilike(
     base_stmt = (q_concept_synonym() if synonym else q_concept_name()).where(
         name_expr.ilike(pattern, escape="\\")
     )
-    if search_constraint:
-        if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError("search_constraint must be an instance of ConceptFilter")
-        base_stmt = search_constraint.apply(base_stmt)
+    if concept_filter:
+        if not isinstance(concept_filter, ConceptFilter):
+            raise TypeError("concept_filter must be an instance of ConceptFilter")
+        base_stmt = concept_filter.apply(base_stmt)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
     return base_stmt
@@ -324,7 +324,7 @@ def q_concept_name_fulltext(
     query_concept_name: str,
     *,
     engine: Engine | Connection,
-    search_constraint: ConceptFilter | None = None,
+    concept_filter: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -343,7 +343,7 @@ def q_concept_name_fulltext(
         The concept name to search for.
     engine : Engine or Connection
         Bindable whose schema_translate_map locates the vocabulary schema.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -365,8 +365,8 @@ def q_concept_name_fulltext(
 
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
-    if search_constraint:
-        stmt = search_constraint.apply(stmt)
+    if concept_filter:
+        stmt = concept_filter.apply(stmt)
 
     if sort:
         stmt = stmt.order_by(
@@ -633,31 +633,31 @@ def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> 
 
 
 def _subjects_in_scope(
-    stmt: Select, concept_id: InstrumentedAttribute[int], scope: ConceptFilter
+    stmt: Select, concept_id: InstrumentedAttribute[int], concept_filter: ConceptFilter
 ) -> Select:
-    """Restrict *stmt* to the rows whose concept *scope* selects, joining only when it restricts."""
-    if scope == ALL_CONCEPTS:
+    """Restrict *stmt* to the rows whose concept ``concept_filter`` selects, joining only when it restricts."""
+    if concept_filter == ALL_CONCEPTS:
         return stmt
-    return scope.apply(stmt.join(Concept, Concept.concept_id == concept_id))
+    return concept_filter.apply(stmt.join(Concept, Concept.concept_id == concept_id))
 
 
-def q_relationship_counts(scope: ConceptFilter) -> Select:
-    """Count the active relationships by id, from the concepts *scope* selects."""
+def q_relationship_counts(concept_filter: ConceptFilter) -> Select:
+    """Count the active relationships by id, from the concepts ``concept_filter`` selects."""
     stmt = (
         select(Concept_Relationship.relationship_id, func.count().label("n"))
         .where(Concept_Relationship.is_valid_expr())
         .group_by(Concept_Relationship.relationship_id)
     )
-    return _subjects_in_scope(stmt, Concept_Relationship.concept_id_1, scope)
+    return _subjects_in_scope(stmt, Concept_Relationship.concept_id_1, concept_filter)
 
 
-def q_synonym_counts(scope: ConceptFilter) -> Select:
-    """Count the synonyms, and the distinct synonym names, of the concepts *scope* selects."""
+def q_synonym_counts(concept_filter: ConceptFilter) -> Select:
+    """Count the synonyms, and the distinct synonym names, of the concepts ``concept_filter`` selects."""
     stmt = select(
         func.count().label("statements"),
         func.count(Concept_Synonym.concept_synonym_name.distinct()).label("distinct"),
     ).select_from(Concept_Synonym)
-    return _subjects_in_scope(stmt, Concept_Synonym.concept_id, scope)
+    return _subjects_in_scope(stmt, Concept_Synonym.concept_id, concept_filter)
 
 
 def _grouping_column(grouping: Grouping) -> InstrumentedAttribute[str]:

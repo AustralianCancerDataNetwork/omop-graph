@@ -425,7 +425,7 @@ def _evaluate_grounded_case(
 ) -> dict[str, object]:
     """Evaluate one case using ``ground_term`` and return poster-friendly results."""
 
-    search_constraint = case_constraints(case)
+    concept_filter = case_constraints(case)
     parent_ids = _resolve_parent_ids(case, default_parent_ids)
     if parent_ids is None:
         raise ValueError(
@@ -444,7 +444,7 @@ def _evaluate_grounded_case(
         query_embedding=text_embedding,
         constraints=GroundingConstraints(
             parent_ids=parent_ids,
-            search_constraint=search_constraint,
+            concept_filter=concept_filter,
             max_depth=6,
             predicate_kinds=frozenset({PredicateKind.IDENTITY}),
         ),

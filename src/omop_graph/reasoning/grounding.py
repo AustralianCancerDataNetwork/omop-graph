@@ -54,7 +54,7 @@ class GroundingConstraints:
         standardized via identity hops, but without ancestor verification. This
         trades disambiguation power for coverage. Results are ranked by relevance
         and identity-hop distance only, not by proximity to a known hierarchy branch.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
         With ``parent_ids``, the maximum ``concept_ancestor`` distance between a
@@ -81,7 +81,7 @@ class GroundingConstraints:
     """
 
     parent_ids: tuple[int, ...] | None
-    search_constraint: ConceptFilter | None
+    concept_filter: ConceptFilter | None
     max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
@@ -162,7 +162,9 @@ def _embedding_matches(
         )
     try:
         matches = kg.nearest_concepts(
-            query_embedding, scope=ConceptFilter(concept_ids=concept_ids), k=len(concept_ids)
+            query_embedding,
+            concept_filter=ConceptFilter(concept_ids=concept_ids),
+            k=len(concept_ids),
         )
     except EmbeddingModelNotRegisteredError as error:
         logger.info(error)
@@ -208,9 +210,9 @@ def ground_term(
     """
     standard_concepts: list[StandardConcept] = []
 
-    search_constraints = constraints.search_constraint
-    if search_constraints is not None:
-        kg.check_search_constraints(search_constraints)
+    concept_filter = constraints.concept_filter
+    if concept_filter is not None:
+        kg.check_concept_filter(concept_filter)
 
     # Only embed the query on demand when an EmbeddingResolver needs it and the KG can embed text.
     # Otherwise embedding-based features stay disabled for this call.
@@ -235,7 +237,7 @@ def ground_term(
         resolver_pipeline.resolve(
             kg,
             query,
-            constraints=search_constraints,
+            constraints=concept_filter,
             query_embedding=query_embedding,
         )
     )
