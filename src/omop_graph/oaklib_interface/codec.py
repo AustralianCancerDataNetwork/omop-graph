@@ -325,7 +325,9 @@ class OMOPCodec:
         The relationship ids of the predicate CURIEs.
 
         A predicate that is not an OMOP one, or names no classified relationship, selects
-        nothing. An info message names it, once for each predicate.
+        nothing. It is named once, in a warning when it has the ``OMOP_REL`` prefix, since
+        it is then probably a typo, and at debug level otherwise, since oaklib callers pass
+        predicates of other ontologies.
         """
         relationship_ids: set[str] = set()
         for predicate in predicates:
@@ -337,7 +339,10 @@ class OMOPCodec:
                 and predicate not in self._ignored_predicates
             ):
                 self._ignored_predicates.add(predicate)
-                logger.warning(
-                    "The predicate %s names no OMOP relationship and matches nothing.", predicate
+                level = logging.WARNING if relationship_id is not None else logging.DEBUG
+                logger.log(
+                    level,
+                    "The predicate %s names no OMOP relationship and matches nothing.",
+                    predicate,
                 )
         return frozenset(relationship_ids)

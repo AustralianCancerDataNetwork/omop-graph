@@ -48,13 +48,24 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         object: CURIE,
         predicates: list[PRED_CURIE] | None = None,
         include_owl_thing: bool = True,
-    ) -> Iterable[CURIE]:
+    ) -> Iterator[CURIE]:
         """
         Yield the common ancestors that have no descendant among the common ancestors.
 
         When there are none, ``owl:Thing`` is yielded if *include_owl_thing* is set.
+
+        Raises
+        ------
+        ValueError
+            At the call, if *predicates* names more than ``rdfs:subClassOf``.
         """
         self._check_predicates(predicates)
+        return self._most_recent_common_ancestors(subject, object, include_owl_thing)
+
+    def _most_recent_common_ancestors(
+        self, subject: CURIE, object: CURIE, include_owl_thing: bool
+    ) -> Iterator[CURIE]:
+        """Yield the most recent common ancestors of two concepts."""
         pair = self._resolve_pair(subject, object)
         found = (
             self.kg.most_recent_common_ancestors(*pair, concept_filter=self._population)
@@ -75,8 +86,21 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         object_ancestors: list[CURIE] | None = None,
         include_owl_thing: bool = True,
     ) -> Iterable[CURIE]:
-        """Yield the concepts that are, or are above, both concepts, and ``owl:Thing`` if asked."""
+        """
+        Yield the concepts that are, or are above, both concepts, and ``owl:Thing`` if asked.
+
+        Raises
+        ------
+        ValueError
+            At the call, if *predicates* names more than ``rdfs:subClassOf``.
+        """
         self._check_predicates(predicates)
+        return self._common_ancestors(subject, object, include_owl_thing)
+
+    def _common_ancestors(
+        self, subject: CURIE, object: CURIE, include_owl_thing: bool
+    ) -> Iterator[CURIE]:
+        """Yield the common ancestors of two concepts."""
         pair = self._resolve_pair(subject, object)
         found = (
             self.kg.common_ancestors(*pair, concept_filter=self._population)
@@ -95,8 +119,19 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         predicates: list[PRED_CURIE] | None = None,
         include_owl_nothing: bool = False,
     ) -> Iterable[CURIE]:
-        """Yield the concepts that are, or are below, both concepts."""
+        """
+        Yield the concepts that are, or are below, both concepts.
+
+        Raises
+        ------
+        ValueError
+            At the call, if *predicates* names more than ``rdfs:subClassOf``.
+        """
         self._check_predicates(predicates)
+        return self._common_descendants(subject, object)
+
+    def _common_descendants(self, subject: CURIE, object: CURIE) -> Iterator[CURIE]:
+        """Yield the common descendants of two concepts."""
         if pair := self._resolve_pair(subject, object):
             for concept_id in sorted(
                 self.kg.common_descendants(*pair, concept_filter=self._population)
@@ -139,10 +174,22 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         The descendants include the concept and the concepts are those in scope. Without
         *curies* every concept in scope is scored, which counts the descendants of each.
         Associations are not supported.
+
+        Raises
+        ------
+        ValueError
+            At the call, if *object_closure_predicates* names more than ``rdfs:subClassOf``,
+            or *use_associations* is set.
         """
         self._check_predicates(object_closure_predicates)
         if use_associations:
             raise ValueError("OMOP has no associations to compute information content from.")
+        return self._information_content_scores(curies)
+
+    def _information_content_scores(
+        self, curies: Iterable[CURIE] | None
+    ) -> Iterator[tuple[CURIE, float]]:
+        """Yield each concept with its information content."""
         batches = (
             self.kg.batches(self.entities())
             if curies is None

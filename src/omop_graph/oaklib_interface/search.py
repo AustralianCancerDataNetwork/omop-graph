@@ -93,21 +93,24 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
         config : SearchConfiguration, optional
             Which properties to search and how to match. ``limit`` caps the results.
 
-        Yields
-        ------
-        CURIE
+        Returns
+        -------
+        Iterator[CURIE]
             The CURIEs of matching concepts, each once.
 
         Raises
         ------
         ValueError
-            If the syntax is regular expression, SQL or Lucene, which are not supported.
+            At the call, if the syntax is regular expression, SQL or Lucene, which are not supported.
         """
         config = config or SearchConfiguration()
         for syntax in self.UNSUPPORTED_SYNTAXES:
             if config.syntax == SearchTermSyntax(syntax.text):
                 raise ValueError(f"{syntax.text} search is not supported for OMOP")
+        return self._search(search_term, config)
 
+    def _search(self, search_term: str, config: SearchConfiguration) -> Iterator[CURIE]:
+        """Yield the CURIEs of the concepts that match the term."""
         props = set(_normalise_properties(config))
         ignored = [field for field in self.IGNORED_SEARCH_FIELDS if getattr(config, field)]
         ignored += sorted(props - self.SUPPORTED_PROPERTIES - {SearchProperty.ANYTHING.text})

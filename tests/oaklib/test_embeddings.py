@@ -178,3 +178,21 @@ def test_a_text_cannot_be_embedded_with_a_read_only_configuration(sessions, stor
 
     with pytest.raises(EmbeddingWriterRequiredError):
         adapter.text_embedding("cancer", model=STORED)
+
+
+def test_the_stored_model_is_the_default_when_the_graph_has_one(sessions, store) -> None:
+    adapter = _with_store(sessions, store, write=True)
+
+    ids, _ = adapter.entity_embeddings([curie(LUNG_CANCER), curie(CANCER)])
+    found = list(adapter.nearest_entities(curie(LUNG_CANCER), limit=1))
+
+    assert ids == [curie(LUNG_CANCER), curie(CANCER)]
+    assert [c for c, _ in found] == [curie(CANCER)]
+    assert adapter.text_embedding("lung cancer").shape == (2,)
+
+
+def test_the_closure_model_is_the_default_without_a_store(plain) -> None:
+    ids, matrix = plain.entity_embeddings([curie(LUNG_CANCER), curie(CANCER)])
+
+    assert ids == [curie(LUNG_CANCER), curie(CANCER)]
+    assert matrix.shape[0] == 2

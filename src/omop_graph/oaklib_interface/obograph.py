@@ -27,6 +27,7 @@ from omop_graph.extensions.omop_alchemy import HierarchyDirection
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.language import OMOPLanguage
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
+from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
 
 class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
@@ -252,6 +253,34 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         The parameters are those of :meth:`ancestors`, in the other direction.
         """
         yield from self._walk(start_curies, predicates, reflexive, method, HierarchyDirection.DOWN)
+
+    def paths(
+        self,
+        start_curies: CURIE | list[CURIE],
+        target_curies: CURIE | list[CURIE],
+        predicates: list[PRED_CURIE] | None = None,
+        predicate_weights: dict[PRED_CURIE, float] | None = None,
+        shortest: bool = True,
+        directed: bool = False,
+    ) -> Iterator[tuple[CURIE, CURIE, CURIE]]:
+        """
+        Yield the shortest paths between the start and the target concepts.
+
+        Raises
+        ------
+        OMOPUnsupportedError
+            If *shortest* is False, since every path between two concepts is unbounded.
+        """
+        if not shortest:
+            raise OMOPUnsupportedError("OboGraphInterface.paths(shortest=False)")
+        return super().paths(
+            start_curies,
+            target_curies,
+            predicates,  # ty: ignore[invalid-argument-type]
+            predicate_weights,  # ty: ignore[invalid-argument-type]
+            shortest,
+            directed,
+        )
 
     def _graph(self, triples: Iterable[tuple[CURIE, PRED_CURIE, CURIE]], nodes=()) -> Graph:
         """Build a graph, naming all its concepts and predicates with one lookup per kind."""

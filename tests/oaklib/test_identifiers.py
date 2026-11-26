@@ -273,7 +273,7 @@ def test_the_prefix_map_covers_the_prefixes_the_adapter_emits(adapter) -> None:
 def test_a_predicate_that_matches_nothing_is_mentioned_once(
     adapter, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG, logger="omop_graph.oaklib_interface.codec"):
         list(adapter.ancestors(curie(CHILD), predicates=[IS_A, "BFO:0000051"]))
         list(adapter.ancestors(curie(CHILD), predicates=["BFO:0000051"]))
 
@@ -287,3 +287,18 @@ def test_a_filter_that_names_no_concept_is_mentioned(
         assert list(adapter.relationships(subjects=[UNKNOWN])) == []
 
     assert f"No CURIE names a concept, so nothing matches: ['{UNKNOWN}']" in caplog.text
+
+
+def test_a_foreign_predicate_is_logged_quietly_and_an_omop_one_with_a_warning(
+    adapter, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG, logger="omop_graph.oaklib_interface.codec"):
+        adapter.codec.relationship_ids(["BFO:0000999", "OMOP_REL:Has%20typo"])
+
+    levels = {record.getMessage(): record.levelno for record in caplog.records}
+    assert levels["The predicate BFO:0000999 names no OMOP relationship and matches nothing."] == (
+        logging.DEBUG
+    )
+    assert levels[
+        "The predicate OMOP_REL:Has%20typo names no OMOP relationship and matches nothing."
+    ] == (logging.WARNING)

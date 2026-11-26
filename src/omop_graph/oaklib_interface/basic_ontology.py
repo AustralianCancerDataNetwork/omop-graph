@@ -38,7 +38,9 @@ from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
-from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
+from omop_graph.oaklib_interface.unsupported import (
+    OMOPUnsupportedPropertyError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +309,23 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """OMOP has no text definitions."""
         return None
 
+    def definitions(
+        self,
+        curies: Iterable[CURIE],
+        include_metadata: bool = False,
+        include_missing: bool = False,
+        lang: str | None = None,
+    ) -> Iterator[tuple]:
+        """
+        OMOP has no text definitions, so nothing is yielded unless *include_missing* is set.
+
+        With *include_missing* each CURIE is yielded with no definition, and with
+        *include_metadata* also with empty metadata.
+        """
+        if include_missing:
+            for curie in curies:
+                yield (curie, None, {}) if include_metadata else (curie, None)
+
     def comments(
         self, curies: Iterable[CURIE], allow_none: bool = True, lang: str | None = None
     ) -> Iterable[tuple[CURIE, str | None]]:
@@ -345,20 +364,26 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             Replaces the adapter's ``concept_filter`` for this call and is used as given,
             so ``filter_obsoletes`` does not apply.
 
-        Yields
+        Returns
         -------
-        CURIE
+        Iterable[CURIE]
             Concept or predicate identifiers.
 
         Raises
         ------
         ValueError
-            If ``owl_type`` is not an OWL type.
+            At the call, if ``owl_type`` is not an OWL type.
         """
         if owl_type is not None and owl_type not in OWL_META_CLASSES:
             raise ValueError(
                 f"{owl_type!r} is not an OWL type; expected one of {OWL_META_CLASSES}."
             )
+        return self._entities(filter_obsoletes, owl_type, concept_filter)
+
+    def _entities(
+        self, filter_obsoletes: bool, owl_type: str | None, concept_filter: ConceptFilter | None
+    ) -> Iterator[CURIE]:
+        """Yield the concepts, or the relationships, of the graph."""
         if owl_type == OWL_OBJECT_PROPERTY:
             yield from self.predicates_by_curie
             return
@@ -647,11 +672,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     @property
     def edge_index(self):
-        raise OMOPUnsupportedError("BasicOntologyInterface.edge_index")
+        raise OMOPUnsupportedPropertyError("BasicOntologyInterface.edge_index")
 
     @property
     def entailed_edge_index(self):
-        raise OMOPUnsupportedError("BasicOntologyInterface.entailed_edge_index")
+        raise OMOPUnsupportedPropertyError("BasicOntologyInterface.entailed_edge_index")
 
     def hierarchical_parents(self, curie: CURIE, isa_only: bool = False) -> list[CURIE]:
         """

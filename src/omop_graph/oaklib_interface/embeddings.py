@@ -31,6 +31,11 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         configuration = self.kg.embedding_configuration
         return configuration.model_name if configuration and self.kg.has_embeddings else None
 
+    @property
+    def default_embedding_model(self) -> str | None:
+        """The stored model when the graph has an embedding store, otherwise oaklib's closure model."""
+        return self._store_model
+
     def _is_store_model(self, model: str | None) -> bool:
         """Whether *model*, or the default, is the stored one."""
         return self._store_model is not None and self._resolve_model(model) == self._store_model

@@ -1,9 +1,7 @@
 """Checks that the adapter honours the oaklib interfaces it claims.
 
-Every method that raises ``NotImplementedError`` in a claimed oaklib interface must be
-implemented by the adapter or registered in ``UNSUPPORTED``. Methods still to be done are
-listed in ``PENDING`` and shrink as the phases land: a pending method that gets implemented
-fails its strict xfail until it is removed from the list.
+Every method that raises ``NotImplementedError``, whatever the arguments, in a claimed oaklib
+interface must be implemented by the adapter or registered in ``UNSUPPORTED``.
 """
 
 from __future__ import annotations
@@ -27,26 +25,25 @@ from omop_graph.oaklib_interface.unsupported import NOT_CLAIMED, UNSUPPORTED
 
 CLAIMED = tuple(claimed_interface_classes().values())
 
-PENDING: frozenset[str] = frozenset()
+AUDITED_GUARDS = {
+    "EmbeddingProviderInterface.entity_embeddings": "raises only when the adapter is not an OboGraphInterface or a SemanticSimilarityInterface",
+    "SemanticSimilarityInterface.setwise_most_recent_common_ancestors": "raises only when the adapter is not an OboGraphInterface",
+    "SemanticSimilarityInterface.multiset_most_recent_common_ancestors": "raises only when the adapter is not an OboGraphInterface",
+}
+"""Methods whose oaklib raise sits behind a check of the adapter's own type that it passes."""
 
 
 def _raises_not_implemented(function: Callable) -> bool:
-    """True when the body of *function* is only a ``raise NotImplementedError``."""
+    """True when *function* raises a bare ``NotImplementedError`` anywhere, also for some arguments."""
     try:
         node = ast.parse(textwrap.dedent(inspect.getsource(function))).body[0]
     except (OSError, TypeError, SyntaxError):
         return False
-    if not isinstance(node, ast.FunctionDef):
-        return False
-    body = [
-        statement
-        for statement in node.body
-        if not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant))
-    ]
-    return (
-        len(body) == 1
-        and isinstance(body[0], ast.Raise)
-        and "NotImplementedError" in ast.dump(body[0])
+    return any(
+        isinstance(statement, ast.Raise)
+        and isinstance(statement.exc, (ast.Name, ast.Call))
+        and "NotImplementedError" in ast.dump(statement.exc)
+        for statement in ast.walk(node)
     )
 
 
@@ -57,13 +54,20 @@ def _claimed_methods() -> Iterator[tuple[type, str, Callable]]:
                 yield interface, name, member
 
 
+def _claimed_members() -> Iterator[tuple[type, str, Callable]]:
+    """The methods of the claimed interfaces, and the getters of their properties."""
+    for interface in CLAIMED:
+        for name, member in vars(interface).items():
+            function = member.fget if isinstance(member, property) else member
+            if inspect.isfunction(function) and not name.startswith("__"):
+                yield interface, name, function
+
+
 def _unimplemented_cases() -> Iterator[Any]:
-    for interface, name, member in _claimed_methods():
+    for interface, name, member in _claimed_members():
         if not _raises_not_implemented(member):
             continue
-        key = f"{interface.__name__}.{name}"
-        marks = [pytest.mark.xfail(strict=True, reason="pending")] if key in PENDING else []
-        yield pytest.param(interface, name, id=key, marks=marks)
+        yield pytest.param(interface, name, id=f"{interface.__name__}.{name}")
 
 
 def _is_compatible(base: inspect.Signature, override: inspect.Signature) -> bool:
@@ -109,11 +113,15 @@ def test_overrides_accept_every_call_the_interface_accepts(
 def test_methods_that_raise_in_oaklib_are_implemented_or_registered(
     interface: type, name: str
 ) -> None:
+    key = f"{interface.__name__}.{name}"
+    if key in AUDITED_GUARDS:
+        pytest.skip(AUDITED_GUARDS[key])
     override = inspect.getattr_static(OMOPAlchemyImplementation, name)
     function = override.fget if isinstance(override, property) else override
+    registered = any(entry.partition("(")[0] == key for entry in UNSUPPORTED)
 
-    assert function is not vars(interface)[name]
-    assert f"{interface.__name__}.{name}" in UNSUPPORTED or not _raises_not_implemented(function)
+    assert registered or function is not vars(interface)[name]
+    assert registered or not _raises_not_implemented(function)
 
 
 def test_every_oaklib_interface_is_implemented_or_listed_with_a_reason() -> None:
@@ -124,7 +132,7 @@ def test_every_unsupported_method_belongs_to_an_implemented_interface() -> None:
     claimed = claimed_interface_classes()
 
     for key in UNSUPPORTED:
-        interface, _, method = key.partition(".")
+        interface, _, method = key.partition("(")[0].partition(".")
         assert hasattr(claimed[interface], method), key
 
 

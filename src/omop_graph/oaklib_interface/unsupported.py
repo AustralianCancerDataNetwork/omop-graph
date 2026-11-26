@@ -33,6 +33,11 @@ _NO_CLOSURE_SCAN = (
     "compare against every concept. Pass candidates, or search the omop-emb model."
 )
 
+_NO_ALL_PATHS = (
+    "Listing every path between two concepts is unbounded in the Is a hierarchy. "
+    "Ask for the shortest paths, which is the default."
+)
+
 _IC_COMPUTED = (
     "Information content is computed from the Is a hierarchy, so scores cannot be loaded or set."
 )
@@ -45,6 +50,7 @@ UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.clone": _READ_ONLY,
     "BasicOntologyInterface.query": "OMOP has no query language that oaklib can pass through.",
     "OboGraphInterface.load_graph": _READ_ONLY,
+    "OboGraphInterface.paths(shortest=False)": _NO_ALL_PATHS,
     "BasicOntologyInterface.edge_index": _NO_EDGE_INDEX,
     "BasicOntologyInterface.entailed_edge_index": _NO_EDGE_INDEX,
     "MappingProviderInterface.get_mapping_clusters": _NO_CLUSTERS,
@@ -61,7 +67,12 @@ UNSUPPORTED: dict[str, str] = {
     "EmbeddingProviderInterface.nearest_entities": _NO_CLOSURE_SCAN,
     "EmbeddingProviderInterface.nearest_entities_to_vector": _NO_CLOSURE_SCAN,
 }
-"""Reason for each unsupported oaklib method, keyed by ``Interface.method``."""
+"""
+Reason for each unsupported oaklib method, keyed by ``Interface.method``.
+
+A method that is unsupported only for some arguments has the condition after its name, as in
+``Interface.method(argument=value)``.
+"""
 
 
 @dataclass(frozen=True)
@@ -114,6 +125,15 @@ class OMOPUnsupportedError(NotImplementedError):
     def __init__(self, key: str):
         super().__init__(f"{key} is not supported by the OMOP adapter. {UNSUPPORTED[key]}")
         self.key = key
+
+
+class OMOPUnsupportedPropertyError(OMOPUnsupportedError, AttributeError):
+    """
+    A property with no OMOP equivalent.
+
+    It is also an ``AttributeError``, so ``hasattr`` and ``inspect.getmembers`` treat the
+    property as absent and do not raise.
+    """
 
 
 class ReadOnlyMixin:
