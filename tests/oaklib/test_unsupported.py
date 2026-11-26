@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from oaklib import interfaces
 
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.oaklib_interface._compliance import oaklib_interface_classes
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 from omop_graph.oaklib_interface.unsupported import UNSUPPORTED, OMOPUnsupportedError
 
@@ -12,7 +12,7 @@ from omop_graph.oaklib_interface.unsupported import UNSUPPORTED, OMOPUnsupported
 def test_every_registered_method_exists_on_its_oaklib_interface(key: str) -> None:
     interface_name, method = key.split(".")
 
-    assert hasattr(getattr(interfaces, interface_name), method)
+    assert hasattr(oaklib_interface_classes()[interface_name], method)
 
 
 @pytest.mark.parametrize("key", [key for key in UNSUPPORTED if "edge_index" not in key])

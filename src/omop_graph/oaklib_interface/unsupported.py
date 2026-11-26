@@ -28,6 +28,15 @@ _NO_SPANS = (
     "Spans within a longer text are not annotated."
 )
 
+_NO_CLOSURE_SCAN = (
+    "The closure models have no vector index, and searching them without candidates would "
+    "compare against every concept. Pass candidates, or search the omop-emb model."
+)
+
+_IC_COMPUTED = (
+    "Information content is computed from the Is a hierarchy, so scores cannot be loaded or set."
+)
+
 UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.set_label": _READ_ONLY,
     "BasicOntologyInterface.create_entity": _READ_ONLY,
@@ -40,6 +49,10 @@ UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.entailed_edge_index": _NO_EDGE_INDEX,
     "MappingProviderInterface.get_mapping_clusters": _NO_CLUSTERS,
     "TextAnnotatorInterface.annotate_text": _NO_SPANS,
+    "SemanticSimilarityInterface.load_information_content_scores": _IC_COMPUTED,
+    "SemanticSimilarityInterface.set_information_content_scores": _IC_COMPUTED,
+    "EmbeddingProviderInterface.nearest_entities": _NO_CLOSURE_SCAN,
+    "EmbeddingProviderInterface.nearest_entities_to_vector": _NO_CLOSURE_SCAN,
 }
 """Reason for each unsupported oaklib method, keyed by ``Interface.method``."""
 
@@ -62,13 +75,6 @@ class UnclaimedInterface:
 
 
 NOT_CLAIMED: dict[str, UnclaimedInterface] = {
-    "SemanticSimilarityInterface": UnclaimedInterface(
-        "Structural similarity from the ancestry, with the cosine similarity from omop-emb.",
-        planned=True,
-    ),
-    "EmbeddingProviderInterface": UnclaimedInterface(
-        "Vectors from omop-emb, an optional extra.", planned=True
-    ),
     "SubsetterInterface": UnclaimedInterface(
         "Gap filling from the ancestry. Extracting a subset needs an in-memory ontology.",
         planned=True,
