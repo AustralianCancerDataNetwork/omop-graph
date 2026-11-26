@@ -36,7 +36,7 @@ The extras for a DuckDB CDM (`[duckdb]`) and for embeddings (`[emb]`, `[pgvector
 ```python
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.model.nodes import LabelMatchKind
+from omop_graph.graph.model.matches import LabelMatchKind
 
 kg = KnowledgeGraph(cdm_session_factory())  # the configured cdm_db
 

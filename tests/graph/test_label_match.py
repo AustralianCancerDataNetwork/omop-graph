@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from omop_graph.graph.model.nodes import LabelMatch, LabelMatchGroupView, LabelMatchKind
+from omop_graph.graph.model.matches import LabelMatch, LabelMatchGroupView, LabelMatchKind
 
 
 def match(kind: LabelMatchKind) -> LabelMatch:

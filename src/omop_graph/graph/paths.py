@@ -24,7 +24,8 @@ from typing import (
 # Local Application Imports
 from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.model.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
-from omop_graph.graph.model.nodes import AncestorMatch, ConceptView, LabelMatchKind
+from omop_graph.graph.model.matches import LabelMatchKind
+from omop_graph.graph.model.nodes import AncestorMatch, ConceptView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.reasoning.resolvers import CandidateHit
 
