@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import replace
@@ -16,11 +17,22 @@ from ..edges import (
     IS_A_RELATIONSHIP_ID,
     EdgeFilter,
 )
+from ..queries import DEFAULT_CONCEPT_FILTER
+from .enumeration import EnumerationMixin
 from .hierarchy import HierarchyMixin
 
 
-class EntailmentMixin(HierarchyMixin):
+class EntailmentMixin(HierarchyMixin, EnumerationMixin):
     """Relationships entailed through the hierarchy."""
+
+    @functools.cached_property
+    def entailing_relationship_ids(self) -> frozenset[str]:
+        """The classified relationships whose fillers generalise up the ``Is a`` hierarchy."""
+        return frozenset(
+            relationship_id
+            for relationship_id, mapping in self._relationship_mapping.items()
+            if mapping.generalises
+        )
 
     def entailed_relationships(
         self,
@@ -28,13 +40,14 @@ class EntailmentMixin(HierarchyMixin):
         objects: tuple[int, ...] | None,
         edge_filter: EdgeFilter | None = None,
         concept_filter: ConceptFilter | None = None,
+        standardise: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
         Query relationships, including those that follow through the ``Is a`` hierarchy.
 
-        Each triple is yielded once. Every relationship *edge_filter* selects is treated
-        this way, so the caller selects only those for which that is sound, see
-        :attr:`omop_graph.graph.edges.Predicate.generalises`.
+        Of the relationships *edge_filter* selects, those that generalise, see
+        :attr:`omop_graph.graph.edges.Predicate.generalises`, are entailed. The others are
+        yielded as stored, and first. Each entailed triple is yielded once.
 
         Parameters
         ----------
@@ -47,6 +60,10 @@ class EntailmentMixin(HierarchyMixin):
         concept_filter : ConceptFilter, optional
             Which concepts count as entailed objects, and for incoming relationships as
             entailed subjects, as in :meth:`closure`. Asserted edges are unaffected.
+        standardise : bool
+            If True, a concept also has the entailed relationships of the standard concepts
+            it maps to, see :meth:`standardise`, reported for the concept itself. Stored
+            relationships are not lent in this way.
 
         Yields
         ------
@@ -67,6 +84,83 @@ class EntailmentMixin(HierarchyMixin):
         """
         if subjects is None and objects is None:
             raise ValueError("Entailed relationships need subjects or objects")
+        resolved = self._resolve_edge_filter(edge_filter)
+        if resolved is None:
+            return
+        selected = frozenset(self._relationship_mapping)
+        if resolved.predicate_ids is not None:
+            selected &= resolved.predicate_ids
+        entailing = selected & self.entailing_relationship_ids
+        asserted = selected - entailing
+        if asserted:
+            yield from self.relationships(
+                subjects, objects=objects, edge_filter=replace(resolved, predicate_ids=asserted)
+            )
+        if entailing:
+            yield from self._entailed_with_stand_ins(
+                subjects,
+                objects,
+                replace(resolved, predicate_ids=entailing),
+                concept_filter,
+                standardise,
+            )
+
+    def all_entailed_relationships(
+        self,
+        edge_filter: EdgeFilter | None = None,
+        concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+        standardise: bool = False,
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """
+        Yield the entailed relationships of every concept *concept_filter* selects.
+
+        The concepts are read in batches of subjects, so the table is never held in memory.
+        The other parameters are those of :meth:`entailed_relationships`.
+        """
+        for batch in self.batches(self.entities(concept_filter)):
+            yield from self.entailed_relationships(
+                batch, None, edge_filter, concept_filter, standardise
+            )
+
+    def _entailed_with_stand_ins(
+        self,
+        subjects: tuple[int, ...] | None,
+        objects: tuple[int, ...] | None,
+        edge_filter: EdgeFilter,
+        concept_filter: ConceptFilter | None,
+        standardise: bool,
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """Entail along the hierarchy, for the stand-ins of each concept when *standardise*."""
+        if not standardise:
+            yield from self._entailed_along_is_a(subjects, objects, edge_filter, concept_filter)
+            return
+        by_subject = subjects is not None
+        stands_in = self._stands_in(subjects if subjects is not None else objects or ())
+        origins: dict[int, list[int]] = defaultdict(list)
+        for origin, group in stands_in.items():
+            for stand_in in group:
+                origins[stand_in].append(origin)
+        expanded = tuple(origins)
+        seen: set[tuple[int, str, int]] = set()
+        if by_subject:
+            triples = self._entailed_along_is_a(expanded, objects, edge_filter, concept_filter)
+            reported = ((origin, p, o) for s, p, o in triples for origin in origins[s])
+        else:
+            triples = self._entailed_along_is_a(None, expanded, edge_filter, concept_filter)
+            reported = ((s, p, origin) for s, p, o in triples for origin in origins[o])
+        for triple in reported:
+            if triple not in seen:
+                seen.add(triple)
+                yield triple
+
+    def _entailed_along_is_a(
+        self,
+        subjects: tuple[int, ...] | None,
+        objects: tuple[int, ...] | None,
+        edge_filter: EdgeFilter,
+        concept_filter: ConceptFilter | None,
+    ) -> Generator[tuple[int, str, int], None, None]:
+        """Entail every relationship *edge_filter* selects, each triple once."""
         if subjects is not None:
             triples = self._entailed_from_subjects(subjects, objects, edge_filter, concept_filter)
         else:

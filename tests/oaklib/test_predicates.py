@@ -39,6 +39,8 @@ class _FakeKnowledgeGraph:
             _predicate("Maps to", PredicateKind.IDENTITY),
         )
 
+    default_relationship_ids = frozenset({"Is a", "Has dir proc site", "Maps to"})
+
     def relationships(self, subjects, objects, edge_filter: EdgeFilter, invert: bool = False):
         self.filters.append(edge_filter)
         return iter(())

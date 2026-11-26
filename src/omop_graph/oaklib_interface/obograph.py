@@ -169,23 +169,15 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         edge_filter = EdgeFilter(
             predicate_ids=self.codec.relationship_ids(self._traversal_predicates(predicates))
         )
-        standing = self._standing_in(ids.values())
         reached = self.kg.closure(
-            {stand_in for stand_ins in standing.values() for stand_in in stand_ins},
+            ids.values(),
             direction,
             edge_filter,
             self.concept_filter if scoped else None,
+            standardise=self.standardise,
         )
         return {
-            curie: [
-                self.codec.concept_curie(other)
-                for other in sorted(
-                    set().union(
-                        *(reached[stand_in] for stand_in in standing[concept_id]),
-                        set(standing[concept_id]) - {concept_id},
-                    )
-                )
-            ]
+            curie: [self.codec.concept_curie(other) for other in sorted(reached[concept_id])]
             for curie, concept_id in ids.items()
         }
 

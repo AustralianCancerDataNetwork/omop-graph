@@ -26,7 +26,6 @@ from oaklib.interfaces.basic_ontology_interface import (
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.edges import (
     IS_A_RELATIONSHIP_ID,
@@ -118,33 +117,6 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         relationship_id = self.codec.parse_predicate(curie)
         return self._predicates_by_relationship_id.get(relationship_id) if relationship_id else None
-
-    @cached_property
-    def default_relationship_ids(self) -> frozenset[str]:
-        """
-        The classified relationships exposed when no predicate is named.
-
-        A Hierarchy relationship is exposed in its up direction only, so each hierarchical
-        edge appears once, from the child to the parent. The down direction is available
-        by naming it.
-        """
-        return frozenset(
-            predicate.relationship_id
-            for predicate in self.predicates_by_curie.values()
-            if not (
-                predicate.predicate_kind is PredicateKind.HIERARCHY
-                and predicate.direction is HierarchyDirection.DOWN
-            )
-        )
-
-    @cached_property
-    def entailing_relationship_ids(self) -> frozenset[str]:
-        """The classified relationships whose fillers generalise up the ``Is a`` hierarchy."""
-        return frozenset(
-            predicate.relationship_id
-            for predicate in self.predicates_by_curie.values()
-            if predicate.generalises
-        )
 
     def _scope(
         self, filter_obsoletes: bool, id_prefixes: Iterable[str] | None = None
@@ -571,26 +543,30 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         subject_ids = self._concept_ids(subjects)
         object_ids = self._concept_ids(objects)
         predicate_ids = (
-            self.codec.relationship_ids(predicates) if predicates else self.default_relationship_ids
+            self.codec.relationship_ids(predicates)
+            if predicates
+            else self.kg.default_relationship_ids
         )
         if not predicate_ids:
             return
 
         triples: Iterable[tuple[int, str, int]]
+        edge_filter = EdgeFilter(predicate_ids=predicate_ids)
         if not include_entailed:
             triples = self.kg.relationships(
-                subject_ids,
-                objects=object_ids,
-                edge_filter=EdgeFilter(predicate_ids=predicate_ids),
-                invert=invert,
+                subject_ids, objects=object_ids, edge_filter=edge_filter, invert=invert
             )
         else:
             if subject_ids is None and object_ids is None:
-                entailed = self._stream_entailed(predicate_ids)
+                entailed = self.kg.all_entailed_relationships(
+                    edge_filter, self.concept_filter, self.standardise
+                )
             else:
                 if invert:
                     subject_ids, object_ids = object_ids, subject_ids
-                entailed = iter(self._entailed(subject_ids, object_ids, predicate_ids))
+                entailed = self.kg.entailed_relationships(
+                    subject_ids, object_ids, edge_filter, self.concept_filter, self.standardise
+                )
             triples = ((o, p, s) if invert else (s, p, o) for s, p, o in entailed)
         for s, p, o in triples:
             yield (
@@ -638,7 +614,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     def _all_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """Stream every active edge of the exposed relationships, without loading them all."""
         for s, p, o in self.kg.all_relationships(
-            EdgeFilter(predicate_ids=self.default_relationship_ids)
+            EdgeFilter(predicate_ids=self.kg.default_relationship_ids)
         ):
             yield (
                 self.codec.concept_curie(s),
@@ -646,79 +622,13 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 self.codec.concept_curie(o),
             )
 
-    def _standing_in(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
-        """
-        Map each concept to the concepts it stands in for: itself, and with ``standardise``
-        also the standard concepts it maps to.
-        """
-        ids = tuple(dict.fromkeys(concept_ids))
-        if not self.standardise:
-            return {concept_id: (concept_id,) for concept_id in ids}
-        return {
-            concept_id: tuple(dict.fromkeys((concept_id, *targets)))
-            for concept_id, targets in self.kg.standardise(ids).items()
-        }
-
-    def _entailed(
-        self,
-        subject_ids: tuple[int, ...] | None,
-        object_ids: tuple[int, ...] | None,
-        relationship_ids: frozenset[str],
-    ) -> Iterator[tuple[int, str, int]]:
-        """
-        The relationships of *relationship_ids* of the subjects, or of the objects when
-        there are no subjects.
-
-        A relationship that entails along ``Is a`` is followed up that hierarchy. The others
-        are the stored ones. With ``standardise`` a concept also has the entailing
-        relationships of the standard concepts it maps to, reported for the concept itself.
-        """
-        entailing = relationship_ids & self.entailing_relationship_ids
-        asserted = relationship_ids - entailing
-        if asserted:
-            yield from self.kg.relationships(
-                subject_ids, objects=object_ids, edge_filter=EdgeFilter(predicate_ids=asserted)
-            )
-        if not entailing:
-            return
-        edge_filter = EdgeFilter(predicate_ids=entailing)
-        if not self.standardise:
-            yield from self.kg.entailed_relationships(
-                subject_ids, object_ids, edge_filter, self.concept_filter
-            )
-            return
-        by_subject = subject_ids is not None
-        assert subject_ids is not None or object_ids is not None
-        standing = self._standing_in(subject_ids if subject_ids is not None else object_ids or ())
-        origins: dict[int, list[int]] = defaultdict(list)
-        for origin, stand_ins in standing.items():
-            for stand_in in stand_ins:
-                origins[stand_in].append(origin)
-        expanded = tuple(origins)
-        seen: set[tuple[int, str, int]] = set()
-        if by_subject:
-            triples = self.kg.entailed_relationships(
-                expanded, object_ids, edge_filter, self.concept_filter
-            )
-            reported = ((origin, p, o) for s, p, o in triples for origin in origins[s])
-        else:
-            triples = self.kg.entailed_relationships(
-                None, expanded, edge_filter, self.concept_filter
-            )
-            reported = ((s, p, origin) for s, p, o in triples for origin in origins[o])
-        for triple in reported:
-            if triple not in seen:
-                seen.add(triple)
-                yield triple
-
-    def _stream_entailed(self, relationship_ids: frozenset[str]) -> Iterator[tuple[int, str, int]]:
-        """Stream the relationships of every concept in scope, one batch of subjects at a time."""
-        for batch in self.kg.batches(self.kg.entities(self.concept_filter)):
-            yield from self._entailed(batch, None, relationship_ids)
-
     def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """Stream the entailed relationships of every concept, for the exposed relationships."""
-        for s, p, o in self._stream_entailed(self.default_relationship_ids):
+        for s, p, o in self.kg.all_entailed_relationships(
+            EdgeFilter(predicate_ids=self.kg.default_relationship_ids),
+            self.concept_filter,
+            self.standardise,
+        ):
             yield (
                 self.codec.concept_curie(s),
                 self.codec.predicate_curie(p),

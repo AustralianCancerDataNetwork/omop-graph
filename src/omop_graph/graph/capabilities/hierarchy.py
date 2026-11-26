@@ -69,6 +69,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         direction: HierarchyDirection = HierarchyDirection.UP,
         edge_filter: EdgeFilter = IS_A_FILTER,
         concept_filter: ConceptFilter | None = None,
+        standardise: bool = False,
     ) -> dict[int, frozenset[int]]:
         """
         Find the concepts reached by following edges repeatedly from each concept.
@@ -89,6 +90,10 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         concept_filter : ConceptFilter, optional
             Report only the concepts it selects. The walk still passes through the others,
             so a concept above an excluded one is still reached. ``concept_ids`` must be unset.
+        standardise : bool
+            If True, a non-standard concept stands in for the standard concepts it maps to,
+            see :meth:`standardise`. It reaches those concepts and everything reached from
+            them, whether or not *concept_filter* selects the standard concepts themselves.
 
         Returns
         -------
@@ -96,6 +101,22 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             Every requested concept mapped to the concepts reached from it, never itself.
         """
         starts = tuple(dict.fromkeys(concept_ids))
+        if standardise:
+            stands_in = self._stands_in(starts)
+            walked = self.closure(
+                {stand_in for group in stands_in.values() for stand_in in group},
+                direction,
+                edge_filter,
+                concept_filter,
+            )
+            return {
+                concept_id: frozenset(
+                    set().union(
+                        *(walked[stand_in] for stand_in in group), set(group) - {concept_id}
+                    )
+                )
+                for concept_id, group in stands_in.items()
+            }
         reached: dict[int, set[int]] = {concept_id: set() for concept_id in starts}
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is not None:
@@ -152,6 +173,14 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
                 else tuple(sorted(mapped[concept_id] & standard_targets))
             )
             for concept_id in ids
+        }
+
+    def _stands_in(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
+        """Map each concept to the concepts it stands in for: itself, then its standard concepts."""
+        ids = tuple(dict.fromkeys(concept_ids))
+        return {
+            concept_id: tuple(dict.fromkeys((concept_id, *targets)))
+            for concept_id, targets in self.standardise(ids).items()
         }
 
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:
