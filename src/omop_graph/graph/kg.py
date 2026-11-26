@@ -21,7 +21,6 @@ from ..extensions.omop_alchemy import (
     RelationshipMappingElement,
     load_relationship_mapping,
 )
-from .base import GraphBackend
 from .capabilities.concepts import ConceptsMixin
 from .capabilities.edges import EdgesMixin
 from .capabilities.embeddings import EmbeddingsMixin, KnowledgeGraphEmbeddingConfiguration
@@ -49,7 +48,6 @@ class KnowledgeGraph(
     EdgesMixin,
     PredicatesMixin,
     ConceptsMixin,
-    GraphBackend,
 ):
     """
     The OMOP concepts and relationships as a graph.
