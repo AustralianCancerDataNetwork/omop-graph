@@ -21,7 +21,7 @@ from oaklib.datamodels.search import SearchConfiguration, SearchProperty
 from oaklib.datamodels.vocabulary import HAS_DBXREF, IS_A, OWL_OBJECT_PROPERTY
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )

@@ -20,7 +20,7 @@ from fixtures.cdm_builders import (
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from sqlalchemy import event
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )

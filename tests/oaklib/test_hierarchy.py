@@ -26,7 +26,7 @@ from fixtures.hierarchy_cdm import (
 )
 from oaklib.datamodels.vocabulary import IS_A
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
 )
 from omop_graph.graph.kg import KnowledgeGraph

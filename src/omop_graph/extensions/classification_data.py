@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .omop_alchemy import HierarchyDirection, PredicateKind, Subkinds
+from .relationship_classification import HierarchyDirection, PredicateKind, Subkinds
 
 CLASSIFICATION_FILE = "predicate_classification.csv"
 MAPPING_FILE = "predicate_mapping.csv"

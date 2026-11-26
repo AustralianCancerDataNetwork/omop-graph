@@ -68,7 +68,7 @@ This classification drives traversal filtering and scoring.
 ```python
 from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.paths import find_shortest_paths
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.relationship_classification import PredicateKind
 
 [ingredient] = kg.concepts_by_code("RxNorm", "6809")  # Metformin
 [drug] = kg.concepts_by_code("RxNorm", "860975")  # Metformin 500 MG Oral Tablet
@@ -123,9 +123,8 @@ omop_graph/
 │   ├── resolvers/  # resolve labels via exact / fuzzy / full-text / synonym search
 │   └── phenotypes/ # set operations for hierarchical groupings
 ├── oaklib_interface/  # OAK-compliant adapter
-├── extensions/     # optional omop-emb support and the classification tables
+├── extensions/     # the relationship classification tables and data
 ├── data/           # the packaged relationship classification
-├── api.py          # stable public API surface
 └── db/             # session helpers
 ```
 

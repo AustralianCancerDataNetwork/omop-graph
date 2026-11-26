@@ -9,7 +9,7 @@ from dataclasses import replace
 from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy import Row
 
-from ...extensions.omop_alchemy import (
+from ...extensions.relationship_classification import (
     HierarchyDirection,
 )
 from ..model.edges import (

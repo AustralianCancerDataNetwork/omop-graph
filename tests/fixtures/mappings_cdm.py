@@ -23,7 +23,7 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
 )
 

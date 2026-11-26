@@ -7,7 +7,7 @@ import functools
 from sqlalchemy import Row
 
 # Local Application Imports
-from ...extensions.omop_alchemy import (
+from ...extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
     RelationshipMappingElement,

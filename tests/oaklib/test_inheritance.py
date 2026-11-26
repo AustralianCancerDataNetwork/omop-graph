@@ -16,7 +16,7 @@ from fixtures.cdm_builders import (
 from fixtures.helpers import MAPS_TO, SITE, curie
 from oaklib.datamodels.vocabulary import IS_A
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )

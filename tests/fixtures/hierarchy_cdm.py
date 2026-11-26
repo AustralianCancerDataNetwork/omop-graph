@@ -17,7 +17,7 @@ from fixtures.cdm_builders import (
     sqlite_cdm,
     synonym,
 )
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )

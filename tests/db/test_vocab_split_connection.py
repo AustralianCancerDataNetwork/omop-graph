@@ -42,7 +42,7 @@ from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,

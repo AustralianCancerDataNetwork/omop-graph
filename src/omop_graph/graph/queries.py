@@ -49,7 +49,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import InstrumentedAttribute, aliased
 from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
-from ..extensions.omop_alchemy import HierarchyDirection
+from ..extensions.relationship_classification import HierarchyDirection
 from .model.counts import Grouping
 from .model.edges import EdgeFilter
 from .model.scope import DEFAULT_CONCEPT_FILTER, _apply_scope, limited

@@ -4,6 +4,7 @@ The package is layered. The first four layers import only from the layers listed
 
 | Layer | Package | Holds |
 |---|---|---|
+| Relationship classification | `omop_graph.extensions` | The tables that store the classification of relationships, their loader, and the enums that name its kinds, such as `PredicateKind`. They extend the CDM schema of omop-alchemy. |
 | Value types | `omop_graph.graph.model` | Immutable data and enums with no database access: `EdgeFilter`, `EdgeView`, `Predicate`, `ConceptView`, scopes, concept counts and similarity results. |
 | Queries | `omop_graph.graph.queries` | SQLAlchemy statement builders, one `q_*` function per question. They return statements and never execute them. |
 | Capabilities | `omop_graph.graph.capabilities` | The behaviour of the graph as mixins. Each runs queries through the session factory and returns model types. |

@@ -8,7 +8,7 @@ from collections.abc import Iterable
 
 from omop_alchemy.cdm.query import ConceptFilter
 
-from ...extensions.omop_alchemy import HierarchyDirection
+from ...extensions.relationship_classification import HierarchyDirection
 from ..model.edges import IS_A_FILTER, EdgeFilter
 from ..model.scope import DEFAULT_CONCEPT_FILTER
 from ..model.similarity import ConceptSimilarity, ICSource

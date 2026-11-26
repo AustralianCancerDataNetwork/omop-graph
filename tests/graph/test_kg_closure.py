@@ -19,7 +19,7 @@ from fixtures.hierarchy_cdm import (
     hierarchy_cdm,
 )
 
-from omop_graph.extensions.omop_alchemy import HierarchyDirection
+from omop_graph.extensions.relationship_classification import HierarchyDirection
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.scope import DEFAULT_CONCEPT_FILTER

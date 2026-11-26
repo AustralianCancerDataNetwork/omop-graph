@@ -22,7 +22,7 @@ from fixtures.hierarchy_cdm import (
 )
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )

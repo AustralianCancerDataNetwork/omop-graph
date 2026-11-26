@@ -17,7 +17,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 # Local Application Imports
-from ..extensions.omop_alchemy import (
+from ..extensions.relationship_classification import (
     RelationshipMappingElement,
     load_relationship_mapping,
 )

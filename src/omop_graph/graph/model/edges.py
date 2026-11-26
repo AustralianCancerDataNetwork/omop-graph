@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
-from ...extensions.omop_alchemy import (
+from ...extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
     PredicateSubkind,

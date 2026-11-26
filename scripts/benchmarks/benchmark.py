@@ -29,7 +29,7 @@ from omop_emb.interface import EmbeddingWriterInterface
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.graph.capabilities.embeddings import MissingExtensionError
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.scoring import StandardConceptWithScore

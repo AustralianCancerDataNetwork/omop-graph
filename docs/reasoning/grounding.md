@@ -66,7 +66,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 ```python
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers import ResolverPipeline
 

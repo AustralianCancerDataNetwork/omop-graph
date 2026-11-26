@@ -22,7 +22,7 @@ from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relat
 from orm_loader.helpers import Base
 from sqlalchemy.orm import sessionmaker
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,

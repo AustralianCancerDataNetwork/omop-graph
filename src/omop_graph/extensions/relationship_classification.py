@@ -1,4 +1,5 @@
-# Extension to omop-alchemy package
+"""The relationship classification: the tables that store it, its loader and its enums."""
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, cast

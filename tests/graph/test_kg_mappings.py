@@ -27,7 +27,7 @@ from fixtures.mappings_cdm import (
     mappings_cdm,
 )
 
-from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
+from omop_graph.extensions.relationship_classification import PredicateKind, PredicateSubkind
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import EdgeFilter, MappingStrength

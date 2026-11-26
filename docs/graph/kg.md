@@ -108,7 +108,7 @@ The graph has two notions of ancestry, and they differ:
 Grounding keeps `concept_ancestor` because it needs the distance to a parent, `min_levels_of_separation`, which `closure` does not return. For example Metformin has no `Is a` ancestors but six ancestors in `concept_ancestor`, ATC classes such as "Biguanides". `closure` walks one query for a whole batch of concepts, and takes an `EdgeFilter` to follow other relationships:
 
 ```python
-from omop_graph.extensions.omop_alchemy import HierarchyDirection
+from omop_graph.extensions.relationship_classification import HierarchyDirection
 
 kg.closure([concept_id])[concept_id]  # strict Is a ancestors
 kg.closure([concept_id], HierarchyDirection.DOWN)[concept_id]  # strict Is a descendants

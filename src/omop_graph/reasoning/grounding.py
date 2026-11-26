@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.graph.capabilities.embeddings import EmbeddingModelNotRegisteredError
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import EdgeFilter
