@@ -22,9 +22,20 @@ class PredicateKind(Enum):
     COMPOSITION = "Composition"
     ASSOCIATION = "Association"
     ATTRIBUTE = "Attribute"
+    METADATA = "Metadata"
 
 
-def _predicate_kind_values(enum_cls: type[PredicateKind]) -> list[str]:
+class HierarchyDirection(Enum):
+    """Direction of a Hierarchy relationship, read from the stored edge ``concept_id_1 -> concept_id_2``.
+
+    ``UP`` means ``concept_id_2`` is the parent or group of ``concept_id_1``.
+    """
+
+    UP = "up"
+    DOWN = "down"
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
     return [member.value for member in enum_cls]
 
 
@@ -32,12 +43,12 @@ def _predicate_kind_enum() -> sa.Enum:
     """Use a varchar-backed enum on DuckDB and the native enum elsewhere."""
     return sa.Enum(
         PredicateKind,
-        values_callable=_predicate_kind_values,
+        values_callable=_enum_values,
         schema=Role.PRIMARY.value,
     ).with_variant(
         sa.Enum(
             PredicateKind,
-            values_callable=_predicate_kind_values,
+            values_callable=_enum_values,
             native_enum=False,
             create_constraint=True,
         ),
@@ -68,7 +79,8 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
 class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     """
     Extensions table: Maps standard OMOP relationship_ids to
-    their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses  .
+    their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses.
+    Hierarchy relationships also have a direction.
     """
 
     __tablename__ = "relationship_mapping"
@@ -81,6 +93,15 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
         _predicate_kind_enum(), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(sa.String(20), primary_key=True)
+    direction: so.Mapped[HierarchyDirection | None] = so.mapped_column(
+        sa.Enum(
+            HierarchyDirection,
+            values_callable=_enum_values,
+            native_enum=False,
+            create_constraint=True,
+        ),
+        nullable=True,
+    )
 
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
     __table_args__ = merge_table_args(

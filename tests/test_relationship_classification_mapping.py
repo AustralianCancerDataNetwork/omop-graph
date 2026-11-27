@@ -1,36 +1,241 @@
-import logging
-
 import pandas as pd
 import pytest
 
-from omop_graph.cli import _filter_unknown_relationship_ids
+from omop_graph.extensions.classification_data import (
+    ClassificationDataError,
+    check_classification,
+    check_mapping_against_cdm,
+    read_classification_files,
+)
+from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
+
+RELATIONSHIPS = {
+    "Maps to": ("Maps to", "Maps to"),
+    "Is a": ("Is a", "Subsumes"),
+    "Subsumes": ("Subsumes", "Is a"),
+    "Has scale type": ("Has scale type", "Scale type of"),
+    "Scale type of": ("Scale type of", "Has scale type"),
+    "Self": ("Self", "Self"),
+}
+HIERARCHY, IDENTITY_KIND = PredicateKind.HIERARCHY.value, PredicateKind.IDENTITY.value
+UP, DOWN, IDENTITY = (
+    (HIERARCHY, "Taxonomic", HierarchyDirection.UP.value),
+    (HIERARCHY, "Taxonomic", HierarchyDirection.DOWN.value),
+    (IDENTITY_KIND, "x", None),
+)
+CLASSIFICATION = pd.DataFrame(
+    [(HIERARCHY, "Taxonomic", "d", "s", "i"), (IDENTITY_KIND, "x", "d", "s", "i")],
+    columns=["predicate_kind", "predicate_subkind", "description", "semantics", "inference"],
+)
 
 
-def test_unknown_relationship_ids_are_warned_about_and_dropped(caplog):
-    mapping = pd.DataFrame(
-        {
-            "relationship_id": ["maps to", "unknown relationship"],
-            "predicate_kind": ["Association", "Association"],
-            "predicate_subkind": ["mapping", "mapping"],
-        }
+def _mapping(*rows: tuple[str, tuple[str, str, str | None]]) -> pd.DataFrame:
+    records = [(rid, RELATIONSHIPS[rid][0], *kind) for rid, kind in rows]
+    return pd.DataFrame(
+        records,
+        columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind", "direction"],
     )
 
-    with caplog.at_level(logging.WARNING, logger="omop_graph.cli"):
-        filtered = _filter_unknown_relationship_ids(mapping, {"maps to"})
 
-    assert filtered["relationship_id"].tolist() == ["maps to"]
-    assert "unknown relationship" in caplog.text
+def _check(mapping: pd.DataFrame, **kwargs):
+    return check_mapping_against_cdm(mapping, RELATIONSHIPS, **kwargs)
 
 
-def test_empty_relationship_vocabulary_fails_clearly():
-    mapping = pd.DataFrame({"relationship_id": ["maps to"]})
+GOOD = _mapping(
+    ("Maps to", IDENTITY),
+    ("Is a", UP),
+    ("Subsumes", DOWN),
+    ("Has scale type", UP),
+    ("Scale type of", DOWN),
+    ("Self", IDENTITY),
+)
 
+
+def test_a_consistent_mapping_passes_with_an_empty_report():
+    report = _check(GOOD, strict=True)
+
+    assert report.warnings == []
+
+
+def test_a_name_differing_from_the_cdm_is_rejected():
+    mapping = GOOD.copy()
+    mapping.loc[1, "r_name"] = "Is a (SNOMED)"
+
+    with pytest.raises(ClassificationDataError, match="relationship_name is 'Is a'"):
+        _check(mapping)
+
+
+def test_a_relationship_mapped_twice_is_rejected():
+    with pytest.raises(ClassificationDataError, match="more than once.*Is a"):
+        _check(pd.concat([GOOD, GOOD.iloc[[1]]]))
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_unclassified_cdm_relationships_warn_and_fail_only_under_strict(strict):
+    mapping = GOOD.iloc[1:]
+
+    if strict:
+        with pytest.raises(ClassificationDataError, match="1 CDM relationships have no.*'Maps to'"):
+            _check(mapping, strict=True)
+    else:
+        assert _check(mapping).unclassified == ["Maps to"]
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_classified_ids_missing_from_the_cdm_warn_and_fail_only_under_strict(strict):
+    mapping = pd.concat(
+        [GOOD, _mapping(("Maps to", IDENTITY)).assign(relationship_id="Subset only", r_name="x")]
+    )
+
+    if strict:
+        with pytest.raises(ClassificationDataError, match="not in the CDM.*'Subset only'"):
+            _check(mapping, strict=True)
+    else:
+        assert _check(mapping).unknown_ids == ["Subset only"]
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        _mapping(("Maps to", IDENTITY), ("Is a", UP), ("Subsumes", UP)),
+        _mapping(("Maps to", IDENTITY), ("Subsumes", DOWN), ("Is a", DOWN)),
+    ],
+)
+def test_a_hierarchy_pair_with_one_direction_is_rejected_once(mapping):
+    with pytest.raises(ClassificationDataError, match="are both") as error:
+        _check(mapping)
+
+    assert str(error.value).count("are both") == 1
+
+
+@pytest.mark.parametrize(
+    ("hierarchy_id", "other_id"),
+    [("Is a", "Subsumes"), ("Subsumes", "Is a"), ("Has scale type", "Scale type of")],
+)
+def test_a_pair_with_one_hierarchy_side_is_rejected_whichever_side_it_is(hierarchy_id, other_id):
+    direction = UP if hierarchy_id in {"Is a", "Has scale type"} else DOWN
+    mapping = _mapping((hierarchy_id, direction), (other_id, IDENTITY))
+
+    with pytest.raises(
+        ClassificationDataError,
+        match=f"'{hierarchy_id}' is Hierarchy but its reverse '{other_id}' is Identity",
+    ):
+        _check(mapping)
+
+
+def test_a_hierarchy_relationship_that_is_its_own_reverse_is_rejected():
+    mapping = _mapping(("Maps to", IDENTITY), ("Self", UP))
+
+    with pytest.raises(ClassificationDataError, match="'Self' is Hierarchy but is its own reverse"):
+        _check(mapping)
+
+
+def test_an_empty_relationship_vocabulary_fails_clearly():
     with pytest.raises(RuntimeError, match="relationship vocabulary is empty"):
-        _filter_unknown_relationship_ids(mapping, set())
+        check_mapping_against_cdm(GOOD, {})
 
 
-def test_filter_fails_when_no_relationship_mapping_survives():
-    mapping = pd.DataFrame({"relationship_id": ["unknown relationship"]})
+def test_a_mapping_without_a_single_cdm_id_fails_clearly():
+    with pytest.raises(RuntimeError, match="None of the relationship mappings"):
+        check_mapping_against_cdm(GOOD, {"Other": ("Other", "Other")})
 
-    with pytest.raises(RuntimeError, match="None of the relationship mappings match"):
-        _filter_unknown_relationship_ids(mapping, {"maps to"})
+
+@pytest.mark.parametrize(
+    ("rows", "message"),
+    [
+        (
+            [(HIERARCHY, "x", "a"), (HIERARCHY, "x", "b")],
+            "defined 2 times, differing in .*description",
+        ),
+        ([(HIERARCHY, "x", "a"), (HIERARCHY, "x", "a")], "defined 2 times$"),
+        ([("Unknown", "x", "a")], "unknown classes: \\['Unknown'\\]"),
+    ],
+)
+def test_a_classification_must_define_each_kind_and_subkind_once(rows, message):
+    classification = pd.DataFrame(
+        [(kind, subkind, description, "s", "i") for kind, subkind, description in rows],
+        columns=["predicate_kind", "predicate_subkind", "description", "semantics", "inference"],
+    )
+
+    with pytest.raises(ClassificationDataError, match=message):
+        check_classification(classification)
+
+
+def _write(directory, classification: str, mapping: str):
+    (directory / "predicate_classification.csv").write_text(
+        "class,subclass,description,semantics,inference\n" + classification
+    )
+    (directory / "predicate_mapping.csv").write_text(mapping)
+
+
+def test_read_classification_files_reads_and_checks_both_files(tmp_path):
+    _write(
+        tmp_path,
+        "Hierarchy,Taxonomic,d,s,i\nIdentity,x,d,s,i\n",
+        "class,subclass,r_id,r_name,direction\nHierarchy,Taxonomic,Is a,Is a,up\nIdentity,x,Maps to,Maps to,\n",
+    )
+
+    classification, mapping = read_classification_files(tmp_path)
+
+    assert classification["predicate_subkind"].tolist() == ["Taxonomic", "x"]
+    assert mapping["relationship_id"].tolist() == ["Is a", "Maps to"]
+    assert mapping["direction"].tolist()[0] == "up"
+    assert pd.isna(mapping["direction"].tolist()[1])
+
+
+def test_a_mapping_without_a_direction_column_has_no_direction(tmp_path):
+    _write(
+        tmp_path, "Identity,x,d,s,i\n", "class,subclass,r_id,r_name\nIdentity,x,Maps to,Maps to\n"
+    )
+
+    _, mapping = read_classification_files(tmp_path)
+
+    assert mapping["direction"].isna().all()
+
+
+@pytest.mark.parametrize("subclass", ["unknown", ""])
+def test_a_mapping_row_without_a_classification_is_rejected(tmp_path, subclass):
+    _write(
+        tmp_path,
+        "Identity,x,d,s,i\n",
+        f"class,subclass,r_id,r_name\nIdentity,x,Maps to,Maps to\nIdentity,{subclass},Is a,Is a\n",
+    )
+
+    with pytest.raises(ClassificationDataError, match="without a classification: \\['Is a'\\]"):
+        read_classification_files(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("kind", "direction", "message"),
+    [
+        (HIERARCHY, "", "without an up or down direction: \\['Is a'\\]"),
+        (HIERARCHY, "sideways", "without an up or down direction: \\['Is a'\\]"),
+        (IDENTITY_KIND, "up", "not Hierarchy but have a direction: \\['Is a'\\]"),
+    ],
+)
+def test_only_hierarchy_relationships_have_a_direction(tmp_path, kind, direction, message):
+    _write(
+        tmp_path,
+        f"{kind},x,d,s,i\n",
+        f"class,subclass,r_id,r_name,direction\n{kind},x,Is a,Is a,{direction}\n",
+    )
+
+    with pytest.raises(ClassificationDataError, match=message):
+        read_classification_files(tmp_path)
+
+
+def test_the_command_prints_a_classification_error_and_exits_without_a_traceback(monkeypatch):
+    from typer.testing import CliRunner
+
+    from omop_graph import cli
+
+    def fail(*args, **kwargs):
+        raise ClassificationDataError("predicate_mapping.csv is invalid")
+
+    monkeypatch.setattr(cli, "relationship_classification", fail)
+
+    result = CliRunner().invoke(cli.app, ["relationship-classification"])
+
+    assert result.exit_code == 1
+    assert "predicate_mapping.csv is invalid" in result.output
+    assert "Traceback" not in result.output

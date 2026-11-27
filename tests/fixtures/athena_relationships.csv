@@ -1,0 +1,725 @@
+relationship_id,relationship_name,reverse_relationship_id
+AB-drug cjgt of,Antibody-drug conjugate of (HemOnc),Has AB-drug cjgt
+AMP of,Actual Medicinal Product of (SNOMED),Has AMP
+AMP restr ind of,NHS dm+d (dictionary of medicines and devices) AMP (actual medicinal product) availability restriction indicator of,Has AMP restr ind
+ARP of,ARP of (SNOMED),Has ARP
+ATC - RxNorm,ATC to RxNorm,RxNorm - ATC
+ATC - RxNorm name,ATC to RxNorm equivalent by concept_name (OMOP),RxNorm - ATC name
+ATC - RxNorm pr lat,ATC to RxNorm/Extension primary lateral (OMOP),RxNorm - ATC pr lat
+ATC - RxNorm pr up,ATC to RxNorm/Extension primary upwards (OMOP),RxNorm - ATC pr up
+ATC - RxNorm sec lat,ATC to RxNorm/Extension secondary lateral (OMOP),RxNorm - ATC sec lat
+ATC - RxNorm sec up,ATC to RxNorm/Extension secondary upwards (OMOP),RxNorm - ATC sec up
+ATC - SNOMED eq,ATC to SNOMED equivalent (RxNorm),SNOMED - ATC eq
+ATC to NDFRT eq,ATC to NDFRT equivalent (NDF-RT),NDFRT to ATC eq
+ATC to VA Class eq,ATC to VA Class equivalent (NDF-RT),VA Class to ATC eq
+Absorbability of,Absorbability of (SNOMED),Has absorbability
+Acc device used by,Access device used by (SNOMED),Using acc device
+Accepted use of,Accepted use of (HemOnc),Has accepted use
+Access of,Access of (SNOMED),Has access
+Active ing of,Active ingredient of (SNOMED),Has active ing
+Add monitor ind of,NHS dm+d (dictionary of medicines and devices) additional monitoring indicator of,Has add monitor ind
+Admin method of,Dose form administration method of (SNOMED),Has admin method
+Affected by process,Affected by process (SNOMED),Process acts on
+After,After (SNOMED),Before
+Answer of,Answer of,Has Answer
+Answer of (PPI),Answer of (PPI),Has answer (PPI)
+Anticoag Rx of,Anticoag Rx of (HemOnc),Has anticoag Rx
+Anticoag tx of,Anticoag tx of (HemOnc),Has anticoag tx
+Antineoplastic of,Antineoplastic of (HemOnc),Has antineoplastic
+Approach of,Approach of (SNOMED),Has approach
+Asso finding of,Associated finding of (SNOMED),Has asso finding
+Asso morph of,Associated morphology of (SNOMED),Has asso morph
+Asso proc of,Associated procedure of (SNOMED),Has asso proc
+Asso visit of,Associated visit of (OMOP),Has asso visit
+Asso with finding,Associated with finding (SNOMED),Finding asso with
+Available as box,Is available in a prepackaged box (OMOP),Box of
+Basic dose form of,Basic dose form of (SNOMED),Has basic dose form
+Basis str subst of,Basis of strength substance of (SNOMED),Has basis str subst
+Before,Before (SNOMED),After
+Biosimilar of,Biosimilar of,Has biosimilar
+Box of,Prepackaged box of (OMOP),Available as box
+Brand name of,Brand name of (OMOP),Has brand name
+CAP parent item of,CAP parent item of,Has CAP parent item
+CAP protocol of,CAP protocol of,Has CAP protocol
+CAP value of,CAP value of,Has CAP value
+CAP-Nebraska cat,CAP to Nebraska Lexicon category,Nebraska-CAP cat
+CAP-Nebraska eq,CAP to Nebraska Lexicon equivalent,Nebraska-CAP eq
+CD category of,Controlled drug cathehory of (DM+D),Has CD category
+CI MoA of,Contraindicating mechanism of action of (NDF-RT),Has CI MoA
+CI by,Contraindicated by (NDF-RT),CI to
+CI chem class of,Contraindicating chemical class of (NDF-RT),Has CI chem class
+CI physiol effect by,Contraindicating physiological effect induced by (NDF-RT),Has CI physio effect
+CI to,Contraindication to (NDF-RT),CI by
+CMS Specialty - NUCC,CMS Specialty to NUCC (CMS),NUCC - CMS Specialty
+CPT4 - CVX eq,CPT4 to CVX equivalent (CVX),CVX - CPT4 eq
+CPT4 - LOINC eq,CPT4 to LOINC equivalent (SNOMED),LOINC - CPT4 eq
+CPT4 - SNOMED cat,CPT-4 to SNOMED category (OMOP),SNOMED cat - CPT4
+CPT4 - SNOMED eq,CPT-4 to SNOMED equivalent (OMOP),SNOMED - CPT4 eq
+CVX - CPT4 eq,CVX to CPT4 equivalent (CVX),CPT4 - CVX eq
+CVX - RxNorm,CVX - RxNorm (OMOP),RxNorm - CVX
+Category in Chapter,Category in Chapter,Chapter has Category
+Category of,Category of,Has Category
+Causative agent of,Causative agent of (SNOMED),Has causative agent
+Caused by,Caused by (SNOMED),Causes
+Causes,Causes (SNOMED),Caused by
+Chapter has Category,Chapter has Category,Category in Chapter
+Chapter to ICDO,Chapter to ICDO,ICDO to Chapter
+Characterizes,Characterizes (SNOMED),Is characterized by
+Chem structure of,Chemical structure of (NDF-RT),Has chem structure
+Chem to Prep eq,Chemical Structure to Pharmaceutical Preparation equivalent (NDF-RT),Prep to Chem eq
+Clinical course of,Has clinical course of (SNOMED),Has clinical course
+Coating material of,Coating material of (SNOMED),Has coating material
+Combi prod ind of,Combination product indicator of (DM+D),Has combi prod ind
+Comp material of,Compositional material of (SNOMED),Has comp material
+Component of,Component of,Has component
+Conc denom unit of,Concentration strength denominator unit of (SNOMED),Has conc denom unit
+Conc denom val of,Concentration strength denominator value of (SNOMED),Has conc denom val
+Conc num unit of,Concentration strength numerator unit of (SNOMED),Has conc num unit
+Conc num val of,Concentration strength numerator value of (SNOMED),Has conc num val
+Concept alt_to from,Active alternative_to inactive (SNOMED),Concept alt_to to
+Concept alt_to to,Inactive alternative_to active (SNOMED),Concept alt_to from
+Concept poss_eq from,Active possibly_equivalent_to inactive (SNOMED),Concept poss_eq to
+Concept poss_eq to,Inactive possibly_equivalent_to active (SNOMED),Concept poss_eq from
+Concept replaced by,Concept replaced by,Concept replaces
+Concept replaces,Concept replaces,Concept replaced by
+Concept same_as from,Active same_as inactive (SNOMED),Concept same_as to
+Concept same_as to,Inactive same_as active (SNOMED),Concept same_as from
+Concept was_a from,Active was_a inactive (SNOMED),Concept was_a to
+Concept was_a to,Inactive was_a active (SNOMED),Concept was_a from
+Consists of,Consists of (RxNorm),Constitutes
+Constitutes,Constitutes (RxNorm),Consists of
+Contained in,Is contained in (RxNorm),Contains
+Contained in panel,Contained in panel,Panel contains
+Contained in version,Table/field contained in OMOP CDM Version (OMOP),Version contains
+Contains,Contains (RxNorm),Contained in
+Context of,Context of (HemOnc),Has context
+Count of act ing in,Is count of active ingredients in (SNOMED),Has count of act ing
+Count of ing of,Count of base of active ingredient of (SNOMED),Has count of ing
+Curr adult indic for,Current adult indication for (HemOnc),Is curr in adult
+Curr ped indic for,Current pediatric indication for (HemOnc),Is curr in ped
+Current treated by,Currently treated by (HemOnc),Is current in
+Cytotox chemo RX of,Cytotoxic chemotherapy of - RxNorm (HemOnc),Has cytotox chemo Rx
+Cytotoxic chemo of,Cytotoxic chemotherapy of (HemOnc),Has cytotoxic chemo
+DOI - RxNorm,DOI contains RxNorm (OMOP),RxNorm - DOI
+DRG - MDC cat,DRG to MDC category (CMS),MDC cat - DRG
+DRG - MS-DRG eq,DRG to MS-DRG equivalent (CMS),MS-DRG - DRG eq
+Date of variable,Date of variable (NAACCR),Variable has date
+Denom value of,Presentation strength denominator value of (SNOMED),Has denomin value
+Denominator unit of,Presentation strength denominator unit of (SNOMED),Has denominator unit
+Dev intended site of,Device intended site of (SNOMED),Has dev intend site
+Device used by,Device used by (SNOMED),Using device
+Diagnosed through,Diagnosed through (NDF-RT),May diagnose
+Dir device of,Direct device of (SNOMED),Has dir device
+Dir morph of,Direct morphology of (SNOMED),Has dir morph
+Dir proc site of,Direct procedure site of (SNOMED),Has dir proc site
+Dir subst of,Direct substance of (SNOMED),Has dir subst
+Direct site of,Direct site of (SNOMED),Has direct site
+Direction of,Direction of,Has Direction
+Disc indicator of,Discontinued indicator of (SNOMED),Has disc indicator
+Disp dose form of,Dispensed dose form of (SNOMED),Has disp dose form
+Disposition of,Disposition of (SNOMED),Has disposition
+Domain subsumes,Domain subsumes (OMOP),Is domain
+Dose form group of,Dose form group of (RxNorm),Has dose form group
+Dose form of,Dose form of (SNOMED),Has dose form
+Dose form unit of,Unit relating to the size of (DM+D),Has dose form unit
+Drug class of drug,Drug class of drug (OMOP),Drug has drug class
+Drug has drug class,Drug has drug class (OMOP),Drug class of drug
+Drug-drug inter for,Drug-drug interaction for (NDF),Has drug-drug inter
+Due to of,Due to of (SNOMED),Has due to
+During,During (SNOMED),Has complication
+EMA indication of,EMA indication of (HemOnc),Has EMA indication
+ETC - RxNorm,ETC to RxNorm (FDB),RxNorm - ETC
+ETC - RxNorm name,ETC to RxNorm equivalent by concept_name (OMOP),RxNorm - ETC name
+End date of,End date of,Has end date
+Endocrine tx of,Endocrine therapy of (HemOnc),Has endocrine tx
+Energy used by,Energy used by (SNOMED),Using energy
+Episodicity of,Episodicity of (SNOMED),Has episodicity
+Etiology of,Etiology of (SNOMED),Has etiology
+Excipient of,Excipient of (SNOMED),Has excipient
+Excluded in map from,Standard to Non-standard exclude child (OMOP),Map excludes child
+Extent of,Extent of (SNOMED),Has extent
+FDA indication of,FDA indication of (HemOnc),Has FDA indication
+FDA labeling of,FDA labeling of (HemOnc),Has FDA labeling
+FDB Ind - ICD9CM,FDB Indication/Contraindication to ICD-9-CM (FDB),ICD9CM - FDB Ind
+Filling of,Filling material of (SNOMED),Has filling
+Finding asso with,Finding associated with (SNOMED),Asso with finding
+Finding context of,Finding context of (SNOMED),Has finding context
+Finding inform of,Finding informer of (SNOMED),Using finding inform
+Finding method of,Finding method of (SNOMED),Using finding method
+Finding site of,Finding site of (SNOMED),Has finding site
+Flavor of,Flavor of (SNOMED),Has flavor
+Focus of,Focus of (SNOMED),Has focus
+Followed by,Followed by (SNOMED),Follows
+Follows,Follows (SNOMED),Followed by
+Form continuity of,Dose form continuity indicator (DM+D),Has form continuity
+Form of,Form of (RxNorm),Has form
+Free indicator of,NHS dm+d freenes indicator of,Has free indicator
+Freq Code - Typ bill,Frequency code to Typ bill Full (UB04),Typ bill - Freq Code
+Growth factor Rx of,Growth factor Rx of (HemOnc),Has growth factor Rx
+Growth factor of,Growth factor of (HemOnc),Has growth factor
+HC indication of,HC indication of (HemOnc),Has HC indication
+HCPCS - SNOMED meas,HCPCS is a SNOMED measurement (OMOP),SNOMED meas - HCPCS
+HCPCS - SNOMED proc,HCPCS is a SNOMED procedure (OMOP),SNOMED proc - HCPCS
+HOI - MedDRA,HOI contains MedDRA (OMOP),MedDRA - HOI
+HOI - SNOMED,HOI contains SNOMED (OMOP),SNOMED - HOI
+Had accepted for,Had accepted for (HemOnc),Had accepted use
+Had accepted use,Had accepted use (HemOnc),Had accepted for
+Has AB-drug cjgt,Has antibody-drug conjugate (HemOnc),AB-drug cjgt of
+Has AB-drug cjgt Rx,Has antibody-drug conjugate - RxNorm (HemOnc),Rx AB-drug cjgt of
+Has AMP,Has Actual Medicinal Product (SNOMED),AMP of
+Has AMP restr ind,Has NHS dm+d (dictionary of medicines and devices) AMP (actual medicinal product) availability restriction indicator,AMP restr ind of
+Has ARP,Has ARP (SNOMED),ARP of
+Has Answer,Has Answer,Answer of
+Has CAP parent item,Has CAP parent item,CAP parent item of
+Has CAP protocol,Has CAP protocol,CAP protocol of
+Has CAP value,Has CAP value,CAP value of
+Has CD category,Has controlled drug category (DM+D),CD category of
+Has CI,Has drug contra-indication (FDB),Is CI of
+Has CI MoA,Has contraindicating mechanism of action (NDF-RT),CI MoA of
+Has CI chem class,Has contraindicating chemical class (NDF-RT),CI chem class of
+Has CI physio effect,Has contraindicating physiological effect (NDF-RT),CI physiol effect by
+Has Category,Has Category,Category of
+Has Direction,Has Direction,Direction of
+Has EMA indication,Has EMA indication (HemOnc),EMA indication of
+Has FDA indication,Has FDA indication (HemOnc),FDA indication of
+Has FDA labeling,Has FDA labeling (HemOnc),FDA labeling of
+Has FDA-appr ind,Has FDA-approved drug indication (FDB),Is FDA-appr ind of
+Has HC indication,Has HC indication (HemOnc),HC indication of
+Has Histology ICDO,Has Histology ICDO,Histology of ICDO
+Has Issue,Has Issue,Issue of
+Has MoA,Has mechanism of action (NDF-RT),MoA of
+Has Module,Has Module,Module of
+Has NMPA indication,Has NMPA indication (HemOnc),NMPA indication of
+Has PDC Rx,Has PDC - RxNorm (HemOnc),Rx PDC of
+Has PK,Has pharmacokinetics (NDF-RT),PK of
+Has PMDA indication,Has PMDA indication (HemOnc),PMDA indication of
+Has PPI parent code,Has PPI parent code,PPI parent code of
+Has Scale,Has Scale,Scale of
+Has Topic,Has Topic,Topic of
+Has Topography ICDO,Has Topography ICDO,Topography of ICDO
+Has VMP,Has Virtual Medicinal Product (SNOMED),VMP of
+Has VRP,Has VRP (SNOMED),VRP of
+Has Value,Has Value,Value of
+Has absorbability,Has absorbability (SNOMED),Absorbability of
+Has accepted use,Has accepted use (HemOnc),Accepted use of
+Has access,Has access (SNOMED),Access of
+Has active ing,Has active ingredient (SNOMED),Active ing of
+Has add monitor ind,Has NHS dm+d (dictionary of medicines and devices) additional monitoring indicator,Add monitor ind of
+Has admin method,Has dose form administration method (SNOMED),Admin method of
+Has answer (PPI),Has answer (PPI),Answer of (PPI)
+Has anticoag Rx,Has anticoag Rx (HemOnc),Anticoag Rx of
+Has anticoag tx,Has anticoag tx (HemOnc),Anticoag tx of
+Has antineopl Rx,Has antineoplastic - RxNorm (HemOnc),Rx antineopl of
+Has antineoplastic,Has antineoplastic (HemOnc),Antineoplastic of
+Has approach,Has Approach (SNOMED),Approach of
+Has asso finding,Has associated finding (SNOMED),Asso finding of
+Has asso morph,Has associated morphology (SNOMED),Asso morph of
+Has asso proc,Has associated procedure (SNOMED),Asso proc of
+Has asso visit,Has associated visit (OMOP),Asso visit of
+Has basic dose form,Has basic dose form (SNOMED),Basic dose form of
+Has basis str subst,Has basis of strength substance (SNOMED),Basis str subst of
+Has biosimilar,Has biosimilar,Biosimilar of
+Has brand name,Has brand name (OMOP),Brand name of
+Has causative agent,Has causative agent (SNOMED),Causative agent of
+Has chem structure,Has chemical structure (NDF-RT),Chem structure of
+Has clinical course,Has clinical course (SNOMED),Clinical course of
+Has coating material,Has coating material (SNOMED),Coating material of
+Has combi prod ind,Has combination product indicator (DM+D),Combi prod ind of
+Has comp material,Has compositional material (SNOMED),Comp material of
+Has complication,Has complication (SNOMED),During
+Has component,Has component,Component of
+Has conc denom unit,Has concentration strength denominator unit (SNOMED),Conc denom unit of
+Has conc denom val,Has concentration strength denominator value (SNOMED),Conc denom val of
+Has conc num unit,Has concentration strength numerator unit (SNOMED),Conc num unit of
+Has conc num val,Has concentration strength numerator value (SNOMED),Conc num val of
+Has context,Has context (HemOnc),Context of
+Has count of act ing,Count of active ingredients (SNOMED),Count of act ing in
+Has count of ing,Has count of base of active ingredient (SNOMED),Count of ing of
+Has cytotox chemo Rx,Has cytotoxic chemotherapy - RxNorm (HemOnc),Cytotox chemo RX of
+Has cytotoxic chemo,Has cytotoxic chemotherapy (HemOnc),Cytotoxic chemo of
+Has denomin value,Has presentation strength denominator value (SNOMED),Denom value of
+Has denominator unit,Has presentation strength denominator unit (SNOMED),Denominator unit of
+Has dev intend site,Has device intended site (SNOMED),Dev intended site of
+Has dir device,Has direct device (SNOMED),Dir device of
+Has dir morph,Has direct morphology (SNOMED),Dir morph of
+Has dir proc site,Has direct procedure site (SNOMED),Dir proc site of
+Has dir subst,Has direct substance (SNOMED),Dir subst of
+Has direct site,Has direct site (SNOMED),Direct site of
+Has disc indicator,Has discontinued indicator (SNOMED),Disc indicator of
+Has disp dose form,Has dispensed dose form (SNOMED),Disp dose form of
+Has disposition,Has disposition (SNOMED),Disposition of
+Has dose form,Has dose form (SNOMED),Dose form of
+Has dose form group,Has dose form group (RxNorm),Dose form group of
+Has dose form unit,Has unit relating to the size (DM+D),Dose form unit of
+Has drug-drug inter,Is involved in drug-drug interaction (NDF),Drug-drug inter for
+Has due to,Has due to (SNOMED),Due to of
+Has end date,Has end date,End date of
+Has endocrine tx,Has endocrine therapy (HemOnc),Endocrine tx of
+Has endocrine tx Rx,Has endocrine therapy - RxNorm (HemOnc),Rx endocrine tx of
+Has episodicity,Has episodicity (SNOMED),Episodicity of
+Has etiology,Has Etiology (SNOMED),Etiology of
+Has excipient,Has excipient (SNOMED),Excipient of
+Has extent,Has Extent (SNOMED),Extent of
+Has filling,Has filling (SNOMED),Filling of
+Has finding context,Has finding context (SNOMED),Finding context of
+Has finding site,Has finding site (SNOMED),Finding site of
+Has flavor,Has flavor (SNOMED),Flavor of
+Has focus,Has focus (SNOMED),Focus of
+Has form,Has form (RxNorm),Form of
+Has form continuity,Has dose form continuity indicator (DM+D),Form continuity of
+Has free indicator,Has NHS dm+d freeness indicator,Free indicator of
+Has growth factor,Has growth factor (HemOnc),Growth factor of
+Has growth factor Rx,Has growth factor Rx (HemOnc),Growth factor Rx of
+Has immunosuppr Rx,Has immunosuppressor - RxNorm (HemOnc),Rx immunosuppr of
+Has immunosuppressor,Has immunosuppressor (HemOnc),Immunosuppressor of
+Has immunotherapy,Has immunotherapy (HemOnc),Immunotherapy of
+Has immunotherapy Rx,Has immunotherapy - RxNorm (HemOnc),Rx immunotherapy of
+Has incipient,Has incipient (DM+D),Incipient of
+Has indir device,Has indirect device (SNOMED),Indir device of
+Has indir morph,Has indirect morphology (SNOMED),Indir morph of
+Has indir proc site,Has indirect procedure site (SNOMED),Indir proc site of
+Has inferred class,Has inferred drug class (OMOP),Inferred class of
+Has inherent,Has inherent (SNOMED),Inheres in
+Has inherent loc,Has inherent location (SNOMED),Inherent location of
+Has intended site,Has dose form intended site (SNOMED),Intended site of
+Has intent,Has intent (SNOMED),Intent of
+Has interpretation,Has interpretation (SNOMED),Interpretation of
+Has interprets,Has interprets (SNOMED),Interprets of
+Has investig use,Has investigational use (HemOnc),Investig use for
+Has kind,Has kind (LOINC),Kind of
+Has laterality,Has laterality (SNOMED),Laterality of
+Has legal category,Has legal category (SNOMED),Legal category of
+Has licensed route,Has licensed route (DM+D),Licensed route of
+Has life circumstan,Has life circumstance (SNOMED Vet),Life circumstan of
+Has local therap Rx,Has local therapy - RxNorm (HemOnc),Rx local therapy of
+Has local therapy,Has local therapy (HemOnc),Local therapy of
+Has manifestation,Has definitional manifestation (SNOMED),Manifestation of
+Has marketed form,Has marketed form (OMOP),Marketed form of
+Has meas component,Has Measured Component (SNOMED),Meas component of
+Has measurement,Has measurement method (SNOMED),Measurement of
+Has metabolism,Has site of metabolism (NDF-RT),Metabolism of
+Has metabolites,Has active metabolites (NDF-RT),Metabolite of
+Has method,Has method,Method of
+Has modality,Has modality (HemOnc),Modality of
+Has modification,Has modification of (SNOMED),Modification of
+Has morphology,Has Morphology (SNOMED),Morphology of
+Has non-avail ind,Has VMP non-availability indicator (SNOMED),Non-avail ind of
+Has numerator unit,Has presentation strength numerator unit (SNOMED),Numerator unit of
+Has numerator value,Has presentation strength numerator value (SNOMED),Numerator value of
+Has occurrence,Has occurrence (SNOMED),Occurrence of
+Has off-label ind,Has off-label drug indication (FDB),Is off-label ind of
+Has ontological form,Has ontological dose form presentation (DM+D),Ontological form of
+Has pack,Has pack (SNOMED),Is pack of
+Has parent item,Has parent item (NAACCR),Parent item of
+Has part of,Has part of (SNOMED),Part of
+Has pathology,Has pathological process (SNOMED),Pathology of
+Has pept-drg cjg Rx,Has peptide-drug conjugate - RxNorm (HemOnc),Rx pept-drg cjg of
+Has pept-drug cjgt,Has peptide-drug conjugate (HemOnc),Pept-drug cjgt of
+Has permiss range,Has permissible range,Permiss range of
+Has pharma prep,Has pharmaceutical preparation (NDF),Pharma prep in
+Has physio effect,Has physiological effect (NDF-RT),Physiol effect by
+Has physiol state,Has physiologic state (SNOMED Vet),Physiol state of
+Has prec ingredient,Has precise active ingredient (SNOMED),Prec ingredient of
+Has precise ing,Has precise ingredient (RxNorm),Precise ing of
+Has precondition,Has precondition (SNOMED),Precondition of
+Has precoord pair,Has precoordinated (Question-Answer/Variable-Value) pair,Precoord pair of
+Has priority,Has priority (SNOMED),Priority of
+Has proc context,Has procedure context (SNOMED),Proc context of
+Has proc device,Has procedure device (SNOMED),Proc device of
+Has proc duration,Process duration,Proc duration of
+Has proc morph,Has procedure morphology (SNOMED),Proc morph of
+Has proc site,Has procedure site (SNOMED),Proc site of
+Has process output,Has process output (SNOMED),Process output of
+Has prod character,Has product characteristic (SNOMED),Prod character of
+Has product comp,Has product component (NDF-RT),Product comp of
+Has property,Has property,Property of
+Has property type,Has property type,Property type of
+Has quantified form,Has quantified form (RxNorm),Quantified form of
+Has question source,Has question source,Question source of
+Has radiocjgt Rx,Has radioconjugate - RxNorm (HemOnc),Rx radiocjgt of
+Has radioconjugate,Has radioconjugate (HemOnc),Radioconjugate of
+Has radiotherapy,Has radiotherapy (HemOnc),Radiotherapy of
+Has radiotherapy Rx,Has radiotherapy - RxNorm (HemOnc),Rx radiotherapy of
+Has recipient cat,Has recipient category (SNOMED),Recipient cat of
+Has regimen type,Has regimen type (HemOnc),Regimen type of
+Has relat context,Has subject relationship context (SNOMED),Relat context of
+Has relative part,Has relative part (SNOMED),Relative part of
+Has release charact,Has dose form release characteristic (SNOMED),Release charact of
+Has revision status,Has revision status (SNOMED),Revision status of
+Has role,Has role (LOINC),Role of
+Has route,Has route (DM+D),Route of
+Has route of admin,Has route of administration (SNOMED),Route of admin of
+Has scale type,Has scale type,Scale type of
+Has setting,Has setting (LOINC),Setting of
+Has severity,Has severity (SNOMED),Severity of
+Has spec active ing,Has specific active ingredient (SNOMED),Spec active ing of
+Has specimen,Has specimen (SNOMED),Specimen of
+Has specimen morph,Has specimen source morphology (SNOMED),Specimen morph of
+Has specimen proc,Has specimen procedure (SNOMED),Specimen proc of
+Has specimen source,Has specimen source identity (SNOMED),Specimen identity of
+Has specimen subst,Has specimen substance (SNOMED),Specimen subst of
+Has specimen topo,Has specimen source topography (SNOMED),Specimen topo of
+Has stage,Has Stage (SNOMED),Stage of
+Has standard brand,Has standard Brand Name (OMOP),Is standard brand of
+Has standard form,Has standard Dose Form (OMOP),Is standard form of
+Has standard ing,Has standard ingredient (OMOP),Is standard ing of
+Has start date,Has start date,Start date of
+Has state of matter,Has state of matter (SNOMED),State of matter of
+Has status,Has status,Status of
+Has steroid tx,Has steroid therapy (HemOnc),Steroid tx of
+Has steroid tx Rx,Has steroid therapy - RxNorm (HemOnc),Rx steroid tx of
+Has strength,Has ingredient qualitative strength (SNOMED),Strength of
+Has sub-specimen,Includes sub-specimen (SNOMED Vet),Sub-specimen of
+Has subject matter,Has subject matter domain (LOINC),Subject matter of
+Has supplier,Has supplier or manufacturer (OMOP),Supplier of
+Has support med Rx,Has supportive medication - RxNorm (HemOnc),Rx support med of
+Has supportive med,Has supportive medication (HemOnc),Supportive med of
+Has surface char,Has surface characteristic (SNOMED),Surf character of
+Has surface texture,Has surface texture (SNOMED),Surface texture of
+Has surgical appr,Has surgical approach (SNOMED),Surgical appr of
+Has synth regimen,Has synthetic regimen (HemOnc),Synth regimen of
+Has system,Has system,System of
+Has targ population,Has target population (SNOMED),Targ population of
+Has targeted therapy,Has targeted therapy (HemOnc),Targeted therapy of
+Has targeted tx Rx,Has targeted therapy - RxNorm (HemOnc),Rx targeted tx of
+Has technique,Has technique (SNOMED),Technique of
+Has temp finding,Has temporal finding (SNOMED),Temp related to
+Has temporal context,Has temporal context (SNOMED),Temporal context of
+Has therap class,Has therapeutic class (NDF),Therap class of
+Has time aspect,Has time aspect,Time aspect of
+Has trade family grp,Has trade family group (SNOMED),Trade family grp of
+Has tradename,Has tradename (RxNorm),Tradename of
+Has transformation,Has dose form transformation (SNOMED),Transformation of
+Has type,Has type,Type of
+Has type of service,Has type of service (LOINC),Type of service of
+Has unit,Has unit,Unit of
+Has unit of admin,Has unit of administration (SNOMED),Unit of admin of
+Has unit of presen,Has unit of presentation (SNOMED),Unit of presen of
+Has unit of prod use,Has unit relating to the entity that can be handled (DM+D),Unit of prod use of
+Has vaccine group,Has vaccine group (CVX),Vaccine group of
+Has variant,Reference to variant,Variant of
+Hist adult indic for,Historical adult indication for (HemOnc),Is hist in adult
+Hist ped indic for,Historical pediatric indication for (HemOnc),Is hist in ped
+Histology of ICDO,Histology of ICDO,Has Histology ICDO
+Historic treated by,Historically treated by (HemOnc),Is historical in
+ICD9CM - FDB Ind,ICD-9-CM to FDB Indication/Contraindication (FDB),FDB Ind - ICD9CM
+ICD9CM - MedDRA,ICD-9-CM to MedDRA (MSSO),MedDRA - ICD9CM
+ICD9P - SNOMED eq,ICD-9-Procedure to SNOMED equivalent (OMOP),SNOMED - ICD9P eq
+ICD9P replaced by,Concept replaced by (ICD-9-Procedure),ICD9P replaces
+ICD9P replaces,Concept replaces (ICD-9-Procedure),ICD9P replaced by
+ICDO - SNOMED,ICDO - SNOMED,SNOMED - ICDO
+ICDO br to OncoTree,ICDO broader to OncoTree,OncoTree to ICDO br
+ICDO to Chapter,ICDO to Chapter,Chapter to ICDO
+ICDO to OncoTree eq,ICDO to OncoTree equivalent,OncoTree to ICDO eq
+ICDO to Proc Schema,ICDO Condition to Procedure Schema (NAACCR),Proc Schema to ICDO
+ICDO to Schema,ICDO Condition to Schema (NAACCR),Schema to ICDO
+Immunosuppressor of,Immunosuppressor of (HemOnc),Has immunosuppressor
+Immunotherapy of,Immunotherapy of (HemOnc),Has immunotherapy
+Incipient of,Incipient of (DM+D),Has incipient
+Included in map from,Standard to Non-standard include child (OMOP),Map includes child
+Ind/CI - SNOMED,Indication/Contra-indication to SNOMED,SNOMED - ind/CI
+Indir device of,Indirect device of (SNOMED),Has indir device
+Indir morph of,Indirect morphology of (SNOMED),Has indir morph
+Indir proc site of,Indirect procedure site of (SNOMED),Has indir proc site
+Induced by,Induced by (NDF-RT),Induces
+Induces,Induces (NDF-RT),Induced by
+Inferred class of,Inferred drug class of (OMOP),Has inferred class
+Inherent location of,Inherent location of (SNOMED),Has inherent loc
+Inheres in,Inheres in (SNOMED),Has inherent
+Inhibits effect,Inhibits effect (NDF-RT),May be inhibited by
+Intended site of,Dose form intended site of (SNOMED),Has intended site
+Intent of,Intent of (SNOMED),Has intent
+Interpretation of,Interpretation of (SNOMED),Has interpretation
+Interprets of,Interprets of (SNOMED),Has interprets
+Investig use for,Investigational use for (HemOnc),Has investig use
+Is CI of,Is contra-indication of (FDB),Has CI
+Is FDA-appr ind of,Is FDA-approved indication of (FDB),Has FDA-appr ind
+Is a,Is a,Subsumes
+Is characterized by,Is characterized by (SNOMED),Characterizes
+Is curr in adult,Is current in adult (HemOnc),Curr adult indic for
+Is curr in ped,Is current in pediatric (HemOnc),Curr ped indic for
+Is current in,Is currently used in (HemOnc),Current treated by
+Is domain,Is a domain (OMOP),Domain subsumes
+Is hist in adult,Is historical in adult (HemOnc),Hist adult indic for
+Is hist in ped,Is historical in pediatric (HemOnc),Hist ped indic for
+Is historical in,Is historically used in (HemOnc),Historic treated by
+Is off-label ind of,Is off-label indication of (FDB),Has off-label ind
+Is pack of,Is pack of (SNOMED),Has pack
+Is standard brand of,Is standard Brand Name of (OMOP),Has standard brand
+Is standard form of,Is standard Dose Form of (OMOP),Has standard form
+Is standard ing of,Is standard ingredient of ingredient (OMOP),Has standard ing
+Is sterile,Is sterile (SNOMED),Is sterile of
+Is sterile of,Is sterile of (SNOMED),Is sterile
+Is transcribed from,mRNA is transcribed from genomic DNA,Transcribes to
+Is translated from,Protein is translated from mRNA,Translates to
+Issue of,Issue of,Has Issue
+Kind of,Kind of (LOINC),Has kind
+LOINC - CPT4 eq,LOINC to CPT4 equivalent (SNOMED),CPT4 - LOINC eq
+LOINC - SNOMED eq,LOINC Hierarchy to SNOMED equivalent (LOINC),SNOMED - LOINC eq
+LOINC replaced by,Concept replaced by (LOINC),LOINC replaces
+LOINC replaces,Concept replaces (LOINC),LOINC replaced by
+Laterality of,Laterality of (SNOMED),Has laterality
+Legal category of,Legal category of (SNOMED),Has legal category
+Licensed route of,Licensed route of (DM+D),Has licensed route
+Life circumstan of,Life circumstance (SNOMED Vet),Has life circumstan
+Local therapy of,Local therapy of (HemOnc),Has local therapy
+MDC cat - DRG,MDC category to DRG (CMS),DRG - MDC cat
+MS-DRG - DRG eq,MS-DRG to DRG equivalent (CMS),DRG - MS-DRG eq
+Manifestation of,Definitional manifestation of (SNOMED),Has manifestation
+Map excludes child,Non-standard to Standard exclude child (OMOP),Excluded in map from
+Map includes child,Non-standard to Standard include child (OMOP),Included in map from
+Mapped from,Standard to Non-standard map (OMOP),Maps to
+Maps to,Non-standard to Standard map (OMOP),Mapped from
+Maps to number,Non-standard to value_as_number map (OMOP),Number mapped from
+Maps to operator,Non-standard to operator concept map (OMOP),Operator mapped from
+Maps to type,Non-standard to type concept map (OMOP),Type mapped from
+Maps to unit,Non-standard to unit concept map (OMOP),Unit mapped from
+Maps to value,Non-standard to value_as_concept map (OMOP),Value mapped from
+Marketed form of,Marketed form of (OMOP),Has marketed form
+May be inhibited by,Effect may be inhibited by (NDF-RT),Inhibits effect
+May be prevented by,May be prevented by (NDF-RT),May prevent
+May be route of,May be route of (HemOnc),May have route
+May be treated by,May be treated by (NDF-RT),May treat
+May diagnose,May diagnose (NDF-RT),Diagnosed through
+May have route,May have route (HemOnc),May be route of
+May prevent,May prevent (NDF-RT),May be prevented by
+May treat,May treat (NDF-RT),May be treated by
+Meas component of,Measured Component of (SNOMED),Has meas component
+Measurement of,Measurement method of (SNOMED),Has measurement
+MedDRA - HOI,MedDRA contained in HOI (OMOP),HOI - MedDRA
+MedDRA - ICD9CM,MedDRA to ICD-9-CM (MSSO),ICD9CM - MedDRA
+MedDRA - SMQ,MedDRA contained in SMQ (MedDRA),SMQ - MedDRA
+MedDRA - SNOMED eq,MedDRA to SNOMED equivalent (OMOP),SNOMED - MedDRA eq
+Metabolism of,Site of metabolism of (NDF-RT),Has metabolism
+Metabolite of,Active metabolite of (NDF-RT),Has metabolites
+Method of,Method of,Has method
+MoA of,Mechanism of action of (NDF-RT),Has MoA
+Modality of,Modality of (Hemonc),Has modality
+Modification of,Is modification of (SNOMED),Has modification
+Module of,Module of,Has Module
+Morphology of,Morphology of (SNOMED),Has morphology
+Multilex has ing,Has ingredient (Multilex),Multilex ing of
+Multilex ing of,Ingredient of (Multilex),Multilex has ing
+NDFRT - RxNorm eq,NDF-RT to RxNorm equivalent (RxNorm),RxNorm - NDFRT eq
+NDFRT - RxNorm name,NDF-RT to RxNorm equivalent by concept_name (OMOP),RxNorm - NDFRT name
+NDFRT - SNOMED eq,NDF-RT to SNOMED equivalent (RxNorm),SNOMED - NDFRT eq
+NDFRT - VAProd,NDF-RT to VA Product (NDF-RT),VAProd - NDFRT
+NDFRT dose form of,Dose form of (NDF-RT),NDFRT has dose form
+NDFRT has dose form,Has dose form (NDF-RT),NDFRT dose form of
+NDFRT has ing,Has ingredient (NDF-RT),NDFRT ing of
+NDFRT ing of,Ingredient of (NDF-RT),NDFRT has ing
+NDFRT to ATC eq,NDFRT to ATC equivalent (NDF-RT),ATC to NDFRT eq
+NDFRT to VA Class eq,NDFRT to VA Class equivalent (NDF-RT),VA Class to NDFRT eq
+NMPA indication of,NMPA indication of (HemOnc),Has NMPA indication
+NUCC - CMS Specialty,NUCC to CMS Specialty (CMS),CMS Specialty - NUCC
+Nebraska-CAP cat,Nebraska Lexicon to CAP category,CAP-Nebraska cat
+Nebraska-CAP eq,Nebraska Lexicon to CAP equivalent,CAP-Nebraska eq
+Non-avail ind of,VMP non-availability indicator of (SNOMED),Has non-avail ind
+Number mapped from,Value_as_number to non-standard map (OMOP),Maps to number
+Numerator unit of,Presentation strength numerator unit of (SNOMED),Has numerator unit
+Numerator value of,Presentation strength numerator value of (SNOMED),Has numerator value
+OPCS4 - SNOMED,OPCS4 to SNOMED equivalent or categorical (NHS),SNOMED - OPCS4
+Occurrence of,Occurrence of (SNOMED),Has occurrence
+Occurs after,Occurs after (SNOMED),Occurs before
+Occurs before,Occurs before (SNOMED),Occurs after
+OncoTree to ICDO br,OncoTree to ICDO broader,ICDO br to OncoTree
+OncoTree to ICDO eq,OncoTree to ICDO equivalent,ICDO to OncoTree eq
+Ontological form of,Ontological dose form presentation of (DM+D),Has ontological form
+Operator mapped from,Operator concept to non-standard map (OMOP),Maps to operator
+PK of,Pharmacokinetics of (NDF-RT),Has PK
+PMDA indication of,PMDA indication of (HemOnc),Has PMDA indication
+PPI parent code of,PPI parent code of,Has PPI parent code
+Panel contains,Panel contains,Contained in panel
+Paral imprt ind,Has NHS dm+d parallel import indicator,Paral imprt of
+Paral imprt of,NHS dm+d parallel import indicator of,Paral imprt ind
+Parent item of,Parent item of (NAACCR),Has parent item
+Part of,Part of (SNOMED),Has part of
+Pathology of,Pathological process of (SNOMED),Has pathology
+Pept-drug cjgt of,Peptide-drug conjugate of (HemOnc),Has pept-drug cjgt
+Permiss range of,Permissible range of,Has permiss range
+Pharma prep in,Pharmaceutical preparation contained in (NDF),Has pharma prep
+Physiol effect by,Physiological effect induced by (NDF-RT),Has physio effect
+Physiol state of,Physiologic state of (SNOMED Vet),Has physiol state
+Plays role,Plays role,Role played by
+PoS - Visit cat,Place of Service to Visit category (OMOP),Visit cat - PoS
+Prec ingredient of,Precise active ingredient of (SNOMED),Has prec ingredient
+Precise ing of,Precise ingredient of (RxNorm),Has precise ing
+Precondition of,Precondition of (SNOMED),Has precondition
+Precoord pair of,Precoordinated (Question-Answer/Variable-Value) pair of,Has precoord pair
+Prep to Chem eq,Pharmaceutical Preparation to Chemical Structure equivalent (NDF-RT),Chem to Prep eq
+Priority of,Priority of (SNOMED),Has priority
+Proc Schema to ICDO,Procedure Schema to ICDO Condition (NAACCR),ICDO to Proc Schema
+Proc context of,Procedure context of (SNOMED),Has proc context
+Proc device of,Procedure device of (SNOMED),Has proc device
+Proc duration of,Process duration of,Has proc duration
+Proc morph of,Procedure morphology of (SNOMED),Has proc morph
+Proc site of,Procedure site of (SNOMED),Has proc site
+Process acts on,Process acts on (SNOMED),Affected by process
+Process extends from,Process extends from (SNOMED),Process extends to
+Process extends to,Process extends to (SNOMED),Process extends from
+Process output of,Process output of (SNOMED),Has process output
+Prod character of,Product characteristic of (SNOMED),Has prod character
+Product comp of,Product component of (NDF-RT),Has product comp
+Property of,Property of,Has property
+Property type of,Property type of,Has property type
+Quantified form of,Quantified form of (RxNorm),Has quantified form
+Question source of,Question source of,Has question source
+Radioconjugate of,Radioconjugate of (HemOnc),Has radioconjugate
+Radiotherapy of,Radiotherapy of (HemOnc),Has radiotherapy
+Recipient cat of,Recipient category of (SNOMED),Has recipient cat
+Reformulated in,Reformulated in (RxNorm),Reformulation of
+Reformulation of,Reformulation of (RxNorm),Reformulated in
+Regimen type of,Regimen type of (HemOnc),Has regimen type
+Regional part of,Regional part of (SNOMED),Whole of
+Relat context of,Subject relationship context of (SNOMED),Has relat context
+Relative part of,Relative part of (SNOMED),Has relative part
+Relative to,Relative to (SNOMED),Relative to of
+Relative to of,Relative to of (SNOMED),Relative to
+Release charact of,Dose form release characteristic of (SNOMED),Has release charact
+Revision status of,Revision status of (SNOMED),Has revision status
+Role of,Role of (LOINC),Has role
+Role played by,Role played by,Plays role
+Route of,Route of (DM+D),Has route
+Route of admin of,Route of administration of (SNOMED),Has route of admin
+Rx AB-drug cjgt of,RxNorm antibody-drug conjugate of (HemOnc),Has AB-drug cjgt Rx
+Rx PDC of,RxNorm PDC of (HemOnc),Has PDC Rx
+Rx antineopl of,RxNorm antineoplastic of (HemOnc),Has antineopl Rx
+Rx endocrine tx of,RxNorm endocrine therapy of (HemOnc),Has endocrine tx Rx
+Rx immunosuppr of,RxNorm immunosuppressor of (HemOnc),Has immunosuppr Rx
+Rx immunotherapy of,RxNorm immunotherapy of (HemOnc),Has immunotherapy Rx
+Rx local therapy of,RxNorm local therapy of (HemOnc),Has local therap Rx
+Rx pept-drg cjg of,RxNorm peptide-drug conjugate of (HemOnc),Has pept-drg cjg Rx
+Rx radiocjgt of,RxNorm radioconjugate of (HemOnc),Has radiocjgt Rx
+Rx radiotherapy of,RxNorm radiotherapy of (HemOnc),Has radiotherapy Rx
+Rx steroid tx of,RxNorm steroid therapy of (HemOnc),Has steroid tx Rx
+Rx support med of,RxNorm Supportive medication of (HemOnc),Has support med Rx
+Rx targeted tx of,RxNorm targeted therapy of (HemOnc),Has targeted tx Rx
+RxNorm - ATC,RxNorm to ATC,ATC - RxNorm
+RxNorm - ATC name,RxNorm to ATC equivalent by concept_name (OMOP),ATC - RxNorm name
+RxNorm - ATC pr lat,RxNorm/Extension to ATC pr lateral (OMOP),ATC - RxNorm pr lat
+RxNorm - ATC pr up,RxNorm/Extension to ATC primary upwards (OMOP),ATC - RxNorm pr up
+RxNorm - ATC sec lat,RxNorm/Extension to ATC secondary lateral (OMOP),ATC - RxNorm sec lat
+RxNorm - ATC sec up,RxNorm/Extension to ATC secondary upwards (OMOP),ATC - RxNorm sec up
+RxNorm - CVX,RxNorm - CVX (OMOP),CVX - RxNorm
+RxNorm - DOI,RxNorm contained in DOI (OMOP),DOI - RxNorm
+RxNorm - ETC,RxNorm to ETC (FDB),ETC - RxNorm
+RxNorm - ETC name,RxNorm to ETC equivalent by concept_name (OMOP),ETC - RxNorm name
+RxNorm - NDFRT eq,RxNorm to NDF-RT equivalent (RxNorm),NDFRT - RxNorm eq
+RxNorm - NDFRT name,RxNorm to NDF-RT equivalent by concept_name (OMOP),NDFRT - RxNorm name
+RxNorm - SNOMED eq,RxNorm to SNOMED equivalent (RxNorm),SNOMED - RxNorm eq
+RxNorm - SPL,RxNorm to SPL (NLM),SPL - RxNorm
+RxNorm - Source eq,RxNorm to Drug Source equivalent (OMOP),Source - RxNorm eq
+RxNorm - VAProd eq,RxNorm to VA Product equivalent (NDF-RT),VAProd - RxNorm eq
+RxNorm dose form of,Dose form of (RxNorm),RxNorm has dose form
+RxNorm has dose form,Has dose form (RxNorm),RxNorm dose form of
+RxNorm has ing,Has ingredient (RxNorm),RxNorm ing of
+RxNorm ing of,Ingredient of (RxNorm),RxNorm has ing
+RxNorm inverse is a,Inverse is a (RxNorm),RxNorm is a
+RxNorm is a,Is a (RxNorm),RxNorm inverse is a
+RxNorm replaced by,Concept replaced by (RxNorm),RxNorm replaces
+RxNorm replaces,Concept replaces (RxNorm),RxNorm replaced by
+SMQ - MedDRA,SMQ consists of MedDRA (MedDRA),MedDRA - SMQ
+SNOMED - ATC eq,SNOMED to ATC equivalent (RxNorm),ATC - SNOMED eq
+SNOMED - CPT4 eq,SNOMED to CPT-4 equivalent (OMOP),CPT4 - SNOMED eq
+SNOMED - HOI,SNOMED contained in HOI (OMOP),HOI - SNOMED
+SNOMED - ICD9P eq,SNOMED to ICD-9-Procedure equivalent (OMOP),ICD9P - SNOMED eq
+SNOMED - ICDO,SNOMED - ICDO,ICDO - SNOMED
+SNOMED - LOINC eq,SNOMED to LOINC Hierarchy equivalent (LOINC),LOINC - SNOMED eq
+SNOMED - MedDRA eq,SNOMED to MedDRA equivalent (OMOP),MedDRA - SNOMED eq
+SNOMED - NDFRT eq,SNOMED to NDF-RT equivalent (RxNorm),NDFRT - SNOMED eq
+SNOMED - OPCS4,SNOMED to OPCS4 equivalent or categorical (NHS),OPCS4 - SNOMED
+SNOMED - RxNorm eq,SNOMED to RxNorm equivalent (RxNorm),RxNorm - SNOMED eq
+SNOMED - VA Class eq,SNOMED to VA Class equivalent (RxNorm),VA Class - SNOMED eq
+SNOMED - ind/CI,SNOMED to Indication/Contra-indication,Ind/CI - SNOMED
+SNOMED cat - CPT4,SNOMED category to CPT-4 (OMOP),CPT4 - SNOMED cat
+SNOMED meas - HCPCS,SNOMED measurement subsumes HCPCS (OMOP),HCPCS - SNOMED meas
+SNOMED proc - HCPCS,SNOMED procedure subsumes HCPCS (OMOP),HCPCS - SNOMED proc
+SPL - RxNorm,SPL to RxNorm (NLM),RxNorm - SPL
+Scale of,Scale of,Has Scale
+Scale type of,Scale type of,Has scale type
+Schema to ICDO,Schema to ICDO Condition (NAACCR),ICDO to Schema
+Schema to Value,Schema to Value (NAACCR),Value to Schema
+Schema to Variable,Schema to Variable (NAACCR),Variable to Schema
+Setting of,Setting of (LOINC),Has setting
+Severity of,Severity of (SNOMED),Has severity
+Source - RxNorm eq,Drug Source to RxNorm equivalent (OMOP),RxNorm - Source eq
+Spec active ing of,Specific active ingredient of (SNOMED),Has spec active ing
+Specimen identity of,Specimen source identity of (SNOMED),Has specimen source
+Specimen morph of,Specimen source morphology of (SNOMED),Has specimen morph
+Specimen of,Specimen of (SNOMED),Has specimen
+Specimen proc of,Specimen procedure of (SNOMED),Has specimen proc
+Specimen subst of,Specimen substance of (SNOMED),Has specimen subst
+Specimen topo of,Specimen source topography of (SNOMED),Has specimen topo
+Stage of,Stage of (SNOMED),Has stage
+Start date of,Start date of,Has start date
+State of matter of,State of matter of (SNOMED),Has state of matter
+Status of,Status of,Has status
+Steroid tx of,Steroid therapy of (HemOnc),Has steroid tx
+Strength of,Ingredient qualitative strength of (SNOMED),Has strength
+Sub-specimen of,Sub-specimen of (SNOMED Vet),Has sub-specimen
+Subject matter of,Subject matter domain of (LOINC),Has subject matter
+Subject of,Subject of (SNOMED),Towards
+Subst used by,Substance used by (SNOMED),Using subst
+Subsumes,Subsumes,Is a
+Supplier of,Supplier or manufacturer of (OMOP),Has supplier
+Supportive med of,Supportive medication of (HemOnc),Has supportive med
+Surf character of,Surface characteristic of (SNOMED),Has surface char
+Surface texture of,Surface texture of (SNOMED),Has surface texture
+Surgical appr of,Surgical approach of (SNOMED),Has surgical appr
+Synth regimen of,Synthetic regimen of(HemOnc),Has synth regimen
+System of,System of,Has system
+Targ population of,Target population of (SNOMED),Has targ population
+Targeted therapy of,Targeted therapy of (HemOnc),Has targeted therapy
+Technique of,Technique of (SNOMED),Has technique
+Temp related to,Temporally related to (SNOMED),Has temp finding
+Temporal context of,Temporal context of (SNOMED),Has temporal context
+Therap class of,Therapeutic class of (NDF),Has therap class
+Time aspect of,Time aspect of,Has time aspect
+Topic of,Topic of,Has Topic
+Topography of ICDO,Topography of ICDO,Has Topography ICDO
+Towards,Towards (SNOMED),Subject of
+Trade family grp of,Trade family group of (SNOMED),Has trade family grp
+Tradename of,Tradename of (RxNorm),Has tradename
+Transcribes to,Genomic DNA transcribes to mRNA,Is transcribed from
+Transformation of,Dose form transformation of (SNOMED),Has transformation
+Translates to,mRNA Translates to protein,Is translated from
+Typ bill - Freq Code,Typ bill Full to Frequency code (UB04),Freq Code - Typ bill
+Typ bill - Typ bill3,Typ bill Full to Typ bill 3 digits (UB04),Typ bill3 - Typ bill
+Typ bill3 - Typ bill,Typ bill 3 digits to Typ bill Full (UB04),Typ bill - Typ bill3
+Type mapped from,Type concept to non-standard map (OMOP),Maps to type
+Type of,Type of,Has type
+Type of service of,Type of service of (LOINC),Has type of service
+UCUM replaced by,Concept replaced by (UCUM),UCUM replaces
+UCUM replaces,Concept replaces (UCUM),UCUM replaced by
+Unit mapped from,Unit concept to non-standard map (OMOP),Maps to unit
+Unit of,Unit of,Has unit
+Unit of admin of,Unit of administration of (SNOMED),Has unit of admin
+Unit of presen of,Unit of presentation of (SNOMED),Has unit of presen
+Unit of prod use of,Unit relating to the entity that can be handled of (DM+D),Has unit of prod use
+Using acc device,Using access device (SNOMED),Acc device used by
+Using device,Using device (SNOMED),Device used by
+Using energy,Using energy (SNOMED),Energy used by
+Using finding inform,Using finding informer (SNOMED),Finding inform of
+Using finding method,Using finding method (SNOMED),Finding method of
+Using subst,Using substance (SNOMED),Subst used by
+VA Class - SNOMED eq,VA Class to SNOMED equivalent (RxNorm),SNOMED - VA Class eq
+VA Class to ATC eq,VA Class to ATC equivalent (NDF-RT),ATC to VA Class eq
+VA Class to NDFRT eq,VA Class to NDFRT equivalent (NDF-RT),NDFRT to VA Class eq
+VAProd - NDFRT,VA Product to NDF-RT (NDF-RT),NDFRT - VAProd
+VAProd - RxNorm eq,VA Product to RxNorm equivalent (NDF-RT),RxNorm - VAProd eq
+VMP has prescr stat,VMP has prescribing status (SNOMED),VMP prescr stat of
+VMP of,Virtual Medicinal Product of (SNOMED),Has VMP
+VMP prescr stat of,VMP prescribing status of (SNOMED),VMP has prescr stat
+VRP has prescr stat,VRP has prescribing status (SNOMED),VRP prescr stat of
+VRP of,VRP of (SNOMED),Has VRP
+VRP prescr stat of,VRP prescribing status of (SNOMED),VRP has prescr stat
+Vaccine group of,Vaccine group of (CVX),Has vaccine group
+Value mapped from,Value_as_concept to non-standard map (OMOP),Maps to value
+Value of,Value of,Has Value
+Value to Schema,Value to Schema (NAACCR),Schema to Value
+Variable has date,Variable has date (NAACCR),Date of variable
+Variable to Schema,Variable to Schema (NAACCR),Schema to Variable
+Variant of,Variant refer to concept,Has variant
+Version contains,OMOP CDM Version contains table/field (OMOP),Contained in version
+Visit cat - PoS,Visit category to Place of Service (OMOP),PoS - Visit cat
+Whole of,Whole of (SNOMED),Regional part of

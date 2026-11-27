@@ -58,4 +58,23 @@ omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 | Option | Short | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **`--pred-class-dir`** | | `String` | `None` (bundled CSVs) | Path to a directory of classification CSVs, overriding the bundled defaults. |
+| **`--strict`** | | `Flag` | `False` | Fail on the two findings that otherwise only warn (see Validation). |
 | **`--verbose`**{: title="Global option, not specific to this subcommand — see the note above." } | `-v` | `Count` | `0` | Increase logging verbosity (use `-v` or `-vv`). Global option; must precede the subcommand name (see note above). |
+
+### Validation
+
+Before any existing classification table is dropped, the load fails with the offending rows if:
+
+- a row of `predicate_mapping.csv` has a `class` and `subclass` that `predicate_classification.csv` does not define, or a class that is not one of the five kinds above
+- a `class` and `subclass` is defined more than once in `predicate_classification.csv`
+- a mapping row's `r_name` differs from that relationship's CDM `relationship_name`, or a `relationship_id` is mapped more than once
+- a `Hierarchy` row has no `up` or `down` `direction`, another row has one, or a `Hierarchy` relationship and its CDM reverse are not both `Hierarchy` with opposite directions
+
+Two findings are logged as warnings with their ids and counts, and fail the load under `--strict`, which the tests of omop-graph use:
+
+- a CDM relationship has no classification, so the `KnowledgeGraph` skips the edges of that relationship
+- a classified `relationship_id` is not in the CDM, which happens with a subset or an older vocabulary. These rows are not loaded.
+
+The packaged classification was last checked in strict mode against Athena release v5.0 29-AUG-26. A later release can add relationships it does not classify yet, which the load reports as a warning.
+
+A failed check prints its message and exits with code 1.

@@ -17,7 +17,7 @@ import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm
 from fixtures.helpers import require_cdm
-from fixtures.mock_cdm import seed_relationship_vocabulary
+from fixtures.mock_cdm import load_seeded_relationship_classification, seed_relationship_vocabulary
 from oa_configurator import Resolver, Role
 from oa_configurator.testing import scoped_test_schema
 from oaklib import get_adapter
@@ -26,7 +26,6 @@ from omop_alchemy.cross_database import cdm_sessionmaker
 from orm_loader.backends import resolve_backend, staging_schema_claim
 from orm_loader.helpers import Base
 
-from omop_graph.cli import relationship_classification
 from omop_graph.db.session import resolve_cdm_database
 from omop_graph.extensions.omop_alchemy import RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
@@ -96,7 +95,7 @@ def _populate(scoped, *, name: str) -> None:
     Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
     _seed_one_concept(scoped.engine, concept_id=_CONCEPT_ID, name=name)
     seed_relationship_vocabulary(scoped.engine)
-    relationship_classification(resolved=scoped.resolved)
+    load_seeded_relationship_classification(require_cdm(scoped.resolved))
 
 
 @pytest.mark.parametrize(

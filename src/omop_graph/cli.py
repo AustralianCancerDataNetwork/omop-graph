@@ -4,7 +4,6 @@ from importlib import resources
 from pathlib import Path
 from typing import Annotated
 
-import pandas as pd
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 import typer
@@ -16,6 +15,11 @@ from orm_loader.helpers.metadata import Base
 from omop_graph.cli_utils import populate_test_data
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import open_cdm_sessions, resolve_cdm_database
+from omop_graph.extensions.classification_data import (
+    ClassificationDataError,
+    check_mapping_against_cdm,
+    read_classification_files,
+)
 from omop_graph.extensions.omop_alchemy import (
     RelationshipClass,
     RelationshipMapping,
@@ -24,31 +28,6 @@ from omop_graph.extensions.omop_alchemy import (
 
 app = typer.Typer()
 logger = logging.getLogger(__name__)
-
-
-def _filter_unknown_relationship_ids(
-    mapping: pd.DataFrame, vocabulary_ids: set[str]
-) -> pd.DataFrame:
-    """Drop and report relationship mappings absent from the CDM vocabulary."""
-    if not vocabulary_ids:
-        raise RuntimeError(
-            "The CDM relationship vocabulary is empty; load vocabulary data "
-            "before running `relationship-classification`."
-        )
-    unknown_ids = sorted(set(mapping["relationship_id"].dropna()) - vocabulary_ids)
-    if unknown_ids:
-        logger.warning(
-            "Dropping %d relationships not found in the CDM vocabulary: %s",
-            len(unknown_ids),
-            unknown_ids,
-        )
-        mapping = mapping[mapping["relationship_id"].isin(vocabulary_ids)]
-    if mapping.empty:
-        raise RuntimeError(
-            "None of the relationship mappings match IDs in the CDM vocabulary; "
-            "no relationship classifications were loaded."
-        )
-    return mapping
 
 
 @app.callback()
@@ -93,9 +72,13 @@ def packaged_predicate_csv_dir() -> Path:
 def relationship_classification(
     pred_class_dir: str | None = None,
     *,
+    strict: bool = False,
     resolved: ResolvedCDMDatabase | None = None,
 ) -> None:
     """Load pre-classified predicates into the database.
+
+    A CDM relationship without a classification, and a classified id that is not in the
+    CDM, are logged as warnings and the unknown ids are not loaded.
 
     Parameters
     ----------
@@ -103,22 +86,38 @@ def relationship_classification(
         Path to the directory containing `predicate_classification.csv` and
         `predicate_mapping.csv`. Defaults to the copies shipped with
         omop-graph.
+    strict : bool, default False
+        Raise on the two findings above instead of warning.
     resolved : ResolvedCDMDatabase, optional
         Database to load into. Defaults to the active config's CDM database.
         When the vocabulary has its own database, ``RelationshipMapping`` is
         created without its FK to ``relationship.relationship_id``.
+
+    Raises
+    ------
+    ClassificationDataError
+        If the files are inconsistent or do not match the CDM ``relationship`` table.
+        The checks run before the existing tables are dropped.
     """
     if resolved is None:
         resolved = resolve_cdm_database()
     with open_cdm_sessions(resolved) as cdm_sessions:
         with cdm_sessions() as session:
             engine = session.get_bind(RelationshipMapping).engine
-            relationship_ids = set(session.scalars(sa.select(Relationship.relationship_id)).all())
+            relationships = session.execute(
+                sa.select(
+                    Relationship.relationship_id,
+                    Relationship.relationship_name,
+                    Relationship.reverse_relationship_id,
+                )
+            ).all()
+        cdm_relationships = {rid: (name, reverse) for rid, name, reverse in relationships}
         _load_relationship_classification(
             pred_class_dir,
             resolved=resolved,
             engine=engine,
-            relationship_ids=relationship_ids,
+            relationships=cdm_relationships,
+            strict=strict,
         )
 
 
@@ -127,69 +126,20 @@ def _load_relationship_classification(
     *,
     resolved: ResolvedCDMDatabase,
     engine: sa.Engine,
-    relationship_ids: set[str],
+    relationships: dict[str, tuple[str, str]],
+    strict: bool,
 ) -> None:
     """Body of :func:`relationship_classification`, on *engine*, which hosts the extension tables."""
-    pred_class_dir_pl = Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
-    if not pred_class_dir_pl.is_dir():
-        raise NotADirectoryError(f"{pred_class_dir_pl} is not a valid directory.")
-
-    pred_mapping_file = pred_class_dir_pl / "predicate_mapping.csv"
-    if not pred_mapping_file.is_file():
-        raise FileNotFoundError(f"`predicate_mapping.csv` not found in {pred_class_dir_pl}")
-    pred_class_file = pred_class_dir_pl / "predicate_classification.csv"
-    if not pred_class_file.is_file():
-        raise FileNotFoundError(f"`predicate_classification.csv` not found in {pred_class_dir_pl}")
-
-    df_class = pd.read_csv(pred_class_file)
-    df_mapping = pd.read_csv(pred_mapping_file)
-
-    # 1. RelationshipClass
-    df_rel_cls = df_class.rename(
-        columns={"class": "predicate_kind", "subclass": "predicate_subkind"}
+    df_rel_cls_to_export, df_rel_mapping = read_classification_files(
+        Path(pred_class_dir) if pred_class_dir else packaged_predicate_csv_dir()
     )
-
-    check = df_rel_cls.groupby(["predicate_kind", "predicate_subkind"])[
-        ["description", "semantics", "inference"]
-    ].nunique(dropna=True)
-    violations = check[(check > 1).any(axis=1)]
-    if not violations.empty:
-        conflicting_data = df_rel_cls[
-            df_rel_cls["predicate_subkind"].isin(violations.index.tolist())
-        ].sort_values("predicate_subkind")
-        logger.error(
-            f"Validation Failed! {len(violations)} predicate_subkinds have conflicting definitions: {conflicting_data}"
-        )
-        raise AttributeError("Validation not passed")
-    df_rel_cls_to_export = df_rel_cls.groupby(
-        ["predicate_kind", "predicate_subkind"], as_index=False
-    ).first()
-
-    # 2. RelationshipMapping
-    df_rel_mapping = df_mapping.rename(
-        columns={
-            "class": "predicate_kind",
-            "subclass": "predicate_subkind",
-            "r_id": "relationship_id",
-        }
-    )
-    df_rel_mapping = df_rel_mapping[
-        ["relationship_id", "predicate_kind", "predicate_subkind"]
-    ].dropna(subset=["predicate_kind", "predicate_subkind"], how="all")
-    df_rel_mapping = _filter_unknown_relationship_ids(df_rel_mapping, relationship_ids)
-    invalid_mask = df_rel_mapping[["predicate_kind", "predicate_subkind"]].isna().any(axis=1)
-    dropped_ids = df_rel_mapping.loc[invalid_mask, "relationship_id"].unique().tolist()
-
-    if dropped_ids:
-        logger.warning(
-            f"Dropping {len(dropped_ids)} relationships due to missing parent or child class: {dropped_ids}"
-        )
-    df_rel_mapping = df_rel_mapping.dropna(
-        subset=["predicate_kind", "predicate_subkind"], how="any"
-    )
-    df_rel_mapping_to_export = df_rel_mapping.drop_duplicates(
-        subset=["relationship_id", "predicate_kind", "predicate_subkind"]
-    )
+    report = check_mapping_against_cdm(df_rel_mapping, relationships, strict=strict)
+    for warning in report.warnings:
+        logger.warning(warning)
+    df_rel_mapping_to_export = df_rel_mapping.loc[
+        ~df_rel_mapping["relationship_id"].isin(report.unknown_ids),
+        ["relationship_id", "predicate_kind", "predicate_subkind", "direction"],
+    ]
 
     loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)
 
@@ -259,9 +209,23 @@ def relationship_classification_cmd(
             )
         ),
     ] = None,
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            help=(
+                "Fail on a CDM relationship without a classification and on a classified "
+                "id that is not in the CDM, instead of warning."
+            ),
+        ),
+    ] = False,
 ):
     """Load pre-classified predicates into the database."""
-    relationship_classification(pred_class_dir)
+    try:
+        relationship_classification(pred_class_dir, strict=strict)
+    except ClassificationDataError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from error
 
 
 if __name__ == "__main__":

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 from typing import cast
 
 import pytest
 import sqlalchemy as sa
+from oa_configurator import ResolvedCDMDatabase
 from oa_configurator.testing import isolated_test_database, scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
@@ -20,6 +23,7 @@ from orm_loader.helpers import Base
 from sqlalchemy.orm import Session, sessionmaker
 
 from fixtures.helpers import require_cdm
+from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
@@ -452,3 +456,21 @@ def seed_relationship_vocabulary(engine: sa.Engine) -> None:
             )
             session.flush()
         session.commit()
+
+
+def load_seeded_relationship_classification(resolved: ResolvedCDMDatabase | None = None) -> None:
+    """Classify the two relationships of :func:`seed_relationship_vocabulary` as Identity.
+
+    With ``resolved=None`` the active CDM database is resolved as the CLI does.
+    """
+    with tempfile.TemporaryDirectory() as directory:
+        (Path(directory) / "predicate_classification.csv").write_text(
+            "class,subclass,description,semantics,inference\n"
+            "Identity,Exact equivalence,Identity mapping,identity,none\n"
+        )
+        (Path(directory) / "predicate_mapping.csv").write_text(
+            "class,subclass,r_id,r_name\n"
+            "Identity,Exact equivalence,Maps to,Maps to\n"
+            "Identity,Exact equivalence,Mapped from,Mapped from\n"
+        )
+        relationship_classification(directory, resolved=resolved)

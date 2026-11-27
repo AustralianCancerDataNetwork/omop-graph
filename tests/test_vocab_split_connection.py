@@ -98,6 +98,7 @@ _shadow_relationship_mapping = sa.Table(
         primary_key=True,
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
+    sa.Column("direction", sa.String(4), nullable=True),
     schema=Role.PRIMARY.value,
 )
 
@@ -402,8 +403,7 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
     split_engines: _Engines, tmp_path
 ) -> None:
     """relationship_classification() creates RelationshipMapping without its
-    FK to the vocabulary. A relationship ID the vocabulary lacks is warned
-    about and dropped."""
+    FK to the vocabulary."""
     (tmp_path / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n"
         "Identity,mapping,Identity mapping,identity,none\n"
@@ -411,7 +411,7 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
     (tmp_path / "predicate_mapping.csv").write_text(
         "class,subclass,r_id,r_name,classification_notes,additional_info,link\n"
         "Identity,mapping,maps to,Maps to,,,\n"
-        "Identity,mapping,unknown_rel,Unknown,,,\n"
+        "Identity,mapping,mapped from,Mapped from,,,\n"
     )
 
     relationship_classification(str(tmp_path), resolved=split_engines.resolved)
@@ -420,10 +420,9 @@ def test_relationship_classification_succeeds_on_a_genuinely_split_vocab_connect
         relationship_ids = set(
             session.execute(sa.select(RelationshipMapping.relationship_id)).scalars()
         )
-    assert relationship_ids == {"maps to"}
+    assert relationship_ids == {"maps to", "mapped from"}
 
     kg = _split_kg(split_engines)
-    assert "unknown_rel" not in {p.relationship_id for p in kg.predicates()}
     predicate = kg.predicate("maps to")
     assert predicate.predicate_kind == PredicateKind.IDENTITY
     assert predicate.predicate_subkind == "mapping"

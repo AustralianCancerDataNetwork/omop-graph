@@ -2,10 +2,8 @@ class,subclass,description,semantics,inference
 Identity,Exact equivalence,Semantically identical concepts across vocabularies,Symmetric merge,Interchangeable
 Identity,Near equivalence,Context-specific similarity (e.g. Brand names),Weak mapping,Proximity search
 Identity,Version lineage,Concept lifecycle and deprecation history,Temporal audit,Succession
-Hierarchy,Taxonomic - up,Generalization to parent concept,Inheritance,Ancestor traversal
-Hierarchy,Taxonomic - down,Specialization to descendant concept,Refinement,Descendant traversal
-Hierarchy,Categorical - up,Membership in a classification group,Grouping,Class membership
-Hierarchy,Categorical - down,Expansion of grouping to members,Member listing,Class expansion
+Hierarchy,Taxonomic,Is-a lineage between a concept and its parents or descendants,Inheritance,Ancestor and descendant traversal
+Hierarchy,Categorical,Membership in a classification group and expansion to its members,Grouping,Class membership
 Composition,Physical,Material part-whole or assembly,Physical decomposition,Part-of inference
 Composition,Structural,Inherent chemical/structural definition,Potency/Recipe definition,Structural reasoning
 Composition,Containment,Packaging or multi-item kit grouping,Physical enclosure,Container reasoning
@@ -17,6 +15,7 @@ Association,Mechanistic,Mechanism of Action or functional pathways,Pathway analy
 Association,Diagnostic,Evidence linking tests/procedures to findings,Diagnostic path,Evidence tracing
 Association,Administrative,"Operational, billing, or system tracking links",ETL/Reporting,System mapping
 Association,Mapping,Cross-vocabulary or historical mapping without a guaranteed 1:1 correspondence,Weak mapping,Low-confidence linking
+Association,Contraindication,"Contraindicated pairing of a drug with an agent, class or effect",Safety check,Contraindication screening
 Attribute,Clinical,"Qualifiers like severity, status, or course",Phenotyping,Attribute enrichment
 Attribute,Anatomical,Spatial location or morphology,Spatial localization,Anatomical qualification
 Attribute,Measurement,"Quantitative units, scales, and properties",Quantitative analysis,Scale interpretation
@@ -24,3 +23,9 @@ Attribute,Pharmaceutical,Dose form and delivery characteristics,Drug characteriz
 Attribute,Temporal,"Clinical event timing, sequence, or duration",Timeline reconstruction,Temporal logic
 Attribute,Procedural,"Technical execution (method, route, access)",Process qualification,Technique specification
 Attribute,Context,General situational qualifiers (status/state),Contextual filtering,Contextual qualification
+Metadata,Module membership,Release module a concept belongs to,Vocabulary bookkeeping,Annotation only
+Metadata,Definition status,"Definition status of a concept, primitive or defined",Vocabulary bookkeeping,Annotation only
+Metadata,Data type,Data type of a data element,Vocabulary bookkeeping,Annotation only
+Metadata,CDM version,CDM version and the tables and fields it contains,Vocabulary bookkeeping,Annotation only
+Metadata,Schema variable,Registry schema and its data variables,Vocabulary bookkeeping,Annotation only
+Metadata,Item date link,Registry item and its start or end date variable,Vocabulary bookkeeping,Annotation only
