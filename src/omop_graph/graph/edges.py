@@ -24,7 +24,12 @@ from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
-from ..extensions.omop_alchemy import HierarchyDirection, PredicateKind, PredicateSubkind
+from ..extensions.omop_alchemy import (
+    HierarchyDirection,
+    PredicateKind,
+    PredicateSubkind,
+    Subkinds,
+)
 
 if TYPE_CHECKING:
     from .kg import KnowledgeGraph
@@ -175,9 +180,9 @@ class MappingStrength(Enum):
 
 
 _MAPPING_SUBKINDS: dict[PredicateSubkind, MappingStrength] = {
-    PredicateSubkind(PredicateKind.IDENTITY, "Exact equivalence"): MappingStrength.EXACT,
-    PredicateSubkind(PredicateKind.IDENTITY, "Near equivalence"): MappingStrength.CLOSE,
-    PredicateSubkind(PredicateKind.ASSOCIATION, "Mapping"): MappingStrength.RELATED,
+    Subkinds.EXACT_EQUIVALENCE: MappingStrength.EXACT,
+    Subkinds.NEAR_EQUIVALENCE: MappingStrength.CLOSE,
+    Subkinds.MAPPING: MappingStrength.RELATED,
 }
 
 

@@ -36,12 +36,13 @@ class OMOPSubsetterInterface(OMOPBasicOntologyInterface, SubsetterInterface):
         seed_curies : list[CURIE]
             The concepts to connect.
         predicates : list[PRED_CURIE] | None
-            Only these predicates, or every exposed relationship when empty.
+            Only these predicates, every exposed relationship when None, and nothing when
+            empty.
         """
         predicate_ids = (
-            self.codec.relationship_ids(predicates)
-            if predicates
-            else self.kg.default_relationship_ids
+            self.kg.default_relationship_ids
+            if predicates is None
+            else self.codec.relationship_ids(predicates)
         )
         ids = tuple(dict.fromkeys(self._resolve_concepts(seed_curies).values()))
         yield from self.triple_curies(

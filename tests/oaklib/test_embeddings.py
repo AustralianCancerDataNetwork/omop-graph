@@ -115,6 +115,11 @@ def test_a_graph_without_a_store_cannot_embed_text(plain) -> None:
         plain.text_embedding("lung cancer")
 
 
+def test_a_model_the_adapter_does_not_provide_is_unsupported(plain) -> None:
+    with pytest.raises(OMOPUnsupportedError, match="embedding_models"):
+        plain.embedding_similarity(curie(CANCER), curie(LUNG), model="nonexistent")
+
+
 def test_the_closure_models_are_not_searched_without_candidates(plain) -> None:
     with pytest.raises(OMOPUnsupportedError, match="candidates"):
         plain.nearest_entities(curie(CANCER))

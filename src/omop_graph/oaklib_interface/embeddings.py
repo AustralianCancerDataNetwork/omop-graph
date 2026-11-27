@@ -45,9 +45,18 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         return models
 
     def _fetch_embeddings(self, curies: list[CURIE], model: str) -> dict[CURIE, np.ndarray | None]:
-        """Read the stored vectors of the concepts that have one."""
+        """
+        Read the stored vectors of the concepts that have one.
+
+        Raises
+        ------
+        omop_graph.oaklib_interface.unsupported.OMOPUnsupportedError
+            If model is not the stored model. The closure models do not come through here.
+        """
         if not self._is_store_model(model):
-            return super()._fetch_embeddings(curies, model)
+            raise OMOPUnsupportedError(
+                "EmbeddingProviderInterface._fetch_embeddings(model=unknown)"
+            )
         ids = self._resolve_concepts(curies)
         vectors = self.kg.concept_embeddings(ids.values())
         return {

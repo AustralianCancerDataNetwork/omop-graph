@@ -76,6 +76,20 @@ def test_a_concept_has_the_standardness_of_its_flag(kg) -> None:
     }
 
 
+def test_the_views_come_best_match_first_unless_unsorted(kg) -> None:
+    ids = range(STANDARD, TO_CLASSIFICATION + 1)
+
+    assert [view.concept_id for view in kg.concept_views(ids)] == [
+        STANDARD,
+        CLASSIFICATION,
+        UNMAPPED_CLASSIFICATION,
+        SOURCE,
+        TO_CLASSIFICATION,
+        DEPRECATED,
+    ]
+    assert [view.concept_id for view in kg.concept_views(ids, sort=False)] == list(ids)
+
+
 def test_a_classification_concept_stands_for_the_standard_concept_it_maps_to(kg) -> None:
     assert kg.standardise([STANDARD, CLASSIFICATION, SOURCE]) == {
         STANDARD: (STANDARD,),

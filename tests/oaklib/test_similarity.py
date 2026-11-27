@@ -101,6 +101,23 @@ def test_only_is_a_can_be_followed(adapter) -> None:
     assert adapter.pairwise_similarity(curie(CANCER), curie(LUNG_CANCER), predicates=[IS_A])
 
 
+def test_a_bad_argument_raises_at_the_call_and_not_when_the_result_is_read(adapter) -> None:
+    with pytest.raises(ValueError, match="rdfs:subClassOf"):
+        adapter.most_recent_common_ancestors(
+            curie(CANCER), curie(LUNG_CANCER), predicates=["BFO:0000050"]
+        )
+    with pytest.raises(ValueError, match="associations"):
+        adapter.information_content_scores([curie(DISEASE)], use_associations=True)
+
+
+def test_the_common_descendants_of_a_stand_in_are_those_of_its_standard_concept(adapter) -> None:
+    standardising = OMOPAlchemyImplementation(kg=adapter.kg, standardise=True)
+    pair = (curie(SOURCE), curie(CANCER))
+
+    assert list(standardising.common_descendants(*pair)) == [curie(LUNG_CANCER)]
+    assert curie(LUNG_CANCER) not in set(adapter.common_descendants(*pair))
+
+
 def test_pairwise_similarity_carries_the_scores_of_the_graph(adapter) -> None:
     similarity = adapter.pairwise_similarity(curie(LUNG_CANCER), curie(CANCER))
     ancestor_ic = -math.log2(2 / IN_SCOPE)

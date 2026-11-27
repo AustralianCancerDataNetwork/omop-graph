@@ -95,6 +95,28 @@ def test_a_mapping_has_the_cardinality_of_its_valid_relationships(kg) -> None:
     }
 
 
+def test_an_edge_with_both_ends_in_the_source_is_listed_once(kg) -> None:
+    brand_names = EdgeFilter(predicate_ids=frozenset({"Brand name of", "Has brand name"}))
+
+    found = [
+        (edge.subject_id, edge.predicate_id, edge.object_id)
+        for edge in kg.mappings(None, brand_names, source="RxNorm")
+    ]
+
+    assert sorted(found) == [
+        (BRAND, "Brand name of", INGREDIENT),
+        (INGREDIENT, "Has brand name", BRAND),
+    ]
+
+
+def test_an_edge_is_listed_for_the_source_on_either_end(kg) -> None:
+    maps_to = EdgeFilter(predicate_ids=frozenset({"Maps to", "Mapped from"}))
+
+    from_source = {(e.subject_id, e.object_id) for e in kg.mappings(None, maps_to, source="Read")}
+
+    assert from_source == {(SOURCE_READ, STANDARD), (STANDARD, SOURCE_READ)}
+
+
 def test_the_predicate_reports_its_mapping_strength(kg) -> None:
     assert kg.predicate("Maps to").mapping_strength is MappingStrength.EXACT
     assert kg.predicate("Concept replaced by").mapping_strength is None

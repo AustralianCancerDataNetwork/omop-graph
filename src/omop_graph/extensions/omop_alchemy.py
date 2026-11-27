@@ -1,7 +1,7 @@
 # Extension to omop-alchemy package
 from dataclasses import dataclass
 from enum import Enum
-from typing import cast
+from typing import ClassVar, cast
 
 import sqlalchemy as sa
 import sqlalchemy.orm as so
@@ -31,6 +31,32 @@ class PredicateSubkind:
 
     kind: PredicateKind
     name: str
+
+
+class Subkinds:
+    """The subkinds that code depends on, each of which is a row of the packaged classification."""
+
+    EXACT_EQUIVALENCE: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.IDENTITY, "Exact equivalence"
+    )
+    NEAR_EQUIVALENCE: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.IDENTITY, "Near equivalence"
+    )
+    MAPPING: ClassVar[PredicateSubkind] = PredicateSubkind(PredicateKind.ASSOCIATION, "Mapping")
+    ADMINISTRATIVE: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.ASSOCIATION, "Administrative"
+    )
+    CONTRAINDICATION: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.ASSOCIATION, "Contraindication"
+    )
+    VALUE_MAPPING: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.ASSOCIATION, "Value mapping"
+    )
+
+    @classmethod
+    def named(cls) -> tuple[PredicateSubkind, ...]:
+        """Every subkind the code depends on."""
+        return tuple(v for v in vars(cls).values() if isinstance(v, PredicateSubkind))
 
 
 class HierarchyDirection(Enum):

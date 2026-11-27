@@ -4,6 +4,15 @@ from collections.abc import Iterator
 from unittest.mock import patch
 
 import pytest
+from fixtures.cdm_builders import (
+    classified,
+    concept,
+    edge,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+    synonym,
+)
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
@@ -11,12 +20,24 @@ from fixtures.hierarchy_cdm import (
     SMOKING_RELATED,
     hierarchy_cdm,
 )
+from omop_alchemy.cdm.model.vocabulary.concept import Concept
+from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
+from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
+from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
+from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
+from omop_graph.extensions.omop_alchemy import (
+    HierarchyDirection,
+    PredicateKind,
+    RelationshipClass,
+    RelationshipMapping,
+)
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.language import OMOPLanguage
 from omop_graph.graph.scope import ALL_CONCEPTS
-from omop_graph.graph.statistics import Grouping
+from omop_graph.graph.statistics import Grouping, SynonymCounts
 
 IS_A = EdgeFilter(predicate_ids=frozenset({"Is a"}))
 
@@ -150,3 +171,73 @@ def test_a_scope_that_is_not_a_single_group_is_counted_on_its_own_even_when_grou
     assert kg.scope_statistics(ConceptFilter(vocabularies=("Nope",)), by_group=True) == (
         kg.scope_statistics(ConceptFilter(vocabularies=("Nope",)))
     )
+
+
+@pytest.fixture(scope="module")
+def grouped_kg() -> Iterator[KnowledgeGraph]:
+    """
+    Concepts 1 to 4 in two vocabularies and two domains, each pair of groups of a different size.
+
+    SNOMED holds 1 and 2 and LOINC holds 3 and 4. Condition holds 1 and 3 and Drug holds 2
+    and 4. The relationships start from the concept that counts them, so concept 1 has one,
+    2 has one, 3 has two and 4 has one. Concepts 1 and 2 share the synonym "first", and
+    concept 4 repeats "shared" of concept 1.
+    """
+    drug = concept(2)
+    drug.domain_id = "Drug"
+    loinc_drug = concept(4, vocabulary_id="LOINC")
+    loinc_drug.domain_id = "Drug"
+    rows = [
+        concept(1),
+        drug,
+        concept(3, vocabulary_id="LOINC"),
+        loinc_drug,
+        relationship("Is a", "Subsumes"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified(
+            "Is a",
+            PredicateKind.HIERARCHY,
+            "Taxonomic - up",
+            generalises=True,
+            direction=HierarchyDirection.UP,
+        ),
+        edge(1, "Is a", 2),
+        edge(2, "Is a", 1),
+        edge(3, "Is a", 1),
+        edge(3, "Is a", 2),
+        edge(4, "Is a", 1),
+        synonym(1, "shared", OMOPLanguage.ENGLISH),
+        synonym(1, "first", OMOPLanguage.ENGLISH),
+        synonym(2, "first", OMOPLanguage.ENGLISH),
+        synonym(2, "second", OMOPLanguage.ENGLISH),
+        synonym(4, "shared", OMOPLanguage.ENGLISH),
+    ]
+    models = (
+        Concept,
+        Relationship,
+        Concept_Relationship,
+        Concept_Synonym,
+        Vocabulary,
+        RelationshipClass,
+        RelationshipMapping,
+    )
+    with sqlite_cdm(models, rows) as sessions:
+        yield KnowledgeGraph(sessions)
+
+
+def test_each_vocabulary_and_each_domain_has_its_own_counts(grouped_kg) -> None:
+    by_vocabulary = grouped_kg.group_statistics(Grouping.VOCABULARY)
+    by_domain = grouped_kg.group_statistics(Grouping.DOMAIN)
+
+    assert {name: g.relationships for name, g in by_vocabulary.items()} == {
+        "SNOMED": {"Is a": 2},
+        "LOINC": {"Is a": 3},
+    }
+    assert {name: g.relationships for name, g in by_domain.items()} == {
+        "Condition": {"Is a": 3},
+        "Drug": {"Is a": 2},
+    }
+    assert by_vocabulary["SNOMED"].synonyms == SynonymCounts(4, 3)
+    assert by_vocabulary["LOINC"].synonyms == SynonymCounts(1, 1)
+    assert by_domain["Condition"].synonyms == SynonymCounts(2, 2)
+    assert by_domain["Drug"].synonyms == SynonymCounts(3, 3)

@@ -236,3 +236,12 @@ def test_relationships_follow_the_oaklib_flags(mock_cdm_kg: KnowledgeGraph) -> N
     assert list(adapter.relationships(subjects=["OMOP:900001"], include_entailed=True)) == list(
         adapter.relationships(subjects=["OMOP:900001"])
     )
+
+
+def test_an_entity_type_that_is_not_an_owl_type_raises_at_the_call(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    adapter = OMOPAlchemyImplementation(kg=mock_cdm_kg)
+
+    with pytest.raises(ValueError, match="not an OWL type"):
+        adapter.entities(owl_type="owl:NotAType")

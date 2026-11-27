@@ -7,7 +7,7 @@ from omop_graph.extensions.classification_data import (
     check_mapping_against_cdm,
     read_classification_files,
 )
-from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping
+from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping, Subkinds
 
 
 def test_packaged_files_are_consistent_ascii_and_fit_the_table_columns():
@@ -38,3 +38,15 @@ def test_packaged_mapping_matches_the_athena_relationship_table():
     )
 
     assert report.warnings == []
+
+
+def test_every_subkind_the_code_names_is_in_the_packaged_classification():
+    classification, mapping = read_classification_files(packaged_predicate_csv_dir())
+    packaged = set(zip(classification["predicate_kind"], classification["predicate_subkind"]))
+    used = set(zip(mapping["predicate_kind"], mapping["predicate_subkind"]))
+
+    named = {(subkind.kind.value, subkind.name) for subkind in Subkinds.named()}
+
+    assert len(named) == len(Subkinds.named()) == 6
+    assert named <= packaged
+    assert named <= used

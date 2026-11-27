@@ -121,7 +121,7 @@ The similarity methods wrap [the graph's](../graph/kg.md#structural-similarity),
 
 * `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one. That stored model is `default_embedding_model`, and otherwise the default is oaklib's `closure` model.
 * The stored model serves `entity_embeddings`, `embedding_similarity` and the nearest searches through the vector index of `omop-emb`. Embedding a text, and so `nearest_entities_to_text`, needs `write=True`, and raises `EmbeddingWriterRequiredError` otherwise.
-* The closure models are not searched without `candidates`, since that would compare against every concept. They cannot embed a text, so `text_embedding` and `nearest_entities_to_text` raise `OMOPUnsupportedError` for them, and for a graph with no embedding store.
+* The closure models are not searched without `candidates`, since that would compare against every concept. They cannot embed a text, so `text_embedding` and `nearest_entities_to_text` raise `OMOPUnsupportedError` for them, and for a graph with no embedding store. A model that `embedding_models()` does not list raises it too.
 * `owl:Thing` has an information content of 0.0 and is its own only ancestor.
 
 ### Summary statistics

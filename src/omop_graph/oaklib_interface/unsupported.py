@@ -33,6 +33,11 @@ _NO_CLOSURE_SCAN = (
     "compare against every concept. Pass candidates, or search the omop-emb model."
 )
 
+_NO_UNKNOWN_MODEL = (
+    "The adapter provides the closure models and the stored model of the graph, which "
+    "embedding_models() lists."
+)
+
 _NO_CLOSURE_TEXT = (
     "The closure models embed a concept from its ancestors, so they cannot embed a text, "
     "which nearest_entities_to_text needs. Use the omop-emb model, or no model when the "
@@ -75,6 +80,7 @@ UNSUPPORTED: dict[str, str] = {
         _NO_CLOSURE_SCAN
     ),
     "EmbeddingProviderInterface.text_embedding(model=closure)": _NO_CLOSURE_TEXT,
+    "EmbeddingProviderInterface._fetch_embeddings(model=unknown)": _NO_UNKNOWN_MODEL,
 }
 """
 Reason for each unsupported oaklib method, keyed by ``Interface.method``.

@@ -223,6 +223,12 @@ def test_classification_concepts_are_not_passed_to_the_embedding_filter() -> Non
     assert translated == EmbeddingConceptFilter(require_standard=True)
 
 
+def test_requiring_classification_alone_leaves_the_embedding_filter_open() -> None:
+    assert embedding_filter(ConceptFilter(include_classification=True)) == (
+        EmbeddingConceptFilter()
+    )
+
+
 def _registered_interface() -> Mock:
     interface = Mock()
     interface.is_model_registered.return_value = True
@@ -321,6 +327,13 @@ def test_embedding_similarity_is_the_cosine_of_the_stored_vectors() -> None:
     kg = _real_graph({1: [1.0, 0.0], 2: [1.0, 1.0]})
 
     assert kg.embedding_similarity(1, 2) == pytest.approx(1 / np.sqrt(2))
+
+
+def test_the_similarity_with_a_zero_vector_is_zero() -> None:
+    kg = _real_graph({1: [1.0, 0.0], 2: [0.0, 0.0]})
+
+    assert kg.embedding_similarity(1, 2) == 0.0
+    assert kg.embedding_similarity(2, 2) == 0.0
 
 
 def test_embedding_similarity_names_the_concepts_without_an_embedding() -> None:

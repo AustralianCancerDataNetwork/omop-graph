@@ -115,6 +115,13 @@ def test_unsupported_syntaxes_raise(adapter, syntax) -> None:
         search(adapter, "cancer", syntax=syntax)
 
 
+def test_an_unsupported_syntax_raises_at_the_call_and_not_when_the_result_is_read(
+    adapter,
+) -> None:
+    with pytest.raises(ValueError, match="not supported"):
+        adapter.basic_search("cancer", config(syntax=SearchTermSyntax.SQL))
+
+
 @pytest.mark.parametrize("term", ["_", "\\", "cancer%", "c_ncer"])
 def test_wildcards_in_a_partial_search_match_themselves(adapter, term) -> None:
     assert search(adapter, term, is_partial=True) == []

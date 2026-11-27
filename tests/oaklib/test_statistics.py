@@ -6,7 +6,14 @@ from collections.abc import Iterator
 
 import pytest
 from fixtures.helpers import MAPS_TO, curie
-from fixtures.hierarchy_cdm import CANCER, DISEASE, LUNG_CANCER, SMOKING_RELATED, hierarchy_cdm
+from fixtures.hierarchy_cdm import (
+    CANCER,
+    DISEASE,
+    LUNG,
+    LUNG_CANCER,
+    SMOKING_RELATED,
+    hierarchy_cdm,
+)
 from fixtures.mappings_cdm import mappings_cdm
 from oaklib.datamodels.vocabulary import IS_A, OWL_OBJECT_PROPERTY
 from omop_alchemy.cdm.query import ConceptFilter
@@ -125,6 +132,16 @@ def test_gap_filling_connects_the_seeds_without_redundant_edges(hierarchy) -> No
         (curie(LUNG_CANCER), IS_A, curie(CANCER)),
         (curie(LUNG_CANCER), IS_A, curie(SMOKING_RELATED)),
     }
+
+
+def test_gap_filling_follows_only_the_predicates_named(hierarchy) -> None:
+    seeds = [curie(LUNG_CANCER), curie(LUNG)]
+    site = (curie(LUNG_CANCER), "OMOP_REL:Has%20finding%20site", curie(LUNG))
+
+    assert set(hierarchy.gap_fill_relationships(seeds)) == {site}
+    assert set(hierarchy.gap_fill_relationships(seeds, predicates=[site[1]])) == {site}
+    assert list(hierarchy.gap_fill_relationships(seeds, predicates=[IS_A])) == []
+    assert list(hierarchy.gap_fill_relationships(seeds, predicates=[])) == []
 
 
 def test_a_gap_filled_graph_holds_the_seeds_and_their_edges(hierarchy) -> None:

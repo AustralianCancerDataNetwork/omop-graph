@@ -4,6 +4,15 @@ import logging
 from collections.abc import Iterator
 
 import pytest
+from fixtures.chain_cdm import (
+    FILLER,
+    FILLER_MIDDLE,
+    FILLER_TOP,
+    HOLDER_LEAF,
+    HOLDER_MIDDLE,
+    chain_cdm,
+)
+from fixtures.chain_cdm import HOLDER as CHAIN_HOLDER
 from fixtures.filler_cdm import HOLDER, NON_STANDARD_FILLER, STANDARD_PARENT, filler_cdm
 from fixtures.hierarchy_cdm import (
     CANCER,
@@ -241,6 +250,43 @@ def test_a_concept_the_walk_finds_and_the_scope_removes_is_silent(
 
     assert ENTAILED_TO_PARENT not in triples
     assert not caplog.records
+
+
+@pytest.fixture(scope="module")
+def chain_kg() -> Iterator[KnowledgeGraph]:
+    with chain_cdm() as sessions:
+        yield KnowledgeGraph(sessions)
+
+
+def test_the_walk_up_from_a_filler_passes_through_a_concept_the_scope_excludes(chain_kg) -> None:
+    triples = set(
+        chain_kg.entailed_relationships((CHAIN_HOLDER,), None, ENTAILING, DEFAULT_CONCEPT_FILTER)
+    )
+
+    assert (CHAIN_HOLDER, "Has finding site", FILLER) in triples
+    assert (CHAIN_HOLDER, "Has finding site", FILLER_TOP) in triples
+    assert (CHAIN_HOLDER, "Has finding site", FILLER_MIDDLE) not in triples
+
+
+def test_the_walk_down_from_a_holder_passes_through_a_concept_the_scope_excludes(
+    chain_kg,
+) -> None:
+    triples = set(
+        chain_kg.entailed_relationships(None, (FILLER_TOP,), ENTAILING, DEFAULT_CONCEPT_FILTER)
+    )
+
+    assert (CHAIN_HOLDER, "Has finding site", FILLER_TOP) in triples
+    assert (HOLDER_LEAF, "Has finding site", FILLER_TOP) in triples
+    assert not {t for t in triples if HOLDER_MIDDLE in (t[0], t[2])}
+
+
+def test_a_subtype_inherits_through_a_concept_the_scope_excludes(chain_kg) -> None:
+    triples = set(
+        chain_kg.entailed_relationships((HOLDER_LEAF,), None, ENTAILING, DEFAULT_CONCEPT_FILTER)
+    )
+
+    assert (HOLDER_LEAF, "Has finding site", FILLER) in triples
+    assert (HOLDER_LEAF, "Has finding site", FILLER_TOP) in triples
 
 
 def test_standardise_names_no_objects_in_a_warning_since_it_reports_for_the_stand_in(

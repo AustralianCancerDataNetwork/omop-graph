@@ -1,7 +1,8 @@
 """Checks that the adapter honours the oaklib interfaces it claims.
 
 Every method that raises ``NotImplementedError``, whatever the arguments, in a claimed oaklib
-interface must be implemented by the adapter or registered in ``UNSUPPORTED``.
+interface must be implemented by the adapter or registered in ``UNSUPPORTED``. An override
+that falls back to ``super()`` of a method that raises is not an implementation.
 """
 
 from __future__ import annotations
@@ -44,6 +45,23 @@ def _raises_not_implemented(function: Callable) -> bool:
         and isinstance(statement.exc, (ast.Name, ast.Call))
         and "NotImplementedError" in ast.dump(statement.exc)
         for statement in ast.walk(node)
+    )
+
+
+def _falls_back_to_super(function: Callable, name: str) -> bool:
+    """True when *function* calls ``super().<name>(...)``, which is the method it overrides."""
+    try:
+        node = ast.parse(textwrap.dedent(inspect.getsource(function))).body[0]
+    except (OSError, TypeError, SyntaxError):
+        return False
+    return any(
+        isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == name
+        and isinstance(call.func.value, ast.Call)
+        and isinstance(call.func.value.func, ast.Name)
+        and call.func.value.func.id == "super"
+        for call in ast.walk(node)
     )
 
 
@@ -122,6 +140,24 @@ def test_methods_that_raise_in_oaklib_are_implemented_or_registered(
 
     assert registered or function is not vars(interface)[name]
     assert registered or not _raises_not_implemented(function)
+    assert registered or not _falls_back_to_super(function, name)
+
+
+def test_a_fallback_to_a_super_method_is_recognised() -> None:
+    class Base:
+        def embed(self, text):
+            raise NotImplementedError
+
+    class Falls(Base):
+        def embed(self, text):
+            return super().embed(text)
+
+    class Implements(Base):
+        def embed(self, text):
+            return [text]
+
+    assert _falls_back_to_super(Falls.embed, "embed")
+    assert not _falls_back_to_super(Implements.embed, "embed")
 
 
 def test_every_oaklib_interface_is_implemented_or_listed_with_a_reason() -> None:
