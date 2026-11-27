@@ -7,10 +7,13 @@ To provide further reasoning capabilities beyond the conventional OMOP CDM, we d
     - `Attribute`,
     - `Composition`, 
     - `Hierarchy`, 
-    - `Identity`.
+    - `Identity`,
+    - `Metadata`.
 - `subclass`: Subclass to further differentiate between edges of the same class. Fine-grained reasoning capabilities including description for the LLM regarding semantics and inference. These are not as limited as the parent `class`.
 
-Each `Hierarchy` subclass has a `direction`, stored in `relationship_class.direction` and read from the stored edge `concept_id_1 -> concept_id_2`. `up` means `concept_id_2` is the parent or group of `concept_id_1`, `down` means the reverse. A relationship and its OMOP reverse therefore always have opposite directions.
+`Metadata` relationships carry release and data-model bookkeeping (module, status, data type, CDM version, schema variable, item dates). They describe the vocabulary itself, not clinical content.
+
+Each `Hierarchy` relationship has a `direction`, stored in `relationship_mapping.direction` and read from the stored edge `concept_id_1 -> concept_id_2`. `up` means `concept_id_2` is the parent or group of `concept_id_1`, `down` means the reverse. A relationship and its OMOP reverse therefore always have opposite directions. No other class has a direction.
 
 ## Predicate Classification
 
@@ -29,5 +32,5 @@ Following the predicate classification guidelines of the previous section, we cl
 
 ??? "Expand to see the classification of all edge connections"
     
-    {{ to_grouped_table('src/omop_graph/data/predicate_mapping.csv', [0, 1], [0, 1, 2, 3], [0, 1], {"r_id": "relationship_id", "r_name": "relationship_name"}) }}
+    {{ to_grouped_table('src/omop_graph/data/predicate_mapping.csv', [0, 1], [0, 1, 2, 3, 7], [0, 1], {"r_id": "relationship_id", "r_name": "relationship_name"}) }}
     

@@ -22,6 +22,7 @@ class PredicateKind(Enum):
     COMPOSITION = "Composition"
     ASSOCIATION = "Association"
     ATTRIBUTE = "Attribute"
+    METADATA = "Metadata"
 
 
 class HierarchyDirection(Enum):
@@ -72,22 +73,14 @@ class RelationshipClass(ReferenceTable, CDMTableBase, Base):
     description: so.Mapped[str] = so.mapped_column(sa.String(80), nullable=False)
     semantics: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
     inference: so.Mapped[str] = so.mapped_column(sa.String(40), nullable=False)
-    direction: so.Mapped[HierarchyDirection | None] = so.mapped_column(
-        sa.Enum(
-            HierarchyDirection,
-            values_callable=_enum_values,
-            native_enum=False,
-            create_constraint=True,
-        ),
-        nullable=True,
-    )
 
 
 @cdm_table
 class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     """
     Extensions table: Maps standard OMOP relationship_ids to
-    their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses  .
+    their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses.
+    Hierarchy relationships also have a direction.
     """
 
     __tablename__ = "relationship_mapping"
@@ -100,6 +93,15 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
         _predicate_kind_enum(), primary_key=True
     )
     predicate_subkind: so.Mapped[str] = so.mapped_column(sa.String(20), primary_key=True)
+    direction: so.Mapped[HierarchyDirection | None] = so.mapped_column(
+        sa.Enum(
+            HierarchyDirection,
+            values_callable=_enum_values,
+            native_enum=False,
+            create_constraint=True,
+        ),
+        nullable=True,
+    )
 
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
     __table_args__ = merge_table_args(
