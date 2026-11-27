@@ -45,7 +45,7 @@ def concept_card_compact(c: ConceptView) -> str:
 
 
 def subgraph_html(kg, sg: Subgraph) -> str:
-    nodes = [kg.concept_view(cid) for cid in sg.nodes]
+    nodes = [kg.concept_view(cid) for cid in sorted(sg.nodes)]
     node_html = "".join(concept_card(n) for n in nodes[:20])
 
     return f"""

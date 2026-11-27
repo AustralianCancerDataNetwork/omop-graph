@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from types import SimpleNamespace
 
 import pytest
+from fixtures.cdm_builders import (
+    classified,
+    concept,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+)
 from fixtures.helpers import graph_path
 from fixtures.hierarchy_cdm import (
     CANCER,
@@ -13,6 +21,7 @@ from fixtures.hierarchy_cdm import (
     hierarchy_cdm,
 )
 
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import IS_A_FILTER
 from omop_graph.graph.paths import GraphPath
@@ -163,6 +172,28 @@ def test_a_subgraph_in_html_shows_a_card_for_each_concept(kg, subgraph_and_trace
     assert "<code>SNOMED:C203</code>" in rendered
 
 
+def test_a_subgraph_in_html_shows_the_cards_of_its_first_twenty_concepts() -> None:
+    rows = [
+        *(concept(i) for i in range(1, 26)),
+        relationship("Is a", "Subsumes"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+    ]
+    with sqlite_cdm(rows) as sessions:
+        many = Subgraph(nodes=frozenset(range(25, 0, -1)), edges=())
+
+        rendered = render_subgraph(KnowledgeGraph(sessions), many, format="html")
+
+    assert "Nodes: 25" in rendered
+    assert [f"<b>Concept {i}</b>" in rendered for i in (1, 20, 21, 25)] == [
+        True,
+        True,
+        False,
+        False,
+    ]
+    assert rendered.count("<b>Concept ") == 20
+
+
 def test_a_trace_in_text_lists_the_expansions_by_relationship(kg, subgraph_and_trace) -> None:
     _, trace = subgraph_and_trace
 
@@ -305,3 +336,20 @@ def test_binding_the_renderers_gives_notebook_displays(
     assert path._repr_html_() == render_path(kg, path, format="html")
     assert subgraph._repr_html_() == render_subgraph(kg, subgraph, format="html")
     assert trace._repr_html_() == render_trace(kg, trace, format="html")
+
+
+@pytest.mark.parametrize(
+    ("ipython", "format"),
+    [
+        (None, "text"),
+        (SimpleNamespace(config={}), "text"),
+        (SimpleNamespace(config={"IPKernelApp": {}}), "html"),
+    ],
+    ids=["no ipython", "terminal ipython", "notebook kernel"],
+)
+def test_the_format_is_html_only_in_a_notebook_kernel(
+    kg, path, monkeypatch, ipython, format
+) -> None:
+    monkeypatch.setattr("IPython.core.getipython.get_ipython", lambda: ipython)
+
+    assert render_path(kg, path) == render_path(kg, path, format=format)
