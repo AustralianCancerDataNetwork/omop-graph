@@ -72,6 +72,14 @@ class OMOPCodec:
             by_prefix[self.vocabulary_prefix(vocabulary_id)].append(vocabulary_id)
         return {prefix: tuple(ids) for prefix, ids in by_prefix.items()}
 
+    @cached_property
+    def _vocabulary_curies(self) -> dict[str, CURIE]:
+        """The CURIE of the vocabulary concept of every vocabulary, by ``vocabulary_id``."""
+        return {
+            view.vocabulary_id: self.concept_curie(view.vocabulary_concept_id)
+            for view in self.kg.vocabularies()
+        }
+
     @staticmethod
     def vocabulary_prefix(vocabulary_id: str) -> str:
         """
@@ -82,9 +90,20 @@ class OMOPCodec:
         """
         return re.sub(r"\W", "_", vocabulary_id)
 
+    def vocabulary_curie(self, vocabulary_id: str) -> CURIE:
+        """
+        Convert a ``vocabulary_id`` to the CURIE of its vocabulary concept, as ``ontologies`` lists it.
+
+        Raises
+        ------
+        KeyError
+            If there is no such vocabulary.
+        """
+        return self._vocabulary_curies[vocabulary_id]
+
     def vocabulary_id(self, prefix: str) -> str:
         """
-        Convert a CURIE prefix back to its ``vocabulary_id``.
+        Convert a CURIE prefix, or the CURIE of a vocabulary concept, back to its ``vocabulary_id``.
 
         A prefix that is already a ``vocabulary_id`` is returned as it is. It is returned
         as it is too when it names no vocabulary, or several, in which case a warning
@@ -92,6 +111,9 @@ class OMOPCodec:
         """
         if prefix in self._vocabulary_ids:
             return prefix
+        for vocabulary_id, curie in self._vocabulary_curies.items():
+            if curie == prefix:
+                return vocabulary_id
         ids = self._vocabulary_ids_by_prefix.get(prefix, ())
         if len(ids) > 1:
             logger.warning(

@@ -79,6 +79,7 @@ class EdgesMixin(PredicatesMixin):
             return
 
         if subjects is None and objects is None:
+            # No batching: the query has no IN list, and the rows are streamed instead.
             statements = (stream(q_edges(None, None, resolved)),)
         else:
             statements = tuple(
@@ -86,12 +87,6 @@ class EdgesMixin(PredicatesMixin):
                 for subject_batch, object_batch in self._pair_batches(subjects, objects)
             )
         yield from self._classified_triples(statements)
-
-    def all_relationships(
-        self, edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER
-    ) -> Generator[tuple[int, str, int], None, None]:
-        """Yield every relationship selected by edge_filter, as :meth:`relationships` does."""
-        yield from self.relationships(None, edge_filter=edge_filter)
 
     def _classified_triples(
         self, statements: Iterable[Select]
@@ -121,6 +116,11 @@ class EdgesMixin(PredicatesMixin):
         edge_filter : EdgeFilter, optional
             Which edges to return. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves out the
             metadata relationships. None selects every classified relationship.
+
+        Returns
+        -------
+        tuple[EdgeView, ...]
+            The classified edges of the concepts.
         """
         with self.session_factory() as session:
             edges = tuple(
@@ -141,13 +141,32 @@ class EdgesMixin(PredicatesMixin):
         edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
         ordered: bool = False,
     ) -> Generator[EdgeView, None, None]:
-        """Yield edges of concept_ids on session, classified from the relationship mapping.
+        """
+        Yield edges of concept_ids on session, classified from the relationship mapping.
 
         Edges whose relationship has no classification are skipped. If
         ``ordered=True``, edges are ordered by source concept, target concept,
         and relationship ID within each batch of ``LOOKUP_BATCH_SIZE`` concepts, making
         results reproducible. If ``ordered=False``, row order is unspecified and may
         differ between runs and backends.
+
+        Parameters
+        ----------
+        session : Session
+            The session to read on.
+        concept_ids : int | Iterable[int]
+            The concepts the edges start from or end at, however many.
+        direction : Literal["in", "out"]
+            ``out`` for the edges that start at the concepts, ``in`` for those that end there.
+        edge_filter : EdgeFilter | None
+            Which edges to return, as in :meth:`edges`.
+        ordered : bool
+            If True, order the edges within each batch.
+
+        Yields
+        ------
+        EdgeView
+            The classified edges.
         """
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
@@ -187,6 +206,11 @@ class EdgesMixin(PredicatesMixin):
         edge_filter : EdgeFilter, optional
             Which edges to return. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves out the
             metadata relationships. None selects every classified relationship.
+
+        Returns
+        -------
+        tuple[EdgeView, ...]
+            The classified edges between the two sets of concepts.
         """
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:

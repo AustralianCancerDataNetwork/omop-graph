@@ -85,4 +85,4 @@ def test_every_error_raised_names_a_registered_method() -> None:
     }
 
     assert raised <= set(UNSUPPORTED)
-    assert set(UNSUPPORTED) <= raised | {"BasicOntologyInterface.query"}
+    assert set(UNSUPPORTED) <= raised

@@ -16,6 +16,7 @@ from datetime import date
 import pytest
 import sqlalchemy as sa
 import sqlalchemy.orm
+from fixtures.cdm_builders import META_CONCEPT_ID
 from fixtures.helpers import require_cdm
 from fixtures.mock_cdm import load_seeded_relationship_classification, seed_relationship_vocabulary
 from oa_configurator import Resolver, Role
@@ -32,7 +33,6 @@ from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
-_META_CONCEPT_ID = 0
 _CONCEPT_ID = 1001
 _TODAY = date(2020, 1, 1)
 _FAR_FUTURE = date(2099, 12, 31)
@@ -47,7 +47,7 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
             session.add_all(
                 [
                     Concept(
-                        concept_id=_META_CONCEPT_ID,
+                        concept_id=META_CONCEPT_ID,
                         concept_name="Meta concept",
                         domain_id="Metadata",
                         vocabulary_id="OMOP",
@@ -71,19 +71,19 @@ def _seed_one_concept(engine: sa.Engine, *, concept_id: int, name: str) -> None:
                     Domain(
                         domain_id="Metadata",
                         domain_name="Metadata",
-                        domain_concept_id=_META_CONCEPT_ID,
+                        domain_concept_id=META_CONCEPT_ID,
                     ),
                     Vocabulary(
                         vocabulary_id="OMOP",
                         vocabulary_name="OMOP",
                         vocabulary_reference="local",
                         vocabulary_version="test",
-                        vocabulary_concept_id=_META_CONCEPT_ID,
+                        vocabulary_concept_id=META_CONCEPT_ID,
                     ),
                     Concept_Class(
                         concept_class_id="Metadata",
                         concept_class_name="Metadata",
-                        concept_class_concept_id=_META_CONCEPT_ID,
+                        concept_class_concept_id=META_CONCEPT_ID,
                     ),
                 ]
             )

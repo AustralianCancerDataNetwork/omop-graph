@@ -60,12 +60,34 @@ class PredicatesMixin(GraphCore):
         return found
 
     def find_predicate(self, relationship_id: str) -> Predicate | None:
-        """Retrieve a Predicate by its relationship ID, or None when it has no classification."""
+        """
+        Retrieve a Predicate by its relationship ID, or None when it has no classification.
+
+        Parameters
+        ----------
+        relationship_id : str
+            The OMOP relationship id.
+
+        Returns
+        -------
+        Predicate | None
+            The predicate, or None when it has no classification.
+        """
         return self._predicates_by_id.get(relationship_id)
 
     def predicate_name(self, relationship_id: str) -> str:
         """
         Retrieve the human-readable name of a classified relationship.
+
+        Parameters
+        ----------
+        relationship_id : str
+            The OMOP relationship id.
+
+        Returns
+        -------
+        str
+            The name of the relationship.
 
         Raises
         ------
@@ -77,6 +99,16 @@ class PredicatesMixin(GraphCore):
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
         """
         Classify the predicate into a semantic kind.
+
+        Parameters
+        ----------
+        relationship_id : str
+            The OMOP relationship id.
+
+        Returns
+        -------
+        PredicateKind
+            The kind of the relationship.
         """
         return self._mapping_for(relationship_id).predicate_kind
 
@@ -109,12 +141,32 @@ class PredicatesMixin(GraphCore):
     def predicate_kinds(self, relationship_ids: tuple[str, ...]) -> tuple[PredicateKind, ...]:
         """
         Classify a batch of predicates.
+
+        Parameters
+        ----------
+        relationship_ids : tuple[str, ...]
+            The OMOP relationship ids.
+
+        Returns
+        -------
+        tuple[PredicateKind, ...]
+            The kind of each relationship, in order.
         """
         return tuple(self.predicate_kind(rel_id) for rel_id in relationship_ids)
 
     def reverse_predicate_id(self, relationship_id: str) -> str | None:
         """
         Get the reverse relationship ID, if it exists.
+
+        Parameters
+        ----------
+        relationship_id : str
+            The OMOP relationship id.
+
+        Returns
+        -------
+        str | None
+            The id of the reverse relationship, if it has one.
         """
         return self.predicate(relationship_id).reverse_id
 
@@ -136,5 +188,10 @@ class PredicatesMixin(GraphCore):
         Return all predicates known to the knowledge graph.
 
         They are read once, like the relationship classification they are built from.
+
+        Returns
+        -------
+        tuple[Predicate, ...]
+            Every classified predicate.
         """
         return tuple(self._predicates_by_id.values())

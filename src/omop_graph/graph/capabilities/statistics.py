@@ -10,9 +10,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from ..queries import (
     q_concept_counts,
     q_relationship_counts,
-    q_relationship_counts_by,
     q_synonym_counts,
-    q_synonym_counts_by,
 )
 from ..scope import ALL_CONCEPTS, every_concept
 from ..statistics import ConceptCount, ConceptCounts, Grouping, GroupStatistics, SynonymCounts
@@ -23,7 +21,19 @@ class StatisticsMixin(GraphCore):
     """Counts, computed by the database and never by reading the concepts."""
 
     def concept_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> ConceptCounts:
-        """Count the concepts in ``concept_filter`` by vocabulary, domain and validity."""
+        """
+        Count the concepts in ``concept_filter`` by vocabulary, domain and validity.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The concepts to count.
+
+        Returns
+        -------
+        ConceptCounts
+            The counts by vocabulary, domain and validity.
+        """
         with self.session_factory() as session:
             return ConceptCounts(
                 tuple(
@@ -54,7 +64,19 @@ class StatisticsMixin(GraphCore):
             }
 
     def synonym_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> SynonymCounts:
-        """Count the synonyms of the concepts in ``concept_filter``, and their distinct names."""
+        """
+        Count the synonyms of the concepts in ``concept_filter``, and their distinct names.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The concepts whose synonyms are counted.
+
+        Returns
+        -------
+        SynonymCounts
+            The number of synonyms and of distinct names.
+        """
         with self.session_factory() as session:
             row = session.execute(q_synonym_counts(concept_filter)).one()
         return SynonymCounts(row.statements, row.distinct)
@@ -63,6 +85,11 @@ class StatisticsMixin(GraphCore):
         """
         Count the active relationships by the group of their subject, in one pass.
 
+        Parameters
+        ----------
+        grouping : Grouping
+            Whether to group by vocabulary or by domain.
+
         Returns
         -------
         dict[str, dict[str, int]]
@@ -70,16 +97,28 @@ class StatisticsMixin(GraphCore):
         """
         found: dict[str, dict[str, int]] = {}
         with self.session_factory() as session:
-            for row in session.execute(q_relationship_counts_by(grouping)):
+            for row in session.execute(q_relationship_counts(ALL_CONCEPTS, grouping)):
                 found.setdefault(row.group, {})[row.relationship_id] = row.n
         return found
 
     def synonym_counts_by(self, grouping: Grouping) -> dict[str, SynonymCounts]:
-        """Count the synonyms and their distinct names by the group of their concept, in one pass."""
+        """
+        Count the synonyms and their distinct names by the group of their concept, in one pass.
+
+        Parameters
+        ----------
+        grouping : Grouping
+            Whether to group by vocabulary or by domain.
+
+        Returns
+        -------
+        dict[str, SynonymCounts]
+            The synonym counts of each group.
+        """
         with self.session_factory() as session:
             return {
                 row.group: SynonymCounts(row.statements, row.distinct)
-                for row in session.execute(q_synonym_counts_by(grouping))
+                for row in session.execute(q_synonym_counts(ALL_CONCEPTS, grouping))
             }
 
     @functools.cached_property
@@ -91,9 +130,14 @@ class StatisticsMixin(GraphCore):
         """
         The relationships and synonyms of each vocabulary or domain, counted in one pass.
 
-        The first call for a grouping counts every group together, which takes a minute on a
-        full Athena release, and the result is kept for the life of the graph. It is cheaper
+        The first call for a grouping counts every group together, which is slow on a full
+        Athena release, and the result is kept for the life of the graph. It is cheaper
         than counting each group on its own when several groups are wanted.
+
+        Parameters
+        ----------
+        grouping : Grouping
+            Whether to group by vocabulary or by domain.
 
         Returns
         -------
@@ -127,8 +171,8 @@ class StatisticsMixin(GraphCore):
         by_group : bool
             If True and the scope is a single vocabulary or domain, it is read from
             :meth:`group_statistics`, which counts every group once for the life of the
-            graph. This pays off when several groups are asked for, and costs about a
-            minute on a full Athena release for the first.
+            graph. This pays off when several groups are asked for, and is slow on a full
+            Athena release for the first.
 
         Returns
         -------
@@ -143,7 +187,7 @@ class StatisticsMixin(GraphCore):
                 (Grouping.DOMAIN, "domains"),
             ):
                 group = getattr(every, field)
-                if group and len(group) == 1 and replace(every, **{field: None}) == ALL_CONCEPTS:
+                if group and len(group) == 1 and replace(every, **{field: None}).is_empty():
                     return self.group_statistics(grouping).get(
                         group[0], GroupStatistics({}, SynonymCounts(0, 0))
                     )

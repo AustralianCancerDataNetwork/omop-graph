@@ -51,7 +51,7 @@ from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
 from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
 from .edges import EdgeFilter
-from .scope import ALL_CONCEPTS, _apply_scope, limited
+from .scope import _apply_scope, limited
 from .statistics import Grouping
 
 
@@ -79,8 +79,8 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
         1. Concepts carrying a standardness flag first
            (``_concept_has_standardness_expr()``: ``'S'`` or ``'C'``, tolerating
            blank/whitespace-only values as unset). Classification concepts share
-           tier 0 with standard ones deliberately — this orders *match
-           candidates*, where a classification node is a legitimate result, not
+           tier 0 with standard ones deliberately, as this orders match
+           candidates, where a classification node is a legitimate result, not
            mapping targets.
         2. Active concepts first (``Concept.is_valid_expr()``: invalid_reason unset,
            i.e. NULL or blank/whitespace-only). CDM v5.4 permits only "D"/"U"/NULL,
@@ -111,6 +111,17 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
         )
     )
     return tuple(terms)
+
+
+def _scoped_and_sorted(
+    stmt: Select, name_expr, concept_filter, sort: bool, rank_expr=None
+) -> Select:
+    """Apply the scope of a label query, and order its matches by quality when sort."""
+    if concept_filter:
+        stmt = _apply_scope(stmt, concept_filter)
+    if sort:
+        stmt = stmt.order_by(*_concept_match_order_terms(name_expr, rank_expr))
+    return stmt
 
 
 def q_concept_view(concept_id: int) -> Select:
@@ -269,13 +280,7 @@ def q_concept_name_match(
         )
     else:
         base_stmt = q_concept_name().where(func.lower(name_expr) == func.lower(query_concept_name))
-    if concept_filter:
-        if not isinstance(concept_filter, ConceptFilter):
-            raise TypeError("concept_filter must be an instance of ConceptFilter")
-        base_stmt = _apply_scope(base_stmt, concept_filter)
-    if sort:
-        base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
-    return base_stmt
+    return _scoped_and_sorted(base_stmt, name_expr, concept_filter, sort)
 
 
 def q_concept_name_ilike(
@@ -311,13 +316,7 @@ def q_concept_name_ilike(
     base_stmt = (q_concept_synonym() if synonym else q_concept_name()).where(
         name_expr.ilike(pattern, escape="\\")
     )
-    if concept_filter:
-        if not isinstance(concept_filter, ConceptFilter):
-            raise TypeError("concept_filter must be an instance of ConceptFilter")
-        base_stmt = _apply_scope(base_stmt, concept_filter)
-    if sort:
-        base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
-    return base_stmt
+    return _scoped_and_sorted(base_stmt, name_expr, concept_filter, sort)
 
 
 def q_concept_name_fulltext(
@@ -365,15 +364,7 @@ def q_concept_name_fulltext(
 
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
-    if concept_filter:
-        stmt = _apply_scope(stmt, concept_filter)
-
-    if sort:
-        stmt = stmt.order_by(
-            *_concept_match_order_terms(name_expr, rank_expr=func.ts_rank(vector, query))
-        )
-
-    return stmt
+    return _scoped_and_sorted(stmt, name_expr, concept_filter, sort, func.ts_rank(vector, query))
 
 
 def q_all_predicates() -> Select:
@@ -641,31 +632,15 @@ def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> 
 
 
 def _subjects_in_scope(
-    stmt: Select, concept_id: InstrumentedAttribute[int], concept_filter: ConceptFilter
+    stmt: Select,
+    concept_id: InstrumentedAttribute[int],
+    concept_filter: ConceptFilter,
+    always_join: bool = False,
 ) -> Select:
-    """Restrict stmt to the rows whose concept ``concept_filter`` selects, joining only when it restricts."""
-    if concept_filter == ALL_CONCEPTS:
+    """Restrict stmt to the rows whose concept ``concept_filter`` selects, joining only when needed."""
+    if concept_filter.is_empty() and not always_join:
         return stmt
     return _apply_scope(stmt.join(Concept, Concept.concept_id == concept_id), concept_filter)
-
-
-def q_relationship_counts(concept_filter: ConceptFilter) -> Select:
-    """Count the active relationships by id, from the concepts ``concept_filter`` selects."""
-    stmt = (
-        select(Concept_Relationship.relationship_id, func.count().label("n"))
-        .where(Concept_Relationship.is_valid_expr())
-        .group_by(Concept_Relationship.relationship_id)
-    )
-    return _subjects_in_scope(stmt, Concept_Relationship.concept_id_1, concept_filter)
-
-
-def q_synonym_counts(concept_filter: ConceptFilter) -> Select:
-    """Count the synonyms, and the distinct synonym names, of the concepts ``concept_filter`` selects."""
-    stmt = select(
-        func.count().label("statements"),
-        func.count(Concept_Synonym.concept_synonym_name.distinct()).label("distinct"),
-    ).select_from(Concept_Synonym)
-    return _subjects_in_scope(stmt, Concept_Synonym.concept_id, concept_filter)
 
 
 def _grouping_column(grouping: Grouping) -> InstrumentedAttribute[str]:
@@ -673,28 +648,44 @@ def _grouping_column(grouping: Grouping) -> InstrumentedAttribute[str]:
     return Concept.vocabulary_id if grouping is Grouping.VOCABULARY else Concept.domain_id
 
 
-def q_relationship_counts_by(grouping: Grouping) -> Select:
-    """Count the active relationships by group of the subject concept and relationship id."""
-    group = _grouping_column(grouping)
-    return (
-        select(group.label("group"), Concept_Relationship.relationship_id, func.count().label("n"))
-        .join(Concept, Concept.concept_id == Concept_Relationship.concept_id_1)
+def q_relationship_counts(
+    concept_filter: ConceptFilter, grouping: Grouping | None = None
+) -> Select:
+    """
+    Count the active relationships by id, from the concepts ``concept_filter`` selects.
+
+    With a grouping the rows also have the ``group`` of the subject concept.
+    """
+    group = [] if grouping is None else [_grouping_column(grouping).label("group")]
+    stmt = (
+        select(*group, Concept_Relationship.relationship_id, func.count().label("n"))
+        .select_from(Concept_Relationship)
         .where(Concept_Relationship.is_valid_expr())
-        .group_by(group, Concept_Relationship.relationship_id)
+        .group_by(*group, Concept_Relationship.relationship_id)
+    )
+    return _subjects_in_scope(
+        stmt, Concept_Relationship.concept_id_1, concept_filter, grouping is not None
     )
 
 
-def q_synonym_counts_by(grouping: Grouping) -> Select:
-    """Count the synonyms, and the distinct synonym names, by group of the concept."""
-    group = _grouping_column(grouping)
-    return (
+def q_synonym_counts(concept_filter: ConceptFilter, grouping: Grouping | None = None) -> Select:
+    """
+    Count the synonyms, and the distinct synonym names, of the concepts ``concept_filter`` selects.
+
+    With a grouping the rows also have the ``group`` of the concept.
+    """
+    group = [] if grouping is None else [_grouping_column(grouping).label("group")]
+    stmt = (
         select(
-            group.label("group"),
+            *group,
             func.count().label("statements"),
             func.count(Concept_Synonym.concept_synonym_name.distinct()).label("distinct"),
         )
-        .join(Concept, Concept.concept_id == Concept_Synonym.concept_id)
-        .group_by(group)
+        .select_from(Concept_Synonym)
+        .group_by(*group)
+    )
+    return _subjects_in_scope(
+        stmt, Concept_Synonym.concept_id, concept_filter, grouping is not None
     )
 
 
@@ -759,39 +750,32 @@ def q_obsolete_concepts(
     return limited(_apply_scope(stmt, concept_filter) if concept_filter else stmt, limit)
 
 
-def _has_parent(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
-    """Correlated test that a concept has a parent: in the closure, or by edge_filter edges."""
+def _has_neighbour(
+    edge_filter: EdgeFilter | None, direction: HierarchyDirection
+) -> ColumnElement[bool]:
+    """
+    Correlated test that a concept has a parent (UP) or a child (DOWN).
+
+    Without edge_filter the neighbour is in the closure at level 1, otherwise it is the
+    other end of an edge the filter selects.
+    """
+    up = direction is HierarchyDirection.UP
     if edge_filter is None:
         return exists(
             select(1).where(
-                Concept_Ancestor.descendant_concept_id == Concept.concept_id,
+                (
+                    Concept_Ancestor.descendant_concept_id
+                    if up
+                    else Concept_Ancestor.ancestor_concept_id
+                )
+                == Concept.concept_id,
                 Concept_Ancestor.min_levels_of_separation == 1,
             )
         )
+    own_end = Concept_Relationship.concept_id_1 if up else Concept_Relationship.concept_id_2
     return exists(
         _filter_concept_relationships(
-            select(1)
-            .select_from(Concept_Relationship)
-            .where(Concept_Relationship.concept_id_1 == Concept.concept_id),
-            edge_filter,
-        )
-    )
-
-
-def _has_child(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
-    """Correlated test that a concept has a child: in the closure, or by edge_filter edges."""
-    if edge_filter is None:
-        return exists(
-            select(1).where(
-                Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
-                Concept_Ancestor.min_levels_of_separation == 1,
-            )
-        )
-    return exists(
-        _filter_concept_relationships(
-            select(1)
-            .select_from(Concept_Relationship)
-            .where(Concept_Relationship.concept_id_2 == Concept.concept_id),
+            select(1).select_from(Concept_Relationship).where(own_end == Concept.concept_id),
             edge_filter,
         )
     )
@@ -808,7 +792,9 @@ def q_roots(
     Parents are the closure's level 1 ancestors, or with edge_filter the targets of
     outgoing edges it selects.
     """
-    return limited(q_entities(concept_filter).where(~_has_parent(edge_filter)), limit)
+    return limited(
+        q_entities(concept_filter).where(~_has_neighbour(edge_filter, HierarchyDirection.UP)), limit
+    )
 
 
 def q_leaves(
@@ -822,7 +808,10 @@ def q_leaves(
     Children are the closure's level 1 descendants, or with edge_filter the sources of
     incoming edges it selects.
     """
-    return limited(q_entities(concept_filter).where(~_has_child(edge_filter)), limit)
+    return limited(
+        q_entities(concept_filter).where(~_has_neighbour(edge_filter, HierarchyDirection.DOWN)),
+        limit,
+    )
 
 
 def q_singletons(
@@ -832,7 +821,11 @@ def q_singletons(
 ) -> Select:
     """Query for singleton concepts (no parents and no children). See :func:`q_roots`."""
     return limited(
-        q_entities(concept_filter).where(~_has_parent(edge_filter), ~_has_child(edge_filter)), limit
+        q_entities(concept_filter).where(
+            ~_has_neighbour(edge_filter, HierarchyDirection.UP),
+            ~_has_neighbour(edge_filter, HierarchyDirection.DOWN),
+        ),
+        limit,
     )
 
 

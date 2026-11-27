@@ -20,26 +20,17 @@ from fixtures.hierarchy_cdm import (
     SMOKING_RELATED,
     hierarchy_cdm,
 )
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
-from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.language import OMOPLanguage
 from omop_graph.graph.scope import ALL_CONCEPTS
 from omop_graph.graph.statistics import Grouping, SynonymCounts
-
-IS_A = EdgeFilter(predicate_ids=frozenset({"Is a"}))
 
 
 @pytest.fixture(scope="module")
@@ -95,7 +86,7 @@ def test_synonyms_are_counted_with_their_distinct_names(kg) -> None:
 def test_gap_filling_drops_the_edge_another_concept_lies_between(kg) -> None:
     seeds = (LUNG_CANCER, CANCER, SMOKING_RELATED, DISEASE)
 
-    assert kg.gap_filled_relationships(seeds, IS_A) == (
+    assert kg.gap_filled_relationships(seeds, EdgeFilter(predicate_ids=frozenset({"Is a"}))) == (
         (CANCER, "Is a", DISEASE),
         (SMOKING_RELATED, "Is a", DISEASE),
         (LUNG_CANCER, "Is a", CANCER),
@@ -212,16 +203,7 @@ def grouped_kg() -> Iterator[KnowledgeGraph]:
         synonym(2, "second", OMOPLanguage.ENGLISH),
         synonym(4, "shared", OMOPLanguage.ENGLISH),
     ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Relationship,
-        Concept_Synonym,
-        Vocabulary,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield KnowledgeGraph(sessions)
 
 

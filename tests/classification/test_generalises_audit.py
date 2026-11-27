@@ -17,15 +17,13 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Relationship, Relationship
+from omop_alchemy.cdm.model.vocabulary import Concept_Relationship
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
@@ -72,8 +70,7 @@ def sessions() -> Iterator[sessionmaker[Session]]:
         edge(ADENO, HAS_SITE, RIGHT_LUNG),
         edge(UNRELATED, HAS_SITE, LIVER),
     ]
-    models = (Concept, Relationship, Concept_Relationship, RelationshipClass, RelationshipMapping)
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield sessions
 
 

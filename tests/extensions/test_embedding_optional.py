@@ -481,7 +481,7 @@ def test_grounding_scores_nothing_without_an_embedding_store_or_matches() -> Non
 # the resolver
 
 
-def test_embedding_resolver_passes_its_limit_as_k_and_its_constraints_as_the_scope(
+def test_embedding_resolver_passes_its_limit_as_k_and_its_concept_filter_as_the_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(resolvers_ext, "HAS_OMOP_EMB", True)
@@ -489,19 +489,19 @@ def test_embedding_resolver_passes_its_limit_as_k_and_its_constraints_as_the_sco
     kg.has_embeddings = True
     kg.nearest_concepts.return_value = ()
     kg.concept_views.return_value = ()
-    constraints = ConceptFilter(domains=("Condition",))
+    scope = ConceptFilter(domains=("Condition",))
 
     resolvers_ext.EmbeddingResolver().get_matches(
         kg=kg,
         query="kidney cancer",
-        constraints=constraints,
+        concept_filter=scope,
         limit=5,
         query_embedding=np.zeros((1, 3)),
     )
 
     call = kg.nearest_concepts.call_args
     assert call.kwargs["k"] == 5
-    assert call.kwargs["concept_filter"] == constraints
+    assert call.kwargs["concept_filter"] == scope
 
 
 def test_embedding_resolver_returns_nothing_without_a_store_or_a_registered_model(

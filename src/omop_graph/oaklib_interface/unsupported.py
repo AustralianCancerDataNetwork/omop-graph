@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 _READ_ONLY = (
     "The OMOP adapter only reads. Vocabulary data is written by loading Athena releases "
     "with the omop-alchemy CLI, and embeddings by omop-emb."
@@ -90,46 +88,25 @@ A method that is unsupported only for some arguments has the condition after its
 """
 
 
-@dataclass(frozen=True)
-class UnclaimedInterface:
-    """
-    An oaklib interface the adapter does not implement.
-
-    Parameters
-    ----------
-    reason : str
-        Why the adapter does not implement it.
-    planned : bool
-        True when the interface is meant to be implemented later.
-    """
-
-    reason: str
-    planned: bool = False
-
-
-NOT_CLAIMED: dict[str, UnclaimedInterface] = {
-    "MetadataInterface": UnclaimedInterface(
-        "OMOP has no definitions, contributors or creators, and no annotated statements, "
-        "so every method would be empty."
-    ),
-    "SkosInterface": UnclaimedInterface(
-        "It fits OMOP, with Is a as broader and narrower and the mappings as exact and "
-        "related, but nothing in oaklib uses it and the methods already exist as "
-        "hierarchical_parents, descendants and sssom_mappings."
-    ),
-    "ValidatorInterface": UnclaimedInterface("Its OBO lint checks have no OMOP meaning."),
-    "OwlInterface": UnclaimedInterface("OMOP has no axioms and no OWL reasoner."),
-    "RdfInterface": UnclaimedInterface("OMOP has no triple store."),
-    "OboLegacyInterface": UnclaimedInterface("It handles OBO shorthand identifiers."),
-    "PatcherInterface": UnclaimedInterface(_NO_FILE_EDITING),
-    "DifferInterface": UnclaimedInterface(_NO_FILE_EDITING),
-    "MergeInterface": UnclaimedInterface(_NO_FILE_EDITING),
-    "DumperInterface": UnclaimedInterface(_NO_FILE_EDITING),
-    "OntologyGenerationInterface": UnclaimedInterface(_NO_FILE_EDITING),
-    "TaxonConstraintInterface": UnclaimedInterface("OMOP has no taxa."),
-    "AssociationProviderInterface": UnclaimedInterface(_NO_ASSOCIATIONS),
-    "ClassEnrichmentCalculationInterface": UnclaimedInterface(_NO_ASSOCIATIONS),
-    "UsagesInterface": UnclaimedInterface("It reports usages of a term in other ontologies."),
+NOT_CLAIMED: dict[str, str] = {
+    "MetadataInterface": "OMOP has no definitions, contributors or creators, and no annotated statements, "
+    "so every method would be empty.",
+    "SkosInterface": "It fits OMOP, with Is a as broader and narrower and the mappings as exact and "
+    "related, but nothing in oaklib uses it and the methods already exist as "
+    "hierarchical_parents, descendants and sssom_mappings.",
+    "ValidatorInterface": "Its OBO lint checks have no OMOP meaning.",
+    "OwlInterface": "OMOP has no axioms and no OWL reasoner.",
+    "RdfInterface": "OMOP has no triple store.",
+    "OboLegacyInterface": "It handles OBO shorthand identifiers.",
+    "PatcherInterface": _NO_FILE_EDITING,
+    "DifferInterface": _NO_FILE_EDITING,
+    "MergeInterface": _NO_FILE_EDITING,
+    "DumperInterface": _NO_FILE_EDITING,
+    "OntologyGenerationInterface": _NO_FILE_EDITING,
+    "TaxonConstraintInterface": "OMOP has no taxa.",
+    "AssociationProviderInterface": _NO_ASSOCIATIONS,
+    "ClassEnrichmentCalculationInterface": _NO_ASSOCIATIONS,
+    "UsagesInterface": "It reports usages of a term in other ontologies.",
 }
 """The oaklib interfaces the adapter does not implement, keyed by class name."""
 

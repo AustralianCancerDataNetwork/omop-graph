@@ -25,6 +25,7 @@ SCOPED_CALLS: dict[str, Callable[[KnowledgeGraph, ConceptFilter], object]] = {
     "all_entailed_relationships": lambda kg, scope: kg.all_entailed_relationships(
         concept_filter=scope
     ),
+    "check_concept_filter": lambda kg, scope: kg.check_concept_filter(scope),
     "closure": lambda kg, scope: kg.closure([LUNG_CANCER], concept_filter=scope),
     "common_ancestors": lambda kg, scope: kg.common_ancestors(
         LUNG_CANCER, CANCER, concept_filter=scope

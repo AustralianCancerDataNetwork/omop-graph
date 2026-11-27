@@ -17,19 +17,12 @@ from fixtures.cdm_builders import (
     sqlite_cdm,
     synonym,
 )
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from sqlalchemy import event
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
@@ -67,6 +60,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
             direction=HierarchyDirection.DOWN,
         ),
         classified("Concept replaced by", PredicateKind.IDENTITY, "Version lineage"),
+        Vocabulary(vocabulary_id="SNOMED", vocabulary_name="SNOMED", vocabulary_concept_id=0),
         *(edge(child, "Is a", parent) for child, parent in parents.items()),
         *(edge(parent, "Subsumes", child) for child, parent in parents.items()),
         edge(DELETED, "Concept replaced by", ROOT),
@@ -75,17 +69,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         *(synonym(concept_id, f"Alias {concept_id}", OMOPLanguage.SPANISH) for concept_id in IDS),
         *(synonym(concept_id, f"Other {concept_id}", OMOPLanguage.ENGLISH) for concept_id in IDS),
     ]
-    models = (
-        Concept,
-        Vocabulary,
-        Relationship,
-        Concept_Ancestor,
-        Concept_Relationship,
-        Concept_Synonym,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 

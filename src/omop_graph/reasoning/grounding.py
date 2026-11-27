@@ -231,14 +231,14 @@ def ground_term(
 
     if query_embedding is not None:
         assert query_embedding.shape[0] == 1, (
-            "query_embedding must have shape (1, D) — one vector per call to ground_term."
+            "query_embedding must have shape (1, D), one vector per call to ground_term."
         )
 
     resolved = list(
         resolver_pipeline.resolve(
             kg,
             query,
-            constraints=concept_filter,
+            concept_filter=concept_filter,
             query_embedding=query_embedding,
         )
     )

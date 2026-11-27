@@ -49,6 +49,11 @@ class MappingsMixin(HierarchyMixin):
             Which edges to return, as in :meth:`relationships`.
         source : str, optional
             Only edges with this vocabulary on either side.
+
+        Yields
+        ------
+        MappingView
+            The edges, each with the vocabularies of both ends and its cardinality.
         """
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
@@ -74,7 +79,14 @@ class MappingsMixin(HierarchyMixin):
         return MappingView(**fields, cardinality=cardinality)
 
     def mapping_predicates(self) -> dict[str, MappingStrength]:
-        """Return the strength of each relationship that is a mapping, by relationship id."""
+        """
+        Return the strength of each relationship that is a mapping, by relationship id.
+
+        Returns
+        -------
+        dict[str, MappingStrength]
+            The strength of each mapping relationship.
+        """
         return {
             relationship_id: strength
             for relationship_id, mapping in self._relationship_mapping.items()
@@ -127,6 +139,11 @@ class MappingsMixin(HierarchyMixin):
     def replacements(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
         """
         Find the concepts that replace each concept, by its ``Concept replaced by`` edges.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts to find replacements for.
 
         Returns
         -------

@@ -39,12 +39,9 @@ class OMOPSubsetterInterface(OMOPBasicOntologyInterface, SubsetterInterface):
             Only these predicates, every exposed relationship when None, and nothing when
             empty.
         """
-        predicate_ids = (
-            self.kg.default_relationship_ids
-            if predicates is None
-            else self.codec.relationship_ids(predicates)
-        )
-        ids = tuple(dict.fromkeys(self._resolve_concepts(seed_curies).values()))
         yield from self.triple_curies(
-            self.kg.gap_filled_relationships(ids, EdgeFilter(predicate_ids=predicate_ids))
+            self.kg.gap_filled_relationships(
+                self._concept_ids(seed_curies),
+                EdgeFilter(predicate_ids=self._relationship_ids(predicates)),
+            )
         )

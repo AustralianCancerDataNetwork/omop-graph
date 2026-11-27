@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -17,7 +15,7 @@ from fixtures.cdm_builders import (
     sqlite_cdm,
     synonym,
 )
-from omop_graph.extensions.omop_alchemy import PredicateKind, RelationshipClass, RelationshipMapping
+from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.graph.language import OMOPLanguage
 
 CANCER, PREFIXED, CONTAINING, LOWER, SOURCE, RETIRED, PERCENT = range(400, 407)
@@ -50,6 +48,5 @@ def search_cdm() -> Generator[sessionmaker[Session]]:
         synonym(CONTAINING, "Oat cell carcinoma", OMOPLanguage.ENGLISH),
         synonym(CANCER, "Cancer", OMOPLanguage.ENGLISH),
     ]
-    models = (Concept, Concept_Synonym, Vocabulary, RelationshipClass, RelationshipMapping)
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield sessions

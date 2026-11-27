@@ -46,7 +46,7 @@ def test_find_standard_paths_checks_all_targets_in_one_pass(
     mock_cdm_kg: KnowledgeGraph,
 ) -> None:
     # Concept 196653 is itself a standard concept, so the very first item popped
-    # from the BFS queue (the candidate itself) triggers the ancestry check —
+    # from the BFS queue (the candidate itself) triggers the ancestry check,
     # exercising the multi-target batching directly without needing graph edges.
     candidate = CandidateHit(
         concept_id=196653,

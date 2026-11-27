@@ -1,4 +1,4 @@
-"""Lookup of concepts by name and the validation of search constraints."""
+"""Lookup of concepts by name and the validation of concept filters."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class SearchMixin(EnumerationMixin):
-    """Lookup of concepts by name and the validation of search constraints."""
+    """Lookup of concepts by name and the validation of concept filters."""
 
     def concept_lookup(
         self,
@@ -60,6 +60,11 @@ class SearchMixin(EnumerationMixin):
             concept ids.
         limit : int, optional
             The most matches to read.
+
+        Returns
+        -------
+        tuple[LabelMatch, ...]
+            The matches, the best first when sorted.
         """
         input_query_term = self._normalise_query_term(query_term)
         if not input_query_term:
@@ -187,6 +192,16 @@ class SearchMixin(EnumerationMixin):
     def concept_ids_by_label(self, label: str) -> tuple[int, ...]:
         """
         Find concept IDs that match the label exactly (case-insensitive).
+
+        Parameters
+        ----------
+        label : str
+            The label to match.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The ids of the concepts with that name.
         """
         label = self._normalise_query_term(label)
         with self.session_factory() as session:
@@ -199,30 +214,32 @@ class SearchMixin(EnumerationMixin):
         """
         return re.sub(r"\s+", " ", query_term.strip().lower())
 
-    def check_concept_filter(self, constraints: ConceptFilter) -> None:
+    def check_concept_filter(self, concept_filter: ConceptFilter) -> None:
         """
         Check that the domains and vocabularies of a concept filter exist.
 
         Parameters
         ----------
-        constraints : ConceptFilter
+        concept_filter : ConceptFilter
             The filter to check.
 
         Raises
         ------
         ValueError
-            If a domain or vocabulary is not in the vocabulary tables.
+            If a domain or vocabulary is not in the vocabulary tables, or the filter sets
+            ``limit``.
         """
-        if constraints.domains is not None:
-            invalid = [d for d in constraints.domains if d not in self._valid_domains]
+        _require_scope(concept_filter)
+        if concept_filter.domains is not None:
+            invalid = [d for d in concept_filter.domains if d not in self._valid_domains]
             if invalid:
                 raise ValueError(
                     f"Invalid domain constraint(s): {invalid}. "
                     f"Available domains: {sorted(self._valid_domains)}"
                 )
 
-        if constraints.vocabularies is not None:
-            invalid = [v for v in constraints.vocabularies if v not in self._valid_vocabularies]
+        if concept_filter.vocabularies is not None:
+            invalid = [v for v in concept_filter.vocabularies if v not in self._valid_vocabularies]
             if invalid:
                 raise ValueError(
                     f"Invalid vocabulary constraint(s): {invalid}. "

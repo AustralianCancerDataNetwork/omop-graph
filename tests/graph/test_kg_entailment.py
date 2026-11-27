@@ -301,3 +301,14 @@ def test_standardise_names_no_objects_in_a_warning_since_it_reports_for_the_stan
 
     assert (LUNG_CANCER, "Has finding site", SOURCE_LUNG) in triples
     assert not caplog.records
+
+
+def test_a_relationship_down_the_hierarchy_is_reported_as_stored(kg) -> None:
+    subsumes = EdgeFilter(predicate_ids=frozenset({"Subsumes"}))
+
+    assert list(kg.entailed_relationships((DISEASE,), None, subsumes)) == [
+        (DISEASE, "Subsumes", CANCER)
+    ]
+    assert list(kg.entailed_relationships(None, (CANCER,), subsumes)) == [
+        (DISEASE, "Subsumes", CANCER)
+    ]

@@ -35,6 +35,18 @@ class EnumerationMixin(EdgesMixin):
         Defaults to active standard and classification concepts. The ids are read through
         a server-side cursor, so they are never all held in memory. With limit, the lowest
         ids are yielded.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The concepts to select.
+        limit : int, optional
+            The most ids to yield, the lowest first.
+
+        Yields
+        ------
+        int
+            The concept ids.
         """
         yield from self._stream_ids(q_entities(concept_filter, limit))
 
@@ -50,6 +62,20 @@ class EnumerationMixin(EdgesMixin):
         Without edge_filter the parents are the closure's level 1 ancestors. With it, a
         parent is the target of an outgoing edge it selects. With limit, the lowest ids are
         yielded.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The concepts to select.
+        edge_filter : EdgeFilter | None
+            Which edges make a concept a parent or a child, the closure when None.
+        limit : int, optional
+            The most ids to yield, the lowest first.
+
+        Yields
+        ------
+        int
+            The concept ids.
         """
         return self._enumerate(q_roots, concept_filter, edge_filter, limit)
 
@@ -64,6 +90,20 @@ class EnumerationMixin(EdgesMixin):
 
         Without edge_filter the children are the closure's level 1 descendants. With it,
         a child is the source of an incoming edge it selects.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The concepts to select.
+        edge_filter : EdgeFilter | None
+            Which edges make a concept a parent or a child, the closure when None.
+        limit : int, optional
+            The most ids to yield, the lowest first.
+
+        Yields
+        ------
+        int
+            The concept ids.
         """
         return self._enumerate(q_leaves, concept_filter, edge_filter, limit)
 
@@ -76,6 +116,20 @@ class EnumerationMixin(EdgesMixin):
         """
         Yield singleton concepts (no parents and no children) among those selected by
         concept_filter. See :meth:`roots` for edge_filter.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The concepts to select.
+        edge_filter : EdgeFilter | None
+            Which edges make a concept a parent or a child, the closure when None.
+        limit : int, optional
+            The most ids to yield, the lowest first.
+
+        Yields
+        ------
+        int
+            The concept ids.
         """
         return self._enumerate(q_singletons, concept_filter, edge_filter, limit)
 
@@ -121,5 +175,10 @@ class EnumerationMixin(EdgesMixin):
             Narrows the concepts, for example to some vocabularies or domains.
         limit : int, optional
             The most ids to yield, the lowest first.
+
+        Yields
+        ------
+        int
+            The concept ids.
         """
         yield from self._stream_ids(q_obsolete_concepts(include_updated, concept_filter, limit))

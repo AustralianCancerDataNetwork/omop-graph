@@ -25,20 +25,13 @@ from oaklib.datamodels.vocabulary import (
     OWL_OBJECT_PROPERTY,
     TERM_REPLACED_BY,
 )
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
 from omop_alchemy.cdm.model.vocabulary.domain import Domain
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
@@ -106,18 +99,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         synonym(CANCER, "Cáncer", OMOPLanguage.SPANISH),
         synonym(CANCER, "Cancer fr", OMOPLanguage.FRENCH),
     ]
-    models = (
-        Concept,
-        Domain,
-        Vocabulary,
-        Relationship,
-        Concept_Ancestor,
-        Concept_Relationship,
-        Concept_Synonym,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 
@@ -277,17 +259,7 @@ def test_metadata_relationships_are_read_only_when_named() -> None:
         edge(concept_id, "Has Module", module),
         edge(module, "Module of", concept_id),
     ]
-    models = (
-        Concept,
-        Domain,
-        Vocabulary,
-        Relationship,
-        Concept_Ancestor,
-        Concept_Relationship,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         adapter = OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
         assert list(adapter.relationships(subjects=[f"OMOP:{concept_id}"])) == []
@@ -334,17 +306,7 @@ def test_a_concept_ancestor_link_without_an_is_a_edge_is_no_hierarchical_parent(
         ancestor(classification, classification, 0),
         ancestor(classification, ingredient, 1),
     ]
-    models = (
-        Concept,
-        Domain,
-        Vocabulary,
-        Relationship,
-        Concept_Ancestor,
-        Concept_Relationship,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         adapter = OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
         assert adapter.hierarchical_parents(f"OMOP:{ingredient}") == []

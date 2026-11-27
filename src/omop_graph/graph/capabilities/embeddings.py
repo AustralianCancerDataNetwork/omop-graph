@@ -184,6 +184,16 @@ def requires_embeddings[S: EmbeddingsMixin, **P, R](
     """
     Guard a method that needs the embedding store, checked when it is called.
 
+    Parameters
+    ----------
+    method : Callable
+        The method to guard.
+
+    Returns
+    -------
+    Callable
+        The method, which checks the embedding store first.
+
     Raises
     ------
     MissingExtensionError
@@ -205,6 +215,16 @@ def requires_embedding_writer[S: EmbeddingsMixin, **P, R](
 ) -> Callable[Concatenate[S, P], R]:
     """
     Guard a method that needs a write-capable embedding store, checked when it is called.
+
+    Parameters
+    ----------
+    method : Callable
+        The method to guard.
+
+    Returns
+    -------
+    Callable
+        The method, which checks that the embedding store can write first.
 
     Raises
     ------
@@ -231,6 +251,16 @@ def embedding_filter(concept_filter: ConceptFilter) -> EmbeddingConceptFilter:
     omop-emb can require standard concepts but has no flag for classification concepts, so
     ``include_classification`` is not passed on. A scope that requires standard concepts
     retrieves standard concepts only, which are the valid mapping targets.
+
+    Parameters
+    ----------
+    concept_filter : ConceptFilter
+        The scope to translate.
+
+    Returns
+    -------
+    EmbeddingConceptFilter
+        The filter for omop-emb.
     """
     from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
 
@@ -363,6 +393,11 @@ class EmbeddingsMixin(GraphCore):
         """
         Embed a query text with the configured model.
 
+        Parameters
+        ----------
+        text : str
+            The text to embed.
+
         Returns
         -------
         np.ndarray
@@ -432,6 +467,16 @@ class EmbeddingsMixin(GraphCore):
         Return the stored embedding of each concept that has one.
 
         Concepts without a stored embedding are left out.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts to read.
+
+        Returns
+        -------
+        dict[int, np.ndarray]
+            The stored vector of each concept that has one.
         """
         stored = self._stored_concept_ids(concept_ids)
         return dict(self._registered().get_embeddings_by_concept_ids(stored)) if stored else {}
@@ -459,7 +504,19 @@ class EmbeddingsMixin(GraphCore):
 
     @requires_embeddings
     def concepts_without_embedding(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
-        """Return the concepts among concept_ids that exist and have no stored embedding."""
+        """
+        Return the concepts among concept_ids that exist and have no stored embedding.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts to check.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The concepts that exist and have no stored embedding.
+        """
         return tuple(self._rows_without_embedding(concept_ids))
 
     def _rows_without_embedding(self, concept_ids: Iterable[int]) -> dict[int, Row]:
@@ -487,6 +544,11 @@ class EmbeddingsMixin(GraphCore):
         """
         Compute and store the embeddings of the concepts that have none.
 
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts to embed when they have no embedding.
+
         Returns
         -------
         tuple[int, ...]
@@ -508,6 +570,18 @@ class EmbeddingsMixin(GraphCore):
     def embedding_similarity(self, concept_a: int, concept_b: int) -> float:
         """
         Return the cosine similarity of the stored embeddings of two concepts.
+
+        Parameters
+        ----------
+        concept_a : int
+            The first concept.
+        concept_b : int
+            The second concept.
+
+        Returns
+        -------
+        float
+            The cosine similarity of the two stored vectors.
 
         Raises
         ------

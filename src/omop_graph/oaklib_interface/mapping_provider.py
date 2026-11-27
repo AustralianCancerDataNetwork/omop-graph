@@ -1,6 +1,7 @@
 """The mapping provider interface over the OMOP knowledge graph."""
 
 from collections.abc import Iterable, Iterator
+from datetime import date
 from typing import ClassVar, cast
 
 from oaklib.datamodels.vocabulary import (
@@ -40,8 +41,9 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
 
     OMOP does not record how a mapping was made, so its justification is
     ``semapv:UnspecifiedMatching``, its date is the start of the relationship's validity
-    and its comment names the OMOP relationship. Mappings are not limited to the adapter's
-    ``concept_filter``.
+    unless that is Athena's placeholder, and its comment names the OMOP relationship.
+    The source of each side is the CURIE of the vocabulary concept of its vocabulary.
+    Mappings are not limited to the adapter's ``concept_filter``.
     """
 
     SKOS_PREDICATES: ClassVar[dict[MappingStrength, PRED_CURIE]] = {
@@ -50,6 +52,9 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         MappingStrength.RELATED: SKOS_RELATED_MATCH,
     }
     """The SKOS predicate of each strength of mapping."""
+
+    PLACEHOLDER_DATE: ClassVar[date] = date(1970, 1, 1)
+    """The start Athena gives to a relationship without one, which dates no mapping."""
 
     @property
     def _mapping_predicates(self) -> dict[str, PRED_CURIE]:
@@ -86,13 +91,13 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         """Yield each concept's vocabulary code as an ``oio:hasDbXref`` mapping."""
         for view in views:
             if source is None or view.vocabulary_id == source:
-                prefix = self.codec.vocabulary_prefix(view.vocabulary_id)
+                vocabulary = self.codec.vocabulary_curie(view.vocabulary_id)
                 yield self._mapping(
                     subject[view.concept_id],
                     HAS_DBXREF,
                     self.codec.code_curie(view.vocabulary_id, view.concept_code),
-                    prefix,
-                    prefix,
+                    vocabulary,
+                    vocabulary,
                 )
 
     def sssom_mappings(
@@ -157,9 +162,11 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
             self.codec.concept_curie(edge.subject_id),
             self._match_predicate(predicates[edge.predicate_id], edge.cardinality),
             self.codec.concept_curie(edge.object_id),
-            self.codec.vocabulary_prefix(edge.subject_source),
-            self.codec.vocabulary_prefix(edge.object_source),
-            mapping_date=edge.valid_start_date,
+            self.codec.vocabulary_curie(edge.subject_source),
+            self.codec.vocabulary_curie(edge.object_source),
+            mapping_date=None
+            if edge.valid_start_date == self.PLACEHOLDER_DATE
+            else edge.valid_start_date,
             mapping_cardinality=edge.cardinality.value,
             comment=f"OMOP relationship {edge.predicate_id}",
         )
@@ -218,8 +225,8 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
                 self.codec.concept_curie(concept_id),
                 self._match_predicate(SKOS_EXACT_MATCH, cardinalities[other]),
                 self.codec.concept_curie(other),
-                self.codec.vocabulary_prefix(views[concept_id].vocabulary_id),
-                self.codec.vocabulary_prefix(views[other].vocabulary_id),
+                self.codec.vocabulary_curie(views[concept_id].vocabulary_id),
+                self.codec.vocabulary_curie(views[other].vocabulary_id),
                 mapping_cardinality=cardinalities[other].value,
             )
 

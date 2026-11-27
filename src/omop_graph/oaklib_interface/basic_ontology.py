@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from functools import cached_property
 from itertools import islice
+from typing import overload
 
 from oaklib.datamodels.vocabulary import (
     DEPRECATED_PREDICATE,
@@ -37,6 +38,7 @@ from omop_graph.graph.language import OMOPLanguage
 from omop_graph.graph.nodes import ConceptView, Standardness
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
 from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
+from omop_graph.graph.structural_similarity import ICSource
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import (
@@ -69,6 +71,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         concept, reported for the concept itself. A concept that maps to several standard
         concepts raises a ``ValueError``, since none of them is the more standard. Off by default, since the result then holds
         concepts that no stored edge connects to the concept.
+    information_content_source : ICSource
+        Where the descendants of the information content are counted. ``ICSource.IS_A``
+        counts the strict hierarchy, and ``ICSource.CONCEPT_ANCESTOR`` the precomputed
+        table, which is faster in bulk.
 
     Raises
     ------
@@ -82,6 +88,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         kg: KnowledgeGraph,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         standardise: bool = False,
+        information_content_source: ICSource = ICSource.IS_A,
         **kwargs,
     ):
         if concept_filter.limit is not None or concept_filter.concept_ids is not None:
@@ -89,6 +96,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         super().__init__(*args, kg=kg, **kwargs)
         self.concept_filter = concept_filter
         self.standardise = standardise
+        self.information_content_source = information_content_source
 
     @cached_property
     def predicates_by_curie(self) -> dict[PRED_CURIE, Predicate]:
@@ -187,15 +195,27 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             spellings[concept_id].append(curie)
         return spellings
 
+    @overload
+    def _concept_ids(self, curies: Iterable[CURIE]) -> tuple[int, ...]: ...
+
+    @overload
+    def _concept_ids(self, curies: None) -> None: ...
+
     def _concept_ids(self, curies: Iterable[CURIE] | None) -> tuple[int, ...] | None:
         """
-        The ids of the CURIEs that name a concept, or None for no restriction.
+        The distinct ids of the CURIEs that name a concept, or None for no restriction.
 
         No id is left when none of the CURIEs names a concept, so nothing then matches.
         """
         if curies is None:
             return None
         return tuple(dict.fromkeys(self._resolve_concepts(curies).values()))
+
+    def _relationship_ids(self, predicates: Iterable[PRED_CURIE] | None) -> frozenset[str]:
+        """The relationship ids of the predicates, those the adapter exposes when None."""
+        if predicates is None:
+            return self.kg.default_relationship_ids
+        return self.codec.relationship_ids(predicates)
 
     def _concept_views(self, curies: Iterable[CURIE]) -> dict[CURIE, ConceptView]:
         """The concept views of the CURIEs that name an existing concept, others left out."""
@@ -207,15 +227,14 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def ontologies(self) -> Iterable[CURIE]:
         """Yield one ontology per vocabulary, as the CURIE of its vocabulary concept."""
-        for vocabulary in self.kg.vocabularies():
-            yield self.codec.concept_curie(vocabulary.vocabulary_concept_id)
+        yield from (self.codec.vocabulary_curie(v.vocabulary_id) for v in self.kg.vocabularies())
 
     def ontology_metadata_map(self, ontology: CURIE) -> METADATA_MAP:
         """
         Name, version and reference of a vocabulary. Empty when ontology is not one.
         """
         for vocabulary in self.kg.vocabularies():
-            if self.codec.concept_curie(vocabulary.vocabulary_concept_id) != ontology:
+            if self.codec.vocabulary_curie(vocabulary.vocabulary_id) != ontology:
                 continue
             metadata: METADATA_MAP = {
                 "id": [ontology],
@@ -241,14 +260,10 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         entities have none.
         """
         entities = list(entities)
-        vocabulary_curies = {
-            vocabulary.vocabulary_id: self.codec.concept_curie(vocabulary.vocabulary_concept_id)
-            for vocabulary in self.kg.vocabularies()
-        }
         views = self._concept_views(entities)
         for entity in entities:
             view = views.get(entity)
-            yield entity, vocabulary_curies.get(view.vocabulary_id) if view else None
+            yield entity, self.codec.vocabulary_curie(view.vocabulary_id) if view else None
 
     def obsoletes(self, include_merged: bool = True) -> Iterable[CURIE]:
         """
@@ -584,11 +599,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         subject_ids = self._concept_ids(subjects)
         object_ids = self._concept_ids(objects)
-        predicate_ids = (
-            self.kg.default_relationship_ids
-            if predicates is None
-            else self.codec.relationship_ids(predicates)
-        )
+        predicate_ids = self._relationship_ids(predicates)
         if not predicate_ids:
             return
 
@@ -652,7 +663,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     def _all_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:
         """Stream every active edge of the exposed relationships, without loading them all."""
         yield from self.triple_curies(
-            self.kg.all_relationships(EdgeFilter(predicate_ids=self.kg.default_relationship_ids))
+            self.kg.relationships(
+                None, edge_filter=EdgeFilter(predicate_ids=self.kg.default_relationship_ids)
+            )
         )
 
     def _all_entailed_relationships(self) -> Iterator[tuple[CURIE, PRED_CURIE, CURIE]]:

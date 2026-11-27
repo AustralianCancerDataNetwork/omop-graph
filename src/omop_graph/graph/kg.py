@@ -1,17 +1,14 @@
 """
 OMOP-backed knowledge graph.
 
-This module provides the `KnowledgeGraph` class, the primary interface to the OMOP
+This module provides the ``KnowledgeGraph`` class, the primary interface to the OMOP
 Common Data Model database. It holds construction and the relationship classification,
-and takes its methods from the capability mixins in `omop_graph.graph.capabilities`.
+and takes its methods from the capability mixins in ``omop_graph.graph.capabilities``.
 
-Capabilities
-------------
-* **Concepts, search, enumeration:** concept views, lookup by name or code, roots and leaves.
-* **Predicates and edges:** relationship classification, relationships and edges.
-* **Hierarchy and entailment:** parents, children, closure, and relationships entailed through them.
-* **Mappings, vocabularies, embeddings:** mappings between vocabularies, vocabulary and synonym
-  lookups, and the optional embedding store.
+The capabilities are concepts, predicates and edges, enumeration of roots, leaves and
+singletons, the ``Is a`` hierarchy and the relationships entailed through it, mappings,
+vocabularies and synonyms, search, structural similarity, statistics and the optional
+embedding store.
 """
 
 from collections.abc import Callable

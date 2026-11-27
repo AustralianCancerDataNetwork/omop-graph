@@ -11,16 +11,9 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
-from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import Standardness
@@ -30,7 +23,6 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 STANDARD, CLASSIFICATION, SOURCE, DEPRECATED, UNMAPPED_CLASSIFICATION, TO_CLASSIFICATION = range(
     500, 506
 )
-REPLACED_BY = "IAO:0100001"
 
 
 @pytest.fixture(scope="module")
@@ -52,16 +44,7 @@ def kg() -> Iterator[KnowledgeGraph]:
         edge(CLASSIFICATION, "Maps to", STANDARD),
         edge(TO_CLASSIFICATION, "Maps to", UNMAPPED_CLASSIFICATION),
     ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Relationship,
-        Concept_Synonym,
-        Vocabulary,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield KnowledgeGraph(sessions)
 
 
@@ -116,4 +99,4 @@ def test_the_metadata_of_a_concept_carries_its_raw_standardness_flag(kg) -> None
 def test_a_deprecated_concept_without_a_replacement_has_no_replacement_key(kg) -> None:
     metadata = OMOPAlchemyImplementation(kg=kg).entity_metadata_map(f"OMOP:{DEPRECATED}")
 
-    assert REPLACED_BY not in metadata
+    assert "IAO:0100001" not in metadata

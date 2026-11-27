@@ -16,7 +16,6 @@ from oaklib.interfaces import TextAnnotatorInterface
 from oaklib.interfaces.text_annotator_interface import nen_annotation
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import PredicateKind
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -74,7 +73,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         configuration: TextAnnotationConfiguration | None = None,
         query_embedding: np.ndarray | None = None,
         annotations: dict[str, Annotation] | None = None,
-        max_depth: int = 6,
+        max_depth: int = GroundingConstraints.max_depth,
     ) -> Iterator[TextAnnotation]:
         """
         Annotate text by grounding the whole text as one term to the OMOP vocabulary.
@@ -93,7 +92,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
             LinkML annotations that provide context constraints (parent IDs,
             vocabularies, domains).
         max_depth : int
-            Maximum grounding hierarchy depth. Default: 6
+            Maximum grounding hierarchy depth, ``GroundingConstraints.max_depth`` by default.
 
         Returns
         -------
@@ -156,7 +155,6 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         return GroundingConstraints(
             parent_ids=tuple(self._parent_id(pid) for pid in parent_ids) if parent_ids else None,
             concept_filter=concept_filter,
-            predicate_kinds=frozenset([PredicateKind.IDENTITY]),
             max_depth=max_depth,
         )
 

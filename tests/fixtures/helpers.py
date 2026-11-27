@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -43,3 +45,22 @@ SUBSUMES = "OMOP_REL:Subsumes"
 def curie(concept_id: int) -> str:
     """The oaklib CURIE of an OMOP concept."""
     return f"OMOP:{concept_id}"
+
+
+def docs_macros() -> dict[str, Callable[[], str]]:
+    """The macros of ``docs/mkdocs_macros.py``, by name, as the documentation build registers them."""
+    path = Path(__file__).parents[2] / "docs" / "mkdocs_macros.py"
+    spec = importlib.util.spec_from_file_location("mkdocs_macros", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    macros: dict[str, Callable[[], str]] = {}
+
+    class Environment:
+        @staticmethod
+        def macro(function):
+            macros[function.__name__] = function
+            return function
+
+    module.define_env(Environment())
+    return macros

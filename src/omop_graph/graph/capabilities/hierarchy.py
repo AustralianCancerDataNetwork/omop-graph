@@ -43,6 +43,16 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         """
         Compute specificity as the inverse of out-degree.
         Higher is more specific.
+
+        Parameters
+        ----------
+        concept_id : int
+            The concept.
+
+        Returns
+        -------
+        float
+            One over the number of outgoing edges, and 1.0 without any.
         """
         out_edges = self.edges(direction="out", concept_ids=concept_id)
         if not out_edges:
@@ -61,6 +71,11 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             If True, the parents are the targets of its active ``Is a`` edges. Otherwise
             they are its level 1 ancestors in the ``concept_ancestor`` table, which hold
             classification and cohort ancestry besides ``Is a``.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The parent concept ids.
         """
         if isa_only:
             return tuple(
@@ -74,6 +89,16 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
     def children(self, concept_id) -> tuple[int, ...]:
         """
         Retrieve children Concept IDs of concept using Concept_Ancestor table.
+
+        Parameters
+        ----------
+        concept_id : int
+            The concept.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The child concept ids.
         """
         with self.session_factory() as session:
             children = tuple(session.execute(q_children(concept_id)).scalars())
@@ -214,9 +239,8 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         standard = self._standard_among(ids)
         mapped: dict[int, set[int]] = {concept_id: set() for concept_id in ids}
         sources = tuple(concept_id for concept_id in ids if concept_id not in standard)
-        for batch in self.batches(sources):
-            for subject_id, _, object_id in self.relationships(batch, edge_filter=edge_filter):
-                mapped[subject_id].add(object_id)
+        for subject_id, _, object_id in self.relationships(sources, edge_filter=edge_filter):
+            mapped[subject_id].add(object_id)
         standard_targets = self._standard_among(set().union(*mapped.values()))
         return {
             concept_id: (
@@ -300,6 +324,18 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
     def get_potential_ancestor(self, child_id: int, parent_id: int) -> AncestorMatch | None:
         """
         Check if an ancestry relationship exists between a child and parent.
+
+        Parameters
+        ----------
+        child_id : int
+            The descendant.
+        parent_id : int
+            The ancestor.
+
+        Returns
+        -------
+        AncestorMatch | None
+            The ancestry row, or None when the parent is not an ancestor.
         """
 
         with self.session_factory() as session:
@@ -352,6 +388,16 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
     def get_num_ancestors(self, concept_ids: tuple[int, ...]) -> dict[int, int]:
         """
         Get the count of ancestors for a batch of concepts.
+
+        Parameters
+        ----------
+        concept_ids : tuple[int, ...]
+            The concepts to count for.
+
+        Returns
+        -------
+        dict[int, int]
+            The number of ancestors of each concept that has any.
         """
         with self.session_factory() as session:
             rows = list(self._rows_in_batches(session, q_concept_num_ancestors, concept_ids))

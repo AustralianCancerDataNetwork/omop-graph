@@ -56,7 +56,10 @@ def test_a_one_to_one_mapping_is_an_exact_match(adapter) -> None:
         (curie(UNIQUE_SOURCE), HAS_DBXREF, f"ICD10CM:C{UNIQUE_SOURCE}"),
     }
     mapping = next(m for m in mappings if m.predicate_id == SKOS_EXACT_MATCH)
-    assert (mapping.subject_source, mapping.object_source) == ("ICD10CM", "SNOMED")
+    assert (mapping.subject_source, mapping.object_source) == (
+        adapter.codec.vocabulary_curie("ICD10CM"),
+        adapter.codec.vocabulary_curie("SNOMED"),
+    )
     assert mapping.mapping_justification == SEMAPV.UnspecifiedMatching.value
     assert mapping.mapping_date == START.isoformat()
     assert str(mapping.mapping_cardinality) == "1:1"
@@ -116,11 +119,17 @@ def test_a_vocabulary_that_is_not_a_curie_prefix_gets_a_safe_one(adapter) -> Non
     mappings = list(adapter.sssom_mappings([curie(SPACED)]))
 
     assert (curie(SPACED), HAS_DBXREF, f"Nebraska_Lexicon:C{SPACED}") in summary(mappings)
-    assert {m.subject_source for m in mappings} == {"Nebraska_Lexicon"}
+    assert {m.subject_source for m in mappings} == {
+        adapter.codec.vocabulary_curie("Nebraska Lexicon")
+    }
     by_curie = summary(mappings)
     assert summary(adapter.sssom_mappings([f"Nebraska_Lexicon:C{SPACED}"])) == by_curie
     assert summary(adapter.sssom_mappings([f"Nebraska Lexicon:C{SPACED}"])) == by_curie
-    for source in ("Nebraska_Lexicon", "Nebraska Lexicon"):
+    for source in (
+        "Nebraska_Lexicon",
+        "Nebraska Lexicon",
+        adapter.codec.vocabulary_curie("Nebraska Lexicon"),
+    ):
         assert summary(adapter.sssom_mappings([curie(STANDARD)], source=source)) == {
             (curie(STANDARD), SKOS_CLOSE_MATCH, curie(SPACED))
         }
@@ -169,8 +178,8 @@ def test_transitive_mappings_go_from_a_source_concept_to_its_standard_concepts(a
     mappings = list(adapter.get_transitive_mappings_by_curie(curie(UNIQUE_SOURCE)))
 
     assert summary(mappings) == {(curie(UNIQUE_SOURCE), SKOS_EXACT_MATCH, curie(UNIQUE_STANDARD))}
-    assert {m.subject_source for m in mappings} == {"ICD10CM"}
-    assert {m.object_source for m in mappings} == {"SNOMED"}
+    assert {m.subject_source for m in mappings} == {adapter.codec.vocabulary_curie("ICD10CM")}
+    assert {m.object_source for m in mappings} == {adapter.codec.vocabulary_curie("SNOMED")}
     assert {str(m.mapping_cardinality) for m in mappings} == {"1:1"}
 
 
@@ -208,3 +217,26 @@ def test_a_source_does_not_widen_the_vocabularies_of_the_adapter(adapter) -> Non
     }
 
     assert cross_references == set()
+
+
+def test_the_sources_are_the_vocabulary_concepts_the_adapter_lists_as_ontologies(adapter) -> None:
+    ontologies = set(adapter.ontologies())
+    sources = {
+        source
+        for m in adapter.sssom_mappings_by_source()
+        for source in (m.subject_source, m.object_source)
+    }
+
+    assert sources <= ontologies
+
+
+def test_the_placeholder_start_date_does_not_date_a_mapping(adapter) -> None:
+    [placeholder] = [
+        m for m in adapter.sssom_mappings([curie(OTHER_SOURCE)]) if m.predicate_id != HAS_DBXREF
+    ]
+    dated = next(
+        m for m in adapter.sssom_mappings([curie(UNIQUE_SOURCE)]) if m.predicate_id != HAS_DBXREF
+    )
+
+    assert placeholder.mapping_date is None
+    assert dated.mapping_date == START.isoformat()

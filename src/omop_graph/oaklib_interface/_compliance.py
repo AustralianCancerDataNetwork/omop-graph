@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import oaklib.interfaces as oaklib_interfaces
 from oaklib.interfaces import OntologyInterface
 
-from omop_graph.oaklib_interface.unsupported import NOT_CLAIMED, UNSUPPORTED
+from omop_graph.oaklib_interface.unsupported import UNSUPPORTED
 
 
 @dataclass(frozen=True)
@@ -78,32 +78,3 @@ def claimed_interfaces() -> list[ClaimedInterface]:
 def unclaimed_interface_names() -> set[str]:
     """The oaklib interfaces the adapter does not implement."""
     return set(oaklib_interface_classes()) - set(claimed_interface_classes())
-
-
-def render_markdown() -> str:
-    """The claimed interfaces, the unsupported methods and the unclaimed interfaces as tables."""
-    lines = [
-        "#### Implemented interfaces",
-        "",
-        "| Interface | Methods | Not supported |",
-        "| --- | --- | --- |",
-        *(f"| `{row.name}` | {row.methods} | {row.unsupported} |" for row in claimed_interfaces()),
-        "",
-        "#### Methods that are not supported",
-        "",
-        "| Method | Reason |",
-        "| --- | --- |",
-        *(f"| `{method}` | {reason} |" for method, reason in sorted(UNSUPPORTED.items())),
-        "",
-        "#### Interfaces that are not implemented",
-        "",
-        "| Interface | Status | Reason |",
-        "| --- | --- | --- |",
-        *(
-            f"| `{name}` | {'Planned' if status.planned else 'Not planned'} | {status.reason} |"
-            for name, status in sorted(
-                NOT_CLAIMED.items(), key=lambda item: (not item[1].planned, item[0])
-            )
-        ),
-    ]
-    return "\n".join(lines)

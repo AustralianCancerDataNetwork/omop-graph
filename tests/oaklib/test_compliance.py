@@ -14,11 +14,11 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
+from fixtures.helpers import docs_macros
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface._compliance import (
     claimed_interface_classes,
-    render_markdown,
     unclaimed_interface_names,
 )
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
@@ -173,7 +173,7 @@ def test_every_unsupported_method_belongs_to_an_implemented_interface() -> None:
 
 
 def test_the_compliance_tables_list_the_registries() -> None:
-    markdown = render_markdown()
+    markdown = docs_macros()["oaklib_compliance"]()
 
     assert all(f"`{key}`" in markdown for key in UNSUPPORTED)
     assert all(f"`{name}`" in markdown for name in NOT_CLAIMED)

@@ -12,7 +12,9 @@ from omop_alchemy.cdm.model.vocabulary.concept import Concept
 from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
 from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
 from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
+from omop_alchemy.cdm.model.vocabulary.domain import Domain
 from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
+from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from orm_loader.helpers import Base
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -25,6 +27,8 @@ from omop_graph.extensions.omop_alchemy import (
 from omop_graph.graph.language import OMOPLanguage
 
 START = date(2020, 1, 1)
+META_CONCEPT_ID = 0
+"""The concept id the vocabulary tables give to their own domain, vocabulary and class concepts."""
 END = date(2099, 12, 31)
 
 
@@ -65,14 +69,19 @@ def relationship(relationship_id: str, reverse: str) -> Relationship:
 
 
 def edge(
-    subject: int, relationship_id: str, object_: int, *, invalid_reason: str | None = None
+    subject: int,
+    relationship_id: str,
+    object_: int,
+    *,
+    invalid_reason: str | None = None,
+    start: date = START,
 ) -> Concept_Relationship:
-    """A concept relationship valid for the whole CDM, deprecated with *invalid_reason*."""
+    """A concept relationship valid from *start*, deprecated with *invalid_reason*."""
     return Concept_Relationship(
         concept_id_1=subject,
         relationship_id=relationship_id,
         concept_id_2=object_,
-        valid_start_date=START,
+        valid_start_date=start,
         valid_end_date=END,
         invalid_reason=invalid_reason,
     )
@@ -85,11 +94,12 @@ def edge_pair(
     object_: int,
     *,
     invalid_reason: str | None = None,
+    start: date = START,
 ) -> list[Concept_Relationship]:
     """A relationship and its reverse, as OMOP stores each pair."""
     return [
-        edge(subject, relationship_id, object_, invalid_reason=invalid_reason),
-        edge(object_, reverse, subject, invalid_reason=invalid_reason),
+        edge(subject, relationship_id, object_, invalid_reason=invalid_reason, start=start),
+        edge(object_, reverse, subject, invalid_reason=invalid_reason, start=start),
     ]
 
 
@@ -140,9 +150,23 @@ def classified(
     )
 
 
+CDM_MODELS: tuple[type[Base], ...] = (
+    Concept,
+    Concept_Ancestor,
+    Concept_Relationship,
+    Concept_Synonym,
+    Domain,
+    Relationship,
+    Vocabulary,
+    RelationshipClass,
+    RelationshipMapping,
+)
+"""The tables of the vocabulary and of the relationship classification."""
+
+
 @contextmanager
 def sqlite_cdm(
-    models: Iterable[type[Base]], rows: Iterable[Any]
+    rows: Iterable[Any], models: Iterable[type[Base]] = CDM_MODELS
 ) -> Generator[sessionmaker[Session]]:
     """
     Create an in-memory SQLite database with the tables of *models* and the *rows*.

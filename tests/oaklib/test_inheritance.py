@@ -15,18 +15,10 @@ from fixtures.cdm_builders import (
 )
 from fixtures.helpers import MAPS_TO, SITE, curie
 from oaklib.datamodels.vocabulary import IS_A
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
-from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
@@ -68,17 +60,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         edge(LUNG, "Finding site of", LUNG_CANCER),
         edge(SOURCE, "Maps to", LUNG_CANCER),
     ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Relationship,
-        RelationshipClass,
-        RelationshipMapping,
-        Concept_Ancestor,
-        Concept_Synonym,
-        Vocabulary,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 

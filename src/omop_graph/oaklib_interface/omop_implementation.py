@@ -21,6 +21,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
 from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
+from omop_graph.graph.structural_similarity import ICSource
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.embeddings import OMOPEmbeddingProviderInterface
 from omop_graph.oaklib_interface.mapping_provider import OMOPMappingProviderInterface
@@ -97,6 +98,9 @@ class OMOPAlchemyImplementation(
         If True, a non-standard concept stands in for the one standard concept it maps to
         when walking the hierarchy and entailing relationships. A concept that maps to
         several standard concepts raises a ``ValueError``. Defaults to False.
+    information_content_source : ICSource, optional
+        Where the descendants of the information content are counted, ``ICSource.IS_A`` by
+        default. ``ICSource.CONCEPT_ANCESTOR`` is faster in bulk.
     """
 
     # oaklib's class_resolver keys plugins by class name; this adds the "omop:" scheme.
@@ -111,6 +115,7 @@ class OMOPAlchemyImplementation(
         kg_emb_config: KnowledgeGraphEmbeddingConfiguration | None = None,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         standardise: bool = False,
+        information_content_source: ICSource = ICSource.IS_A,
         **kwargs,
     ):
         if resource is None:
@@ -129,5 +134,6 @@ class OMOPAlchemyImplementation(
             kg=kg,
             concept_filter=concept_filter,
             standardise=standardise,
+            information_content_source=information_content_source,
             **kwargs,
         )

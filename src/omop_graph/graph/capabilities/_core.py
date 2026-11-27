@@ -33,6 +33,16 @@ class GraphCore:
         Every query that takes a list of ids runs once for each batch, which keeps the
         number of bind parameters of a statement under the limit of the database. The ids
         can be concept ids or the CURIEs of an adapter.
+
+        Parameters
+        ----------
+        ids : Iterable[T]
+            The ids to split.
+
+        Returns
+        -------
+        Iterator[tuple[T, ...]]
+            The batches, each of at most ``LOOKUP_BATCH_SIZE`` ids.
         """
         return batched(ids, cls.LOOKUP_BATCH_SIZE)
 

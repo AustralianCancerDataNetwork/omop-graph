@@ -8,9 +8,70 @@ def define_env(env):
     @env.macro
     def oaklib_compliance() -> str:
         """The tables of implemented, unsupported and unimplemented oaklib interfaces."""
-        from omop_graph.oaklib_interface._compliance import render_markdown
+        from omop_graph.oaklib_interface._compliance import claimed_interfaces
+        from omop_graph.oaklib_interface.unsupported import NOT_CLAIMED, UNSUPPORTED
 
-        return render_markdown()
+        lines = [
+            "#### Implemented interfaces",
+            "",
+            "| Interface | Methods | Not supported |",
+            "| --- | --- | --- |",
+            *(
+                f"| `{row.name}` | {row.methods} | {row.unsupported} |"
+                for row in claimed_interfaces()
+            ),
+            "",
+            "#### Methods that are not supported",
+            "",
+            "| Method | Reason |",
+            "| --- | --- |",
+            *(f"| `{method}` | {reason} |" for method, reason in sorted(UNSUPPORTED.items())),
+            "",
+            "#### Interfaces that are not implemented",
+            "",
+            "| Interface | Reason |",
+            "| --- | --- |",
+            *(f"| `{name}` | {reason} |" for name, reason in sorted(NOT_CLAIMED.items())),
+        ]
+        return "\n".join(lines)
+
+    @env.macro
+    def graph_capabilities() -> str:
+        """One row for each capability mixin of the knowledge graph, bases first."""
+        import inspect
+
+        from omop_graph.graph.capabilities._core import GraphCore
+        from omop_graph.graph.kg import KnowledgeGraph
+
+        def members(capability: type) -> list[str]:
+            names = [
+                name
+                for name, value in vars(capability).items()
+                if not name.startswith("_")
+                and (
+                    inspect.isroutine(value)
+                    or isinstance(value, property | classmethod | staticmethod)
+                )
+            ]
+            names += [
+                name for name in inspect.get_annotations(capability) if not name.startswith("_")
+            ]
+            return list(dict.fromkeys(names))
+
+        lines = [
+            "| Capability | Purpose | Builds on | Members |",
+            "| --- | --- | --- | --- |",
+        ]
+        for capability in reversed(KnowledgeGraph.__mro__):
+            if not issubclass(capability, GraphCore) or capability is KnowledgeGraph:
+                continue
+            purpose = (inspect.getdoc(capability) or "").splitlines()[0].rstrip(".")
+            bases = ", ".join(
+                f"`{base.__name__}`" for base in capability.__bases__ if issubclass(base, GraphCore)
+            )
+            names = ", ".join(f"`{name}`" for name in members(capability))
+            lines.append(f"| `{capability.__name__}` | {purpose} | {bases or '-'} | {names} |")
+        return "\n".join(lines)
 
     @env.macro
     def to_grouped_table(

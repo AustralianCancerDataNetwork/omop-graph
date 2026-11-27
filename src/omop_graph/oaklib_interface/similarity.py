@@ -1,7 +1,6 @@
 """The semantic similarity interface over the OMOP knowledge graph."""
 
-from collections.abc import Iterable, Iterator
-from typing import ClassVar
+from collections.abc import Callable, Iterable, Iterator
 
 from oaklib.datamodels.similarity import (
     InformationContentCorpusEnum,
@@ -13,7 +12,6 @@ from oaklib.datamodels.vocabulary import IS_A, OWL_THING
 from oaklib.interfaces.semsim_interface import SemanticSimilarityInterface
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.graph.structural_similarity import ICSource
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
 
@@ -29,9 +27,6 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
     The ``subject_ancestors`` and ``object_ancestors`` arguments of ``pairwise_similarity``
     have no effect.
     """
-
-    information_content_source: ClassVar[ICSource] = ICSource.IS_A
-    """Where the descendants are counted, ``CONCEPT_ANCESTOR`` is faster in bulk."""
 
     @staticmethod
     def _check_predicates(predicates: Iterable[PRED_CURIE] | None) -> None:
@@ -59,21 +54,25 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         self._check_predicates(predicates)
         return self._most_recent_common_ancestors(subject, object, include_owl_thing)
 
+    def _pair_curies(
+        self, find: Callable[..., frozenset[int]], subject: CURIE, object: CURIE
+    ) -> list[CURIE]:
+        """The CURIEs, in id order, of what find returns for two concepts, none if either is unknown."""
+        pair = self._resolve_pair(subject, object)
+        found = (
+            find(*pair, concept_filter=self._population, standardise=self.standardise)
+            if pair
+            else frozenset()
+        )
+        return [self.codec.concept_curie(concept_id) for concept_id in sorted(found)]
+
     def _most_recent_common_ancestors(
         self, subject: CURIE, object: CURIE, include_owl_thing: bool
     ) -> Iterator[CURIE]:
         """Yield the most recent common ancestors of two concepts."""
-        pair = self._resolve_pair(subject, object)
-        found = (
-            self.kg.most_recent_common_ancestors(
-                *pair, concept_filter=self._population, standardise=self.standardise
-            )
-            if pair
-            else frozenset()
-        )
-        for concept_id in sorted(found):
-            yield self.codec.concept_curie(concept_id)
-        if not found and include_owl_thing:
+        curies = self._pair_curies(self.kg.most_recent_common_ancestors, subject, object)
+        yield from curies
+        if not curies and include_owl_thing:
             yield OWL_THING
 
     def common_ancestors(
@@ -100,16 +99,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         self, subject: CURIE, object: CURIE, include_owl_thing: bool
     ) -> Iterator[CURIE]:
         """Yield the common ancestors of two concepts."""
-        pair = self._resolve_pair(subject, object)
-        found = (
-            self.kg.common_ancestors(
-                *pair, concept_filter=self._population, standardise=self.standardise
-            )
-            if pair
-            else frozenset()
-        )
-        for concept_id in sorted(found):
-            yield self.codec.concept_curie(concept_id)
+        yield from self._pair_curies(self.kg.common_ancestors, subject, object)
         if include_owl_thing:
             yield OWL_THING
 
@@ -133,13 +123,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
 
     def _common_descendants(self, subject: CURIE, object: CURIE) -> Iterator[CURIE]:
         """Yield the common descendants of two concepts."""
-        if pair := self._resolve_pair(subject, object):
-            for concept_id in sorted(
-                self.kg.common_descendants(
-                    *pair, concept_filter=self._population, standardise=self.standardise
-                )
-            ):
-                yield self.codec.concept_curie(concept_id)
+        yield from self._pair_curies(self.kg.common_descendants, subject, object)
 
     def load_information_content_scores(self, source: str) -> None:
         """Not supported, the information content is computed from the hierarchy."""

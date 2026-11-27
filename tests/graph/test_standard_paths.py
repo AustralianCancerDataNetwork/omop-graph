@@ -14,16 +14,10 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from sqlalchemy import event
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
@@ -85,15 +79,7 @@ def kg() -> Iterator[KnowledgeGraph]:
         *edge_pair(CHAIN_HEAD, "Concept replaced by", "Concept replaces", CHAIN_MIDDLE),
         *edge_pair(CHAIN_MIDDLE, "Concept replaced by", "Concept replaces", LEAF),
     ]
-    models = (
-        Concept,
-        Concept_Ancestor,
-        Relationship,
-        Concept_Relationship,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield KnowledgeGraph(sessions)
 
 

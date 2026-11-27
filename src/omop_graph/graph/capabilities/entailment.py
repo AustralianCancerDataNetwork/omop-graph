@@ -182,6 +182,20 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
 
         The concepts are read in batches of subjects, so the table is never held in memory.
         The other parameters are those of :meth:`entailed_relationships`.
+
+        Parameters
+        ----------
+        edge_filter : EdgeFilter | None
+            Which relationships to entail.
+        concept_filter : ConceptFilter
+            The concepts whose relationships are entailed, and the scope of the objects.
+        standardise : bool
+            If True, a non-standard concept stands in for its standard concept.
+
+        Yields
+        ------
+        tuple[int, str, int]
+            The subject, relationship id and object of each relationship.
         """
         for batch in self.batches(self.entities(concept_filter)):
             yield from self.entailed_relationships(
@@ -273,11 +287,8 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             (own, tuple(dict.fromkeys(subjects)), edge_filter),
             (inherited, tuple(set().union(*above.values())), self._without_is_a(edge_filter)),
         ):
-            for batch in self.batches(ids):
-                for source, relationship_id, filler in self.relationships(
-                    batch, edge_filter=selected
-                ):
-                    edges[source].append((relationship_id, filler))
+            for source, relationship_id, filler in self.relationships(ids, edge_filter=selected):
+                edges[source].append((relationship_id, filler))
         ancestors = self._closure(
             {filler for edges in (*own.values(), *inherited.values()) for _, filler in edges},
             concept_filter=concept_filter,
@@ -312,9 +323,9 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         for target, below in descendants.items():
             for filler in (target, *below):
                 targets_by_filler[filler].append(target)
-        asserted: list[tuple[int, str, int]] = []
-        for batch in self.batches(targets_by_filler):
-            asserted.extend(self.relationships(None, objects=batch, edge_filter=edge_filter))
+        asserted = list(
+            self.relationships(None, objects=targets_by_filler, edge_filter=edge_filter)
+        )
         inheriting = {
             subject_id
             for subject_id, relationship_id, _ in asserted

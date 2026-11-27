@@ -48,7 +48,7 @@ The primary adapter class that inherits from multiple OAK interfaces:
 * A vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`, is written `Nebraska_Lexicon` in CURIEs, and either spelling is accepted as input, including in `id_prefixes`.
 * A concept code is percent-encoded in a CURIE, so the code `[iU]/L` of the `UCUM` vocabulary is `UCUM:%5BiU%5D%2FL`.
 * OMOP does not keep a code unique within its vocabulary. A `vocabulary_id:concept_code` names the valid concept when only one has the code. When several do, it names none and a warning lists their `OMOP:<concept_id>` CURIEs, which are always unambiguous.
-* A CURIE that names no concept, and a predicate CURIE that names no OMOP relationship such as `BFO:0000050`, are left out of the result instead of raising, and one info message names them.
+* A CURIE that names no concept is left out of the result instead of raising, and one info message names them. A predicate that names no OMOP relationship matches nothing and is named once, in a debug message when it is another ontology's, such as `BFO:0000050`, and in a warning when it has the `OMOP_REL` prefix, since it is then probably a typo.
 * `prefix_map` holds the oaklib defaults, `OMOP` and `OMOP_REL`. A vocabulary has no URI, since its name does not say whether it means what a registry prefix of the same name means, as `JAX` does not. Its CURIEs such as `LOINC:94762-2` are still valid, and `curie_to_uri` returns `None` for them.
 * `entities`, `roots`, `leafs` and `singletons` list active standard and classification concepts. Pass `concept_filter=ConceptFilter(...)` to the constructor to change that.
 * `roots`, `leafs` and `singletons` take the parents and children from the predicates you name. If no concept has an edge for a predicate, such as `BFO:0000050` (part of), then no concept has a parent through it, so every concept is a root.
@@ -91,8 +91,8 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 ```
 
 * `ancestors` and `descendants` report only concepts within the adapter's `concept_filter`, though the walk passes through the others. `ancestor_graph` and `descendant_graph` keep every concept on the walk so the graph stays connected.
-* A non-standard concept has no ancestry, so its `ancestors` are empty with `reflexive=False`. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the one standard concept it maps to: its walks include that concept and its ancestors, and its entailed relationships are those of that concept that generalise, reported for the concept itself. A concept that maps to several standard concepts raises a `ValueError`. Mappings and lineage of the standard concepts are not lent to it, and `standardise` applies likewise to the similarity methods, while `hierarchical_parents` and `hierarchical_children` stay literal. This is off by default because the result holds concepts that no stored edge connects to the concept.
-* `hierarchical_parents` is one `Is a` step and `ancestors` follows `Is a` to the top, so the parents are always among the ancestors. The level 1 ancestors of `concept_ancestor`, which hold classification and cohort ancestry too, are `kg.parents`.
+* A non-standard concept has no ancestry, so its `ancestors` are empty with `reflexive=False`. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the one standard concept it maps to: its walks include that concept and its ancestors, and its entailed relationships are those of that concept that generalise, reported for the concept itself. A concept that maps to several standard concepts raises a `ValueError`. Mappings and lineage of the standard concepts are not lent to it, and `standardise` applies likewise to the similarity methods, while `hierarchical_parents` stays literal. This is off by default because the result holds concepts that no stored edge connects to the concept.
+* `hierarchical_parents` is one `Is a` step and `ancestors` follows `Is a` to the top, so the parents are always among the ancestors. The level 1 ancestors of `concept_ancestor`, which hold classification and cohort ancestry too, are `kg.parents`. The children of a concept are `relationships(objects=[...], predicates=["rdfs:subClassOf"])`.
 * `paths` finds shortest paths only, and `shortest=False` raises `OMOPUnsupportedError`.
 * `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary. `edges` lists only the relationships between the concepts that `nodes` lists, so a relationship to a deprecated concept is left out.
 * `descendants` of a concept near the top of a hierarchy return very many concepts.
@@ -110,14 +110,14 @@ adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20
 * Version lineage such as `Concept replaced by` is not a mapping, and neither is a concept mapped to itself or the value family such as `Maps to value`, which only completes a `Maps to`.
 * Every mapping states its `mapping_cardinality`, `1:1`, `1:n`, `n:1` or `n:n`. It is counted from the valid relationships of the same id in the connected database, so on a subset of the CDM it is relative to the rows that subset holds. A concept that maps to several concepts, or shares its target with others, is not equivalent to one of them alone, so only a `1:1` mapping is `skos:exactMatch`.
 * OMOP stores each pair in both directions, so a standard concept has a mapping to every source concept that maps to it. Without concepts, `sssom_mappings` lists both directions of each pair.
-* The justification is `semapv:UnspecifiedMatching`, since OMOP does not record how a mapping was made. The date is when the relationship became valid, and the comment names the OMOP relationship.
-* A source or code can use a vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`. It is written `Nebraska_Lexicon`, and either spelling is accepted as input.
+* The justification is `semapv:UnspecifiedMatching`, since OMOP does not record how a mapping was made. The date is when the relationship became valid, and is left out when it is Athena's placeholder `1970-01-01`. The comment names the OMOP relationship. The `subject_source` and `object_source` are the CURIEs of the vocabulary concepts of the two vocabularies, as `ontologies` lists them.
+* A source or code can use a vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`. In a code it is written `Nebraska_Lexicon`. Either spelling, or the CURIE of the vocabulary concept, is accepted as a `source`.
 * The cross-reference is a mapping only, so it is not in `entity_alias_map`. It can be looked up from the concept or from `vocabulary_id:concept_code`.
 * Mappings are not limited to the adapter's `concept_filter`.
 * `get_transitive_mappings_by_curie` follows exact equivalence from a non-standard concept to the standard concepts it maps to, as `skos:exactMatch` when one to one and `skos:closeMatch` otherwise, and a standard concept has none. OMOP maps many concepts to one and stores each mapping in both directions, so following them both ways would join every concept that shares a target, and the result would be most of a vocabulary. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
 
 ### Similarity and embeddings
-The similarity methods wrap [the graph's](../graph/kg.md#structural-similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. `OMOPAlchemyImplementation.information_content_source` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
+The similarity methods wrap [the graph's](../graph/kg.md#structural-similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. The `information_content_source` argument of `OMOPAlchemyImplementation` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
 
 * `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one. That stored model is `default_embedding_model`, and otherwise the default is oaklib's `closure` model.
 * The stored model serves `entity_embeddings`, `embedding_similarity` and the nearest searches through the vector index of `omop-emb`. Embedding a text, and so `nearest_entities_to_text`, needs `write=True`, and raises `EmbeddingWriterRequiredError` otherwise.
@@ -129,7 +129,7 @@ The counts come from the database, where oaklib's default would read every conce
 
 * The counts describe the adapter's view. Concepts are those of the adapter's `concept_filter` and its deprecated concepts. Edges are the active ones of the exposed relationships whose subject is in the adapter's vocabularies and domains. Synonyms are those of the concepts counted, and the distinct names are counted over them.
 * Groups are made by `omop:vocabulary` or `omop:domain`. Branches below roots and entailed edges are not counted, and raise `ValueError`.
-* On a full Athena release the whole count takes about 15 s, and the first group by vocabulary or domain about a minute, since every group is counted in one pass and kept.
+* On a full Athena release the whole count is quick, and the first group by vocabulary or domain is slow, since every group is counted in one pass and kept.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.
@@ -185,7 +185,7 @@ for parent in adapter.hierarchical_parents("OMOP:313217"):
 
 `basic_search` returns the best matches first and honours `limit`:
 
-* Labels are always searched, aliases with the `ALIAS` property, and identifiers (an `OMOP` CURIE or `vocabulary:code`) with `IDENTIFIER`.
+* Labels are always searched, aliases with the `ALIAS` property, and identifiers (an `OMOP` CURIE or `vocabulary:code`) with `IDENTIFIER` or `MAPPED_IDENTIFIER`.
 * The order is identifier, exact label, labels starting with the term (`STARTS_WITH` syntax or `is_partial`), then labels containing it (`is_partial`), then full-text matches (`is_fuzzy`, only where the database has the index). Within a kind, standard and active concepts come first.
 * Matching is case-insensitive, and `%`, `_` and `\` in the term match themselves. Deprecated concepts are left out unless `include_obsoletes_in_results` is set.
 * The adapter's `concept_filter` narrows the vocabularies and domains searched, but not standardness.

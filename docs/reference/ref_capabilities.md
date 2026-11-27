@@ -1,3 +1,8 @@
+::: omop_graph.graph.capabilities.concepts
+    options:
+      members:
+        - UnknownConceptError
+
 ::: omop_graph.graph.capabilities.embeddings
     options:
       members:

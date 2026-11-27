@@ -72,6 +72,24 @@ class StructuralSimilarityMixin(HierarchyMixin):
         """
         Return the concepts that are, or are above, both concepts.
 
+        Parameters
+        ----------
+        concept_a : int
+            The first concept.
+        concept_b : int
+            The second concept.
+        edge_filter : EdgeFilter
+            The edges that make up the hierarchy, ``Is a`` by default.
+        concept_filter : ConceptFilter
+            The concepts that are reported.
+        standardise : bool
+            If True, a non-standard concept stands in for the one standard concept it maps to.
+
+        Returns
+        -------
+        frozenset[int]
+            The concepts above or equal to both.
+
         Raises
         ------
         UnknownConceptError
@@ -92,6 +110,24 @@ class StructuralSimilarityMixin(HierarchyMixin):
     ) -> frozenset[int]:
         """
         Return the concepts that are, or are below, both concepts.
+
+        Parameters
+        ----------
+        concept_a : int
+            The first concept.
+        concept_b : int
+            The second concept.
+        edge_filter : EdgeFilter
+            The edges that make up the hierarchy, ``Is a`` by default.
+        concept_filter : ConceptFilter
+            The concepts that are reported.
+        standardise : bool
+            If True, a non-standard concept stands in for the one standard concept it maps to.
+
+        Returns
+        -------
+        frozenset[int]
+            The concepts below or equal to both.
 
         Raises
         ------
@@ -115,6 +151,24 @@ class StructuralSimilarityMixin(HierarchyMixin):
         Return the common ancestors that have no descendant among the common ancestors.
 
         They are found from the ancestor sets alone, so no descendants are counted.
+
+        Parameters
+        ----------
+        concept_a : int
+            The first concept.
+        concept_b : int
+            The second concept.
+        edge_filter : EdgeFilter
+            The edges that make up the hierarchy, ``Is a`` by default.
+        concept_filter : ConceptFilter
+            The concepts that are reported.
+        standardise : bool
+            If True, a non-standard concept stands in for the one standard concept it maps to.
+
+        Returns
+        -------
+        frozenset[int]
+            The common ancestors with no descendant among them.
 
         Raises
         ------
@@ -145,6 +199,24 @@ class StructuralSimilarityMixin(HierarchyMixin):
     ) -> float:
         """
         Return the common ancestors over all ancestors of either concept.
+
+        Parameters
+        ----------
+        concept_a : int
+            The first concept.
+        concept_b : int
+            The second concept.
+        edge_filter : EdgeFilter
+            The edges that make up the hierarchy, ``Is a`` by default.
+        concept_filter : ConceptFilter
+            The concepts that are reported.
+        standardise : bool
+            If True, a non-standard concept stands in for the one standard concept it maps to.
+
+        Returns
+        -------
+        float
+            The share of the ancestors of either concept that both have.
 
         Raises
         ------
@@ -316,6 +388,11 @@ class StructuralSimilarityMixin(HierarchyMixin):
             If True, a non-standard concept stands in for the one standard concept it maps
             to when its ancestors are found, see :meth:`closure`. A concept outside
             ``concept_filter`` has its information content read from that standard concept.
+
+        Returns
+        -------
+        ConceptSimilarity
+            The scores of the pair.
 
         Raises
         ------

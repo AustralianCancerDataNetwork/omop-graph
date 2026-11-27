@@ -19,17 +19,11 @@ from fixtures.cdm_builders import (
 from fixtures.helpers import curie
 from oaklib.datamodels.search import SearchConfiguration, SearchProperty
 from oaklib.datamodels.vocabulary import HAS_DBXREF, IS_A, OWL_OBJECT_PROPERTY
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.codec import OMOPCodec
@@ -92,16 +86,7 @@ def adapter() -> Iterator[OMOPAlchemyImplementation]:
         *edge_pair(CHILD, "Is a", "Subsumes", PARENT),
         *edge_pair(SOURCE, "Maps to", "Mapped from", PARENT),
     ]
-    models = (
-        Concept,
-        Concept_Ancestor,
-        Relationship,
-        Concept_Relationship,
-        Vocabulary,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
 
 

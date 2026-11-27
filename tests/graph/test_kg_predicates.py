@@ -6,13 +6,10 @@ from collections.abc import Iterator
 
 import pytest
 from fixtures.cdm_builders import classified, relationship, relationship_class, sqlite_cdm
-from omop_alchemy.cdm.model.vocabulary import Relationship
 from sqlalchemy import event
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 
@@ -25,7 +22,7 @@ def kg() -> Iterator[KnowledgeGraph]:
         relationship_class(PredicateKind.IDENTITY, "Exact"),
         classified("Maps to", PredicateKind.IDENTITY, "Exact"),
     ]
-    with sqlite_cdm((Relationship, RelationshipClass, RelationshipMapping), rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield KnowledgeGraph(sessions)
 
 

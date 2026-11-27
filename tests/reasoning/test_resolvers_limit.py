@@ -40,7 +40,7 @@ def test_a_resolver_refuses_a_filter_that_sets_a_limit(kg, resolver) -> None:
     if resolver in (FullTextResolver, FullTextSynonymResolver):
         pytest.skip("Full-text search needs PostgreSQL and returns nothing here.")
     with pytest.raises(ValueError, match="Pass limit to the method"):
-        resolver().resolve(kg, "cancer", constraints=ConceptFilter(limit=1))
+        resolver().resolve(kg, "cancer", concept_filter=ConceptFilter(limit=1))
 
 
 @pytest.mark.parametrize("resolver", [ExactLabelResolver, PartialLabelResolver])
@@ -61,7 +61,7 @@ def test_a_synonym_resolver_returns_at_most_its_limit(kg, resolver) -> None:
 def test_a_resolver_applies_the_scope_and_the_limit_together(kg) -> None:
     scope = ConceptFilter(concept_ids=(CONTAINING,))
 
-    hits = list(PartialLabelResolver().resolve(kg, "cancer", constraints=scope, limit=5))
+    hits = list(PartialLabelResolver().resolve(kg, "cancer", concept_filter=scope, limit=5))
 
     assert [hit.concept_id for hit in hits] == [CONTAINING]
 

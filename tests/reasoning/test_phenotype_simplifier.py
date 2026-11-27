@@ -14,18 +14,9 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from omop_alchemy.cdm.model.vocabulary import (
-    Concept,
-    Concept_Ancestor,
-    Concept_Relationship,
-    Relationship,
-    Vocabulary,
-)
 
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.reasoning.phenotypes import phenotype_simplifier
@@ -78,16 +69,7 @@ def kg() -> Iterator[KnowledgeGraph]:
         ancestor(AMBIGUOUS, SEED_THREE),
         ancestor(AMBIGUOUS, SEED_FOUR),
     ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Relationship,
-        Concept_Ancestor,
-        RelationshipClass,
-        RelationshipMapping,
-        Vocabulary,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield KnowledgeGraph(sessions)
 
 

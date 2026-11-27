@@ -17,7 +17,7 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 ## Key Features
 
 * **SQLAlchemy Integration:** Efficiently manages database sessions and executes optimized queries against the CDM.
-* **Cached Classification:** Reads the [relationship classification](edges.md) once, when the graph is created, and keeps the valid domains and vocabularies after their first use.
+* **Cached state:** A graph assumes that the vocabulary tables do not change while it lives. It reads the [relationship classification](edges.md) when it is created, and keeps the predicates, vocabularies, valid domains, descendant counts, scope sizes and group statistics after their first use. Create a new graph after loading a vocabulary release.
 * **Semantic Predicates:** Resolves standard OMOP relationship IDs into rich `Predicate` objects that understand hierarchy and directionality, and selects edges with an `EdgeFilter`. See [here for more information](edges.md)
 * **Flexible Search:** Supports exact matches, fuzzy `ILIKE` searches, and full-text search (bag-of-words) across concept names and synonyms. See [documentation for more information](../reasoning/resolvers.md)
 * **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
@@ -53,22 +53,9 @@ if matches:
 
 ### Capabilities
 
-`KnowledgeGraph` holds construction and the relationship classification, and takes its methods from capability mixins in `omop_graph.graph.capabilities`. Each mixin builds on the ones it lists, and the oaklib adapter only translates CURIEs and oaklib types around these methods.
+`KnowledgeGraph` holds construction and the relationship classification, and takes its methods from capability mixins in `omop_graph.graph.capabilities`. Each mixin builds on the ones it lists, and the oaklib adapter only translates CURIEs and oaklib types around these methods. The table is generated from the mixins.
 
-| Capability | Builds on | Methods |
-| --- | --- | --- |
-| Concepts | core | `concept_view`, `concept_views`, `concepts_by_code`, `missing_concepts`, `require_concepts` |
-| Predicates | core | `predicate`, `predicates`, `predicate_kind`, `default_relationship_ids` |
-| Edges | predicates | `relationships`, `all_relationships`, `edges`, `edges_between`, `iter_edges` |
-| Enumeration | edges | `entities`, `roots`, `leaves`, `singletons`, `obsolete_concepts` |
-| Hierarchy | edges, concepts | `parents`, `children`, `closure`, `standardise` |
-| Entailment | hierarchy, enumeration | `entailed_relationships`, `all_entailed_relationships`, `gap_filled_relationships`, `entailing_relationship_ids` |
-| Mappings | hierarchy | `mappings`, `mapping_predicates`, `standard_mappings`, `replacements` |
-| Vocabulary | core | `vocabularies`, `domain_concept_ids`, `synonyms`, `translations`, `synonym_languages` |
-| Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_concept_filter` |
-| Structural similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
-| Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, their `_by` forms for relationships and synonyms, `group_statistics` and `scope_statistics` |
-| Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `concepts_without_embedding`, `embed_text`, `embed_concepts` |
+{{ graph_capabilities() }}
 
 * A scope is a `ConceptFilter` that decides which concepts a method reports or counts, see [Scopes](#scopes).
 * `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the one standard concept it maps to. A stand-in reports the entailed relationships of the standard concept for itself, and not the mappings. With both subjects and objects, the stand-ins apply to the subjects. A concept that maps to several standard concepts raises a `ValueError`, since none is the more standard. `standardise` lists them, and `standard_concept` returns the one or raises.
@@ -99,13 +86,13 @@ similarity.ancestor_id, similarity.jaccard, similarity.phenodigm
 ```
 
 * The most recent common ancestors come from the ancestor sets alone. Only they and the two concepts have their descendants counted, so the cost does not grow with the number of common ancestors.
-* The information content of a concept is `-log2(descendants / concepts in scope)`. The counts are cached for the life of the graph. Counting the descendants of a broad concept takes seconds the first time, such as 14 s for Clinical finding, and a pair whose only common ancestor is broad takes about as long.
+* The information content of a concept is `-log2(descendants / concepts in scope)`. The counts are cached for the life of the graph. Counting the descendants of a broad concept is slow the first time on a full Athena release, and a pair whose only common ancestor is broad takes about as long.
 * `ICSource.CONCEPT_ANCESTOR` counts from the precomputed `concept_ancestor` table instead, which is fast in bulk. It also holds classification and cohort ancestry, so its scores can differ from those of the strict hierarchy.
 * The strict hierarchy has no ancestry for RxNorm ingredients, whose ATC classes are only in `concept_ancestor`, so two drugs have no common ancestor and score zero.
 
 #### Statistics
 
-`concept_counts` counts concepts by vocabulary, domain and deprecation, `relationship_counts` the active relationships by id, and `synonym_counts` the synonyms. `relationship_counts_by` and `synonym_counts_by` count them by vocabulary or domain, and `group_statistics` joins both per group and keeps the result for the life of the graph. The database counts them, and a scope that selects every concept counts the relationship table without joining the concepts. On a full Athena release the relationship count and the synonym count take about 6 s each, and counting by vocabulary or domain takes about a minute for every group together.
+`concept_counts` counts concepts by vocabulary, domain and deprecation, `relationship_counts` the active relationships by id, and `synonym_counts` the synonyms. `relationship_counts_by` and `synonym_counts_by` count them by vocabulary or domain, and `group_statistics` joins both per group and keeps the result for the life of the graph. The database counts them, and a scope that selects every concept counts the relationship table without joining the concepts. On a full Athena release the counts over every concept are quick, and counting by vocabulary or domain is slow for the first group, since it counts every group together.
 
 ---
 
@@ -133,8 +120,7 @@ A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg
 
 ### Embedding Configuration
 
-To enable semantic similarity and RAG-based retrieval, pass a `KnowledgeGraphEmbeddingConfiguration` when initialising the graph.
-This requires the optional `omop-emb` package, see the [installation guide](../usage/installation.md#embedding-rag).
+To enable semantic similarity and RAG-based retrieval, pass a `KnowledgeGraphEmbeddingConfiguration` when initialising the graph. This requires the optional `omop-emb` package, see the [installation guide](../usage/installation.md#embedding-rag).
 
 !!! info "omop-emb documentation"
     `omop-emb` manages all embedding storage, backends, and retrieval. Full documentation, including backend setup, CLI reference, FAISS sidecar, and configuration, is available at [australiancancerdatanetwork.github.io/omop-emb](https://australiancancerdatanetwork.github.io/omop-emb/).
@@ -164,9 +150,7 @@ emb_config = KnowledgeGraphEmbeddingConfiguration(
 kg = KnowledgeGraph(cdm_session_factory(), emb_config=emb_config)
 ```
 
-See [omop-llm: Asymmetric Embeddings](https://AustralianCancerDataNetwork.github.io/omop-llm/usage/asymmetric-embeddings/) and
-[oa-configurator: `[models.<name>]`](https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#modelsname)
-for how a model (provider, connection details, embedding dimension, and asymmetric-prefix configuration) gets registered under a name in the first place, and [oa-configurator: `[vector_stores.<name>]`](https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#vector_storesname) for the storage backend side.
+See [omop-llm: Asymmetric Embeddings](https://AustralianCancerDataNetwork.github.io/omop-llm/usage/asymmetric-embeddings/) and [oa-configurator: `[models.<name>]`](https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#modelsname) for how a model (provider, connection details, embedding dimension, and asymmetric-prefix configuration) gets registered under a name in the first place, and [oa-configurator: `[vector_stores.<name>]`](https://AustralianCancerDataNetwork.github.io/OA_Configurator/config-reference/#vector_storesname) for the storage backend side.
 
 #### Read-only vs write-capable
 
@@ -210,9 +194,7 @@ Vector search returns standard concepts when the scope requires them. It cannot 
 
 #### Fallback embedding calculation
 
-When some concepts in the OMOP DB have not been pre-indexed, similarity scoring will silently skip them.
-Setting `compute_missing_embeddings=True` instructs grounding to compute and persist the embeddings
-of any missing concepts before it scores them. `embedding_similarity` never writes, and raises `MissingEmbeddingError` for a concept without a vector. `embed_concepts` is the explicit write.
+When some concepts in the OMOP DB have not been pre-indexed, similarity scoring will silently skip them. Setting `compute_missing_embeddings=True` instructs grounding to compute and persist the embeddings of any missing concepts before it scores them. `embedding_similarity` never writes, and raises `MissingEmbeddingError` for a concept without a vector. `embed_concepts` is the explicit write.
 
 !!! warning
     `compute_missing_embeddings=True` requires `write=True`. This is validated at construction and raises `ValueError` immediately if `write` is `False`.

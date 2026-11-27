@@ -2,18 +2,16 @@
 A small CDM with every kind of mapping edge: exact, near, associated and version lineage.
 
 The exact edges are of every cardinality: one source to one standard concept, three sources
-to the STANDARD concept, and a source that splits into two with one of them shared.
+to the STANDARD concept, and a source that splits into two with one of them shared. The edges
+of OTHER_SOURCE start on the date Athena gives to relationships without one.
 """
 
 from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import date
 
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
 from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -27,8 +25,6 @@ from fixtures.cdm_builders import (
 )
 from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 
 STANDARD, SOURCE_ICD, SOURCE_READ, BRAND, INGREDIENT, REPLACED, ICDO, SPACED = range(300, 308)
@@ -86,16 +82,7 @@ def mappings_cdm() -> Generator[sessionmaker[Session]]:
         *edge_pair(UNIQUE_SOURCE, "Maps to", "Mapped from", UNIQUE_STANDARD),
         *edge_pair(SPLIT_SOURCE, "Maps to", "Mapped from", SPLIT_A),
         *edge_pair(SPLIT_SOURCE, "Maps to", "Mapped from", SPLIT_B),
-        *edge_pair(OTHER_SOURCE, "Maps to", "Mapped from", SPLIT_A),
+        *edge_pair(OTHER_SOURCE, "Maps to", "Mapped from", SPLIT_A, start=date(1970, 1, 1)),
     ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Relationship,
-        Concept_Synonym,
-        Vocabulary,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield sessions

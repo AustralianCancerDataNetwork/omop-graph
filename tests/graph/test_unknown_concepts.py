@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 
 import pytest
 from fixtures.hierarchy_cdm import CANCER, DISEASE, hierarchy_cdm
@@ -19,26 +19,38 @@ def kg() -> Iterator[KnowledgeGraph]:
         yield KnowledgeGraph(sessions)
 
 
-OPERATIONS: dict[str, Callable[[KnowledgeGraph], object]] = {
-    "closure": lambda kg: kg.closure([CANCER, MISSING]),
-    "standardise": lambda kg: kg.standardise([CANCER, MISSING]),
-    "standard_mappings": lambda kg: kg.standard_mappings([CANCER, MISSING]),
-    "information_content": lambda kg: kg.information_content([CANCER, MISSING]),
-    "pairwise_similarity": lambda kg: kg.pairwise_similarity(CANCER, MISSING),
-    "common_ancestors": lambda kg: kg.common_ancestors(CANCER, MISSING),
-    "common_descendants": lambda kg: kg.common_descendants(CANCER, MISSING),
-    "most_recent_common_ancestors": lambda kg: kg.most_recent_common_ancestors(CANCER, MISSING),
-    "jaccard_similarity": lambda kg: kg.jaccard_similarity(CANCER, MISSING),
-    "concept_view": lambda kg: kg.concept_view(MISSING),
-}
-
-
-@pytest.mark.parametrize("operation", OPERATIONS)
+@pytest.mark.parametrize(
+    "operation",
+    [
+        pytest.param(lambda kg: kg.closure([CANCER, MISSING]), id="closure"),
+        pytest.param(lambda kg: kg.standardise([CANCER, MISSING]), id="standardise"),
+        pytest.param(lambda kg: kg.standard_mappings([CANCER, MISSING]), id="standard_mappings"),
+        pytest.param(
+            lambda kg: kg.information_content([CANCER, MISSING]), id="information_content"
+        ),
+        pytest.param(lambda kg: kg.pairwise_similarity(CANCER, MISSING), id="pairwise_similarity"),
+        pytest.param(lambda kg: kg.common_ancestors(CANCER, MISSING), id="common_ancestors"),
+        pytest.param(lambda kg: kg.common_descendants(CANCER, MISSING), id="common_descendants"),
+        pytest.param(
+            lambda kg: kg.most_recent_common_ancestors(CANCER, MISSING),
+            id="most_recent_common_ancestors",
+        ),
+        pytest.param(lambda kg: kg.jaccard_similarity(CANCER, MISSING), id="jaccard_similarity"),
+        pytest.param(lambda kg: kg.concept_view(MISSING), id="concept_view"),
+    ],
+)
 def test_working_out_a_property_of_a_missing_concept_names_it(kg, operation) -> None:
     with pytest.raises(UnknownConceptError) as raised:
-        OPERATIONS[operation](kg)
+        operation(kg)
 
     assert raised.value.concept_ids == (MISSING,)
+
+
+def test_the_error_reads_as_a_message_without_quotes(kg) -> None:
+    with pytest.raises(UnknownConceptError) as raised:
+        kg.require_concepts([MISSING, 999998])
+
+    assert str(raised.value) == "These concepts do not exist: [999999, 999998]"
 
 
 def test_missing_concepts_lists_each_once_in_the_order_given(kg) -> None:

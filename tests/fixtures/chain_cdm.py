@@ -5,12 +5,6 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from omop_alchemy.cdm.model.vocabulary.concept import Concept
-from omop_alchemy.cdm.model.vocabulary.concept_ancestor import Concept_Ancestor
-from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relationship
-from omop_alchemy.cdm.model.vocabulary.concept_synonym import Concept_Synonym
-from omop_alchemy.cdm.model.vocabulary.relationship import Relationship
-from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from sqlalchemy.orm import Session, sessionmaker
 
 from fixtures.cdm_builders import (
@@ -24,8 +18,6 @@ from fixtures.cdm_builders import (
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
-    RelationshipClass,
-    RelationshipMapping,
 )
 
 HOLDER, HOLDER_MIDDLE, HOLDER_LEAF, FILLER, FILLER_MIDDLE, FILLER_TOP = range(600, 606)
@@ -72,15 +64,5 @@ def chain_cdm() -> Generator[sessionmaker[Session]]:
         edge(FILLER_MIDDLE, "Is a", FILLER_TOP),
         edge(HOLDER, "Has finding site", FILLER),
     ]
-    models = (
-        Concept,
-        Relationship,
-        Concept_Ancestor,
-        Concept_Relationship,
-        Concept_Synonym,
-        Vocabulary,
-        RelationshipClass,
-        RelationshipMapping,
-    )
-    with sqlite_cdm(models, rows) as sessions:
+    with sqlite_cdm(rows) as sessions:
         yield sessions

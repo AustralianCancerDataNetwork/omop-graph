@@ -34,6 +34,9 @@ class UnknownConceptError(KeyError):
         self.concept_ids = tuple(concept_ids)
         super().__init__(f"These concepts do not exist: {list(self.concept_ids)}")
 
+    def __str__(self) -> str:
+        return str(self.args[0])
+
 
 class ConceptsMixin(GraphCore):
     """Concept views and enumeration of concepts."""
@@ -63,6 +66,11 @@ class ConceptsMixin(GraphCore):
         """
         Find the concepts among concept_ids that do not exist.
 
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts to look for.
+
         Returns
         -------
         tuple[int, ...]
@@ -81,6 +89,11 @@ class ConceptsMixin(GraphCore):
     def require_concepts(self, concept_ids: Iterable[int]) -> None:
         """
         Check that every one of concept_ids exists.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            The concepts that must exist.
 
         Raises
         ------

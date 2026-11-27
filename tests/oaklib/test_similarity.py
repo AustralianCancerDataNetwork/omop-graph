@@ -22,6 +22,7 @@ from oaklib.datamodels.vocabulary import IS_A, OWL_THING
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.structural_similarity import ICSource
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 
@@ -188,3 +189,19 @@ def test_a_non_standard_concept_stands_in_for_its_standard_concept_when_asked(ad
     assert curie(CANCER) in set(standardising.common_ancestors(*pair))
     assert curie(CANCER) not in set(adapter.common_ancestors(*pair))
     assert curie(CANCER) in list(standardising.most_recent_common_ancestors(*pair))
+
+
+def test_the_information_content_is_counted_from_the_source_the_adapter_is_given(adapter) -> None:
+    precomputed = OMOPAlchemyImplementation(
+        kg=adapter.kg, information_content_source=ICSource.CONCEPT_ANCESTOR
+    )
+    concept_ids = (DISEASE, LUNG_CANCER)
+
+    for source, implementation in (
+        (ICSource.IS_A, adapter),
+        (ICSource.CONCEPT_ANCESTOR, precomputed),
+    ):
+        expected = adapter.kg.information_content(concept_ids, source, implementation._population)
+        scores = dict(implementation.information_content_scores([curie(c) for c in concept_ids]))
+
+        assert scores == {curie(c): expected[c] for c in concept_ids}

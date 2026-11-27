@@ -8,6 +8,7 @@ from datetime import date
 
 import pytest
 import sqlalchemy as sa
+from fixtures.cdm_builders import META_CONCEPT_ID
 from fixtures.helpers import VOCAB_TABLES
 from oa_configurator.testing import scoped_test_schema
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
@@ -23,8 +24,6 @@ from omop_graph.graph.queries import (
     q_concept_views,
     q_entities,
 )
-
-_META_CONCEPT_ID = 0
 
 
 @pytest.fixture()
@@ -60,7 +59,7 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
                 session.add_all(
                     [
                         Concept(
-                            concept_id=_META_CONCEPT_ID,
+                            concept_id=META_CONCEPT_ID,
                             concept_name="Meta concept",
                             domain_id="Metadata",
                             vocabulary_id="OMOP",
@@ -73,36 +72,36 @@ def concept_engine(pg_db) -> Iterator[sa.Engine]:
                         Domain(
                             domain_id="Metadata",
                             domain_name="Metadata",
-                            domain_concept_id=_META_CONCEPT_ID,
+                            domain_concept_id=META_CONCEPT_ID,
                         ),
                         Domain(
                             domain_id="Condition",
                             domain_name="Condition",
-                            domain_concept_id=_META_CONCEPT_ID,
+                            domain_concept_id=META_CONCEPT_ID,
                         ),
                         Vocabulary(
                             vocabulary_id="OMOP",
                             vocabulary_name="OMOP",
                             vocabulary_reference="local",
                             vocabulary_version="test",
-                            vocabulary_concept_id=_META_CONCEPT_ID,
+                            vocabulary_concept_id=META_CONCEPT_ID,
                         ),
                         Vocabulary(
                             vocabulary_id="SNOMED",
                             vocabulary_name="SNOMED",
                             vocabulary_reference="local",
                             vocabulary_version="test",
-                            vocabulary_concept_id=_META_CONCEPT_ID,
+                            vocabulary_concept_id=META_CONCEPT_ID,
                         ),
                         Concept_Class(
                             concept_class_id="Metadata",
                             concept_class_name="Metadata",
-                            concept_class_concept_id=_META_CONCEPT_ID,
+                            concept_class_concept_id=META_CONCEPT_ID,
                         ),
                         Concept_Class(
                             concept_class_id="Clinical Finding",
                             concept_class_name="Clinical Finding",
-                            concept_class_concept_id=_META_CONCEPT_ID,
+                            concept_class_concept_id=META_CONCEPT_ID,
                         ),
                         concept(1, standard_concept="S", invalid_reason=None),
                         concept(2, standard_concept="C", invalid_reason=" "),

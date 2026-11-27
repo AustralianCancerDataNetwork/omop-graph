@@ -204,6 +204,14 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             for curie, concept_id in ids.items()
         }
 
+    @staticmethod
+    def _reached_members(reached: dict[CURIE, list[CURIE]]) -> dict[CURIE, None]:
+        """The starts and the concepts reached from them, each once, in order."""
+        members = dict.fromkeys(reached)
+        for others in reached.values():
+            members.update(dict.fromkeys(others))
+        return members
+
     def _walk(
         self,
         start_curies: CURIE | list[CURIE],
@@ -222,9 +230,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             yield from walker(starts, predicates, reflexive, method)
             return
         reached = self._reached(starts, predicates, direction, scoped=True)
-        found = dict.fromkeys(reached)
-        for others in reached.values():
-            found.update(dict.fromkeys(others))
+        found = self._reached_members(reached)
         if not reflexive:
             for curie in reached:
                 found.pop(curie, None)
@@ -308,15 +314,9 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
 
     def _graph(self, triples: Iterable[tuple[CURIE, PRED_CURIE, CURIE]], nodes=()) -> Graph:
         """Build a graph, naming all its concepts and predicates with one lookup per kind."""
-        edges: list[Edge | dict] = [Edge(sub=s, pred=p, obj=o) for s, p, o in triples]
-        concepts = dict.fromkeys(
-            [
-                *nodes,
-                *(e.sub for e in edges if isinstance(e, Edge)),
-                *(e.obj for e in edges if isinstance(e, Edge)),
-            ]
-        )
-        predicates = dict.fromkeys(e.pred for e in edges if isinstance(e, Edge))
+        triples = list(triples)
+        concepts = dict.fromkeys([*nodes, *(s for s, _, _ in triples), *(o for _, _, o in triples)])
+        predicates = dict.fromkeys(p for _, p, _ in triples)
         labels = dict(self.labels([*concepts, *predicates]))
         graph_nodes: list[Node | dict] = [
             Node(id=curie, lbl=labels.get(curie), type=NodeTypeEnum.CLASS.text)
@@ -325,6 +325,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         graph_nodes += [
             Node(id=p, lbl=labels.get(p), type=NodeTypeEnum.PROPERTY.text) for p in predicates
         ]
+        edges: list[Edge | dict] = [Edge(sub=s, pred=p, obj=o) for s, p, o in triples]
         return Graph(id="omop", nodes=graph_nodes, edges=edges)
 
     def _walked(
@@ -337,9 +338,7 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         starts = as_list(start_curies)
         predicates = self._traversal_predicates(predicates)
         reached = self._reached(starts, predicates, direction, scoped=False)
-        members = dict.fromkeys(reached)
-        for others in reached.values():
-            members.update(dict.fromkeys(others))
+        members = self._reached_members(reached)
         triples = list(self.relationships(subjects=members, objects=members, predicates=predicates))
         return triples, members
 

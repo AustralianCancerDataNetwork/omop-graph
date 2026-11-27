@@ -212,7 +212,7 @@ class ConceptView:
         """Whether the concept is active under OMOP Alchemy's flag semantics.
 
         Delegates to ``normalised_flag`` so a blank or whitespace-only
-        ``invalid_reason`` — which some real-world loads carry instead of NULL —
+        ``invalid_reason``, which some real-world loads carry instead of NULL,
         is treated as unset, exactly as the SQL-side predicate does.
         """
         return normalised_flag(self.invalid_reason) is None
@@ -498,7 +498,7 @@ class LabelMatchGroupView:
                 <td>{escape(best.matched_concept_label)}</td>
                 <td>{escape(", ".join(reasons))}</td>
                 <td style="font-size:0.85em; color:#666;">
-                  {other_labels if other_labels else "—"}
+                  {other_labels if other_labels else "-"}
                 </td>
               </tr>
             """)
