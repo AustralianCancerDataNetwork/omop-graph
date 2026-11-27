@@ -9,9 +9,9 @@ import sqlalchemy as sa
 from omop_alchemy.cdm.model.vocabulary import Concept_Relationship
 from sqlalchemy.orm import Session
 
-from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
-from omop_graph.graph.edges import EdgeFilter
+from omop_graph.extensions.relationship_classification import PredicateKind, PredicateSubkind
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.queries import q_edges
 
 SOURCE = 900001

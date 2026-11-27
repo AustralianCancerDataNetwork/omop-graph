@@ -20,7 +20,7 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 * **Cached state:** A graph assumes that the vocabulary tables do not change while it lives. It reads the [relationship classification](edges.md) when it is created, and keeps the predicates, vocabularies, valid domains, descendant counts, scope sizes and group statistics after their first use. Create a new graph after loading a vocabulary release.
 * **Semantic Predicates:** Resolves standard OMOP relationship IDs into rich `Predicate` objects that understand hierarchy and directionality, and selects edges with an `EdgeFilter`. See [here for more information](edges.md)
 * **Flexible Search:** Supports exact matches, fuzzy `ILIKE` searches, and full-text search (bag-of-words) across concept names and synonyms. See [documentation for more information](../reasoning/resolvers.md)
-* **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
+* **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `ancestors`, `descendants`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
 * **Large inputs and results:** Methods that take concept ids split them into batches of `KnowledgeGraph.LOOKUP_BATCH_SIZE`, so any number of ids works. `entities`, `roots`, `leaves`, `singletons` and `relationships` without subjects or objects read through a server-side cursor and return generators, so they never hold the whole table in memory.
 * **Standardisation and Mappings:** `standardise` finds the standard concepts a concept stands for, and `mappings` lists the mappings of concepts with their vocabularies and their cardinality, counted from the valid relationships of the same id.
 * **Structural similarity and statistics:** Common ancestors, information content, pairwise similarity and counts, see [Capabilities](#capabilities).
@@ -35,7 +35,7 @@ The `KnowledgeGraph` takes a factory of sessions on the OMOP CDM. `cdm_session_f
 ```python
 from omop_graph.db.session import cdm_session_factory
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatchKind
+from omop_graph.graph.model.matches import LabelMatchKind
 
 kg = KnowledgeGraph(cdm_session_factory())  # the configured cdm_db
 
@@ -70,7 +70,7 @@ Every `concept_filter` a method takes is a scope, a membership rule that decides
 * A scope that sets `concept_ids` restricts what is reported to those ids. The ids are sent to the database as one list and are never batched, so a scope with more than about 65,000 ids fails on PostgreSQL. Use a vocabulary or a domain, or pass the ids to the method that takes ids.
 * A scope only filters what is reported. A walk still passes through the concepts it excludes. A scope also applies to the concepts you name, and a relationship asserted to a concept is reported whatever the scope. In `entailed_relationships`, a requested object the scope excludes gets only the relationships asserted to it, and a warning lists it.
 * The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, and the counts and lookups to `ALL_CONCEPTS`.
-* `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
+* `omop_graph.graph.model.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
 
 #### Unknown concepts
 
@@ -102,19 +102,19 @@ The graph has two notions of ancestry, and they differ:
 
 | | Source | Holds |
 |---|---|---|
-| `parents`, `children`, and the ancestor checks of [grounding](../reasoning/grounding.md) | OMOP's `concept_ancestor` table | All ancestry OMOP precomputes: `Is a`, but also classification such as ATC classes, SPL labels and cohorts. Only standard and classification concepts. |
+| `parents`, `children`, `ancestors`, `descendants` and the ancestor checks of [grounding](../reasoning/grounding.md) | OMOP's `concept_ancestor` table | All ancestry OMOP precomputes: `Is a`, but also classification such as ATC classes, SPL labels and cohorts. Only standard and classification concepts. |
 | `closure`, `entailed_relationships` and the [OAK adapter](../oaklib/interface.md) | The active `Is a` edges | Strict `Is a` ancestors and descendants, including concepts that are not standard. The hierarchy is assumed acyclic, as it is in the OMOP vocabularies, and `closure` ends on a cycle without repeating a concept. |
 
 Grounding keeps `concept_ancestor` because it needs the distance to a parent, `min_levels_of_separation`, which `closure` does not return. For example Metformin has no `Is a` ancestors but six ancestors in `concept_ancestor`, ATC classes such as "Biguanides". `closure` walks one query for a whole batch of concepts, and takes an `EdgeFilter` to follow other relationships:
 
 ```python
-from omop_graph.extensions.omop_alchemy import HierarchyDirection
+from omop_graph.extensions.relationship_classification import HierarchyDirection
 
 kg.closure([concept_id])[concept_id]  # strict Is a ancestors
 kg.closure([concept_id], HierarchyDirection.DOWN)[concept_id]  # strict Is a descendants
 ```
 
-A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg.standardise([concept_id])` maps it to the standard concepts at the end of its identity edges such as `Maps to`, which can be several. `kg.standard_concept` returns the one standard concept, and raises when there are several. A classification concept with a `Maps to` stands for its target in the same way, as an ATC class stands for its ingredient. Only a standard concept is a valid target.
+`ancestors` and `descendants` take `isa_only=True` to read the strict `Is a` hierarchy through `closure` instead. A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg.standardise([concept_id])` maps it to the standard concepts at the end of its identity edges such as `Maps to`, which can be several. `kg.standard_concept` returns the one standard concept, and raises when there are several. A classification concept with a `Maps to` stands for its target in the same way, as an ATC class stands for its ingredient. Only a standard concept is a valid target.
 
 ---
 

@@ -8,7 +8,7 @@ from omop_graph.extensions.classification_data import (
     parse_generalises,
     read_classification_files,
 )
-from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
+from omop_graph.extensions.relationship_classification import HierarchyDirection, PredicateKind
 
 RELATIONSHIPS = {
     "Maps to": ("Maps to", "Maps to"),

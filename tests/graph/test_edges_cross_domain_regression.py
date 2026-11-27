@@ -22,13 +22,13 @@ from omop_alchemy.cdm.model.vocabulary.concept_relationship import Concept_Relat
 from orm_loader.helpers import Base
 from sqlalchemy.orm import sessionmaker
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.traverse import traverse
 
 KNEE_REPLACEMENT = 40482788

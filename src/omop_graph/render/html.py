@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from html import escape
 
-from omop_graph.graph.nodes import ConceptView
+from omop_graph.graph.model.nodes import ConceptView
 from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import GraphTrace, Subgraph
 
@@ -132,7 +132,7 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
     for s in explanation.steps:
         subj = kg.concept_view(s.step.subject.concept_id)
         obj = kg.concept_view(s.step.object.concept_id)
-        depth = str(s.traversal_depth) if s.traversal_depth is not None else "-"
+        depth = str(s.traversal_depth) if s.traversal_depth is not None else "&mdash;"
         rows.append(f"""
         <tr>
             <td>{escape(subj.concept_name)}</td>

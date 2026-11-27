@@ -12,11 +12,11 @@ from fixtures.cdm_builders import (
     sqlite_cdm,
 )
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
 )
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import Standardness
+from omop_graph.graph.model.nodes import Standardness
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 

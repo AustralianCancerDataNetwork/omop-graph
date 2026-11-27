@@ -42,14 +42,14 @@ from orm_loader.helpers import Base
 
 from omop_graph.cli import relationship_classification
 from omop_graph.config import OmopGraphConfig
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
+from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.scope import DEFAULT_CONCEPT_FILTER
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.db_dialect]
 

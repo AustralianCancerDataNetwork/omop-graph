@@ -6,7 +6,7 @@ import pytest
 from fixtures.hierarchy_cdm import CANCER, LUNG_CANCER, hierarchy_cdm
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.language import OMOPLanguage
+from omop_graph.graph.model.language import OMOPLanguage
 
 
 @pytest.fixture(scope="module")

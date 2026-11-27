@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from sqlalchemy.orm import Session, sessionmaker
 
 from fixtures.cdm_builders import (
+    ancestor,
     classified,
     concept,
     edge,
@@ -15,7 +16,7 @@ from fixtures.cdm_builders import (
     relationship_class,
     sqlite_cdm,
 )
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )
@@ -28,7 +29,7 @@ def chain_cdm() -> Generator[sessionmaker[Session]]:
     """
     Yield a CDM with HOLDER site FILLER.
 
-    HOLDER_LEAF is a kind of HOLDER_MIDDLE, which is a kind of HOLDER. FILLER is a kind of
+    HOLDER_LEAF is a kind of HOLDER_MIDDLE, which is a kind of HOLDER, as the ``concept_ancestor`` rows say too. FILLER is a kind of
     FILLER_MIDDLE, which is a kind of FILLER_TOP. Both middle concepts are deprecated.
     """
     rows = [
@@ -63,6 +64,10 @@ def chain_cdm() -> Generator[sessionmaker[Session]]:
         edge(FILLER, "Is a", FILLER_MIDDLE),
         edge(FILLER_MIDDLE, "Is a", FILLER_TOP),
         edge(HOLDER, "Has finding site", FILLER),
+        *(ancestor(c, c, 0) for c in (HOLDER, HOLDER_MIDDLE, HOLDER_LEAF)),
+        ancestor(HOLDER, HOLDER_MIDDLE),
+        ancestor(HOLDER_MIDDLE, HOLDER_LEAF),
+        ancestor(HOLDER, HOLDER_LEAF, 2),
     ]
     with sqlite_cdm(rows) as sessions:
         yield sessions

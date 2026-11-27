@@ -7,12 +7,12 @@ from oaklib.interfaces.summary_statistics_interface import SummaryStatisticsInte
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph.scope import (
+from omop_graph.graph.model.counts import ConceptCounts, SynonymCounts
+from omop_graph.graph.model.scope import (
     every_concept,
     narrowed_to_domains,
     narrowed_to_vocabularies,
 )
-from omop_graph.graph.statistics import ConceptCounts, SynonymCounts
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError

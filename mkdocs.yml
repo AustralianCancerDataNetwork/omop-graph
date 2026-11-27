@@ -37,6 +37,7 @@ nav:
   - Core Components:
       - "Knowledge Graph": graph/kg.md
       - "Relationships": graph/edges.md
+      - "Architecture": graph/architecture.md
       - "Oaklib Interface": oaklib/interface.md
   - Reasoning:
       - "Semantic Grounding": reasoning/grounding.md
@@ -46,6 +47,7 @@ nav:
       - "Edges": reference/ref_edges.md
       - "Grounding": reference/ref_grounding.md
       - "KnowledgeGraph": reference/ref_kg.md
+      - "Model": reference/ref_model.md
       - "Nodes": reference/ref_nodes.md
       - "Paths": reference/ref_paths.md
       - "Resolvers": reference/ref_resolvers.md

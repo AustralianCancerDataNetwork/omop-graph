@@ -29,16 +29,19 @@ from oaklib.interfaces.basic_ontology_interface import (
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph import KnowledgeGraph
-from omop_graph.graph.edges import (
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import (
     EdgeFilter,
     Predicate,
 )
-from omop_graph.graph.language import OMOPLanguage
-from omop_graph.graph.nodes import ConceptView, Standardness
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
-from omop_graph.graph.scope import every_concept, narrowed_to_vocabularies
-from omop_graph.graph.structural_similarity import ICSource
+from omop_graph.graph.model.language import OMOPLanguage
+from omop_graph.graph.model.nodes import ConceptView, Standardness
+from omop_graph.graph.model.scope import (
+    DEFAULT_CONCEPT_FILTER,
+    every_concept,
+    narrowed_to_vocabularies,
+)
+from omop_graph.graph.model.similarity import ICSource
 from omop_graph.oaklib_interface.base import OMOPBaseInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import (

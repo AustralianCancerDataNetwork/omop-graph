@@ -49,10 +49,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import InstrumentedAttribute, aliased
 from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
-from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
-from .edges import EdgeFilter
-from .scope import _apply_scope, limited
-from .statistics import Grouping
+from ..extensions.relationship_classification import HierarchyDirection
+from .model.counts import Grouping
+from .model.edges import EdgeFilter
+from .model.scope import DEFAULT_CONCEPT_FILTER, _apply_scope, limited
 
 
 def _concept_has_standardness_expr():
@@ -484,9 +484,18 @@ def q_children(concept_id: int) -> Select:
 
 
 def q_ancestors(concept_id: int) -> Select:
-    """Query all ancestors."""
+    """Query all ancestors, at any level but the concept itself."""
     return select(Concept_Ancestor.ancestor_concept_id).where(
-        Concept_Ancestor.descendant_concept_id == concept_id
+        Concept_Ancestor.descendant_concept_id == concept_id,
+        Concept_Ancestor.min_levels_of_separation > 0,
+    )
+
+
+def q_descendants(concept_id: int) -> Select:
+    """Query all descendants, at any level but the concept itself."""
+    return select(Concept_Ancestor.descendant_concept_id).where(
+        Concept_Ancestor.ancestor_concept_id == concept_id,
+        Concept_Ancestor.min_levels_of_separation > 0,
     )
 
 
@@ -597,12 +606,6 @@ def q_mappings(
             )
         ),
     )
-
-
-DEFAULT_CONCEPT_FILTER = ConceptFilter(
-    require_standard=True, include_classification=True, require_active=True
-)
-"""Concepts the graph enumerators list by default: active, standard or classification."""
 
 
 def q_entities(
@@ -914,10 +917,4 @@ def q_concept_num_descendants(concept_ids: tuple[int, ...]) -> Select:
         .where(Concept.concept_id.in_(concept_ids))
         .where(Concept_Ancestor.min_levels_of_separation > 0)
         .group_by(Concept.concept_id)
-    )
-
-
-def q_relationship_class(relationship_id: str) -> Select:
-    return select(RelationshipMapping.predicate_kind).where(
-        RelationshipMapping.relationship_id == relationship_id
     )

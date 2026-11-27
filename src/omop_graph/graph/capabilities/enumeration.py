@@ -9,11 +9,11 @@ from sqlalchemy.sql import Select
 
 # Local Application Imports
 from .._streaming import stream
-from ..edges import (
+from ..model.edges import (
     EdgeFilter,
 )
+from ..model.scope import DEFAULT_CONCEPT_FILTER
 from ..queries import (
-    DEFAULT_CONCEPT_FILTER,
     q_entities,
     q_leaves,
     q_obsolete_concepts,

@@ -1,5 +1,6 @@
 """
-Concept filters used as scopes, and the helpers that derive one scope from another.
+The common scopes, ``ALL_CONCEPTS`` and ``DEFAULT_CONCEPT_FILTER``, and the helpers that
+derive one scope from another.
 
 A ``ConceptFilter`` given to a graph method is a scope, a membership rule that decides which
 concepts the method reports or counts. ``limit`` truncates a list and decides no membership,
@@ -25,6 +26,11 @@ from sqlalchemy import Select
 
 ALL_CONCEPTS = ConceptFilter()
 """A scope that selects every concept."""
+
+DEFAULT_CONCEPT_FILTER = ConceptFilter(
+    require_standard=True, include_classification=True, require_active=True
+)
+"""Concepts the graph enumerators list by default: active, standard or classification."""
 
 
 def _require_scope(concept_filter: ConceptFilter) -> ConceptFilter:

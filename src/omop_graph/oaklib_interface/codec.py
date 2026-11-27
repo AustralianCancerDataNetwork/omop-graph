@@ -15,8 +15,8 @@ from oaklib.datamodels.vocabulary import IS_A
 from oaklib.interfaces.basic_ontology_interface import get_default_prefix_map
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.graph import KnowledgeGraph
-from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import IS_A_RELATIONSHIP_ID
 
 logger = logging.getLogger(__name__)
 

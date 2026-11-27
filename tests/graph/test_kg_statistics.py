@@ -22,15 +22,15 @@ from fixtures.hierarchy_cdm import (
 )
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
 )
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.language import OMOPLanguage
-from omop_graph.graph.scope import ALL_CONCEPTS
-from omop_graph.graph.statistics import Grouping, SynonymCounts
+from omop_graph.graph.model.counts import Grouping, SynonymCounts
+from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.language import OMOPLanguage
+from omop_graph.graph.model.scope import ALL_CONCEPTS
 
 
 @pytest.fixture(scope="module")

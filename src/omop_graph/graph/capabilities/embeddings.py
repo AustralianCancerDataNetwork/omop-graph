@@ -20,7 +20,7 @@ import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy import Row
 
-from ..scope import ALL_CONCEPTS, _require_scope
+from ..model.scope import ALL_CONCEPTS, _require_scope
 from ._core import GraphCore
 
 if TYPE_CHECKING:

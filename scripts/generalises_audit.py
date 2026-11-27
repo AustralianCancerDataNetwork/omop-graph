@@ -42,7 +42,7 @@ from omop_graph.extensions.classification_data import (
     NON_GENERALISING_SUBKINDS,
     read_classification_files,
 )
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.queries import q_all_predicates
 

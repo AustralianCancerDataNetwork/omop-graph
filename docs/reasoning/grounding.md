@@ -37,6 +37,8 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 5.  **Scoring**: Apply the scoring algorithm to the resulting valid Standard Concepts
     - Details of scoring algorithm shown [here](#scoring)
 
+Each check answers a different question. Lexical plausibility, whether the text resembles the concept, is decided by the resolvers and `LabelMatchKind`. Semantic admissibility, whether the concept is allowed at all, is decided by `GroundingConstraints`. Structural plausibility, whether the path to the standard concept is credible, is read from the `PathProfile`.
+
 ## Grounding Constraints
 
 `GroundingConstraints` has four fields. `parent_ids` and `concept_filter` have no default, and either can be `None`:
@@ -66,7 +68,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 ```python
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
 from omop_graph.reasoning.resolvers import ResolverPipeline
 

@@ -9,7 +9,7 @@ from fixtures.cdm_builders import classified, concept, relationship, relationshi
 from omop_alchemy.cdm.model.vocabulary import Domain, Vocabulary
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     PredicateKind,
 )
 from omop_graph.graph.kg import KnowledgeGraph

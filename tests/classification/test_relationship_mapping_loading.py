@@ -10,7 +10,7 @@ import sqlalchemy as sa
 import sqlalchemy.exc
 from sqlalchemy.orm import Session, sessionmaker
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
     RelationshipClass,

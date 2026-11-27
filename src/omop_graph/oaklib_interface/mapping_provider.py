@@ -15,9 +15,9 @@ from oaklib.types import CURIE, PRED_CURIE
 from sssom.constants import SEMAPV
 from sssom_schema import Mapping
 
-from omop_graph.graph.edges import EdgeFilter, MappingStrength
-from omop_graph.graph.nodes import ConceptView, MappingCardinality, MappingView
-from omop_graph.graph.scope import narrowed_to_vocabularies
+from omop_graph.graph.model.edges import EdgeFilter, MappingStrength
+from omop_graph.graph.model.nodes import ConceptView, MappingCardinality, MappingView
+from omop_graph.graph.model.scope import narrowed_to_vocabularies
 from omop_graph.oaklib_interface.base import as_list
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError

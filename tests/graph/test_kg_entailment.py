@@ -30,9 +30,9 @@ from fixtures.hierarchy_cdm import (
 )
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
+from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.scope import DEFAULT_CONCEPT_FILTER
 
 ENTAILING = EdgeFilter(predicate_ids=frozenset({"Is a", "Has finding site"}))
 

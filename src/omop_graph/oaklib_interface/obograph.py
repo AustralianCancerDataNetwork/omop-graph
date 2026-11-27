@@ -24,9 +24,9 @@ from oaklib.datamodels.vocabulary import (
 from oaklib.interfaces.obograph_interface import GraphTraversalMethod, OboGraphInterface
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.extensions.omop_alchemy import HierarchyDirection
-from omop_graph.graph.edges import EdgeFilter
-from omop_graph.graph.language import OMOPLanguage
+from omop_graph.extensions.relationship_classification import HierarchyDirection
+from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.language import OMOPLanguage
 from omop_graph.oaklib_interface.base import as_list
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError

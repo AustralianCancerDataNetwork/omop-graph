@@ -12,10 +12,8 @@ from omop_alchemy.cdm.model.vocabulary import Concept
 from omop_alchemy.cdm.query import ConceptFilter
 
 # Local Application Imports
-from ..nodes import (
-    LabelMatch,
-    LabelMatchKind,
-)
+from ..model.matches import LabelMatch, LabelMatchKind
+from ..model.scope import ALL_CONCEPTS, _require_scope, limited, restricted_to_ids
 from ..queries import (
     q_concept_name_fulltext,
     q_concept_name_ilike,
@@ -23,7 +21,6 @@ from ..queries import (
     q_domain_ids,
     q_vocabulary_ids,
 )
-from ..scope import ALL_CONCEPTS, _require_scope, limited, restricted_to_ids
 from .enumeration import EnumerationMixin
 
 logger = logging.getLogger(__name__)

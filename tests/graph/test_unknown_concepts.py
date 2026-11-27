@@ -8,7 +8,7 @@ from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.structural_similarity import ICSource
+from omop_graph.graph.model.similarity import ICSource
 
 MISSING = 999999
 

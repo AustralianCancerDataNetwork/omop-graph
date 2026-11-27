@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeFilter
+from omop_graph.extensions.relationship_classification import PredicateKind
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import EdgeFilter
 
 
 def test_edges_are_classified_from_the_relationship_mapping(

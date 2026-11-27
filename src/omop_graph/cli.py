@@ -20,7 +20,7 @@ from omop_graph.extensions.classification_data import (
     check_mapping_against_cdm,
     read_classification_files,
 )
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     RelationshipClass,
     RelationshipMapping,
     create_extension_tables,

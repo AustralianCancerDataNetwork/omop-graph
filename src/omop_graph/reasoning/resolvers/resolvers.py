@@ -25,8 +25,8 @@ from omop_graph.graph.capabilities.embeddings import (
     MissingExtensionError,
 )
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
-from omop_graph.graph.scope import ALL_CONCEPTS
+from omop_graph.graph.model.matches import LabelMatch, LabelMatchKind
+from omop_graph.graph.model.scope import ALL_CONCEPTS
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph

@@ -19,9 +19,9 @@ from oaklib.resource import OntologyResource
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.db.session import cdm_session_factory, resolve_cdm_database
-from omop_graph.graph import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
-from omop_graph.graph.queries import DEFAULT_CONCEPT_FILTER
-from omop_graph.graph.structural_similarity import ICSource
+from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
+from omop_graph.graph.model.scope import DEFAULT_CONCEPT_FILTER
+from omop_graph.graph.model.similarity import ICSource
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.embeddings import OMOPEmbeddingProviderInterface
 from omop_graph.oaklib_interface.mapping_provider import OMOPMappingProviderInterface

@@ -1,1 +1,1 @@
-::: omop_graph.graph.nodes
+::: omop_graph.graph.model.nodes

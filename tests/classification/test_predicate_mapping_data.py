@@ -7,7 +7,11 @@ from omop_graph.extensions.classification_data import (
     check_mapping_against_cdm,
     read_classification_files,
 )
-from omop_graph.extensions.omop_alchemy import RelationshipClass, RelationshipMapping, Subkinds
+from omop_graph.extensions.relationship_classification import (
+    RelationshipClass,
+    RelationshipMapping,
+    Subkinds,
+)
 
 
 def test_packaged_files_are_consistent_ascii_and_fit_the_table_columns():

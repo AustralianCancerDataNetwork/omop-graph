@@ -11,7 +11,7 @@ from oa_configurator import Role
 
 from omop_graph import cli
 from omop_graph.db.session import cdm_session_factory
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
     RelationshipClass,

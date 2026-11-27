@@ -7,16 +7,16 @@ from collections.abc import Generator, Iterable
 
 from sqlalchemy import Row
 
-from ...extensions.omop_alchemy import PredicateSubkind
+from ...extensions.relationship_classification import PredicateSubkind
 
 # Local Application Imports
 from .._streaming import stream
-from ..edges import (
+from ..model.edges import (
     REPLACED_BY_RELATIONSHIP_ID,
     EdgeFilter,
     MappingStrength,
 )
-from ..nodes import (
+from ..model.nodes import (
     MappingCardinality,
     MappingView,
 )

@@ -22,9 +22,10 @@ from typing import (
 )
 
 # Local Application Imports
-from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
-from omop_graph.graph.nodes import AncestorMatch, ConceptView, LabelMatchKind
+from omop_graph.extensions.relationship_classification import PredicateKind
+from omop_graph.graph.model.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
+from omop_graph.graph.model.matches import LabelMatchKind
+from omop_graph.graph.model.nodes import AncestorMatch, ConceptView
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.reasoning.resolvers import CandidateHit
 
@@ -619,34 +620,6 @@ class StandardConcept:
     synonym: bool
     hierarchy_cost: float = 0.0
     identity_hops: int = 0
-
-
-def get_unique_standard_concepts(
-    concepts: list[StandardConcept],
-) -> list[StandardConcept]:
-    """
-    Filter a list of StandardConcepts to keep only the best match per Concept ID.
-
-    Ranking criteria:
-    1. Separation (lower is better)
-    2. Match Kind (lower value is better in this enum)
-    3. Hierarchy Cost (lower is better)
-    """
-    sorted_concepts = sorted(
-        concepts,
-        key=lambda x: (
-            x.separation,
-            x.match_kind.value,
-            x.hierarchy_cost,
-        ),
-    )
-
-    unique_best_concepts = {}
-    for concept in sorted_concepts:
-        if concept.concept_id not in unique_best_concepts:
-            unique_best_concepts[concept.concept_id] = concept
-
-    return list(unique_best_concepts.values())
 
 
 def _load_views(

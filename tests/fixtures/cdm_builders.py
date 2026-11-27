@@ -18,13 +18,13 @@ from omop_alchemy.cdm.model.vocabulary.vocabulary import Vocabulary
 from orm_loader.helpers import Base
 from sqlalchemy.orm import Session, sessionmaker
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,
 )
-from omop_graph.graph.language import OMOPLanguage
+from omop_graph.graph.model.language import OMOPLanguage
 
 START = date(2020, 1, 1)
 META_CONCEPT_ID = 0

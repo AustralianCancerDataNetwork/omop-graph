@@ -28,7 +28,7 @@ from orm_loader.backends import resolve_backend, staging_schema_claim
 from orm_loader.helpers import Base
 
 from omop_graph.db.session import resolve_cdm_database
-from omop_graph.extensions.omop_alchemy import RelationshipMapping
+from omop_graph.extensions.relationship_classification import RelationshipMapping
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface import omop_implementation
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation

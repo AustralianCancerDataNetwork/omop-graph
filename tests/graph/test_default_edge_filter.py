@@ -14,13 +14,13 @@ from fixtures.cdm_builders import (
     sqlite_cdm,
 )
 
-from omop_graph.extensions.omop_alchemy import (
+from omop_graph.extensions.relationship_classification import (
     HierarchyDirection,
     PredicateKind,
     PredicateSubkind,
 )
-from omop_graph.graph.edges import DEFAULT_EDGE_FILTER, EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import DEFAULT_EDGE_FILTER, EdgeFilter
 from omop_graph.graph.paths import DEFAULT_PATH_FILTER, find_shortest_paths
 from omop_graph.graph.traverse import traverse
 

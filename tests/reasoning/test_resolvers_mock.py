@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
+from omop_graph.graph.model.matches import LabelMatch, LabelMatchKind
 from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
 from omop_graph.reasoning.resolvers.resolvers import (
     ExactLabelResolver,

@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 
 # Local Application Imports
-from ...extensions.omop_alchemy import (
+from ...extensions.relationship_classification import (
     PredicateSubkind,
 )
 from .._streaming import stream
-from ..edges import (
+from ..model.edges import (
     DEFAULT_EDGE_FILTER,
     EdgeFilter,
     EdgeView,
