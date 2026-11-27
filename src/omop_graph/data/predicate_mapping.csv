@@ -677,6 +677,8 @@ Hierarchy,Taxonomic,OncoTree to ICDO br,OncoTree to ICDO broader,"Inheritance li
 Attribute,Pharmaceutical,Ontological form of,Ontological dose form presentation of (DM+D),Qualifies physical drug delivery properties or dose forms.,,,
 Hierarchy,Categorical,Parent item of,Parent item of (NAACCR),Expands a classification group into its constituent members. Example: [Phase III Radiation Treatment Modality] -> [Number of Phases of Rad Treatment to this Volume],,,down
 Composition,Physical,Part of,Part of (SNOMED),Physical material assembly or structural part-whole relationship. Example: [Chromosome pair 9] -> [neurotrophic receptor tyrosine kinase 2 nucleotide sequence],,,
+Composition,Physical,Regional part of,Regional part of (SNOMED),Physical material assembly or structural part-whole relationship.,,,
+Composition,Physical,Whole of,Whole of (SNOMED),Physical material assembly or structural part-whole relationship.,,,
 Association,Causal,Pathology of,Pathological process of (SNOMED),"Relates conditions to their biological, pathological, or environmental causes. Example: [Contracture of joint] -> [At increased risk for joint contracture]",,,
 Association,Therapeutic,Pept-drug cjgt of,Peptide-drug conjugate of (HemOnc),Links therapeutic interventions to clinical indications or contraindications. Example: [Melphalan flufenamide] -> [Melphalan flufenamide and Dexamethasone],,https://hemonc.org/wiki/HemOncKB_canonical_triples,
 Attribute,Context,Plays role,Plays role,Specific situational modifier or contextual role. Example: [SARS-CoV-2 antigen vaccine] -> [Active immunity stimulant role],,,

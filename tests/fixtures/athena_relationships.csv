@@ -570,6 +570,7 @@ Recipient cat of,Recipient category of (SNOMED),Has recipient cat
 Reformulated in,Reformulated in (RxNorm),Reformulation of
 Reformulation of,Reformulation of (RxNorm),Reformulated in
 Regimen type of,Regimen type of (HemOnc),Has regimen type
+Regional part of,Regional part of (SNOMED),Whole of
 Relat context of,Subject relationship context of (SNOMED),Has relat context
 Relative part of,Relative part of (SNOMED),Has relative part
 Relative to,Relative to (SNOMED),Relative to of
@@ -721,3 +722,4 @@ Variable to Schema,Variable to Schema (NAACCR),Schema to Variable
 Variant of,Variant refer to concept,Has variant
 Version contains,OMOP CDM Version contains table/field (OMOP),Contained in version
 Visit cat - PoS,Visit category to Place of Service (OMOP),PoS - Visit cat
+Whole of,Whole of (SNOMED),Regional part of

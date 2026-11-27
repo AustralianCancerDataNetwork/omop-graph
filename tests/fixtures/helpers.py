@@ -10,7 +10,7 @@ from oa_configurator import ResolvedCDMDatabase, ResolvedDatabase
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 
 ATHENA_RELATIONSHIPS = Path(__file__).parent / "athena_relationships.csv"
-"""Relationship id, name and reverse id of the Athena release v5.0 30-AUG-24.
+"""Relationship id, name and reverse id of the Athena release v5.0 29-AUG-26.
 
 Columns 1, 2 and 5 of the ``RELATIONSHIP.csv`` of that release.
 """
