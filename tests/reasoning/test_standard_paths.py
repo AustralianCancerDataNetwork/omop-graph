@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -19,6 +20,7 @@ from sqlalchemy import event
 from omop_graph.extensions.relationship_classification import (
     PredicateKind,
 )
+from omop_graph.graph.capabilities.concepts import UnknownConceptError
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.model.matches import LabelMatchKind
@@ -106,8 +108,20 @@ def test_edges_to_non_standard_concepts_are_not_followed(kg) -> None:
     assert search(kg, [SOURCE_CHAINED, ORPHAN]) == [set(), set()]
 
 
-def test_an_edge_to_a_concept_that_does_not_exist_is_skipped(kg) -> None:
-    assert search(kg, [SOURCE_DANGLING]) == [set()]
+def test_an_edge_to_a_concept_that_does_not_exist_is_skipped_and_logged(kg, caplog) -> None:
+    without_domain = EdgeFilter(predicate_kinds=frozenset({PredicateKind.IDENTITY}))
+    with caplog.at_level(logging.WARNING):
+        found = find_standard_paths(kg, None, [hit(SOURCE_DANGLING)], edge_filter=without_domain)
+
+    assert found == [[]]
+    assert "Skipped edges to 1 concepts that do not exist: [999]" in caplog.messages
+
+
+def test_a_candidate_that_does_not_exist_is_an_error(kg) -> None:
+    with pytest.raises(UnknownConceptError) as error:
+        search(kg, [SOURCE, 998, 999])
+
+    assert error.value.concept_ids == (998, 999)
 
 
 def test_the_edge_filter_limits_the_edges_walked(kg) -> None:
@@ -123,6 +137,7 @@ def test_the_edge_filter_limits_the_edges_walked(kg) -> None:
 
 def test_without_targets_max_depth_caps_the_edges_walked(kg) -> None:
     assert search(kg, [SOURCE, LEAF], max_depth=0) == [set(), {(LEAF, 0, 0)}]
+    assert search(kg, [SOURCE], max_depth=1) == [{(LEAF, 1, 1)}]
 
 
 def test_with_targets_a_descendant_is_recorded_for_each_target_it_descends_from(kg) -> None:
@@ -138,6 +153,11 @@ def test_with_targets_a_concept_that_descends_from_none_is_expanded(kg) -> None:
 def test_with_targets_max_depth_caps_the_ancestor_separation(kg) -> None:
     assert search(kg, [DEEP_LEAF], (TARGET_A,), max_depth=4) == [set()]
     assert search(kg, [DEEP_LEAF], (TARGET_A,), max_depth=5) == [{(DEEP_LEAF, 5, 0)}]
+
+
+def test_with_targets_max_concepts_caps_each_target_apart(kg) -> None:
+    assert [len(f) for f in search(kg, [SOURCE_TWO], (TARGET_A, TARGET_B), max_concepts=1)] == [2]
+    assert [len(f) for f in search(kg, [SOURCE_TWO], (TARGET_A,), max_concepts=1)] == [1]
 
 
 def test_max_concepts_caps_each_candidate_apart(kg) -> None:

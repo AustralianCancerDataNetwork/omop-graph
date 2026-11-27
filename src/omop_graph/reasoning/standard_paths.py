@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import heapq
+import logging
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from omop_graph.graph.model.edges import EdgeFilter
 from omop_graph.graph.model.matches import LabelMatchKind
-from omop_graph.graph.model.nodes import AncestorMatch, ConceptView
+from omop_graph.graph.model.nodes import ConceptView
 from omop_graph.graph.paths import DEFAULT_PATH_FILTER, Node
 from omop_graph.reasoning.resolvers import CandidateHit
 
@@ -18,27 +18,27 @@ if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
 
 
-@dataclass(order=True)
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
 class QueueItem:
-    """Frontier item for the cost-prioritised BFS in find_standard_paths.
+    """
+    A concept reached from a candidate, waiting to be processed.
 
     Attributes
     ----------
-    cost : float
-        Accumulated traversal cost. Currently always 0.0 (uniform BFS). Reserved as
-        live infrastructure for future weighted traversal; see Notes in find_standard_paths.
     node : Node
-        The graph node at this position in the frontier.
+        The concept reached.
     candidate_index : int
         Position in the search's candidates of the candidate this item was reached from.
     iterations : int
-        BFS depth (number of hops from the candidate).
+        The number of edges walked from the candidate.
     """
 
-    cost: float
-    node: Node = field(compare=False)
-    candidate_index: int = field(compare=False)
-    iterations: int = field(default=0, compare=False)
+    node: Node
+    candidate_index: int
+    iterations: int = 0
 
 
 @dataclass(frozen=True)
@@ -72,9 +72,6 @@ class StandardConcept:
     synonym : bool
         Whether the original candidate matched via a synonym rather than the
         primary concept name.
-    hierarchy_cost : float, default 0.0
-        Reserved for future weighted traversal; see ``QueueItem.cost`` and the
-        Notes on ``find_standard_paths``. Currently always 0.0.
     identity_hops : int, default 0
         The number of edges walked from the original candidate to reach this concept.
         Not used in scoring as of now.
@@ -88,7 +85,6 @@ class StandardConcept:
     matched_concept_label: str
     match_kind: LabelMatchKind
     synonym: bool
-    hierarchy_cost: float = 0.0
     identity_hops: int = 0
 
 
@@ -97,8 +93,7 @@ def _load_views(
 ) -> None:
     """Add the views of the concepts in concept_ids that views lacks."""
     missing = {concept_id for concept_id in concept_ids if concept_id not in views}
-    for batch in kg.batches(missing):
-        views.update((view.concept_id, view) for view in kg.concept_views(batch, sort=False))
+    views.update((view.concept_id, view) for view in kg.concept_views(missing, sort=False))
 
 
 def find_standard_paths(
@@ -113,10 +108,10 @@ def find_standard_paths(
     Search for the standard concepts reachable from each candidate, optionally verified
     against ancestor targets.
 
-    Performs a breadth-first search (BFS) from all candidates at once. Each BFS wave drains
-    the entire queue, and reads the edges, concepts and ancestors of the whole wave in
-    single queries. Non-standard concepts are expanded by following their outgoing edges
-    to standard concepts.
+    Performs a breadth-first search from all candidates at once, with the same cost for
+    every edge. Each wave takes the whole queue, and reads the edges, concepts and ancestors
+    of the whole wave in single queries. Non-standard concepts are expanded by following
+    their outgoing edges to standard concepts.
 
     Notes
     -----
@@ -165,26 +160,20 @@ def find_standard_paths(
         least one target ancestor constraint, or, when ``targets`` is None, every standard
         concept reached.
 
-    Notes
-    -----
-    The search is currently plain BFS because all edge costs are uniform (0.0). The
-    QueueItem.cost field and the heapq structure are preserved as infrastructure for
-    future weighted traversal. To upgrade to Dijkstra, define a COST_PREDICATES mapping
-    from PredicateKind to a numeric cost (e.g. IDENTITY=0, HIERARCHY=1, ASSOCIATION=2),
-    set new_cost accordingly in the expansion loop, and change the wave drain from a
-    full-queue drain to a single-cost-level drain so that lower-cost nodes are always
-    processed before higher-cost ones. A* would additionally require a domain-specific
-    admissible heuristic added to the priority.
+    Raises
+    ------
+    UnknownConceptError
+        If a candidate is not a concept in the graph.
     """
     # Placeholder for the non-parent-ID grounding so the target accumulation works
     unconstrained_placeholder: int = 0
 
+    kg.require_concepts(candidate.concept_id for candidate in candidates)
     views: dict[int, ConceptView] = {}
     _load_views(kg, views, (candidate.concept_id for candidate in candidates))
 
     queue = [
         QueueItem(
-            cost=0.0,
             node=Node(candidate.concept_id, bool(views[candidate.concept_id].standard_concept)),
             candidate_index=index,
             iterations=0,
@@ -210,7 +199,6 @@ def find_standard_paths(
     def standard_concept_of(item: QueueItem, separation: int) -> StandardConcept:
         candidate = candidates[item.candidate_index]
         return StandardConcept(
-            hierarchy_cost=item.cost,
             concept_id=item.node.concept_id,
             concept_name=views[item.node.concept_id].concept_name,
             separation=separation,
@@ -223,13 +211,9 @@ def find_standard_paths(
         )
 
     while queue:
-        # Drain the entire heap to process it at once and reduce round-trips to the DB,
-        # leaving out the candidates whose search is done.
-        wave = [
-            item
-            for _ in range(len(queue))
-            if not is_done((item := heapq.heappop(queue)).candidate_index)
-        ]
+        # The whole queue is one wave, leaving out the candidates whose search is done.
+        wave = [item for item in queue if not is_done(item.candidate_index)]
+        queue = []
 
         dedup_standard_items: dict[tuple[int, int], QueueItem] = {}
         for item in wave:
@@ -239,10 +223,9 @@ def find_standard_paths(
         expand_items = [item for item in wave if not item.node.is_standard]
 
         if targets:
-            multi_ancestors: dict[int, dict[int, AncestorMatch]] = {}
-            standard_ids = {item.node.concept_id for item in standard_items}
-            for batch in kg.batches(standard_ids):
-                multi_ancestors.update(kg.get_potential_ancestors_batch(batch, targets))
+            multi_ancestors = kg.get_potential_ancestors_batch(
+                tuple({item.node.concept_id for item in standard_items}), targets
+            )
 
             for item in standard_items:
                 ancestor_matches = multi_ancestors.get(item.node.concept_id)
@@ -270,10 +253,14 @@ def find_standard_paths(
         # Expand: Go to next best concept_id. One query reads the edges of the whole wave.
         object_ids_by_subject: defaultdict[int, list[int]] = defaultdict(list)
         subject_ids = {item.node.concept_id for item in expand_items}
-        for batch in kg.batches(subject_ids):
-            for subject_id, _, object_id in kg.relationships(batch, edge_filter=edge_filter):
-                object_ids_by_subject[subject_id].append(object_id)
-        _load_views(kg, views, (o for ids in object_ids_by_subject.values() for o in ids))
+        for subject_id, _, object_id in kg.relationships(subject_ids, edge_filter=edge_filter):
+            object_ids_by_subject[subject_id].append(object_id)
+        reached_ids = {o for ids in object_ids_by_subject.values() for o in ids}
+        _load_views(kg, views, reached_ids)
+        if missing := sorted(reached_ids - views.keys()):
+            logger.warning(
+                "Skipped edges to %d concepts that do not exist: %s", len(missing), missing
+            )
 
         for item in expand_items:
             next_iterations = item.iterations + 1
@@ -282,7 +269,7 @@ def find_standard_paths(
             for object_id in dict.fromkeys(object_ids_by_subject[item.node.concept_id]):
                 object_view = views.get(object_id)
 
-                # Optimization: Only traverse to Standard concepts
+                # Only standard concepts are walked to, so a non-standard one ends the branch.
                 if object_view is None or not object_view.standard_concept:
                     continue
 
@@ -296,21 +283,12 @@ def find_standard_paths(
                     continue
                 visited[object_id] = next_iterations
 
-                new_cost = item.cost
-                # Cost differentiation is reserved for future use. When COST_PREDICATES is
-                # defined (e.g. IDENTITY=0, HIERARCHY=1, ASSOCIATION=2), replace with:
-                #   new_cost = cost + COST_PREDICATES[predicate_kind_for_this_edge]
-                # If costs become non-uniform the wave-drain must change to a per-cost-tier
-                # drain (one heappop at a time) to preserve lowest-cost-first ordering.
-
-                heapq.heappush(
-                    queue,
+                queue.append(
                     QueueItem(
-                        cost=new_cost,
                         node=Node(concept_id=object_id, is_standard=True),
                         candidate_index=item.candidate_index,
                         iterations=next_iterations,
-                    ),
+                    )
                 )
 
     # list comprehension for flattening + deduplication, keeping the order found
