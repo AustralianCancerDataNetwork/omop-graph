@@ -48,7 +48,7 @@ A relationship generalises when it reads as "every X has some Y". Every lung can
 
 These three thresholds are judgement thresholds chosen with the script. They are not derived from anything. The sample of stored edges follows the storage order of the database, and a measurement that times out is reported as unmeasured and never as a result.
 
-`src/omop_graph/data/generalises_provenance.json` records the vocabulary release and date of the run, all parameters, the relationships that were overridden by meaning, and how many proposals change at nearby thresholds. Where the check is mixed or cannot be run, such as for vocabularies whose hierarchy does not follow their attributes, the flag stays empty. The check measures whether the data is consistent under inheritance, not whether the claim holds, so an empty flag does not mean the relationship does not generalise.
+`src/omop_graph/data/generalises_provenance.json` records the vocabulary release and date of the run, all parameters, how many proposals change at nearby thresholds, the flags that were changed to follow the audit, and the nine relationships whose flag was kept or left empty against the proposal. Where the check is mixed or cannot be run, such as for vocabularies whose hierarchy does not follow their attributes, the flag stays empty. The check measures whether the data is consistent under inheritance, not whether the claim holds, so an empty flag does not mean the relationship does not generalise.
 
 ## Predicate Classification
 
