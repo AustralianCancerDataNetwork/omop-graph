@@ -1,1 +1,1 @@
-::: omop_graph.graph.scoring
+::: omop_graph.reasoning.scoring

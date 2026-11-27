@@ -27,9 +27,9 @@ from omop_graph.graph.capabilities.embeddings import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.matches import LabelMatchKind
-from omop_graph.graph.paths import StandardConcept
 from omop_graph.reasoning import grounding as grounding_ext
 from omop_graph.reasoning.resolvers import resolvers as resolvers_ext
+from omop_graph.reasoning.standard_paths import StandardConcept
 
 
 def _make_resolved_model() -> ResolvedModel:

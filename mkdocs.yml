@@ -37,6 +37,8 @@ nav:
   - Core Components:
       - "Knowledge Graph": graph/kg.md
       - "Relationships": graph/edges.md
+      - "Paths and Traversal": graph/paths.md
+      - "Rendering": graph/rendering.md
       - "Architecture": graph/architecture.md
       - "Oaklib Interface": oaklib/interface.md
   - Reasoning:
@@ -45,11 +47,14 @@ nav:
   - API Reference:
       - "Capabilities": reference/ref_capabilities.md
       - "Edges": reference/ref_edges.md
+      - "Extensions": reference/ref_extensions.md
       - "Grounding": reference/ref_grounding.md
       - "KnowledgeGraph": reference/ref_kg.md
       - "Model": reference/ref_model.md
       - "Nodes": reference/ref_nodes.md
+      - "Oaklib Adapter": reference/ref_oaklib.md
       - "Paths": reference/ref_paths.md
+      - "Render": reference/ref_render.md
       - "Resolvers": reference/ref_resolvers.md
       - "Scoring": reference/ref_scoring.md
 

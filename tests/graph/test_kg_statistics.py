@@ -28,7 +28,7 @@ from omop_graph.extensions.relationship_classification import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.counts import Grouping, SynonymCounts
-from omop_graph.graph.model.edges import EdgeFilter
+from omop_graph.graph.model.edges import IS_A_FILTER
 from omop_graph.graph.model.language import OMOPLanguage
 from omop_graph.graph.model.scope import ALL_CONCEPTS
 
@@ -86,7 +86,7 @@ def test_synonyms_are_counted_with_their_distinct_names(kg) -> None:
 def test_gap_filling_drops_the_edge_another_concept_lies_between(kg) -> None:
     seeds = (LUNG_CANCER, CANCER, SMOKING_RELATED, DISEASE)
 
-    assert kg.gap_filled_relationships(seeds, EdgeFilter(predicate_ids=frozenset({"Is a"}))) == (
+    assert kg.gap_filled_relationships(seeds, IS_A_FILTER) == (
         (CANCER, "Is a", DISEASE),
         (SMOKING_RELATED, "Is a", DISEASE),
         (LUNG_CANCER, "Is a", CANCER),

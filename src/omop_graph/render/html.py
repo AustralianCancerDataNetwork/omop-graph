@@ -3,8 +3,9 @@ from __future__ import annotations
 from html import escape
 
 from omop_graph.graph.model.nodes import ConceptView
-from omop_graph.graph.paths import GraphPath, PathExplanation
+from omop_graph.graph.paths import GraphPath
 from omop_graph.graph.traverse import GraphTrace, Subgraph
+from omop_graph.reasoning.explanation import PathExplanation
 
 
 def concept_card(c: ConceptView) -> str:
@@ -44,7 +45,7 @@ def concept_card_compact(c: ConceptView) -> str:
 
 
 def subgraph_html(kg, sg: Subgraph) -> str:
-    nodes = [kg.concept_view(cid) for cid in sg.nodes]
+    nodes = [kg.concept_view(cid) for cid in sorted(sg.nodes)]
     node_html = "".join(concept_card(n) for n in nodes[:20])
 
     return f"""
@@ -140,7 +141,6 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
             <td>{escape(obj.concept_name)}</td>
             <td>{s.predicate_kind.name}</td>
             <td>{depth}</td>
-            <td>{escape(s.reason)}</td>
         </tr>
         """)
 
@@ -161,7 +161,6 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
                 <th>To</th>
                 <th>Kind</th>
                 <th>Depth</th>
-                <th>Reason</th>
             </tr>
             {"".join(rows)}
         </table>

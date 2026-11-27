@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from omop_graph.graph.model.edges import EdgeView
-from omop_graph.graph.paths import GraphPath, PathExplanation
+from omop_graph.graph.paths import GraphPath
 from omop_graph.graph.traverse import GraphTrace, Subgraph
+from omop_graph.reasoning.explanation import PathExplanation
 
 
 def edge_text(kg, edge: EdgeView) -> str:
@@ -80,6 +81,6 @@ def explained_path_text(kg, explanation: PathExplanation) -> str:
         depth = f"depth={s.traversal_depth}" if s.traversal_depth is not None else "depth=?"
         lines.append(
             f"  {subj.concept_name} --[{s.step.predicate}]--> {obj.concept_name} "
-            f"({s.predicate_kind.name}, {depth}) {s.reason}"
+            f"({s.predicate_kind.name}, {depth})"
         )
     return "\n".join(lines)

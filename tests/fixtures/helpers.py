@@ -11,6 +11,8 @@ import sqlalchemy as sa
 from oa_configurator import ResolvedCDMDatabase, ResolvedDatabase
 from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Class, Domain, Vocabulary
 
+from omop_graph.graph.paths import GraphPath, Node, PathStep
+
 ATHENA_RELATIONSHIPS = Path(__file__).parent / "athena_relationships.csv"
 """Relationship id, name and reverse id of the Athena release v5.0 29-AUG-26.
 
@@ -64,3 +66,13 @@ def docs_macros() -> dict[str, Callable[[], str]]:
 
     module.define_env(Environment())
     return macros
+
+
+def graph_path(*steps: tuple[int, bool, str, int, bool]) -> GraphPath:
+    """A path of steps given as the subject, its standardness, the predicate and the object."""
+    return GraphPath(
+        tuple(
+            PathStep(Node(subject, subject_standard), predicate, Node(object_, object_standard))
+            for subject, subject_standard, predicate, object_, object_standard in steps
+        )
+    )

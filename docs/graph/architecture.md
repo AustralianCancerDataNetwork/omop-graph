@@ -1,6 +1,6 @@
 # Architecture
 
-The package is layered. At runtime, the first four layers import only from the layers listed before them. Annotations are the one exception, since `graph.model.edges` names `KnowledgeGraph` under `TYPE_CHECKING`.
+The package is layered. At runtime, each layer imports only from the layers listed before it. Annotations are the one exception, since `graph.model.edges` names `KnowledgeGraph` under `TYPE_CHECKING`.
 
 | Layer | Package | Holds |
 |---|---|---|
@@ -9,10 +9,10 @@ The package is layered. At runtime, the first four layers import only from the l
 | Queries | `omop_graph.graph.queries` | SQLAlchemy statement builders, one `q_*` function per question. They return statements and never execute them. |
 | Capabilities | `omop_graph.graph.capabilities` | The behaviour of the graph as mixins. Each runs queries through the session factory and returns model types. |
 | Knowledge graph | `omop_graph.graph.kg` | `KnowledgeGraph`, the class that combines the capabilities. |
-| Algorithms | `omop_graph.graph.paths`, `traverse`, `scoring` | Path search, traversal and candidate scoring on top of a `KnowledgeGraph`. |
-| Reasoning | `omop_graph.reasoning` | Resolvers and grounding, which turn text into standard concepts. |
-| Adapter | `omop_graph.oaklib_interface` | The oaklib implementation. It translates CURIEs and oaklib types around `KnowledgeGraph` methods, and holds no query logic of its own. |
+| Algorithms | `omop_graph.graph.paths`, `traverse` | Shortest-path search and traversal on top of a `KnowledgeGraph`. |
+| Reasoning | `omop_graph.reasoning` | Resolvers, search for standard concepts, scoring, path explanations and grounding, which turn text into standard concepts. |
 | Rendering | `omop_graph.render` | Text, HTML and Mermaid views of paths and traces. |
+| Adapter | `omop_graph.oaklib_interface` | The oaklib implementation. It translates CURIEs and oaklib types around `KnowledgeGraph` methods, and holds no query logic of its own. |
 
 ## Why the types sit apart from the capabilities
 

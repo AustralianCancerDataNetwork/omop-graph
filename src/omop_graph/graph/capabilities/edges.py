@@ -105,7 +105,10 @@ class EdgesMixin(PredicatesMixin):
         edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
     ) -> tuple[EdgeView, ...]:
         """
-        Convenience method to retrieve all edges from one or multiple concepts.
+        Retrieve all edges from one or multiple concepts.
+
+        Every edge is read before any is returned, so memory grows with their number. The order
+        of the edges is unspecified, see :meth:`iter_edges`, which can stream them in order.
 
         Parameters
         ----------
@@ -120,7 +123,7 @@ class EdgesMixin(PredicatesMixin):
         Returns
         -------
         tuple[EdgeView, ...]
-            The classified edges of the concepts.
+            The classified edges of the concepts, in no specified order.
         """
         with self.session_factory() as session:
             edges = tuple(

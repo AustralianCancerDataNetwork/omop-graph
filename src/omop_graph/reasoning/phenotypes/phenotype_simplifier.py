@@ -1,6 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from omop_graph.extensions.relationship_classification import HierarchyDirection
 from omop_graph.graph.kg import KnowledgeGraph
 
 
@@ -15,57 +16,42 @@ class ParentStatistics:
     max_depth: int = 0
 
 
-def descendants_exhaustive_subsumes(
-    kg: KnowledgeGraph,
-    root_id: int,
-    exclude_roots: set[int] | None = None,
-) -> set[int]:
-    """
-    Exhaustive descendant closure using ONLY 'Subsumes'.
-
-    Currently disabled: always raises ``NotImplementedError``. The predicate
-    search this relied on changed and the body below was never updated to
-    match (it also still calls ``kg.iter_edges(predicate=...)``, a parameter
-    that no longer exists; see ``predicate_ids``/``predicate_kinds``).
-    """
-
-    if exclude_roots is None:
-        exclude_roots = set()
-
-    descendants: set[int] = set()
-    frontier: list[int] = [root_id]
-
-    raise NotImplementedError(
-        "predicate search has changed. Needs to change here too. Subsumes no longer valid."
-    )
-
-    with kg.session_factory() as session:
-        while frontier:
-            current = frontier.pop()
-            for e in kg.iter_edges(
-                session=session,
-                concept_ids=current,
-                direction="out",
-                predicate="Subsumes",
-            ):
-                child = e.object_id
-                if child == current or child in descendants:
-                    continue
-                descendants.add(child)
-                if child in exclude_roots:
-                    continue
-                frontier.append(child)
-
-    return descendants
-
-
 def find_common_parents(
     seeds: list[int],
     kg: KnowledgeGraph,
     min_coverage: int = 2,
     max_up_depth: int | None = None,  # optional safety valve
 ) -> dict[int, ParentStatistics]:
+    """
+    Find the parents that cover several seeds and how well each one fits them.
 
+    A parent is a standard concept above the seeds in ``concept_ancestor``. The concepts
+    below a parent in the strict ``Is a`` hierarchy are its descendants, and those that are
+    neither a seed nor below one pollute it.
+
+    Parameters
+    ----------
+    seeds : list[int]
+        The concepts to find parents for.
+    kg : KnowledgeGraph
+        The graph to read.
+    min_coverage : int
+        Keep the parents that cover at least this many seeds.
+    max_up_depth : int, optional
+        How many levels above the seeds to look. Unlimited when not given.
+
+    Returns
+    -------
+    dict[int, ParentStatistics]
+        The statistics of each parent, by its concept id.
+
+    Raises
+    ------
+    ValueError
+        If a seed or a parent maps to several standard concepts.
+    UnknownConceptError
+        If a seed does not exist.
+    """
     seed_set = set(seeds)
     standard_seeds = {
         standard_id
@@ -73,7 +59,7 @@ def find_common_parents(
         if standard_id is not None
     }
     candidates: defaultdict[int, ParentStatistics] = defaultdict(ParentStatistics)
-    exclude = seed_set | standard_seeds
+    chosen = seed_set | standard_seeds
     # frontier items: (current_concept, originating_seed, depth)
     frontier: list[tuple[int, int, int]] = [(s, s, 0) for s in seeds]
     visited: set[tuple[int, int]] = set()
@@ -109,10 +95,12 @@ def find_common_parents(
     for stats in final.values():
         stats.coverage = len(stats.descendants)
 
+    below_parents = kg.closure(final, HierarchyDirection.DOWN)
+    covered_by_seeds = chosen | set().union(*kg.closure(chosen, HierarchyDirection.DOWN).values())
     for parent, stats in final.items():
-        all_desc = descendants_exhaustive_subsumes(kg, parent, exclude)
-        stats.pollution = len(all_desc - standard_seeds - seed_set)
-        final[parent].descendants |= all_desc
+        all_desc = below_parents[parent]
+        stats.pollution = len(all_desc - covered_by_seeds)
+        stats.descendants |= all_desc
         denom = stats.coverage + stats.pollution
         stats.purity = stats.coverage / denom if denom else 0.0
         stats.completeness = stats.coverage / max(len(seeds), 1)

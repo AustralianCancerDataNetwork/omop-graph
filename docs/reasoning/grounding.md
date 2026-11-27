@@ -37,7 +37,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 5.  **Scoring**: Apply the scoring algorithm to the resulting valid Standard Concepts
     - Details of scoring algorithm shown [here](#scoring)
 
-Each check answers a different question. Lexical plausibility, whether the text resembles the concept, is decided by the resolvers and `LabelMatchKind`. Semantic admissibility, whether the concept is allowed at all, is decided by `GroundingConstraints`. Structural plausibility, whether the path to the standard concept is credible, is read from the `PathProfile`.
+Each check answers a different question. Lexical plausibility, whether the text resembles the concept, is decided by the resolvers and `LabelMatchKind`. Semantic admissibility, whether the concept is allowed at all, is decided by `GroundingConstraints`. Structural plausibility, whether the path to the standard concept is credible, is read from its `separation` (see [Scoring](#scoring)). A `PathProfile` does not take part in grounding. It explains a path found with `find_shortest_paths`, see [Paths](../graph/paths.md#explaining-a-path).
 
 ## Grounding Constraints
 
@@ -134,7 +134,7 @@ In clinical coding, we often prefer a specific match, but when choosing between 
 Scoring is performed in a batch operation to minimize database overhead:
 
 ```python
-from omop_graph.graph.scoring import score_standard_concepts
+from omop_graph.reasoning.scoring import score_standard_concepts
 
 scored = score_standard_concepts(
     text="Hodgkin lymphoma",
