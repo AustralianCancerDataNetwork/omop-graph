@@ -24,7 +24,6 @@ import argparse
 import json
 import logging
 from collections import defaultdict
-from collections.abc import Iterable
 from dataclasses import asdict, dataclass, replace
 from datetime import date
 from enum import Enum
@@ -44,14 +43,14 @@ from omop_graph.extensions.classification_data import (
     read_classification_files,
 )
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.queries import q_all_predicates, q_edges
+from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.queries import q_all_predicates
 
 logger = logging.getLogger(__name__)
 
 IS_A = "Is a"
 MEASURED_KINDS = (PredicateKind.ATTRIBUTE, PredicateKind.COMPOSITION, PredicateKind.ASSOCIATION)
 QUERY_CANCELED = "57014"
-BATCH = 1000
 
 
 class Basis(str, Enum):
@@ -122,53 +121,8 @@ class TimedOut:
     """A measurement that ran past the statement timeout."""
 
 
-def strict_ancestors(session: Session, concept_ids: Iterable[int]) -> dict[int, frozenset[int]]:
-    """
-    Walk the valid ``Is a`` edges upward, as the entailment does.
-
-    Parameters
-    ----------
-    session : Session
-        Read-only CDM session.
-    concept_ids : Iterable[int]
-        Concepts to start from.
-
-    Returns
-    -------
-    dict[int, frozenset[int]]
-        Every concept mapped to its strict ``Is a`` ancestors, never itself.
-    """
-    parents: dict[int, set[int]] = {}
-    pending = set(concept_ids)
-    while pending:
-        batch = sorted(pending)[:BATCH]
-        pending.difference_update(batch)
-        found = defaultdict(set)
-        for row in session.execute(
-            q_edges(tuple(batch), "out", predicate_ids=frozenset({IS_A}), active_only=True)
-        ):
-            found[row.subject_id].add(row.object_id)
-        for concept_id in batch:
-            parents[concept_id] = found[concept_id]
-            pending.update(found[concept_id] - parents.keys())
-
-    def reach(concept_id: int) -> frozenset[int]:
-        reached: set[int] = set()
-        frontier = [concept_id]
-        while frontier:
-            frontier = [
-                parent
-                for child in frontier
-                for parent in parents[child]
-                if parent not in reached and not reached.add(parent)
-            ]
-        return frozenset(reached - {concept_id})
-
-    return {concept_id: reach(concept_id) for concept_id in parents}
-
-
 def measure(
-    session: Session, relationship_id: str, sample_edges: int, sample_pairs: int
+    session: Session, kg: KnowledgeGraph, relationship_id: str, sample_edges: int, sample_pairs: int
 ) -> Measurement:
     """
     Measure how the children of a parent inherit a relationship.
@@ -177,6 +131,8 @@ def measure(
     ----------
     session : Session
         Read-only CDM session.
+    kg : KnowledgeGraph
+        Provides the strict ``Is a`` ancestors, the walk that entailment follows.
     relationship_id : str
         The relationship to measure.
     sample_edges : int
@@ -232,8 +188,8 @@ def measure(
         held_by_pair[(child, parent, filler)]
         if held_id is not None:
             held_by_pair[(child, parent, filler)].add(held_id)
-    ancestors = strict_ancestors(
-        session, {object_id for objects in held_by_pair.values() for object_id in objects}
+    ancestors = kg.closure(
+        {object_id for objects in held_by_pair.values() for object_id in objects}
     )
     holders = [(pair, objects) for pair, objects in held_by_pair.items() if objects]
     covered = sum(
@@ -244,7 +200,12 @@ def measure(
 
 
 def measure_within(
-    session: Session, relationship_id: str, sample_edges: int, sample_pairs: int, timeout: int
+    session: Session,
+    kg: KnowledgeGraph,
+    relationship_id: str,
+    sample_edges: int,
+    sample_pairs: int,
+    timeout: int,
 ) -> Measurement | TimedOut:
     """
     Measure a relationship, giving up after ``timeout`` seconds.
@@ -253,6 +214,8 @@ def measure_within(
     ----------
     session : Session
         Read-only CDM session.
+    kg : KnowledgeGraph
+        As for :func:`measure`.
     relationship_id : str
         The relationship to measure.
     sample_edges : int
@@ -270,7 +233,7 @@ def measure_within(
     if session.get_bind().dialect.name == "postgresql":
         session.execute(sa.text(f"SET statement_timeout = {int(timeout) * 1000}"))
     try:
-        return measure(session, relationship_id, sample_edges, sample_pairs)
+        return measure(session, kg, relationship_id, sample_edges, sample_pairs)
     except DBAPIError as error:
         sqlstate = getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None)
         if sqlstate != QUERY_CANCELED:
@@ -415,7 +378,9 @@ def main() -> None:
         if PredicateKind(kind) in MEASURED_KINDS
         and (kind, subkind) not in NON_GENERALISING_SUBKINDS
     }
-    with cdm_session_factory(resolved=resolve_cdm_database())() as session:
+    sessions = cdm_session_factory(resolved=resolve_cdm_database())
+    kg = KnowledgeGraph(sessions)
+    with sessions() as session:
         release = session.scalar(
             sa.select(Vocabulary.vocabulary_version).where(Vocabulary.vocabulary_id == "None")
         )
@@ -436,7 +401,9 @@ def main() -> None:
         def cached(rid: str) -> Measurement | TimedOut:
             if rid not in measured:
                 measured[rid] = (
-                    measure_within(session, rid, args.sample_edges, args.sample_pairs, args.timeout)
+                    measure_within(
+                        session, kg, rid, args.sample_edges, args.sample_pairs, args.timeout
+                    )
                     if edge_counts.get(rid)
                     else Measurement(0, 0, 0)
                 )

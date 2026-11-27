@@ -112,14 +112,11 @@ def synonym(concept_id: int, name: str, language: OMOPLanguage) -> Concept_Synon
     )
 
 
-def relationship_class(
-    kind: PredicateKind, subkind: str, direction: HierarchyDirection | None = None
-) -> RelationshipClass:
+def relationship_class(kind: PredicateKind, subkind: str) -> RelationshipClass:
     """A classification row for a subkind, with placeholder descriptions."""
     return RelationshipClass(
         predicate_kind=kind,
         predicate_subkind=subkind,
-        direction=direction,
         description=subkind,
         semantics=subkind,
         inference="none",
@@ -131,12 +128,14 @@ def classified(
     kind: PredicateKind,
     subkind: str,
     generalises: bool = False,
+    direction: HierarchyDirection | None = None,
 ) -> RelationshipMapping:
-    """The classification of a relationship under a kind and subkind, and whether it generalises."""
+    """The classification of a relationship under a kind and subkind, with its direction and whether it generalises."""
     return RelationshipMapping(
         relationship_id=relationship_id,
         predicate_kind=kind,
         predicate_subkind=subkind,
+        direction=direction,
         generalises=generalises,
     )
 

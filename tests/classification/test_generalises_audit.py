@@ -5,17 +5,31 @@ from __future__ import annotations
 import importlib.util
 import sys
 from collections.abc import Iterator
-from datetime import date
 from pathlib import Path
-from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from omop_alchemy.cdm.model.vocabulary import Concept_Relationship
+from fixtures.cdm_builders import (
+    classified,
+    concept,
+    edge,
+    relationship,
+    relationship_class,
+    sqlite_cdm,
+)
+from omop_alchemy.cdm.model.vocabulary import Concept, Concept_Relationship, Relationship
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
-_SCRIPT = Path(__file__).parents[1] / "scripts" / "generalises_audit.py"
+from omop_graph.extensions.omop_alchemy import (
+    HierarchyDirection,
+    PredicateKind,
+    RelationshipClass,
+    RelationshipMapping,
+)
+from omop_graph.graph.kg import KnowledgeGraph
+
+_SCRIPT = Path(__file__).parents[2] / "scripts" / "generalises_audit.py"
 _spec = importlib.util.spec_from_file_location("generalises_audit", _SCRIPT)
 assert _spec and _spec.loader
 audit = importlib.util.module_from_spec(_spec)
@@ -27,67 +41,60 @@ LUNG_CANCER, SMALL_CELL, ADENO, UNRELATED = 1, 2, 3, 4
 LUNG, THORACIC_ORGAN, RIGHT_LUNG, LIVER = 10, 11, 12, 13
 
 
-def _edge(subject: int, relationship_id: str, obj: int, invalid_reason: str | None = None):
-    return Concept_Relationship(
-        concept_id_1=subject,
-        concept_id_2=obj,
-        relationship_id=relationship_id,
-        valid_start_date=date(2020, 1, 1),
-        valid_end_date=date(2099, 12, 31),
-        invalid_reason=invalid_reason,
-    )
+@pytest.fixture
+def sessions() -> Iterator[sessionmaker[Session]]:
+    """Lung cancer has a site, and its children carry it, specialise it, or do not hold it."""
+    rows = [
+        *(concept(concept_id) for concept_id in (LUNG_CANCER, SMALL_CELL, ADENO, UNRELATED)),
+        *(concept(concept_id) for concept_id in (LUNG, THORACIC_ORGAN, RIGHT_LUNG, LIVER)),
+        relationship("Is a", "Subsumes"),
+        relationship(HAS_SITE, SITE_OF),
+        relationship(SITE_OF, HAS_SITE),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic"),
+        relationship_class(PredicateKind.ATTRIBUTE, "Site"),
+        classified(
+            "Is a",
+            PredicateKind.HIERARCHY,
+            "Taxonomic",
+            generalises=True,
+            direction=HierarchyDirection.UP,
+        ),
+        classified(HAS_SITE, PredicateKind.ATTRIBUTE, "Site", generalises=True),
+        classified(SITE_OF, PredicateKind.ATTRIBUTE, "Site"),
+        edge(SMALL_CELL, "Is a", LUNG_CANCER),
+        edge(ADENO, "Is a", LUNG_CANCER),
+        edge(UNRELATED, "Is a", LUNG_CANCER),
+        edge(RIGHT_LUNG, "Is a", LUNG),
+        edge(LUNG, "Is a", THORACIC_ORGAN),
+        edge(LIVER, "Is a", LIVER, invalid_reason="D"),
+        edge(LUNG_CANCER, HAS_SITE, LUNG),
+        edge(SMALL_CELL, HAS_SITE, LUNG),
+        edge(ADENO, HAS_SITE, RIGHT_LUNG),
+        edge(UNRELATED, HAS_SITE, LIVER),
+    ]
+    models = (Concept, Relationship, Concept_Relationship, RelationshipClass, RelationshipMapping)
+    with sqlite_cdm(models, rows) as sessions:
+        yield sessions
 
 
 @pytest.fixture
-def session() -> Iterator[Session]:
-    """Lung cancer has a site, and its children carry it, specialise it, or do not hold it."""
-    engine = sa.create_engine("sqlite+pysqlite:///:memory:").execution_options(
-        schema_translate_map={"primary": None, "vocab": None}
-    )
-    cast(sa.Table, Concept_Relationship.__table__).create(engine)
-    with Session(engine) as session:
-        session.add_all(
-            [
-                _edge(SMALL_CELL, "Is a", LUNG_CANCER),
-                _edge(ADENO, "Is a", LUNG_CANCER),
-                _edge(UNRELATED, "Is a", LUNG_CANCER),
-                _edge(RIGHT_LUNG, "Is a", LUNG),
-                _edge(LUNG, "Is a", THORACIC_ORGAN),
-                _edge(LIVER, "Is a", LIVER, invalid_reason="D"),
-                _edge(LUNG_CANCER, HAS_SITE, LUNG),
-                _edge(SMALL_CELL, HAS_SITE, LUNG),
-                _edge(ADENO, HAS_SITE, RIGHT_LUNG),
-                _edge(UNRELATED, HAS_SITE, LIVER),
-            ]
-        )
-        session.commit()
+def session(sessions) -> Iterator[Session]:
+    with sessions() as session:
         yield session
-    engine.dispose()
 
 
-def test_the_strict_ancestors_follow_the_valid_is_a_edges_upward(session):
-    ancestors = audit.strict_ancestors(session, [RIGHT_LUNG, LIVER])
-
-    assert ancestors[RIGHT_LUNG] == {LUNG, THORACIC_ORGAN}
-    assert ancestors[LIVER] == frozenset()
+@pytest.fixture
+def kg(sessions) -> KnowledgeGraph:
+    return KnowledgeGraph(sessions)
 
 
-def test_a_cycle_of_is_a_edges_ends_and_never_lists_the_concept_itself(session):
-    session.add_all([_edge(THORACIC_ORGAN, "Is a", RIGHT_LUNG)])
-    session.commit()
-
-    ancestors = audit.strict_ancestors(session, [RIGHT_LUNG])
-
-    assert ancestors[RIGHT_LUNG] == {LUNG, THORACIC_ORGAN}
-
-
-def test_a_child_carries_the_parent_object_by_holding_it_or_something_below_it(session):
-    measurement = audit.measure(session, HAS_SITE, sample_edges=10, sample_pairs=10)
+def test_a_child_carries_the_parent_object_by_holding_it_or_something_below_it(session, kg):
+    measurement = audit.measure(session, kg, HAS_SITE, sample_edges=10, sample_pairs=10)
 
     assert measurement == audit.Measurement(pairs=3, holders=3, covered=2)
 
 
-def test_a_child_that_holds_nothing_counts_as_a_pair_and_not_as_a_holder(session):
+def test_a_child_that_holds_nothing_counts_as_a_pair_and_not_as_a_holder(session, kg):
     session.execute(
         sa.delete(Concept_Relationship).where(
             Concept_Relationship.concept_id_1 == UNRELATED,
@@ -96,16 +103,16 @@ def test_a_child_that_holds_nothing_counts_as_a_pair_and_not_as_a_holder(session
     )
     session.commit()
 
-    measurement = audit.measure(session, HAS_SITE, sample_edges=10, sample_pairs=10)
+    measurement = audit.measure(session, kg, HAS_SITE, sample_edges=10, sample_pairs=10)
 
     assert measurement == audit.Measurement(pairs=3, holders=2, covered=2)
 
 
-def test_an_invalid_edge_is_not_a_held_object(session):
-    session.add(_edge(UNRELATED, HAS_SITE, LUNG, invalid_reason="D"))
+def test_an_invalid_edge_is_not_a_held_object(session, kg):
+    session.add(edge(UNRELATED, HAS_SITE, LUNG, invalid_reason="D"))
     session.commit()
 
-    measurement = audit.measure(session, HAS_SITE, sample_edges=10, sample_pairs=10)
+    measurement = audit.measure(session, kg, HAS_SITE, sample_edges=10, sample_pairs=10)
 
     assert measurement.covered == 2
 
@@ -118,13 +125,13 @@ def _cancelled(sqlstate: str):
     return raise_it
 
 
-def test_only_a_statement_timeout_is_reported_as_timed_out(session, monkeypatch):
+def test_only_a_statement_timeout_is_reported_as_timed_out(session, kg, monkeypatch):
     monkeypatch.setattr(audit, "measure", _cancelled(audit.QUERY_CANCELED))
-    assert audit.measure_within(session, HAS_SITE, 10, 10, 1) == audit.TimedOut()
+    assert audit.measure_within(session, kg, HAS_SITE, 10, 10, 1) == audit.TimedOut()
 
     monkeypatch.setattr(audit, "measure", _cancelled("42P01"))
     with pytest.raises(DBAPIError):
-        audit.measure_within(session, HAS_SITE, 10, 10, 1)
+        audit.measure_within(session, kg, HAS_SITE, 10, 10, 1)
 
 
 SETTINGS = audit.Settings(min_pairs=10, min_share=0.7, max_reverse=0.15)

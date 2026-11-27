@@ -164,8 +164,10 @@ def test_one_concept_with_many_synonyms_does_not_use_up_the_limit() -> None:
     )
     rows = [
         relationship("Is a", "Subsumes"),
-        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up", HierarchyDirection.UP),
-        classified("Is a", PredicateKind.HIERARCHY, "Taxonomic - up"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified(
+            "Is a", PredicateKind.HIERARCHY, "Taxonomic - up", direction=HierarchyDirection.UP
+        ),
         concept(700, "Plain one"),
         concept(701, "Plain two"),
         concept(702, "Plain three"),

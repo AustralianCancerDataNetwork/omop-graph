@@ -325,6 +325,7 @@ def test_the_command_prints_a_classification_error_and_exits_without_a_traceback
         raise ClassificationDataError("predicate_mapping.csv is invalid")
 
     monkeypatch.setattr(cli, "relationship_classification", fail)
+    monkeypatch.setattr(cli.OmopGraphConfig, "configure_logging", lambda *args, **kwargs: None)
 
     result = CliRunner().invoke(cli.app, ["relationship-classification"])
 
