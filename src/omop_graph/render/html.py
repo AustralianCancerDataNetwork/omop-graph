@@ -141,7 +141,6 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
             <td>{escape(obj.concept_name)}</td>
             <td>{s.predicate_kind.name}</td>
             <td>{depth}</td>
-            <td>{escape(s.reason)}</td>
         </tr>
         """)
 
@@ -162,7 +161,6 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
                 <th>To</th>
                 <th>Kind</th>
                 <th>Depth</th>
-                <th>Reason</th>
             </tr>
             {"".join(rows)}
         </table>

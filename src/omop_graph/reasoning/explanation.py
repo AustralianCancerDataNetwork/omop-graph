@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from omop_graph.extensions.relationship_classification import PredicateKind
-from omop_graph.graph.model.matches import LabelMatchKind
 from omop_graph.graph.paths import GraphPath, PathStep
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 
@@ -50,7 +49,6 @@ class PathProfile:
         cls,
         kg: KnowledgeGraph,
         path: GraphPath,
-        match_kind: LabelMatchKind,
         source_concept_id: int | None = None,
     ) -> PathProfile:
         """
@@ -59,15 +57,24 @@ class PathProfile:
         The first Standard Concept encountered via an IDENTITY edge is promoted as
         the anchor.
 
-        Notes
-        -----
-        For zero-hop paths (source == target), ``source_concept_id``
-        must be provided; a ``ValueError`` is raised otherwise.
-
         Parameters
         ----------
+        kg : KnowledgeGraph
+            The graph to read the concepts from.
+        path : GraphPath
+            The path to analyze.
         source_concept_id : int, optional
             Required when ``path`` has no steps (i.e. source == target).
+
+        Returns
+        -------
+        PathProfile
+            The concept the path resolves to and the concept it starts at.
+
+        Raises
+        ------
+        ValueError
+            If ``path`` has no steps and ``source_concept_id`` is not given.
         """
         if not path.steps:
             if source_concept_id is None:
@@ -132,7 +139,6 @@ class PathExplanationStep:
     step: PathStep
     traversal_depth: int | None
     predicate_kind: PredicateKind
-    reason: str
 
 
 @dataclass(frozen=True)
@@ -151,10 +157,23 @@ class PathExplanation:
         kg: KnowledgeGraph,
         path: GraphPath,
         trace: GraphTrace,
-        match_kind: LabelMatchKind,
     ) -> PathExplanation:
         """
         Construct an explanation by combining the path, the trace log, and semantic profiles.
+
+        Parameters
+        ----------
+        kg : KnowledgeGraph
+            The graph to read the concepts and relationships from.
+        path : GraphPath
+            The path to explain.
+        trace : GraphTrace
+            The trace of the search that found the path.
+
+        Returns
+        -------
+        PathExplanation
+            The profile of the path and, for each step, its relationship kind and depth.
         """
         steps: list[PathExplanationStep] = []
         source = (
@@ -162,18 +181,16 @@ class PathExplanation:
             if path.steps
             else (trace.seeds[0] if trace.seeds else None)
         )
-        profile = PathProfile.from_path(kg, path, match_kind=match_kind, source_concept_id=source)
+        profile = PathProfile.from_path(kg, path, source_concept_id=source)
 
         for step in path.steps:
             ts = trace_contains_step(trace, step)
             kind = kg.predicate_kind(step.predicate)
-            reason = kind.value
             steps.append(
                 PathExplanationStep(
                     step=step,
                     traversal_depth=ts.depth if ts else None,
                     predicate_kind=kind,
-                    reason=reason,
                 )
             )
         return cls(

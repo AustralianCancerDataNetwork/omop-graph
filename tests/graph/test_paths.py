@@ -5,6 +5,7 @@ from collections.abc import Iterator
 
 import pytest
 from fixtures.edge_list import EdgeList
+from fixtures.helpers import graph_path
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
@@ -20,7 +21,7 @@ from fixtures.hierarchy_cdm import (
 from omop_graph.graph import paths as paths_module
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import IS_A_FILTER, EdgeFilter
-from omop_graph.graph.paths import find_shortest_paths
+from omop_graph.graph.paths import GraphPath, find_shortest_paths
 from omop_graph.graph.traverse import TerminationReason
 
 
@@ -325,3 +326,31 @@ def test_a_trace_of_a_search_without_a_path_says_so() -> None:
     assert trace.terminated_reason is TerminationReason.NO_PATH
     assert trace.seeds == (3,)
     assert [(step.depth, step.node) for step in trace.steps] == [(0, 3)]
+
+
+def test_a_path_knows_its_start_and_its_nodes() -> None:
+    path = graph_path((1, True, "Is a", 2, False), (2, False, "Is a", 3, True))
+
+    assert path.start_concept_id == 1
+    assert path.nodes() == (1, 2, 3)
+    assert len(path) == 2
+    assert path[1].object.concept_id == 3
+
+
+def test_an_empty_path_has_no_start_and_no_nodes() -> None:
+    with pytest.raises(ValueError, match="no start concept"):
+        _ = GraphPath(()).start_concept_id
+
+    assert GraphPath(()).nodes() == ()
+
+
+def test_the_first_standard_concept_of_a_path_is_the_first_one_met() -> None:
+    assert (
+        graph_path(
+            (1, False, "Is a", 2, False), (2, False, "Is a", 3, True)
+        ).get_first_standard_concept_id()
+        == 3
+    )
+    assert graph_path((1, True, "Is a", 2, True)).get_first_standard_concept_id() == 1
+    assert graph_path((1, False, "Is a", 2, False)).get_first_standard_concept_id() is None
+    assert GraphPath(()).get_first_standard_concept_id() is None

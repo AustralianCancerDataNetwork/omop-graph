@@ -45,4 +45,4 @@ subgraph, trace = traverse(
 
 ## Explaining a path
 
-`PathExplanation.from_path(kg, path, trace, match_kind)` in `omop_graph.reasoning.explanation` combines a path with the trace of its search. It gives the concept the path resolves to, a `PathProfile`, and for each step the kind of its relationship and the depth at which the search read it, counted from the end of the search that found it. The result renders with [`render_explained_path`](rendering.md).
+`PathExplanation.from_path(kg, path, trace)` in `omop_graph.reasoning.explanation` combines a path with the trace of its search. It gives the concept the path resolves to, a `PathProfile` and for each step the kind of its relationship and the depth at which the search read it, counted from the end of the search that found it. The result renders with [`render_explained_path`](rendering.md).

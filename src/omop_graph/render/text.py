@@ -81,6 +81,6 @@ def explained_path_text(kg, explanation: PathExplanation) -> str:
         depth = f"depth={s.traversal_depth}" if s.traversal_depth is not None else "depth=?"
         lines.append(
             f"  {subj.concept_name} --[{s.step.predicate}]--> {obj.concept_name} "
-            f"({s.predicate_kind.name}, {depth}) {s.reason}"
+            f"({s.predicate_kind.name}, {depth})"
         )
     return "\n".join(lines)

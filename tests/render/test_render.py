@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from fixtures.helpers import graph_path
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
@@ -14,8 +15,7 @@ from fixtures.hierarchy_cdm import (
 
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import IS_A_FILTER
-from omop_graph.graph.model.matches import LabelMatchKind
-from omop_graph.graph.paths import GraphPath, Node, PathStep
+from omop_graph.graph.paths import GraphPath
 from omop_graph.graph.traverse import (
     GraphTrace,
     Subgraph,
@@ -31,16 +31,6 @@ from omop_graph.render import (
     render_subgraph,
     render_trace,
 )
-
-
-def _path(*steps: tuple[int, bool, str, int, bool]) -> GraphPath:
-    """A path of steps given as the subject, its standardness, the predicate and the object."""
-    return GraphPath(
-        tuple(
-            PathStep(Node(subject, subject_standard), predicate, Node(object_, object_standard))
-            for subject, subject_standard, predicate, object_, object_standard in steps
-        )
-    )
 
 
 def _lines(*lines: str) -> str:
@@ -62,7 +52,9 @@ def kg() -> Iterator[KnowledgeGraph]:
 
 @pytest.fixture(scope="module")
 def path() -> GraphPath:
-    return _path((LUNG_CANCER, True, "Is a", CANCER, True), (CANCER, True, "Is a", DISEASE, True))
+    return graph_path(
+        (LUNG_CANCER, True, "Is a", CANCER, True), (CANCER, True, "Is a", DISEASE, True)
+    )
 
 
 @pytest.fixture(scope="module")
@@ -244,41 +236,43 @@ def test_a_trace_in_html_shows_five_edges_of_a_relationship_and_counts_the_rest(
 
 
 def test_an_explained_path_gives_the_kind_depth_and_standardness(kg) -> None:
-    mapped = _path((SOURCE, False, "Maps to", LUNG_CANCER, True))
+    mapped = graph_path((SOURCE, False, "Maps to", LUNG_CANCER, True))
     trace = _trace_from(kg, SOURCE)
-    explanation = PathExplanation.from_path(kg, mapped, trace, LabelMatchKind.EXACT)
+    explanation = PathExplanation.from_path(kg, mapped, trace)
 
     assert render_explained_path(kg, explanation, format="text") == _lines(
         "Original: Concept 212",
         "Resolved: Concept 203 (ID: 203, standard)",
         "Steps:",
-        "  Concept 212 --[Maps to]--> Concept 203 (IDENTITY, depth=0) Identity",
+        "  Concept 212 --[Maps to]--> Concept 203 (IDENTITY, depth=0)",
     )
 
 
 def test_an_explained_path_names_the_kind_of_the_relationship(kg) -> None:
-    attribute = _path((LUNG_CANCER, True, "Has finding site", LUNG, True))
+    attribute = graph_path((LUNG_CANCER, True, "Has finding site", LUNG, True))
     trace = GraphTrace(seeds=(LUNG_CANCER,), steps=[])
-    explanation = PathExplanation.from_path(kg, attribute, trace, LabelMatchKind.EXACT)
+    explanation = PathExplanation.from_path(kg, attribute, trace)
 
     assert render_explained_path(kg, explanation, format="text").endswith(
-        "  Concept 203 --[Has finding site]--> Concept 206 (ATTRIBUTE, depth=?) Attribute"
+        "  Concept 203 --[Has finding site]--> Concept 206 (ATTRIBUTE, depth=?)"
     )
 
 
 def test_an_explained_path_of_a_concept_to_itself_says_if_it_is_not_standard(kg) -> None:
     trace = GraphTrace(seeds=(SOURCE,), steps=[])
-    explanation = PathExplanation.from_path(kg, GraphPath(()), trace, LabelMatchKind.EXACT)
+    explanation = PathExplanation.from_path(kg, GraphPath(()), trace)
 
     assert render_explained_path(kg, explanation, format="text") == _lines(
-        "Original: Concept 212", "Resolved: Concept 212 (ID: 212, non-standard)", "Steps:"
+        "Original: Concept 212",
+        "Resolved: Concept 212 (ID: 212, non-standard)",
+        "Steps:",
     )
 
 
 def test_an_explained_path_in_html_has_a_row_for_each_step(kg) -> None:
-    mapped = _path((SOURCE, False, "Maps to", LUNG_CANCER, True))
+    mapped = graph_path((SOURCE, False, "Maps to", LUNG_CANCER, True))
     trace = _trace_from(kg, SOURCE)
-    explanation = PathExplanation.from_path(kg, mapped, trace, LabelMatchKind.EXACT)
+    explanation = PathExplanation.from_path(kg, mapped, trace)
     rendered = " ".join(render_explained_path(kg, explanation, format="html").split())
 
     assert (
@@ -287,13 +281,13 @@ def test_an_explained_path_in_html_has_a_row_for_each_step(kg) -> None:
     )
     assert (
         "<tr> <td>Concept 212</td> <td>Maps to</td> <td>Concept 203</td> <td>IDENTITY</td> "
-        "<td>0</td> <td>Identity</td> </tr>"
+        "<td>0</td> </tr>"
     ) in rendered
 
 
 def test_an_explained_path_in_html_marks_a_concept_that_is_not_standard(kg) -> None:
     trace = GraphTrace(seeds=(SOURCE,), steps=[])
-    explanation = PathExplanation.from_path(kg, GraphPath(()), trace, LabelMatchKind.EXACT)
+    explanation = PathExplanation.from_path(kg, GraphPath(()), trace)
 
     rendered = " ".join(render_explained_path(kg, explanation, format="html").split())
 
