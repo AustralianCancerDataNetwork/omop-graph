@@ -1,8 +1,8 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from omop_graph.extensions.relationship_classification import HierarchyDirection
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.model.edges import SUBSUMES_FILTER
 
 
 @dataclass
@@ -16,53 +16,42 @@ class ParentStatistics:
     max_depth: int = 0
 
 
-def descendants_exhaustive_subsumes(
-    kg: KnowledgeGraph,
-    root_id: int,
-    exclude_roots: set[int] | None = None,
-) -> set[int]:
-    """
-    Find every descendant of a concept by following only the ``Subsumes`` relationship.
-
-    One query reads the edges of a whole level, so the number of queries is the depth
-    of the hierarchy below the root.
-
-    Parameters
-    ----------
-    kg : KnowledgeGraph
-        The graph to read.
-    root_id : int
-        The concept to start from. It is not one of its own descendants.
-    exclude_roots : set[int], optional
-        Concepts that are included as descendants but whose own descendants are not followed.
-
-    Returns
-    -------
-    set[int]
-        The descendants of the root, empty if it has none.
-    """
-    excluded = exclude_roots or set()
-    descendants: set[int] = set()
-    frontier = {root_id}
-    while frontier:
-        children = {
-            child
-            for subject, _, child in kg.relationships(frontier, edge_filter=SUBSUMES_FILTER)
-            if child != subject
-        }
-        found = children - descendants
-        descendants |= found
-        frontier = found - excluded
-    return descendants - {root_id}
-
-
 def find_common_parents(
     seeds: list[int],
     kg: KnowledgeGraph,
     min_coverage: int = 2,
     max_up_depth: int | None = None,  # optional safety valve
 ) -> dict[int, ParentStatistics]:
+    """
+    Find the parents that cover several seeds and how well each one fits them.
 
+    A parent is a standard concept above the seeds in ``concept_ancestor``. The concepts
+    below a parent in the strict ``Is a`` hierarchy are its descendants, and those that are
+    neither a seed nor below one pollute it.
+
+    Parameters
+    ----------
+    seeds : list[int]
+        The concepts to find parents for.
+    kg : KnowledgeGraph
+        The graph to read.
+    min_coverage : int
+        Keep the parents that cover at least this many seeds.
+    max_up_depth : int, optional
+        How many levels above the seeds to look. Unlimited when not given.
+
+    Returns
+    -------
+    dict[int, ParentStatistics]
+        The statistics of each parent, by its concept id.
+
+    Raises
+    ------
+    ValueError
+        If a seed or a parent maps to several standard concepts.
+    UnknownConceptError
+        If a seed does not exist.
+    """
     seed_set = set(seeds)
     standard_seeds = {
         standard_id
@@ -70,7 +59,7 @@ def find_common_parents(
         if standard_id is not None
     }
     candidates: defaultdict[int, ParentStatistics] = defaultdict(ParentStatistics)
-    exclude = seed_set | standard_seeds
+    chosen = seed_set | standard_seeds
     # frontier items: (current_concept, originating_seed, depth)
     frontier: list[tuple[int, int, int]] = [(s, s, 0) for s in seeds]
     visited: set[tuple[int, int]] = set()
@@ -106,10 +95,12 @@ def find_common_parents(
     for stats in final.values():
         stats.coverage = len(stats.descendants)
 
+    below_parents = kg.closure(final, HierarchyDirection.DOWN)
+    covered_by_seeds = chosen | set().union(*kg.closure(chosen, HierarchyDirection.DOWN).values())
     for parent, stats in final.items():
-        all_desc = descendants_exhaustive_subsumes(kg, parent, exclude)
-        stats.pollution = len(all_desc - standard_seeds - seed_set)
-        final[parent].descendants |= all_desc
+        all_desc = below_parents[parent]
+        stats.pollution = len(all_desc - covered_by_seeds)
+        stats.descendants |= all_desc
         denom = stats.coverage + stats.pollution
         stats.purity = stats.coverage / denom if denom else 0.0
         stats.completeness = stats.coverage / max(len(seeds), 1)
