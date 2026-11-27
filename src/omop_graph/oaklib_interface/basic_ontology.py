@@ -29,7 +29,7 @@ from oaklib.interfaces.basic_ontology_interface import (
 from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.graph import KnowledgeGraph
+from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.model.edges import (
     EdgeFilter,
     Predicate,

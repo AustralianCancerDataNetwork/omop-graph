@@ -4,7 +4,7 @@ from collections.abc import Iterable, Iterator
 
 from oaklib.types import CURIE, PRED_CURIE
 
-from omop_graph.graph import KnowledgeGraph
+from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.codec import OMOPCodec
 
 

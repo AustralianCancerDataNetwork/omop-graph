@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+from omop_graph.graph.model.edges import EdgeView
 from omop_graph.graph.paths import GraphPath, PathExplanation
 from omop_graph.graph.traverse import GraphTrace, Subgraph
+
+
+def edge_text(kg, edge: EdgeView) -> str:
+    """The edge with the names of its concepts and of its relationship."""
+    subject = kg.concept_view(edge.subject_id)
+    object_ = kg.concept_view(edge.object_id)
+    return (
+        f"{subject.concept_name} -[{kg.predicate(edge.predicate_id).name}]-> {object_.concept_name}"
+    )
 
 
 def subgraph_text(kg, sg: Subgraph) -> str:

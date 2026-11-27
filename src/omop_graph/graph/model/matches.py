@@ -219,7 +219,7 @@ class LabelMatchGroupView:
                 <td>{escape(best.matched_concept_label)}</td>
                 <td>{escape(", ".join(reasons))}</td>
                 <td style="font-size:0.85em; color:#666;">
-                  {other_labels if other_labels else "-"}
+                  {other_labels if other_labels else "&mdash;"}
                 </td>
               </tr>
             """)

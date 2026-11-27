@@ -484,9 +484,18 @@ def q_children(concept_id: int) -> Select:
 
 
 def q_ancestors(concept_id: int) -> Select:
-    """Query all ancestors."""
+    """Query all ancestors, at any level but the concept itself."""
     return select(Concept_Ancestor.ancestor_concept_id).where(
-        Concept_Ancestor.descendant_concept_id == concept_id
+        Concept_Ancestor.descendant_concept_id == concept_id,
+        Concept_Ancestor.min_levels_of_separation > 0,
+    )
+
+
+def q_descendants(concept_id: int) -> Select:
+    """Query all descendants, at any level but the concept itself."""
+    return select(Concept_Ancestor.descendant_concept_id).where(
+        Concept_Ancestor.ancestor_concept_id == concept_id,
+        Concept_Ancestor.min_levels_of_separation > 0,
     )
 
 

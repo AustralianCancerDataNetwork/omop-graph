@@ -34,4 +34,4 @@ Embeddings need the optional `omop-emb` package. Only `omop_graph.graph.capabili
 
 ## Package root
 
-`omop_graph` re-exports the names most callers need, such as `KnowledgeGraph`, `EdgeFilter`, `GraphPath` and `GroundingConstraints`. Everything else is imported from its module.
+`omop_graph` and `omop_graph.graph` re-export nothing, so importing a module loads only the layers below it. Import every name from the module that defines it, such as `omop_graph.graph.kg.KnowledgeGraph`.

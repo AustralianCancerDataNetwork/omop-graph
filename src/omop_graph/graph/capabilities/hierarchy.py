@@ -1,4 +1,4 @@
-"""The ``Is a`` hierarchy: parents, children, closure and ancestry."""
+"""The ``Is a`` hierarchy: parents, children, ancestors, descendants, closure and ancestry."""
 
 from __future__ import annotations
 
@@ -24,11 +24,13 @@ from ..model.nodes import (
 # Local Application Imports
 from ..model.scope import restricted_to_ids
 from ..queries import (
+    q_ancestors,
     q_children,
     q_closure,
     q_concept_num_ancestors,
     q_concept_potential_ancestor,
     q_concept_potential_ancestors_batch,
+    q_descendants,
     q_entities,
     q_parents,
 )
@@ -37,7 +39,7 @@ from .edges import EdgesMixin
 
 
 class HierarchyMixin(EdgesMixin, ConceptsMixin):
-    """The ``Is a`` hierarchy: parents, children, closure and ancestry."""
+    """The ``Is a`` hierarchy: parents, children, ancestors, descendants, closure and ancestry."""
 
     def specificity(self, concept_id: int) -> float:
         """
@@ -103,6 +105,62 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         with self.session_factory() as session:
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
+
+    def ancestors(self, concept_id: int, isa_only: bool = False) -> tuple[int, ...]:
+        """
+        Retrieve the ancestor concept ids of a concept, at every level.
+
+        Parameters
+        ----------
+        concept_id : int
+            The concept.
+        isa_only : bool
+            If True, the ancestors are those of the strict ``Is a`` hierarchy, see
+            :meth:`closure`. Otherwise they are its ancestors in the ``concept_ancestor``
+            table, which hold classification and cohort ancestry besides ``Is a``.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The ancestor concept ids in order, without the concept itself.
+
+        Raises
+        ------
+        UnknownConceptError
+            If ``isa_only`` is True and the concept does not exist.
+        """
+        if isa_only:
+            return tuple(sorted(self.closure([concept_id])[concept_id]))
+        with self.session_factory() as session:
+            return tuple(sorted(session.execute(q_ancestors(concept_id)).scalars()))
+
+    def descendants(self, concept_id: int, isa_only: bool = False) -> tuple[int, ...]:
+        """
+        Retrieve the descendant concept ids of a concept, at every level.
+
+        Parameters
+        ----------
+        concept_id : int
+            The concept.
+        isa_only : bool
+            If True, the descendants are those of the strict ``Is a`` hierarchy, see
+            :meth:`closure`. Otherwise they are its descendants in the ``concept_ancestor``
+            table, which hold classification and cohort ancestry besides ``Is a``.
+
+        Returns
+        -------
+        tuple[int, ...]
+            The descendant concept ids in order, without the concept itself.
+
+        Raises
+        ------
+        UnknownConceptError
+            If ``isa_only`` is True and the concept does not exist.
+        """
+        if isa_only:
+            return tuple(sorted(self.closure([concept_id], HierarchyDirection.DOWN)[concept_id]))
+        with self.session_factory() as session:
+            return tuple(sorted(session.execute(q_descendants(concept_id)).scalars()))
 
     def closure(
         self,

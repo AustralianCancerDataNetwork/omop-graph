@@ -8,11 +8,11 @@ It focuses on data definitions and classification logic, not graph traversal alg
 
 Supported Relationships (``PredicateKind``)
 --------------------------------------------
-* **Hierarchy:** Structural parent/child relationships (e.g., 'is a', 'subsumes').
-* **Identity:** Semantic equivalence (e.g., 'maps to', source code to standard concept).
-* **Composition:** Part-whole/component relationships.
-* **Association:** General, non-hierarchical relationships between concepts.
-* **Attribute:** Descriptive properties (e.g., 'has dose form').
+* Hierarchy: Structural parent/child relationships (e.g., 'is a', 'subsumes').
+* Identity: Semantic equivalence (e.g., 'maps to', source code to standard concept).
+* Composition: Part-whole/component relationships.
+* Association: General, non-hierarchical relationships between concepts.
+* Attribute: Descriptive properties (e.g., 'has dose form').
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import TYPE_CHECKING
 
 from omop_alchemy.cdm.model import normalised_flag
 
@@ -30,10 +29,6 @@ from ...extensions.relationship_classification import (
     PredicateSubkind,
     Subkinds,
 )
-
-if TYPE_CHECKING:
-    from ..kg import KnowledgeGraph
-
 
 IS_A_RELATIONSHIP_ID = "Is a"
 """The relationship id of the subclass edge. Its transitive closure is the strict hierarchy."""
@@ -139,26 +134,6 @@ class EdgeView:
 
     def __repr__(self) -> str:
         return f"Edge({self.subject_id} -[{self.predicate_id}]-> {self.object_id})"
-
-    def pretty(self, kg: KnowledgeGraph) -> str:
-        """
-        Return a human-readable string representation of the edge using concept names.
-
-        Parameters
-        ----------
-        kg : KnowledgeGraph
-            The graph instance used to look up concept names.
-
-        Returns
-        -------
-        str
-            A string in the format 'Subject Name -[predicate]-> Object Name'.
-        """
-        s = kg.concept_view(self.subject_id)
-        o = kg.concept_view(self.object_id)
-        pred = kg.predicate(self.predicate_id)
-
-        return f"{s.concept_name} -[{pred.name}]-> {o.concept_name}"
 
 
 class MappingStrength(Enum):

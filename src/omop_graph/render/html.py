@@ -132,7 +132,7 @@ def explained_path_html(kg, explanation: PathExplanation) -> str:
     for s in explanation.steps:
         subj = kg.concept_view(s.step.subject.concept_id)
         obj = kg.concept_view(s.step.object.concept_id)
-        depth = str(s.traversal_depth) if s.traversal_depth is not None else "-"
+        depth = str(s.traversal_depth) if s.traversal_depth is not None else "&mdash;"
         rows.append(f"""
         <tr>
             <td>{escape(subj.concept_name)}</td>
