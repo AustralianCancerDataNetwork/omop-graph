@@ -13,6 +13,19 @@ from .omop_alchemy import HierarchyDirection, PredicateKind
 CLASSIFICATION_FILE = "predicate_classification.csv"
 MAPPING_FILE = "predicate_mapping.csv"
 KIND_COLUMNS = ["predicate_kind", "predicate_subkind"]
+GENERALISING_KINDS = frozenset(
+    {
+        PredicateKind.ATTRIBUTE.value,
+        PredicateKind.COMPOSITION.value,
+        PredicateKind.ASSOCIATION.value,
+    }
+)
+NON_GENERALISING_SUBKINDS = frozenset(
+    {
+        (PredicateKind.ASSOCIATION.value, subkind)
+        for subkind in ("Mapping", "Administrative", "Contraindication", "Value mapping")
+    }
+)
 
 
 class ClassificationDataError(ValueError):
@@ -49,6 +62,33 @@ class ClassificationReport:
                 f"are not loaded: {self.unknown_ids}"
             )
         return messages
+
+
+def parse_generalises(flags: pd.Series) -> pd.Series:
+    """Read the ``generalises`` column of ``predicate_mapping.csv`` as booleans.
+
+    Parameters
+    ----------
+    flags : pd.Series
+        The column. Empty cells and false are False, and true is True.
+
+    Returns
+    -------
+    pd.Series
+        The flags as booleans.
+
+    Raises
+    ------
+    ClassificationDataError
+        If a cell is anything but empty, true or false.
+    """
+    text = flags.astype("string").str.strip().str.lower().fillna("").replace("", "false")
+    unknown = ~text.isin(["true", "false"])
+    if unknown.any():
+        raise ClassificationDataError(
+            f"generalises must be empty, true or false, not {sorted(set(flags[unknown].map(str)))}"
+        )
+    return (text == "true").astype(bool)
 
 
 def check_classification(classification: pd.DataFrame) -> None:
@@ -90,15 +130,18 @@ def check_mapping(mapping: pd.DataFrame, classification: pd.DataFrame) -> None:
     ----------
     mapping : pd.DataFrame
         Rows of ``predicate_mapping.csv`` with ``relationship_id``, ``predicate_kind``,
-        ``predicate_subkind`` and ``direction`` columns.
+        ``predicate_subkind``, ``direction`` and ``generalises`` columns.
     classification : pd.DataFrame
         Rows of ``predicate_classification.csv``.
 
     Raises
     ------
     ClassificationDataError
-        If a row has a class and subclass that the classification does not define, or if
-        exactly the Hierarchy rows do not have an ``up`` or ``down`` direction.
+        If a row has a class and subclass that the classification does not define, if
+        exactly the Hierarchy rows do not have an ``up`` or ``down`` direction, or if a
+        relationship generalises that cannot. Only attribute, composition and association
+        relationships and upward Hierarchy relationships can, and the Mapping,
+        Administrative, Contraindication and Value mapping subkinds never do.
     """
     problems = []
     defined = set(zip(classification["predicate_kind"], classification["predicate_subkind"]))
@@ -122,6 +165,17 @@ def check_mapping(mapping: pd.DataFrame, classification: pd.DataFrame) -> None:
         problems.append(
             f"relationships that are not Hierarchy but have a direction: {unexpected.tolist()}"
         )
+    never = pd.Series(
+        [pair in NON_GENERALISING_SUBKINDS for pair in zip(*(mapping[c] for c in KIND_COLUMNS))],
+        index=mapping.index,
+    )
+    can_generalise = (
+        mapping["predicate_kind"].isin(GENERALISING_KINDS)
+        | (is_hierarchy & (directions == HierarchyDirection.UP.value))
+    ) & ~never
+    cannot = mapping.loc[mapping["generalises"] & ~can_generalise, "relationship_id"]
+    if not cannot.empty:
+        problems.append(f"relationships that cannot generalise: {cannot.tolist()}")
     if problems:
         raise ClassificationDataError(f"{MAPPING_FILE} is invalid:\n" + "\n".join(problems))
 
@@ -132,15 +186,16 @@ def read_classification_files(directory: Path) -> tuple[pd.DataFrame, pd.DataFra
     Parameters
     ----------
     directory : Path
-        Directory holding both files. A missing ``direction`` column in the mapping means no
-        relationship has a direction.
+        Directory holding both files. A missing ``direction`` or ``generalises`` column in the
+        mapping means no relationship has a direction or generalises.
 
     Returns
     -------
     tuple[pd.DataFrame, pd.DataFrame]
         The classification with ``predicate_kind``, ``predicate_subkind``, ``description``,
         ``semantics`` and ``inference`` columns, and the mapping with ``relationship_id``,
-        ``r_name``, ``predicate_kind``, ``predicate_subkind`` and ``direction`` columns.
+        ``r_name``, ``predicate_kind``, ``predicate_subkind``, ``direction`` and boolean
+        ``generalises`` columns.
 
     Raises
     ------
@@ -164,9 +219,12 @@ def read_classification_files(directory: Path) -> tuple[pd.DataFrame, pd.DataFra
     mapping = pd.read_csv(directory / MAPPING_FILE, encoding="utf-8-sig").rename(
         columns={**renames, "r_id": "relationship_id"}
     )
-    mapping = mapping.assign(direction=mapping.get("direction"))[
-        ["relationship_id", "r_name", *KIND_COLUMNS, "direction"]
-    ]
+    mapping = mapping.assign(
+        direction=mapping.get("direction"),
+        generalises=parse_generalises(
+            mapping.get("generalises", pd.Series("", index=mapping.index))
+        ),
+    )[["relationship_id", "r_name", *KIND_COLUMNS, "direction", "generalises"]]
     check_classification(classification)
     check_mapping(mapping, classification)
     return classification, mapping
@@ -182,7 +240,8 @@ def check_mapping_against_cdm(
 
     Errors are always raised: an ``r_name`` that differs from the CDM ``relationship_name``,
     a relationship mapped more than once, and a Hierarchy relationship whose CDM reverse is
-    not Hierarchy with the opposite direction. A CDM relationship without a row and a mapped
+    not Hierarchy with the opposite direction, and a relationship and its reverse that both
+    generalise. A CDM relationship without a row and a mapped
     id that is not in the CDM are findings of the report, and raise under ``strict``.
 
     Parameters
@@ -261,6 +320,12 @@ def check_mapping_against_cdm(
             problems.append(
                 f"{relationship_id!r} and its reverse {reverse_id!r} are both {direction!r}"
             )
+
+    generalising = set(mapping.loc[mapping["generalises"], "relationship_id"])
+    for relationship_id in sorted(generalising & set(relationships)):
+        reverse_id = relationships[relationship_id][1]
+        if reverse_id in generalising and relationship_id < reverse_id:
+            problems.append(f"{relationship_id!r} and its reverse {reverse_id!r} both generalise")
 
     report = ClassificationReport(
         unclassified=sorted(set(relationships) - set(ids)),

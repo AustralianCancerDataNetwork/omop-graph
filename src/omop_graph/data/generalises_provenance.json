@@ -1,0 +1,112 @@
+{
+  "vocabulary_version": "v5.0 29-AUG-26",
+  "date": "2026-11-27",
+  "settings": {
+    "basis": "holders",
+    "min_pairs": 30,
+    "min_share": 0.7,
+    "max_reverse": 0.15
+  },
+  "sample_edges": 1500,
+  "sample_pairs": 15000,
+  "sample_order": "storage order, no ordering",
+  "timeout_seconds": 120,
+  "measured": 506,
+  "proposals": {
+    "false": 408,
+    "true": 94,
+    "unmeasured": 4
+  },
+  "timed_out": [
+    "Has time aspect",
+    "RxNorm dose form of",
+    "RxNorm has dose form",
+    "Time aspect of"
+  ],
+  "sensitivity": [
+    {
+      "threshold": "min_share",
+      "value": 0.6,
+      "changed": 1,
+      "relationships": [
+        "Has scale type"
+      ]
+    },
+    {
+      "threshold": "min_share",
+      "value": 0.8,
+      "changed": 1,
+      "relationships": [
+        "Has Scale"
+      ]
+    },
+    {
+      "threshold": "min_pairs",
+      "value": 20,
+      "changed": 1,
+      "relationships": [
+        "Has process output"
+      ]
+    },
+    {
+      "threshold": "min_pairs",
+      "value": 50,
+      "changed": 3,
+      "relationships": [
+        "Has prod character",
+        "Has unit",
+        "Has variant"
+      ]
+    },
+    {
+      "threshold": "max_reverse",
+      "value": 0.1,
+      "changed": 7,
+      "relationships": [
+        "Has due to",
+        "Has inherent loc",
+        "Has interprets",
+        "Has proc site",
+        "Has relat context",
+        "Has specimen morph",
+        "Inheres in"
+      ]
+    },
+    {
+      "threshold": "max_reverse",
+      "value": 0.25,
+      "changed": 9,
+      "relationships": [
+        "Characterizes",
+        "Has MoA",
+        "Has asso finding",
+        "Has causative agent",
+        "Has finding site",
+        "Has part of",
+        "Has specimen proc",
+        "Has specimen topo",
+        "Occurs after"
+      ]
+    }
+  ],
+  "flags_changed_after_the_audit": [
+    "Has active ing",
+    "Has approach",
+    "Has asso morph",
+    "Has dose form",
+    "Has priority",
+    "Using energy"
+  ],
+  "overrides": [
+    "Characterizes",
+    "Has MoA",
+    "Has finding site",
+    "Has specimen topo",
+    "Has unit",
+    "Has variant",
+    "Occurs after",
+    "SNOMED - HOI",
+    "Subject of"
+  ],
+  "note": "overrides lists the flags that differ from the audit proposal after review. flags_changed_after_the_audit were set or cleared to follow it."
+}

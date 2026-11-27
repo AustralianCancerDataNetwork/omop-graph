@@ -80,7 +80,7 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
     """
     Extensions table: Maps standard OMOP relationship_ids to
     their parent (predicate_kind - one of PredicateKind) and more fine-grained subclasses.
-    Hierarchy relationships also have a direction.
+    Hierarchy relationships also have a direction, and a relationship may generalise.
     """
 
     __tablename__ = "relationship_mapping"
@@ -101,6 +101,9 @@ class RelationshipMapping(ReferenceTable, CDMTableBase, Base):
             create_constraint=True,
         ),
         nullable=True,
+    )
+    generalises: so.Mapped[bool] = so.mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.false()
     )
 
     # Must match RelationshipClass's schema, or SQLAlchemy silently builds a second, unlinked Table object.
@@ -146,11 +149,17 @@ def create_extension_tables(
     )
 
 
+class StaleClassificationError(RuntimeError):
+    """The relationship classification tables are missing or lack columns of the current schema."""
+
+
 @dataclass(frozen=True, slots=True)
 class RelationshipMappingElement:
     relationship_id: str
     predicate_kind: PredicateKind
     predicate_subkind: str
+    direction: HierarchyDirection | None
+    generalises: bool
 
     @classmethod
     def from_relationship_mapping_entry(cls, entry) -> "RelationshipMappingElement":
@@ -158,13 +167,57 @@ class RelationshipMappingElement:
             relationship_id=entry.relationship_id,
             predicate_kind=PredicateKind(entry.predicate_kind),
             predicate_subkind=entry.predicate_subkind,
+            direction=HierarchyDirection(entry.direction) if entry.direction else None,
+            generalises=bool(entry.generalises),
+        )
+
+
+def check_classification_schema(session: so.Session) -> None:
+    """Check that the classification tables of the database have every column of the current schema.
+
+    Parameters
+    ----------
+    session : so.Session
+        Session on the database hosting the extension tables.
+
+    Raises
+    ------
+    StaleClassificationError
+        If a table does not exist or lacks columns, which a reload with
+        ``omop-graph relationship-classification`` repairs.
+    """
+    bind = session.get_bind(RelationshipMapping)
+    translate = bind.get_execution_options().get("schema_translate_map") or {}
+    inspector = sa.inspect(bind)
+    problems = []
+    for model in (RelationshipClass, RelationshipMapping):
+        table = cast(sa.Table, model.__table__)
+        schema = translate.get(table.schema, table.schema)
+        if not inspector.has_table(table.name, schema=schema):
+            problems.append(f"table {table.name} does not exist")
+            continue
+        present = {column["name"] for column in inspector.get_columns(table.name, schema=schema)}
+        missing = [column.name for column in table.columns if column.name not in present]
+        if missing:
+            problems.append(f"table {table.name} lacks the columns {missing}")
+    if problems:
+        raise StaleClassificationError(
+            f"The relationship classification is outdated: {'; '.join(problems)}. "
+            "Run `omop-graph relationship-classification` to load it again."
         )
 
 
 def load_relationship_mapping(
     session: so.Session,
 ) -> dict[str, RelationshipMappingElement]:
-    """Load the entire RelationshipMapping table and return it as a dict keyed by relationship_id."""
+    """Load the entire RelationshipMapping table and return it as a dict keyed by relationship_id.
+
+    Raises
+    ------
+    StaleClassificationError
+        If the classification tables are missing or lack columns.
+    """
+    check_classification_schema(session)
     results = session.query(RelationshipMapping).all()
     return {
         row.relationship_id: RelationshipMappingElement.from_relationship_mapping_entry(row)

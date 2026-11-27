@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import csv
 
+import pytest
 import sqlalchemy as sa
 from fixtures.helpers import ATHENA_RELATIONSHIPS
 from oa_configurator import Role
 
 from omop_graph import cli
+from omop_graph.db.session import cdm_session_factory
 from omop_graph.extensions.omop_alchemy import (
     HierarchyDirection,
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,
+    StaleClassificationError,
+    load_relationship_mapping,
 )
 
 IS_A_AND_SUBSUMES = [
@@ -134,5 +138,22 @@ def test_packaged_classification_loads_under_strict_mode_on_duckdb(duckdb_db):
                 RelationshipMapping.predicate_kind == PredicateKind.HIERARCHY
             )
         )
+        generalising = connection.scalar(
+            sa.select(sa.func.count()).where(RelationshipMapping.generalises.is_(True))
+        )
     assert mapped == len(athena)
     assert with_direction == hierarchy > 0
+    assert generalising > 0
+
+
+def test_an_older_duckdb_classification_raises_one_error_naming_the_columns(duckdb_db):
+    _seed_duckdb_vocabulary(duckdb_db.committing_engine)
+    cli.relationship_classification(resolved=duckdb_db.resolved)
+    with duckdb_db.committing_engine.begin() as connection:
+        connection.execute(sa.text("ALTER TABLE relationship_mapping DROP COLUMN generalises"))
+
+    with (
+        cdm_session_factory(resolved=duckdb_db.resolved)() as session,
+        pytest.raises(StaleClassificationError, match="lacks the columns.*generalises"),
+    ):
+        load_relationship_mapping(session)

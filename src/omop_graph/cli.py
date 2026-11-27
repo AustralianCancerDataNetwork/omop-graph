@@ -138,7 +138,7 @@ def _load_relationship_classification(
         logger.warning(warning)
     df_rel_mapping_to_export = df_rel_mapping.loc[
         ~df_rel_mapping["relationship_id"].isin(report.unknown_ids),
-        ["relationship_id", "predicate_kind", "predicate_subkind", "direction"],
+        ["relationship_id", "predicate_kind", "predicate_subkind", "direction", "generalises"],
     ]
 
     loader_backend = resolve_backend(engine, staging_schema_tag=STAGING_SCHEMA)

@@ -99,6 +99,7 @@ _shadow_relationship_mapping = sa.Table(
     ),
     sa.Column("predicate_subkind", sa.String(20), primary_key=True),
     sa.Column("direction", sa.String(4), nullable=True),
+    sa.Column("generalises", sa.Boolean, nullable=False, server_default=sa.false()),
     schema=Role.PRIMARY.value,
 )
 

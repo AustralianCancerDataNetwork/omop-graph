@@ -16,6 +16,7 @@ Association,Diagnostic,Evidence linking tests/procedures to findings,Diagnostic 
 Association,Administrative,"Operational, billing, or system tracking links",ETL/Reporting,System mapping
 Association,Mapping,Cross-vocabulary or historical mapping without a guaranteed 1:1 correspondence,Weak mapping,Low-confidence linking
 Association,Contraindication,"Contraindicated pairing of a drug with an agent, class or effect",Safety check,Contraindication screening
+Association,Value mapping,"Value, unit, number, operator or type that completes a Maps to",Part of a two-part map,Read with Maps to
 Attribute,Clinical,"Qualifiers like severity, status, or course",Phenotyping,Attribute enrichment
 Attribute,Anatomical,Spatial location or morphology,Spatial localization,Anatomical qualification
 Attribute,Measurement,"Quantitative units, scales, and properties",Quantitative analysis,Scale interpretation
