@@ -31,6 +31,7 @@ class _KG:
         synonym: bool = False,
         concept_filter=None,
         sort: bool = False,
+        limit: int | None = None,
     ):
         key = _key(match_kind, synonym)
         concept_ids = self.case.hits.get(key, [])

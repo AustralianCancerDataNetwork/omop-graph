@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from functools import cached_property
+from itertools import islice
 
 from oaklib.datamodels.vocabulary import (
     DEPRECATED_PREDICATE,
@@ -344,6 +345,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         owl_type: str | None = None,
         *,
         concept_filter: ConceptFilter | None = None,
+        limit: int | None = None,
     ) -> Iterable[CURIE]:
         """
         Iterate over the concepts, or the relationships, of the graph.
@@ -361,7 +363,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             as predicate CURIEs. The other OWL types have no entities here and yield nothing.
         concept_filter : ConceptFilter | None
             Replaces the adapter's ``concept_filter`` for this call and is used as given,
-            so ``filter_obsoletes`` does not apply.
+            so ``filter_obsoletes`` does not apply. A scope that must not set ``limit``.
+        limit : int | None
+            The most entities to yield. Concepts come in the order of their ids.
 
         Returns
         -------
@@ -377,10 +381,14 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             raise ValueError(
                 f"{owl_type!r} is not an OWL type; expected one of {OWL_META_CLASSES}."
             )
-        return self._entities(filter_obsoletes, owl_type, concept_filter)
+        return islice(self._entities(filter_obsoletes, owl_type, concept_filter, limit), limit)
 
     def _entities(
-        self, filter_obsoletes: bool, owl_type: str | None, concept_filter: ConceptFilter | None
+        self,
+        filter_obsoletes: bool,
+        owl_type: str | None,
+        concept_filter: ConceptFilter | None,
+        limit: int | None,
     ) -> Iterator[CURIE]:
         """Yield the concepts, or the relationships, of the graph."""
         if owl_type == OWL_OBJECT_PROPERTY:
@@ -389,7 +397,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         if owl_type not in (None, OWL_CLASS):
             return
 
-        for cid in self.kg.entities(concept_filter or self._scope(filter_obsoletes=True)):
+        for cid in self.kg.entities(concept_filter or self._scope(filter_obsoletes=True), limit):
             yield self.codec.concept_curie(cid)
         if concept_filter is None and not filter_obsoletes:
             yield from self.obsoletes()

@@ -23,7 +23,7 @@ from ..queries import (
     q_concept_name_match,
     q_concept_vocabulary_ids,
 )
-from ..scope import ALL_CONCEPTS, restricted_to_ids, scope_only
+from ..scope import ALL_CONCEPTS, _require_scope, limited, restricted_to_ids
 from .enumeration import EnumerationMixin
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 class SearchMixin(EnumerationMixin):
     """Lookup of concepts by name and the validation of search constraints."""
 
-    @scope_only
     def concept_lookup(
         self,
         query_term: str,
@@ -54,9 +53,11 @@ class SearchMixin(EnumerationMixin):
         synonym : bool
             If True, searches in Concept_Synonym instead of Concept.
         concept_filter : ConceptFilter, optional
-            Additional filters for domain/vocabulary.
+            Additional filters for domain/vocabulary. It is a scope and must not set
+            ``limit``.
         sort : bool
-            Whether to order the matches by quality.
+            Whether to order the matches by quality. Without it, a limit keeps the lowest
+            concept ids.
         limit : int, optional
             The most matches to read.
         """
@@ -89,7 +90,7 @@ class SearchMixin(EnumerationMixin):
                 raise
 
             if limit is not None:
-                cn = cn.limit(limit)
+                cn = cn.limit(limit) if sort else limited(cn, limit)
             matches = tuple(
                 LabelMatch(
                     input_query=input_query_term,
@@ -104,7 +105,6 @@ class SearchMixin(EnumerationMixin):
             )
         return matches
 
-    @scope_only
     def search(
         self,
         term: str,
@@ -131,7 +131,8 @@ class SearchMixin(EnumerationMixin):
         synonyms : bool
             If True, also match synonyms.
         concept_filter : ConceptFilter
-            The concepts that can match. By default every concept.
+            The concepts that can match, a scope that must not set ``limit``. By default
+            every concept.
         limit : int, optional
             The most concepts to yield. Zero or less yields none. A concept with several
             matching synonyms counts once, so more rows are read until the limit is met
@@ -144,6 +145,7 @@ class SearchMixin(EnumerationMixin):
         int
             Concept ids.
         """
+        _require_scope(concept_filter)
         found: dict[int, None] = {}
 
         def full() -> bool:

@@ -35,4 +35,4 @@ pipeline = ResolverPipeline(
 candidates = pipeline.resolve(kg, "Hodgkin lymphoma", constraints=concept_filter)
 ```
 
-The pipeline is used by [`ground_term`](grounding.md), together with the `GroundingConstraints` described there. The `constraints` argument of `resolve` is a `ConceptFilter`, which restricts the candidates by domain, vocabulary and standard or active status.
+The pipeline is used by [`ground_term`](grounding.md), together with the `GroundingConstraints` described there. The `constraints` argument of `resolve` is a `ConceptFilter`, which restricts the candidates by domain, vocabulary and standard or active status. It must not set `limit`. The most candidates each resolver returns is the `limit` argument of `resolve`, and for the embedding resolver it is the number of nearest concepts.

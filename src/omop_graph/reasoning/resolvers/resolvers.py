@@ -92,6 +92,7 @@ class CandidateResolver:
         query: str,
         constraints: ConceptFilter | None = None,
         sort: bool = False,
+        limit: int | None = None,
         **kwargs,
     ) -> tuple[LabelMatch, ...]:
         """
@@ -104,9 +105,11 @@ class CandidateResolver:
         query : str
             The input query to search for.
         constraints : ConceptFilter, optional
-            Filters for domain/vocabulary.
+            Filters for domain/vocabulary. A scope that must not set ``limit``.
         sort : bool, default False
             Whether to sort LabelMatch results by their internal relevance ranking.
+        limit : int, optional
+            The most matches to return.
 
         Returns
         -------
@@ -120,6 +123,7 @@ class CandidateResolver:
                 synonym=self.synonym,
                 concept_filter=constraints,
                 sort=sort,
+                limit=limit,
             )
         )
 
@@ -128,6 +132,7 @@ class CandidateResolver:
         kg: KnowledgeGraph,
         query: str,
         constraints: ConceptFilter | None = None,
+        limit: int | None = None,
         **kwargs,
     ) -> Iterable[CandidateHit]:
         """
@@ -140,15 +145,17 @@ class CandidateResolver:
         query : str
             The input query.
         constraints : ConceptFilter, optional
-            Filters for concepts to consider in the search. Also limits the number of candidates returned
-            using the `limit` field.
+            Filters for the concepts to consider in the search. A scope that must not set
+            ``limit``.
+        limit : int, optional
+            The most candidates to return.
 
         Returns
         -------
         Iterable[CandidateHit]
             The formatted candidate hits.
         """
-        matches = self.get_matches(kg, query, constraints=constraints, **kwargs)
+        matches = self.get_matches(kg, query, constraints=constraints, limit=limit, **kwargs)
         hits = [
             CandidateHit(
                 concept_id=m.matched_concept_id,
@@ -240,6 +247,7 @@ class EmbeddingResolver(CandidateResolver):
         query: str,
         constraints: ConceptFilter | None = None,
         sort: bool = False,
+        limit: int | None = None,
         query_embedding: np.ndarray | None = None,
         **kwargs,
     ) -> tuple[LabelMatch, ...]:
@@ -261,10 +269,8 @@ class EmbeddingResolver(CandidateResolver):
         try:
             matches = kg.nearest_concepts(
                 query_embedding,
-                concept_filter=constraints
-                if isinstance(constraints, ConceptFilter)
-                else ALL_CONCEPTS,
-                k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
+                concept_filter=constraints if constraints is not None else ALL_CONCEPTS,
+                k=limit,
             )
         except EmbeddingModelNotRegisteredError as error:
             logger.info(error)

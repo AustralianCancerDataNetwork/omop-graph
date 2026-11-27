@@ -155,7 +155,7 @@ class _RecordingKnowledgeGraph:
         self.scopes: list[ConceptFilter] = []
         self.obsolete_scopes: list[ConceptFilter] = []
 
-    def entities(self, concept_filter: ConceptFilter):
+    def entities(self, concept_filter: ConceptFilter, limit: int | None = None):
         self.scopes.append(concept_filter)
         return iter(())
 
@@ -191,6 +191,28 @@ def test_an_explicit_concept_filter_replaces_the_standing_scope_as_given() -> No
     list(adapter.entities(concept_filter=explicit))
 
     assert kg.scopes == [explicit]
+
+
+def test_a_limit_keeps_the_concepts_with_the_lowest_ids_and_counts_the_obsoletes(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    adapter = OMOPAlchemyImplementation(kg=mock_cdm_kg)
+    by_id = sorted(adapter.entities(), key=lambda curie: int(curie.split(":")[1]))
+
+    assert list(adapter.entities(limit=2)) == by_id[:2]
+    assert len(list(adapter.entities(filter_obsoletes=False, limit=len(by_id) + 1))) == (
+        len(list(adapter.entities(filter_obsoletes=False)))
+    )
+    assert len(list(adapter.entities(filter_obsoletes=False, limit=1))) == 1
+
+
+def test_an_explicit_concept_filter_that_sets_a_limit_is_refused(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    adapter = OMOPAlchemyImplementation(kg=mock_cdm_kg)
+
+    with pytest.raises(ValueError, match="Pass limit to the method"):
+        list(adapter.entities(concept_filter=ConceptFilter(limit=1)))
 
 
 @pytest.mark.parametrize(

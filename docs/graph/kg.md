@@ -77,9 +77,9 @@ if matches:
 
 #### Scopes
 
-A `ConceptFilter` has two roles. `entities`, `roots`, `leaves`, `singletons` and `obsolete_concepts` take it as a query, where `concept_ids` and `limit` select and truncate the answer. Every other method that takes a `concept_filter` takes it as a scope, a membership rule that decides which concepts are reported or counted.
+Every `concept_filter` a method takes is a scope, a membership rule that decides which concepts are reported or counted.
 
-* A scope that sets `limit` is refused when the method is called, since a limit truncates a list and cannot decide membership.
+* A scope that sets `limit` is refused, since a limit truncates a list and cannot decide membership. For a generator the error comes with its first item. The methods that truncate take a `limit` parameter of their own: `entities`, `roots`, `leaves`, `singletons`, `obsolete_concepts`, `concept_lookup` and `search`. With a `limit`, the enumerators return the concepts with the lowest ids, so the same ones come back on every run.
 * A scope that sets `concept_ids` restricts what is reported to those ids.
 * A scope only filters what is reported. A walk still passes through the concepts it excludes, and the concepts you ask about are always reported.
 * The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, and the counts and lookups to `ALL_CONCEPTS`.

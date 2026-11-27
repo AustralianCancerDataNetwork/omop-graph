@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from fixtures.embedding_store import sqlite_vec_reader
 from fixtures.helpers import curie
 from fixtures.hierarchy_cdm import CANCER, LUNG, LUNG_CANCER, hierarchy_cdm
 from oa_configurator.resolver import ResolvedModel, ResolvedProvider
@@ -65,6 +66,9 @@ def store() -> Mock:
         LUNG_CANCER: np.array([1.0, 0.0]),
         CANCER: np.array([1.0, 1.0]),
     }
+    interface.backend.get_stored_concept_ids.side_effect = lambda *, model_name, concept_filter: (
+        {LUNG_CANCER, CANCER} & set(concept_filter.concept_ids)
+    )
     interface.get_similar_concepts.return_value = (
         (
             SimpleNamespace(concept_id=LUNG_CANCER, similarity=1.0),
@@ -142,6 +146,17 @@ def test_the_stored_vectors_are_those_of_the_concepts_that_have_one(sessions, st
     assert adapter.embedding_similarity(curie(LUNG_CANCER), curie(CANCER), model=STORED) == (
         pytest.approx(1 / np.sqrt(2))
     )
+
+
+def test_a_real_store_serves_the_concepts_that_have_a_vector_and_skips_the_others(sessions) -> None:
+    kg = KnowledgeGraph(sessions, emb_config=_configuration(write=False))
+    kg._emb = sqlite_vec_reader({LUNG_CANCER: [1.0, 0.0], CANCER: [1.0, 1.0]})
+    adapter = OMOPAlchemyImplementation(kg=kg)
+
+    ids, matrix = adapter.entity_embeddings([curie(LUNG_CANCER), curie(LUNG), curie(CANCER)])
+
+    assert ids == [curie(LUNG_CANCER), curie(CANCER)]
+    assert matrix.shape == (2, 2)
 
 
 def test_the_stored_model_is_searched_through_its_index_without_the_query_concept(

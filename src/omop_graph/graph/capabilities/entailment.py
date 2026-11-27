@@ -17,9 +17,9 @@ from ..edges import (
     EdgeFilter,
 )
 from ..queries import DEFAULT_CONCEPT_FILTER
+from ..scope import _require_scope
 
 # Local Application Imports
-from ..scope import scope_only
 from .enumeration import EnumerationMixin
 from .hierarchy import HierarchyMixin
 
@@ -36,7 +36,6 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             if mapping.generalises
         )
 
-    @scope_only
     def entailed_relationships(
         self,
         subjects: tuple[int, ...] | None,
@@ -87,6 +86,8 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         """
         if subjects is None and objects is None:
             raise ValueError("Entailed relationships need subjects or objects")
+        if concept_filter is not None:
+            _require_scope(concept_filter)
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
             return
@@ -152,7 +153,6 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             )
         )
 
-    @scope_only
     def all_entailed_relationships(
         self,
         edge_filter: EdgeFilter | None = None,

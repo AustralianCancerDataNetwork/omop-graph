@@ -44,7 +44,7 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `parent_ids` | `tuple[int, ...] \| None` | required | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). With `None` grounding runs unconstrained: candidates are standardised through identity edges but not checked against a hierarchy, which gives coverage but less disambiguation. |
-| `concept_filter` | `ConceptFilter \| None` | required | Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit). |
+| `concept_filter` | `ConceptFilter \| None` | required | Filters applied to the initial resolver query (concept IDs, domain, vocabulary and standard/active flags). It is a scope, so it must not set `limit`. |
 | `max_depth` | `int` | `6` | With `parent_ids`, the largest `concept_ancestor` distance between a standard concept and a parent, and the identity hops to the standard concept are not capped. Without `parent_ids`, the largest number of identity hops from the candidate to a standard concept. |
 | `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. Currently locked: `__post_init__` raises `ValueError` for any value other than exactly `frozenset({PredicateKind.IDENTITY})` — not yet configurable in practice, despite being a normal dataclass field. |
 
@@ -60,7 +60,6 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | `require_standard` | `bool` | `False` | When `True`, only standard concepts (`'S'`) are returned. |
 | `include_classification` | `bool` | `False` | With `require_standard`, also admits classification concepts (`'C'`). |
 | `require_active` | `bool` | `False` | When `True`, only concepts with an unset `invalid_reason` are returned. |
-| `limit` | `int` | `None` | Cap the number of candidates returned from the resolver query. |
 
 ### Example
 
@@ -92,6 +91,8 @@ results = ground_term(
 ```
 
 `ground_term` also accepts an optional `context: str | None` folded into the on-demand query-embedding text (used only when `query_embedding` is omitted and the KG has a write-capable embedding config); see [`ground_term`'s own docstring](../reference/ref_grounding.md) for details.
+
+`max_candidates` caps the ranked results of all resolvers together. To cap each resolver on its own, call the resolvers one by one with `limit`, see [Resolvers](resolvers.md).
 
 ## Scoring
 It usually happens that multiple viable candidates are extracted for each search term, especially if multiple resolvers are used. To rank these extracted concepts, we devised a scoring algorithm, which is detailed in the following:

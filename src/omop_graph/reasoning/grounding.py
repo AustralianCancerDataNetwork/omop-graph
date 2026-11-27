@@ -198,7 +198,8 @@ def ground_term(
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
-        Limit for the number of candidates returned. If None, returns all candidates.
+        The most candidates to return, taken from the ranked candidates of all resolvers
+        together. If None, returns all candidates.
     context : str, optional
         Additional free-form context folded into the on-demand query-embedding
         text. Has no effect when ``query_embedding`` is supplied directly.

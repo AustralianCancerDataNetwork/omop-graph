@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Concatenate, cast
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from ..scope import ALL_CONCEPTS, scope_only
+from ..scope import ALL_CONCEPTS, _require_scope
 from ._core import GraphCore
 
 if TYPE_CHECKING:
@@ -374,7 +374,6 @@ class EmbeddingsMixin(GraphCore):
         writer = cast("EmbeddingWriterInterface", self.emb)
         return writer.embed_texts((text,), role=EmbeddingRole.QUERY)
 
-    @scope_only
     @requires_embeddings
     def nearest_concepts(
         self,
@@ -393,7 +392,8 @@ class EmbeddingsMixin(GraphCore):
             embedding, or a text, which is embedded first and so needs a write-capable
             configuration.
         concept_filter : ConceptFilter
-            The concepts that can match. ``limit`` is ignored, use k.
+            The concepts that can match, a scope that must not set ``limit``. Use k to
+            truncate.
         k : int, optional
             The most matches to return, the default of the store when omitted.
 
@@ -411,6 +411,7 @@ class EmbeddingsMixin(GraphCore):
         ValueError
             If a vector query holds more than one vector.
         """
+        _require_scope(concept_filter)
         if isinstance(query, str):
             self._check_embedding_writer("Searching by text")
             query = self.embed_text(query)
@@ -433,8 +434,29 @@ class EmbeddingsMixin(GraphCore):
 
         Concepts without a stored embedding are left out.
         """
+        stored = self._stored_concept_ids(concept_ids)
+        return dict(self._registered().get_embeddings_by_concept_ids(stored)) if stored else {}
+
+    def _stored_concept_ids(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
+        """
+        Return the concepts among concept_ids that have a stored embedding, in order.
+
+        The store raises for a requested concept without a vector, so the vectors are only
+        requested for the concepts this lookup returns.
+        """
+        from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
+
         ids = tuple(dict.fromkeys(concept_ids))
-        return dict(self._registered().get_embeddings_by_concept_ids(ids)) if ids else {}
+        if not ids:
+            return ()
+        interface = self._registered()
+        stored: set[int] = set()
+        for batch in self.batches(ids):
+            stored |= interface.backend.get_stored_concept_ids(
+                model_name=interface.canonical_model_name,
+                concept_filter=EmbeddingConceptFilter(concept_ids=batch),
+            )
+        return tuple(concept_id for concept_id in ids if concept_id in stored)
 
     @requires_embeddings
     def concepts_without_embedding(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
@@ -443,7 +465,7 @@ class EmbeddingsMixin(GraphCore):
         if not ids:
             return ()
         missing = self.emb.get_concepts_without_embedding(
-            concept_filter=ConceptFilter(concept_ids=ids, limit=len(ids))
+            concept_filter=ConceptFilter(concept_ids=ids)
         )
         return tuple(missing)
 
@@ -464,7 +486,7 @@ class EmbeddingsMixin(GraphCore):
             return ()
         writer = cast("EmbeddingWriterInterface", self.emb)
         missing = writer.get_concepts_without_embedding(
-            concept_filter=ConceptFilter(concept_ids=ids, limit=len(ids))
+            concept_filter=ConceptFilter(concept_ids=ids)
         )
         if not missing:
             return ()
@@ -473,7 +495,7 @@ class EmbeddingsMixin(GraphCore):
             concept_ids=missing_ids,
             concept_texts=tuple(row.concept_name for row in missing.values()),
             concept_meta=fetch_cdm_concepts_for_filter(
-                ConceptFilter(concept_ids=missing_ids, limit=len(missing_ids)),
+                ConceptFilter(concept_ids=missing_ids),
                 cdm_session_factory=self.session_factory,
             ),
         )

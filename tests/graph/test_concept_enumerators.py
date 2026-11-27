@@ -11,7 +11,7 @@ def test_entities_follow_the_given_concept_filter(mock_cdm_kg: KnowledgeGraph) -
     assert list(mock_cdm_kg.entities(ConceptFilter(concept_ids=(KIDNEY_CARCINOMA,)))) == [
         KIDNEY_CARCINOMA
     ]
-    assert len(list(mock_cdm_kg.entities(ConceptFilter(limit=1)))) == 1
+    assert list(mock_cdm_kg.entities(limit=2)) == sorted(mock_cdm_kg.entities())[:2]
     assert list(mock_cdm_kg.entities(ConceptFilter(domains=("No such domain",)))) == []
 
 

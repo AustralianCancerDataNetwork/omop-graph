@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
+from fixtures.embedding_store import sqlite_vec_reader
 from oa_configurator.resolver import ResolvedModel, ResolvedProvider
 from omop_alchemy.cdm.query import ConceptFilter
 from omop_emb import MetricType
@@ -272,6 +273,13 @@ def test_several_query_vectors_are_rejected() -> None:
         kg.nearest_concepts(np.zeros((2, 3)))
 
 
+def test_nearest_concepts_refuses_a_scope_that_sets_a_limit() -> None:
+    kg = _bare_graph(_configuration(), _registered_interface())
+
+    with pytest.raises(ValueError, match="Pass limit to the method"):
+        kg.nearest_concepts(np.zeros((1, 3)), concept_filter=ConceptFilter(limit=3))
+
+
 def test_an_unregistered_model_raises_instead_of_returning_nothing() -> None:
     interface = Mock()
     interface.is_model_registered.return_value = False
@@ -282,31 +290,42 @@ def test_an_unregistered_model_raises_instead_of_returning_nothing() -> None:
         kg.nearest_concepts(np.zeros((1, 3)))
 
 
+def _real_graph(vectors: dict[int, list[float]]) -> KnowledgeGraph:
+    """A graph over a real sqlite-vec store, which raises for a concept it does not hold."""
+    return _bare_graph(_configuration(), sqlite_vec_reader(vectors))
+
+
+def test_a_real_store_refuses_a_concept_without_a_vector() -> None:
+    reader = sqlite_vec_reader({1: [1.0, 0.0]})
+
+    with pytest.raises(ValueError, match="not found"):
+        reader.get_embeddings_by_concept_ids((1, 2))
+
+
 def test_the_stored_embeddings_are_those_the_store_has() -> None:
-    interface = _registered_interface()
-    interface.get_embeddings_by_concept_ids.return_value = {1: np.array([1.0, 0.0])}
-    kg = _bare_graph(_configuration(), interface)
+    kg = _real_graph({1: [1.0, 0.0], 3: [0.0, 1.0]})
 
     assert set(kg.concept_embeddings([1, 2, 1])) == {1}
-    assert interface.get_embeddings_by_concept_ids.call_args.args == ((1, 2),)
+    assert set(kg.concept_embeddings([2, 3, 1])) == {1, 3}
+    assert kg.concept_embeddings([2]) == {}
     assert kg.concept_embeddings([]) == {}
 
 
+def test_the_stored_ids_are_asked_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    kg = _real_graph({1: [1.0, 0.0], 2: [0.0, 1.0], 3: [1.0, 1.0]})
+    monkeypatch.setattr(KnowledgeGraph, "LOOKUP_BATCH_SIZE", 2)
+
+    assert set(kg.concept_embeddings([1, 2, 3, 4])) == {1, 2, 3}
+
+
 def test_embedding_similarity_is_the_cosine_of_the_stored_vectors() -> None:
-    interface = _registered_interface()
-    interface.get_embeddings_by_concept_ids.return_value = {
-        1: np.array([1.0, 0.0]),
-        2: np.array([1.0, 1.0]),
-    }
-    kg = _bare_graph(_configuration(), interface)
+    kg = _real_graph({1: [1.0, 0.0], 2: [1.0, 1.0]})
 
     assert kg.embedding_similarity(1, 2) == pytest.approx(1 / np.sqrt(2))
 
 
 def test_embedding_similarity_names_the_concepts_without_an_embedding() -> None:
-    interface = _registered_interface()
-    interface.get_embeddings_by_concept_ids.return_value = {1: np.array([1.0, 0.0])}
-    kg = _bare_graph(_configuration(), interface)
+    kg = _real_graph({1: [1.0, 0.0]})
 
     with pytest.raises(MissingEmbeddingError) as raised:
         kg.embedding_similarity(1, 2)
@@ -428,7 +447,7 @@ def test_grounding_scores_nothing_without_an_embedding_store_or_matches() -> Non
 # the resolver
 
 
-def test_embedding_resolver_threads_constraints_limit_as_k(
+def test_embedding_resolver_passes_its_limit_as_k_and_its_constraints_as_the_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(resolvers_ext, "HAS_OMOP_EMB", True)
@@ -436,10 +455,14 @@ def test_embedding_resolver_threads_constraints_limit_as_k(
     kg.has_embeddings = True
     kg.nearest_concepts.return_value = ()
     kg.concept_views.return_value = ()
-    constraints = ConceptFilter(domains=("Condition",), limit=5)
+    constraints = ConceptFilter(domains=("Condition",))
 
     resolvers_ext.EmbeddingResolver().get_matches(
-        kg=kg, query="kidney cancer", constraints=constraints, query_embedding=np.zeros((1, 3))
+        kg=kg,
+        query="kidney cancer",
+        constraints=constraints,
+        limit=5,
+        query_embedding=np.zeros((1, 3)),
     )
 
     call = kg.nearest_concepts.call_args

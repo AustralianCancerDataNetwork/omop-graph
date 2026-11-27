@@ -32,7 +32,7 @@ from ..queries import (
 )
 
 # Local Application Imports
-from ..scope import restricted_to_ids, scope_only
+from ..scope import restricted_to_ids
 from .concepts import ConceptsMixin
 from .edges import EdgesMixin
 
@@ -80,7 +80,6 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             children = tuple(session.execute(q_children(concept_id)).scalars())
         return children
 
-    @scope_only
     def closure(
         self,
         concept_ids: Iterable[int],

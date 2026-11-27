@@ -1,30 +1,27 @@
 """
 Concept filters used as scopes, and the helpers that derive one scope from another.
 
-A ``ConceptFilter`` plays two roles. As a query, it selects and truncates concepts, so
-``concept_ids`` and ``limit`` both mean something. As a scope, it is a membership rule that
-decides which concepts a method reports or counts, so ``limit``, which truncates a list,
-means nothing. A scope never changes which concepts a walk passes through, and never removes
-a concept the caller asked about.
+A ``ConceptFilter`` given to a graph method is a scope, a membership rule that decides which
+concepts the method reports or counts. ``limit`` truncates a list and decides no membership,
+so a scope that sets it is refused, and the methods that truncate take a ``limit`` parameter.
+A scope never changes which concepts a walk passes through, and never removes a concept the
+caller asked about.
 """
 
 from __future__ import annotations
 
-import functools
-import inspect
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import replace
 
+from omop_alchemy.cdm.model.vocabulary import Concept
 from omop_alchemy.cdm.query import ConceptFilter
+from sqlalchemy import Select
 
 ALL_CONCEPTS = ConceptFilter()
 """A scope that selects every concept."""
 
-SCOPE_ONLY_MARKER = "__scope_only__"
-"""Attribute set on the methods that take their ``concept_filter`` as a scope."""
 
-
-def require_scope(concept_filter: ConceptFilter) -> ConceptFilter:
+def _require_scope(concept_filter: ConceptFilter) -> ConceptFilter:
     """
     Check that a concept filter can be used as a scope.
 
@@ -41,34 +38,59 @@ def require_scope(concept_filter: ConceptFilter) -> ConceptFilter:
     Raises
     ------
     ValueError
-        If it sets ``limit``, which truncates a list and so cannot decide membership.
+        If it sets ``limit``, which truncates a list and so cannot decide membership. The
+        methods that truncate take a ``limit`` parameter of their own.
     """
     if concept_filter.limit is not None:
         raise ValueError(
-            "A concept_filter used as a scope must not set limit, which truncates a result "
-            "and does not decide which concepts belong."
+            "A concept_filter is a scope and must not set limit, which truncates a result "
+            "and does not decide which concepts belong. Pass limit to the method instead."
         )
     return concept_filter
 
 
-def scope_only[**P, R](method: Callable[P, R]) -> Callable[P, R]:
+def _apply_scope(stmt: Select, concept_filter: ConceptFilter) -> Select:
     """
-    Mark a method whose ``concept_filter`` argument is a scope, and check it on every call.
+    Restrict a statement to the concepts a scope selects.
 
-    The check runs when the method is called, also for a generator method, so a bad scope
-    fails at the call and not at the first item.
+    Parameters
+    ----------
+    stmt : Select
+        A statement whose FROM clause includes ``Concept``.
+    concept_filter : ConceptFilter
+        The scope.
+
+    Returns
+    -------
+    Select
+        The statement with the conditions of the scope.
+
+    Raises
+    ------
+    ValueError
+        If the scope sets ``limit``.
     """
-    signature = inspect.signature(method)
+    return _require_scope(concept_filter).apply(stmt)
 
-    @functools.wraps(method)
-    def checked(*args: P.args, **kwargs: P.kwargs) -> R:
-        value = signature.bind(*args, **kwargs).arguments.get("concept_filter")
-        if value is not None:
-            require_scope(value)
-        return method(*args, **kwargs)
 
-    setattr(checked, SCOPE_ONLY_MARKER, True)
-    return checked
+def limited(stmt: Select, limit: int | None) -> Select:
+    """
+    Truncate a statement to the concepts with the lowest ids.
+
+    Parameters
+    ----------
+    stmt : Select
+        A statement whose FROM clause includes ``Concept``.
+    limit : int, optional
+        The most rows to read. None reads them all, in no particular order.
+
+    Returns
+    -------
+    Select
+        The statement ordered by concept id and cut to ``limit`` rows, so the same rows
+        are read on every run.
+    """
+    return stmt if limit is None else stmt.order_by(Concept.concept_id).limit(limit)
 
 
 def restricted_to_ids(concept_filter: ConceptFilter, concept_ids: Iterable[int]) -> ConceptFilter:

@@ -51,7 +51,7 @@ from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
 from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
 from .edges import EdgeFilter
-from .scope import ALL_CONCEPTS
+from .scope import ALL_CONCEPTS, _apply_scope, limited
 from .statistics import Grouping
 
 
@@ -272,7 +272,7 @@ def q_concept_name_match(
     if concept_filter:
         if not isinstance(concept_filter, ConceptFilter):
             raise TypeError("concept_filter must be an instance of ConceptFilter")
-        base_stmt = concept_filter.apply(base_stmt)
+        base_stmt = _apply_scope(base_stmt, concept_filter)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
     return base_stmt
@@ -314,7 +314,7 @@ def q_concept_name_ilike(
     if concept_filter:
         if not isinstance(concept_filter, ConceptFilter):
             raise TypeError("concept_filter must be an instance of ConceptFilter")
-        base_stmt = concept_filter.apply(base_stmt)
+        base_stmt = _apply_scope(base_stmt, concept_filter)
     if sort:
         base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
     return base_stmt
@@ -366,7 +366,7 @@ def q_concept_name_fulltext(
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
     if concept_filter:
-        stmt = concept_filter.apply(stmt)
+        stmt = _apply_scope(stmt, concept_filter)
 
     if sort:
         stmt = stmt.order_by(
@@ -616,9 +616,11 @@ DEFAULT_CONCEPT_FILTER = ConceptFilter(
 """Concepts the graph enumerators list by default: active, standard or classification."""
 
 
-def q_entities(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
-    """Query concept IDs using OMOP Alchemy's canonical concept semantics."""
-    return concept_filter.apply(select(Concept.concept_id))
+def q_entities(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, limit: int | None = None
+) -> Select:
+    """Query the ids of the concepts concept_filter selects, the lowest ``limit`` of them if set."""
+    return limited(_apply_scope(select(Concept.concept_id), concept_filter), limit)
 
 
 def q_concept_count(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
@@ -629,13 +631,14 @@ def q_concept_count(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> S
 def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
     """Count the concepts concept_filter selects by vocabulary, domain and validity."""
     deprecated = ~Concept.is_valid_expr()
-    return concept_filter.apply(
+    return _apply_scope(
         select(
             Concept.vocabulary_id,
             Concept.domain_id,
             deprecated.label("deprecated"),
             func.count().label("n"),
-        ).group_by(Concept.vocabulary_id, Concept.domain_id, deprecated)
+        ).group_by(Concept.vocabulary_id, Concept.domain_id, deprecated),
+        concept_filter,
     )
 
 
@@ -645,7 +648,7 @@ def _subjects_in_scope(
     """Restrict stmt to the rows whose concept ``concept_filter`` selects, joining only when it restricts."""
     if concept_filter == ALL_CONCEPTS:
         return stmt
-    return concept_filter.apply(stmt.join(Concept, Concept.concept_id == concept_id))
+    return _apply_scope(stmt.join(Concept, Concept.concept_id == concept_id), concept_filter)
 
 
 def q_relationship_counts(concept_filter: ConceptFilter) -> Select:
@@ -739,12 +742,15 @@ def q_domains() -> Select:
 
 
 def q_obsolete_concepts(
-    include_updated: bool = True, concept_filter: ConceptFilter | None = None
+    include_updated: bool = True,
+    concept_filter: ConceptFilter | None = None,
+    limit: int | None = None,
 ) -> Select:
     """
     Query the ids of deleted concepts, and of updated ones when include_updated.
 
     A concept_filter narrows them, by its vocabularies and domains and its other fields.
+    With limit, the lowest ids are read.
     """
     reasons = [InvalidReasonFlag.DELETED]
     if include_updated:
@@ -752,7 +758,7 @@ def q_obsolete_concepts(
     stmt = select(Concept.concept_id).where(
         normalised_flag_expr(Concept.invalid_reason).in_(reasons)
     )
-    return concept_filter.apply(stmt) if concept_filter else stmt
+    return limited(_apply_scope(stmt, concept_filter) if concept_filter else stmt, limit)
 
 
 def _has_parent(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
@@ -794,7 +800,9 @@ def _has_child(edge_filter: EdgeFilter | None) -> ColumnElement[bool]:
 
 
 def q_roots(
-    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, edge_filter: EdgeFilter | None = None
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+    edge_filter: EdgeFilter | None = None,
+    limit: int | None = None,
 ) -> Select:
     """
     Query for root concepts (no parents).
@@ -802,11 +810,13 @@ def q_roots(
     Parents are the closure's level 1 ancestors, or with edge_filter the targets of
     outgoing edges it selects.
     """
-    return q_entities(concept_filter).where(~_has_parent(edge_filter))
+    return limited(q_entities(concept_filter).where(~_has_parent(edge_filter)), limit)
 
 
 def q_leaves(
-    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, edge_filter: EdgeFilter | None = None
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+    edge_filter: EdgeFilter | None = None,
+    limit: int | None = None,
 ) -> Select:
     """
     Query for leaf concepts (no children).
@@ -814,14 +824,18 @@ def q_leaves(
     Children are the closure's level 1 descendants, or with edge_filter the sources of
     incoming edges it selects.
     """
-    return q_entities(concept_filter).where(~_has_child(edge_filter))
+    return limited(q_entities(concept_filter).where(~_has_child(edge_filter)), limit)
 
 
 def q_singletons(
-    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, edge_filter: EdgeFilter | None = None
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+    edge_filter: EdgeFilter | None = None,
+    limit: int | None = None,
 ) -> Select:
     """Query for singleton concepts (no parents and no children). See :func:`q_roots`."""
-    return q_entities(concept_filter).where(~_has_parent(edge_filter), ~_has_child(edge_filter))
+    return limited(
+        q_entities(concept_filter).where(~_has_parent(edge_filter), ~_has_child(edge_filter)), limit
+    )
 
 
 def q_concept_domain_ids() -> Select:

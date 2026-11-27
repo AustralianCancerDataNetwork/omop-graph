@@ -13,7 +13,7 @@ from ..queries import (
     q_synonym_counts,
     q_synonym_counts_by,
 )
-from ..scope import ALL_CONCEPTS, scope_only
+from ..scope import ALL_CONCEPTS
 from ..statistics import ConceptCount, ConceptCounts, Grouping, GroupStatistics, SynonymCounts
 from ._core import GraphCore
 
@@ -21,7 +21,6 @@ from ._core import GraphCore
 class StatisticsMixin(GraphCore):
     """Counts, computed by the database and never by reading the concepts."""
 
-    @scope_only
     def concept_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> ConceptCounts:
         """Count the concepts in ``concept_filter`` by vocabulary, domain and validity."""
         with self.session_factory() as session:
@@ -32,7 +31,6 @@ class StatisticsMixin(GraphCore):
                 )
             )
 
-    @scope_only
     def relationship_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> dict[str, int]:
         """
         Count the active relationships of each relationship id.
@@ -54,7 +52,6 @@ class StatisticsMixin(GraphCore):
                 for row in session.execute(q_relationship_counts(concept_filter))
             }
 
-    @scope_only
     def synonym_counts(self, concept_filter: ConceptFilter = ALL_CONCEPTS) -> SynonymCounts:
         """Count the synonyms of the concepts in ``concept_filter``, and their distinct names."""
         with self.session_factory() as session:
