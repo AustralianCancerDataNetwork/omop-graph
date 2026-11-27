@@ -14,18 +14,22 @@ The queries cover:
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Literal, cast
+import re
+from collections.abc import Callable
+from typing import cast
 
 from omop_alchemy.backends import (
     resolve_backend,
 )
+from omop_alchemy.cdm.model import InvalidReasonFlag, normalised_flag_expr
 from omop_alchemy.cdm.model.vocabulary import (
     Concept,
     Concept_Ancestor,
     Concept_Relationship,
     Concept_Synonym,
+    Domain,
     Relationship,
+    Vocabulary,
 )
 from omop_alchemy.cdm.query import ConceptFilter
 from sqlalchemy import (
@@ -39,11 +43,16 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    true,
+    union_all,
 )
-from sqlalchemy.orm import aliased
-from sqlalchemy.sql import Select
+from sqlalchemy.orm import InstrumentedAttribute, aliased
+from sqlalchemy.sql import ColumnElement, CompoundSelect, Select
 
-from ..extensions.omop_alchemy import RelationshipMapping
+from ..extensions.omop_alchemy import HierarchyDirection, RelationshipMapping
+from .edges import EdgeFilter
+from .scope import _apply_scope, limited
+from .statistics import Grouping
 
 
 def _concept_has_standardness_expr():
@@ -70,8 +79,8 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
         1. Concepts carrying a standardness flag first
            (``_concept_has_standardness_expr()``: ``'S'`` or ``'C'``, tolerating
            blank/whitespace-only values as unset). Classification concepts share
-           tier 0 with standard ones deliberately — this orders *match
-           candidates*, where a classification node is a legitimate result, not
+           tier 0 with standard ones deliberately, as this orders match
+           candidates, where a classification node is a legitimate result, not
            mapping targets.
         2. Active concepts first (``Concept.is_valid_expr()``: invalid_reason unset,
            i.e. NULL or blank/whitespace-only). CDM v5.4 permits only "D"/"U"/NULL,
@@ -102,6 +111,17 @@ def _concept_match_order_terms(name_expr, rank_expr=None):
         )
     )
     return tuple(terms)
+
+
+def _scoped_and_sorted(
+    stmt: Select, name_expr, concept_filter, sort: bool, rank_expr=None
+) -> Select:
+    """Apply the scope of a label query, and order its matches by quality when sort."""
+    if concept_filter:
+        stmt = _apply_scope(stmt, concept_filter)
+    if sort:
+        stmt = stmt.order_by(*_concept_match_order_terms(name_expr, rank_expr))
+    return stmt
 
 
 def q_concept_view(concept_id: int) -> Select:
@@ -142,13 +162,14 @@ def q_concept_views(concept_ids: tuple[int, ...], sort: bool = True) -> Select:
     concept_ids : tuple[int, ...]
         A tuple of OMOP Concept IDs.
     sort : bool, default True
-        If True, preserve the input order using a CASE statement.
+        If True, order the concepts as label matches are ordered, see
+        :func:`_concept_match_order_terms`.
         If False, do not add an ORDER BY clause (DB returns arbitrary order).
 
     Returns
     -------
     Select
-        A statement selecting standard concept columns, optionally ordered by input list.
+        A statement selecting standard concept columns, optionally ordered by match quality.
     """
     stmt = select(
         Concept.concept_id,
@@ -168,9 +189,9 @@ def q_concept_views(concept_ids: tuple[int, ...], sort: bool = True) -> Select:
     return stmt
 
 
-def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:
+def q_concepts_by_code(vocabulary_id: str, concept_code: str) -> Select:
     """
-    Query for a Concept ID given its source vocabulary and code.
+    Query the id and validity of every concept with a vocabulary and code.
 
     Parameters
     ----------
@@ -182,11 +203,15 @@ def q_concept_id_by_code(vocabulary_id: str, concept_code: str) -> Select:
     Returns
     -------
     Select
-        A statement selecting just the concept_id.
+        A statement selecting ``concept_id`` and ``is_valid``, ordered by concept id.
     """
-    return select(Concept.concept_id).where(
-        Concept.vocabulary_id == vocabulary_id,
-        Concept.concept_code == concept_code,
+    return (
+        select(Concept.concept_id, Concept.is_valid_expr().label("is_valid"))
+        .where(
+            Concept.vocabulary_id == vocabulary_id,
+            Concept.concept_code == concept_code,
+        )
+        .order_by(Concept.concept_id)
     )
 
 
@@ -226,7 +251,7 @@ def q_concept_synonym() -> Select:
 
 def q_concept_name_match(
     query_concept_name: str,
-    search_constraint: ConceptFilter | None = None,
+    concept_filter: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -237,7 +262,7 @@ def q_concept_name_match(
     ----------
     query_concept_name : str
         The concept name to match.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -255,20 +280,15 @@ def q_concept_name_match(
         )
     else:
         base_stmt = q_concept_name().where(func.lower(name_expr) == func.lower(query_concept_name))
-    if search_constraint:
-        if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError("search_constraint must be an instance of ConceptFilter")
-        base_stmt = search_constraint.apply(base_stmt)
-    if sort:
-        base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
-    return base_stmt
+    return _scoped_and_sorted(base_stmt, name_expr, concept_filter, sort)
 
 
 def q_concept_name_ilike(
     query_concept_name: str,
-    search_constraint: ConceptFilter | None = None,
+    concept_filter: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
+    anchored: bool = False,
 ) -> Select:
     """
     Query for partial matches on concept names using ILIKE.
@@ -276,11 +296,13 @@ def q_concept_name_ilike(
     Parameters
     ----------
     query_concept_name : str
-        The concept name to search for.
-    search_constraint : ConceptFilter, optional
+        The concept name to search for. ``%``, ``_`` and ``\\`` match themselves.
+    concept_filter : ConceptFilter, optional
         Additional filters.
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
+    anchored : bool, optional
+        If True, the name must start with the query instead of containing it.
 
     Returns
     -------
@@ -289,27 +311,19 @@ def q_concept_name_ilike(
     """
     name_expr = Concept_Synonym.concept_synonym_name if synonym else Concept.concept_name
 
-    if "%" in query_concept_name:
-        raise ValueError("query_concept_name should not contain wildcards like '%'.")
-
-    if synonym:
-        base_stmt = q_concept_synonym().where(name_expr.ilike(f"%{query_concept_name}%"))
-    else:
-        base_stmt = q_concept_name().where(name_expr.ilike(f"%{query_concept_name}%"))
-    if search_constraint:
-        if not isinstance(search_constraint, ConceptFilter):
-            raise TypeError("search_constraint must be an instance of ConceptFilter")
-        base_stmt = search_constraint.apply(base_stmt)
-    if sort:
-        base_stmt = base_stmt.order_by(*_concept_match_order_terms(name_expr))
-    return base_stmt
+    escaped = re.sub(r"([\\%_])", r"\\\1", query_concept_name)
+    pattern = f"{escaped}%" if anchored else f"%{escaped}%"
+    base_stmt = (q_concept_synonym() if synonym else q_concept_name()).where(
+        name_expr.ilike(pattern, escape="\\")
+    )
+    return _scoped_and_sorted(base_stmt, name_expr, concept_filter, sort)
 
 
 def q_concept_name_fulltext(
     query_concept_name: str,
     *,
     engine: Engine | Connection,
-    search_constraint: ConceptFilter | None = None,
+    concept_filter: ConceptFilter | None = None,
     synonym: bool = False,
     sort: bool = True,
 ) -> Select:
@@ -328,7 +342,7 @@ def q_concept_name_fulltext(
         The concept name to search for.
     engine : Engine or Connection
         Bindable whose schema_translate_map locates the vocabulary schema.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Additional filters (domain, vocab).
     synonym : bool, optional
         Whether to search in synonyms instead of concept names.
@@ -350,134 +364,98 @@ def q_concept_name_fulltext(
 
     stmt = stmt.where(vector.op("@@")(query))  # Hits the GIN index instantly
 
-    if search_constraint:
-        stmt = search_constraint.apply(stmt)
+    return _scoped_and_sorted(stmt, name_expr, concept_filter, sort, func.ts_rank(vector, query))
 
-    if sort:
-        stmt = stmt.order_by(
-            *_concept_match_order_terms(name_expr, rank_expr=func.ts_rank(vector, query))
+
+def q_all_predicates() -> Select:
+    """Query all defined relationships."""
+    return select(
+        Relationship.relationship_id,
+        Relationship.relationship_name,
+        Relationship.reverse_relationship_id,
+    )
+
+
+def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Select:
+    """Apply the validity, date, domain and relationship id conditions of edge_filter.
+
+    The kind and subkind fields are not applied here: the caller resolves them to
+    ``predicate_ids`` first, since the classification is not in the SQL tables.
+    """
+    if edge_filter.active_only:
+        stmt = stmt.where(Concept_Relationship.is_valid_expr())
+
+    if edge_filter.on is not None:
+        stmt = stmt.where(
+            and_(
+                Concept_Relationship.valid_start_date <= edge_filter.on,
+                Concept_Relationship.valid_end_date >= edge_filter.on,
+            )
         )
+
+    if edge_filter.within_domain:
+        Subj = aliased(Concept)
+        Obj = aliased(Concept)
+        stmt = stmt.join(Subj, Concept_Relationship.concept_id_1 == Subj.concept_id)
+        stmt = stmt.join(Obj, Concept_Relationship.concept_id_2 == Obj.concept_id)
+        stmt = stmt.where(Subj.domain_id == Obj.domain_id)
+
+    if edge_filter.predicate_ids is not None:
+        stmt = stmt.where(Concept_Relationship.relationship_id.in_(edge_filter.predicate_ids))
 
     return stmt
 
 
-def q_predicate_name(relationship_id: str) -> Select:
-    """Query for the human-readable name of a relationship."""
-    return select(Relationship.relationship_name).where(
-        Relationship.relationship_id == relationship_id
-    )
-
-
-def q_all_predicates() -> Select:
-    """Query for all defined relationships."""
-    return select(
-        Relationship.relationship_id,
-        Relationship.relationship_name,
-        Relationship.reverse_relationship_id,
-        Relationship.is_hierarchical_relationship_expr().label("is_hierarchical"),
-        Relationship.is_ancestry_defining_expr().label("defines_ancestry"),
-    )
-
-
-def q_predicate_row(relationship_id: str) -> Select:
-    """Query for a specific relationship definition."""
-    return select(
-        Relationship.relationship_id,
-        Relationship.relationship_name,
-        Relationship.reverse_relationship_id,
-        Relationship.is_hierarchical_relationship_expr().label("is_hierarchical"),
-        Relationship.is_ancestry_defining_expr().label("defines_ancestry"),
-    ).where(Relationship.relationship_id == relationship_id)
-
-
-def q_predicate_row_with_ancestry(relationship_id: str) -> Select:
-    """
-    Query a predicate and its reverse to determine directionality.
-
-    This joins the Relationship table with itself to determine if the relationship
-    points 'up' (towards ancestors) or 'down' (towards descendants).
-
-    Returns
-    -------
-    Select
-        Columns: relationship_id, relationship_name, reverse_relationship_id,
-        is_hierarchical, anc_down, anc_up.
-    """
-    return q_all_predicates_with_ancestry().where(Relationship.relationship_id == relationship_id)
-
-
-def q_all_predicates_with_ancestry() -> Select:
-    """Query all predicates with derived ancestry direction flags."""
-    Rel = Relationship
-    Rev = aliased(Relationship)
-
-    return select(
-        Rel.relationship_id,
-        Rel.relationship_name,
-        Rel.reverse_relationship_id,
-        Rel.is_hierarchical_relationship_expr().label("is_hierarchical"),
-        Rel.is_ancestry_defining_expr().label("anc_down"),
-        Rev.is_ancestry_defining_expr().label("anc_up"),
-    ).join(Rev, Rel.reverse_relationship_id == Rev.relationship_id)
-
-
 def q_edges(
-    concept_ids: tuple[int, ...] | int,
-    direction: Literal["in", "out"],
-    predicate_ids: frozenset[str] | None = None,
-    active_only: bool = False,
-    on: date | None = None,
-    within_domain: bool = False,
+    subjects: tuple[int, ...] | None,
+    objects: tuple[int, ...] | None,
+    edge_filter: EdgeFilter,
+    *,
+    detailed: bool = False,
     ordered: bool = False,
 ) -> Select:
-    """Query edges for a batch of concept IDs, in either direction.
+    """
+    Query the edges between some subjects and some objects.
 
     Parameters
     ----------
-    direction : {"in", "out"}
-        Whether to query incoming or outgoing edges for ``concept_ids``.
+    subjects : tuple[int, ...], optional
+        Only edges that start at one of these concepts, or any when None.
+    objects : tuple[int, ...], optional
+        Only edges that end at one of these concepts, or any when None.
+    edge_filter : EdgeFilter
+        Conditions on the edges. Its kind and subkind fields are ignored, see
+        :func:`_filter_concept_relationships`.
+    detailed : bool, default=False
+        If True, also select the validity dates and the deprecation reason, which an
+        edge view needs. Without them the rows are (subject_id, predicate_id, object_id).
     ordered : bool, default=False
         If True, order by source concept, target concept, and relationship ID
         to make results reproducible. If False, row order is unspecified and
         may differ between runs and backends.
     """
-    if isinstance(concept_ids, int):
-        concept_ids = (concept_ids,)
-
-    Subj = aliased(Concept)
-    Obj = aliased(Concept)
-
-    stmt = select(
+    details = (
+        (
+            Concept_Relationship.valid_start_date,
+            Concept_Relationship.valid_end_date,
+            Concept_Relationship.invalid_reason,
+        )
+        if detailed
+        else ()
+    )
+    columns = (
         Concept_Relationship.concept_id_1.label("subject_id"),
         Concept_Relationship.relationship_id.label("predicate_id"),
         Concept_Relationship.concept_id_2.label("object_id"),
-        Concept_Relationship.valid_start_date,
-        Concept_Relationship.valid_end_date,
-        Concept_Relationship.invalid_reason,
+        *details,
     )
+    stmt = _filter_concept_relationships(select(*columns), edge_filter)
 
-    if active_only:
-        stmt = stmt.where(Concept_Relationship.is_valid_expr())
-        if on is not None:
-            stmt = stmt.where(
-                and_(
-                    Concept_Relationship.valid_start_date <= on,
-                    Concept_Relationship.valid_end_date >= on,
-                )
-            )
+    if subjects is not None:
+        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
 
-    if within_domain:
-        stmt = stmt.join(Subj, Concept_Relationship.concept_id_1 == Subj.concept_id)
-        stmt = stmt.join(Obj, Concept_Relationship.concept_id_2 == Obj.concept_id)
-        stmt = stmt.where(Subj.domain_id == Obj.domain_id)
-
-    if direction == "in":
-        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(concept_ids))
-    elif direction == "out":
-        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
-
-    if predicate_ids:  # Exact ID's
-        stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicate_ids))
+    if objects is not None:
+        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
 
     if ordered:
         stmt = stmt.order_by(
@@ -512,124 +490,353 @@ def q_ancestors(concept_id: int) -> Select:
     )
 
 
-def q_relationships(
-    subjects: tuple[int, ...] | None,
-    predicates: tuple[str, ...] | None,
-    objects: tuple[int, ...] | None,
+def q_closure(
+    concept_ids: tuple[int, ...], direction: HierarchyDirection, edge_filter: EdgeFilter
 ) -> Select:
+    """
+    Query the transitive closure of the edges of edge_filter as (origin, reached) pairs.
 
-    stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
+    Follows the selected edges repeatedly from each concept. ``UP`` goes from the subject of
+    an edge to its object, as from a concept to its ``Is a`` ancestors, and ``DOWN`` the
+    other way. A concept is never reached from itself. Its kind and subkind fields are
+    ignored, see :func:`_filter_concept_relationships`.
+    """
+    near, far = (
+        (Concept_Relationship.concept_id_1, Concept_Relationship.concept_id_2)
+        if direction is HierarchyDirection.UP
+        else (Concept_Relationship.concept_id_2, Concept_Relationship.concept_id_1)
+    )
+    seed = _filter_concept_relationships(
+        select(near.label("origin"), far.label("reached")).where(near.in_(concept_ids)),
+        edge_filter,
+    )
+    closure = seed.cte("closure", recursive=True)
+    step = _filter_concept_relationships(
+        select(closure.c.origin, far)
+        .select_from(closure)
+        .join(Concept_Relationship, near == closure.c.reached),
+        edge_filter,
+    )
+    closure = closure.union(step)
+    return select(closure.c.origin, closure.c.reached).where(closure.c.origin != closure.c.reached)
+
+
+def _sharing(end: InstrumentedAttribute) -> ColumnElement[int]:
+    """
+    Count the valid relationships of the same id that have the same concept at one end.
+
+    Self relationships are not counted, since they are not mappings. The count is of the
+    row that is correlated, so it is read for each row of the query it is used in.
+    """
+    Other = aliased(Concept_Relationship)
+    other_end = (
+        Other.concept_id_1 if end is Concept_Relationship.concept_id_1 else Other.concept_id_2
+    )
+    return (
+        select(func.count())
+        .select_from(Other)
+        .where(
+            other_end == end,
+            Other.relationship_id == Concept_Relationship.relationship_id,
+            Other.concept_id_1 != Other.concept_id_2,
+            normalised_flag_expr(Other.invalid_reason).is_(None),
+        )
+        .scalar_subquery()
     )
 
-    if subjects:
-        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
 
-    if predicates:
-        stmt = stmt.where(Concept_Relationship.relationship_id.in_(predicates))
+def q_mappings(
+    concept_ids: tuple[int, ...] | None, edge_filter: EdgeFilter, source: str | None = None
+) -> Select | CompoundSelect:
+    """
+    Query the edges of edge_filter with the vocabularies of their concepts.
 
-    if objects:
-        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
+    Parameters
+    ----------
+    concept_ids : tuple[int, ...] | None
+        Only edges starting from these concepts, or all edges when None.
+    edge_filter : EdgeFilter
+        Conditions on the edges, see :func:`q_edges`. Edges from a concept to itself are
+        left out.
+    source : str, optional
+        Only edges with this vocabulary on either side. It is two queries, one for each
+        side, since a condition on either side of the join cannot use an index.
+    """
 
-    return stmt
+    def edges(side: Callable[[type[Concept], type[Concept]], ColumnElement[bool]]) -> Select:
+        Subject = aliased(Concept)
+        Object = aliased(Concept)
+        stmt = (
+            select(
+                Concept_Relationship.concept_id_1.label("subject_id"),
+                Concept_Relationship.relationship_id.label("predicate_id"),
+                Concept_Relationship.concept_id_2.label("object_id"),
+                Concept_Relationship.valid_start_date,
+                Subject.vocabulary_id.label("subject_source"),
+                Object.vocabulary_id.label("object_source"),
+                _sharing(Concept_Relationship.concept_id_2).label("subjects_of_object"),
+                _sharing(Concept_Relationship.concept_id_1).label("objects_of_subject"),
+            )
+            .join(Subject, Subject.concept_id == Concept_Relationship.concept_id_1)
+            .join(Object, Object.concept_id == Concept_Relationship.concept_id_2)
+            .where(Concept_Relationship.concept_id_1 != Concept_Relationship.concept_id_2)
+            .where(side(Subject, Object))
+        )
+        stmt = _filter_concept_relationships(stmt, edge_filter)
+        if concept_ids is not None:
+            stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
+        return stmt
+
+    if source is None:
+        return edges(lambda subject, object_: true())
+    return union_all(
+        edges(lambda subject, object_: subject.vocabulary_id == source),
+        edges(
+            lambda subject, object_: and_(
+                object_.vocabulary_id == source, subject.vocabulary_id != source
+            )
+        ),
+    )
+
+
+DEFAULT_CONCEPT_FILTER = ConceptFilter(
+    require_standard=True, include_classification=True, require_active=True
+)
+"""Concepts the graph enumerators list by default: active, standard or classification."""
 
 
 def q_entities(
-    domain: str | None, standard_only: bool = True, filter_obsoletes: bool = True
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER, limit: int | None = None
 ) -> Select:
-    """Query concept IDs using OMOP Alchemy's canonical concept semantics."""
-    return ConceptFilter(
-        domains=(domain,) if domain else None,
-        require_standard=standard_only,
-        include_classification=True,
-        require_active=filter_obsoletes,
-    ).apply(select(Concept.concept_id))
+    """Query the ids of the concepts concept_filter selects, the lowest ``limit`` of them if set."""
+    return limited(_apply_scope(select(Concept.concept_id), concept_filter), limit)
 
 
-def q_concept_filtered(vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
-    """Helper query for selecting standard concepts filtered by vocab/domain."""
-    return ConceptFilter(
-        domains=(domain_id,) if domain_id else None,
-        vocabularies=(vocabulary_id,) if vocabulary_id else None,
-        require_standard=True,
-        include_classification=True,
-    ).apply(select(Concept.concept_id))
+def q_concept_count(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
+    """Count the concepts concept_filter selects."""
+    return select(func.count()).select_from(q_entities(concept_filter).subquery())
 
 
-def q_concept_synonym_filtered(concept_id: int) -> Select:
-    """Query synonyms for a specific concept."""
-    stmt = q_concept_synonym()
-    return stmt.where(Concept_Synonym.concept_id == concept_id)
+def q_concept_counts(concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER) -> Select:
+    """Count the concepts concept_filter selects by vocabulary, domain and validity."""
+    deprecated = ~Concept.is_valid_expr()
+    return _apply_scope(
+        select(
+            Concept.vocabulary_id,
+            Concept.domain_id,
+            deprecated.label("deprecated"),
+            func.count().label("n"),
+        ).group_by(Concept.vocabulary_id, Concept.domain_id, deprecated),
+        concept_filter,
+    )
 
 
-def q_singletons(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
+def _subjects_in_scope(
+    stmt: Select,
+    concept_id: InstrumentedAttribute[int],
+    concept_filter: ConceptFilter,
+    always_join: bool = False,
+) -> Select:
+    """Restrict stmt to the rows whose concept ``concept_filter`` selects, joining only when needed."""
+    if concept_filter.is_empty() and not always_join:
+        return stmt
+    return _apply_scope(stmt.join(Concept, Concept.concept_id == concept_id), concept_filter)
+
+
+def _grouping_column(grouping: Grouping) -> InstrumentedAttribute[str]:
+    """The concept column that concepts are grouped by."""
+    return Concept.vocabulary_id if grouping is Grouping.VOCABULARY else Concept.domain_id
+
+
+def q_relationship_counts(
+    concept_filter: ConceptFilter, grouping: Grouping | None = None
+) -> Select:
     """
-    Query for singleton concepts (no parents, no children).
-    Uses NOT EXISTS subqueries on the ancestor table.
+    Count the active relationships by id, from the concepts ``concept_filter`` selects.
+
+    With a grouping the rows also have the ``group`` of the subject concept.
     """
-    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
+    group = [] if grouping is None else [_grouping_column(grouping).label("group")]
+    stmt = (
+        select(*group, Concept_Relationship.relationship_id, func.count().label("n"))
+        .select_from(Concept_Relationship)
+        .where(Concept_Relationship.is_valid_expr())
+        .group_by(*group, Concept_Relationship.relationship_id)
+    )
+    return _subjects_in_scope(
+        stmt, Concept_Relationship.concept_id_1, concept_filter, grouping is not None
+    )
 
-    return stmt.where(
-        ~exists(
+
+def q_synonym_counts(concept_filter: ConceptFilter, grouping: Grouping | None = None) -> Select:
+    """
+    Count the synonyms, and the distinct synonym names, of the concepts ``concept_filter`` selects.
+
+    With a grouping the rows also have the ``group`` of the concept.
+    """
+    group = [] if grouping is None else [_grouping_column(grouping).label("group")]
+    stmt = (
+        select(
+            *group,
+            func.count().label("statements"),
+            func.count(Concept_Synonym.concept_synonym_name.distinct()).label("distinct"),
+        )
+        .select_from(Concept_Synonym)
+        .group_by(*group)
+    )
+    return _subjects_in_scope(
+        stmt, Concept_Synonym.concept_id, concept_filter, grouping is not None
+    )
+
+
+def q_synonyms(concept_ids: tuple[int, ...], language_concept_id: int | None = None) -> Select:
+    """
+    Query the synonyms of concept_ids with their language concept, ordered by name.
+
+    Only the synonyms in the language language_concept_id are selected when it is given.
+    """
+    stmt = (
+        select(
+            Concept_Synonym.concept_id,
+            Concept_Synonym.concept_synonym_name.label("name"),
+            Concept_Synonym.language_concept_id,
+        )
+        .where(Concept_Synonym.concept_id.in_(concept_ids))
+        .order_by(Concept_Synonym.concept_id, Concept_Synonym.concept_synonym_name)
+    )
+    if language_concept_id is not None:
+        stmt = stmt.where(Concept_Synonym.language_concept_id == language_concept_id)
+    return stmt
+
+
+def q_synonym_language_ids() -> Select:
+    """Query the distinct language concept ids used by synonyms."""
+    return select(Concept_Synonym.language_concept_id).distinct()
+
+
+def q_vocabularies() -> Select:
+    """Query all vocabularies."""
+    return select(
+        Vocabulary.vocabulary_id,
+        Vocabulary.vocabulary_name,
+        Vocabulary.vocabulary_reference,
+        Vocabulary.vocabulary_version,
+        Vocabulary.vocabulary_concept_id,
+    )
+
+
+def q_domains() -> Select:
+    """Query all domains with their concept id."""
+    return select(Domain.domain_id, Domain.domain_concept_id)
+
+
+def q_obsolete_concepts(
+    include_updated: bool = True,
+    concept_filter: ConceptFilter | None = None,
+    limit: int | None = None,
+) -> Select:
+    """
+    Query the ids of deleted concepts, and of updated ones when include_updated.
+
+    A concept_filter narrows them, by its vocabularies and domains and its other fields.
+    With limit, the lowest ids are read.
+    """
+    reasons = [InvalidReasonFlag.DELETED]
+    if include_updated:
+        reasons.append(InvalidReasonFlag.UPDATED)
+    stmt = select(Concept.concept_id).where(
+        normalised_flag_expr(Concept.invalid_reason).in_(reasons)
+    )
+    return limited(_apply_scope(stmt, concept_filter) if concept_filter else stmt, limit)
+
+
+def _has_neighbour(
+    edge_filter: EdgeFilter | None, direction: HierarchyDirection
+) -> ColumnElement[bool]:
+    """
+    Correlated test that a concept has a parent (UP) or a child (DOWN).
+
+    Without edge_filter the neighbour is in the closure at level 1, otherwise it is the
+    other end of an edge the filter selects.
+    """
+    up = direction is HierarchyDirection.UP
+    if edge_filter is None:
+        return exists(
             select(1).where(
-                and_(
-                    Concept_Ancestor.descendant_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
+                (
+                    Concept_Ancestor.descendant_concept_id
+                    if up
+                    else Concept_Ancestor.ancestor_concept_id
                 )
+                == Concept.concept_id,
+                Concept_Ancestor.min_levels_of_separation == 1,
             )
         )
-    ).where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
+    own_end = Concept_Relationship.concept_id_1 if up else Concept_Relationship.concept_id_2
+    return exists(
+        _filter_concept_relationships(
+            select(1).select_from(Concept_Relationship).where(own_end == Concept.concept_id),
+            edge_filter,
         )
     )
 
 
-def q_roots(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
-    """Query for root concepts (no parents)."""
-    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
-    return stmt.where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.descendant_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
-        )
+def q_roots(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+    edge_filter: EdgeFilter | None = None,
+    limit: int | None = None,
+) -> Select:
+    """
+    Query for root concepts (no parents).
+
+    Parents are the closure's level 1 ancestors, or with edge_filter the targets of
+    outgoing edges it selects.
+    """
+    return limited(
+        q_entities(concept_filter).where(~_has_neighbour(edge_filter, HierarchyDirection.UP)), limit
     )
 
 
-def q_leaves(*, vocabulary_id: str | None = None, domain_id: str | None = None) -> Select:
-    """Query for leaf concepts (no children)."""
-    stmt = q_concept_filtered(vocabulary_id=vocabulary_id, domain_id=domain_id)
-    return stmt.where(
-        ~exists(
-            select(1).where(
-                and_(
-                    Concept_Ancestor.ancestor_concept_id == Concept.concept_id,
-                    Concept_Ancestor.min_levels_of_separation == 1,
-                )
-            )
-        )
+def q_leaves(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+    edge_filter: EdgeFilter | None = None,
+    limit: int | None = None,
+) -> Select:
+    """
+    Query for leaf concepts (no children).
+
+    Children are the closure's level 1 descendants, or with edge_filter the sources of
+    incoming edges it selects.
+    """
+    return limited(
+        q_entities(concept_filter).where(~_has_neighbour(edge_filter, HierarchyDirection.DOWN)),
+        limit,
     )
 
 
-def q_concept_domain_ids() -> Select:
-    """Query distinct domain IDs."""
-    return select(Concept.domain_id).distinct().where(Concept.domain_id.is_not(None))
+def q_singletons(
+    concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
+    edge_filter: EdgeFilter | None = None,
+    limit: int | None = None,
+) -> Select:
+    """Query for singleton concepts (no parents and no children). See :func:`q_roots`."""
+    return limited(
+        q_entities(concept_filter).where(
+            ~_has_neighbour(edge_filter, HierarchyDirection.UP),
+            ~_has_neighbour(edge_filter, HierarchyDirection.DOWN),
+        ),
+        limit,
+    )
 
 
-def q_concept_vocabulary_ids() -> Select:
-    """Query distinct vocabulary IDs."""
-    return select(Concept.vocabulary_id).distinct().where(Concept.vocabulary_id.is_not(None))
+def q_domain_ids() -> Select:
+    """Query the domain IDs of the domain table."""
+    return select(Domain.domain_id)
+
+
+def q_vocabulary_ids() -> Select:
+    """Query the vocabulary IDs of the vocabulary table."""
+    return select(Vocabulary.vocabulary_id)
 
 
 def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:

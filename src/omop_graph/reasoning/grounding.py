@@ -16,29 +16,27 @@ the full grounding pipeline:
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.emb import (
-    HAS_OMOP_EMB,
-    semantic_similarity,
-    try_get_embedding_writer_interface,
-)
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.capabilities.embeddings import EmbeddingModelNotRegisteredError
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.graph.paths import (
-    StandardConcept,
-    find_standard_paths,
-)
+from omop_graph.graph.paths import StandardConcept, find_standard_paths
 from omop_graph.graph.scoring import StandardConceptWithScore, score_standard_concepts
 from omop_graph.reasoning.resolvers import (
-    CandidateHit,
     EmbeddingResolver,
     ResolverPipeline,
 )
+
+if TYPE_CHECKING:
+    from omop_emb import NearestConceptMatch
 
 logger = logging.getLogger(__name__)
 
@@ -56,20 +54,34 @@ class GroundingConstraints:
         standardized via identity hops, but without ancestor verification. This
         trades disambiguation power for coverage. Results are ranked by relevance
         and identity-hop distance only, not by proximity to a known hierarchy branch.
-    search_constraint : ConceptFilter, optional
+    concept_filter : ConceptFilter, optional
         Domain and Vocabulary restrictions for the initial resolution phase.
     max_depth : int, optional
-        Maximum allowed distance in the hierarchy between a candidate and a parent.
-        Defaults to ``6``.
+        With ``parent_ids``, the maximum ``concept_ancestor`` distance between a
+        standard concept and a parent. Without it, the maximum number of identity hops
+        from the candidate to a standard concept. Defaults to ``6``.
     predicate_kinds : frozenset[PredicateKind], optional
         Edge types allowed during BFS traversal. Defaults to IDENTITY only, which
         covers the OMOP "Maps to" and "Non-standard to Standard" relationships. Allowing
         HIERARCHY or ASSOCIATION edges would traverse parent-of and cross-domain links,
         expanding candidates to unrelated concepts and diluting grounding results.
+
+    Notes
+    -----
+    ``max_depth`` has a different meaning in each mode:
+
+    - With ``parent_ids`` it caps ``min_levels_of_separation`` in ``concept_ancestor``.
+      The identity hops from the candidate to the standard concept are not capped.
+    - Without ``parent_ids`` it caps the identity hops and no ancestor check is made.
+
+    ``min_levels_of_separation`` is the length of the shortest chain of ancestry-defining
+    relationships. ``concept_ancestor`` merges all such relationship types and does not
+    record which one produced a level, so one level is not necessarily one ``Is a`` step.
+    The same value is ``StandardConcept.separation``, which ranks the results.
     """
 
     parent_ids: tuple[int, ...] | None
-    search_constraint: ConceptFilter | None
+    concept_filter: ConceptFilter | None
     max_depth: int = 6
     predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY})
 
@@ -106,6 +118,60 @@ def _query_text_with_context(query: str, context: str | None) -> str:
     return f"{query}\n\n{context}"
 
 
+def _embedding_matches(
+    kg: KnowledgeGraph,
+    standard_concepts: Sequence[StandardConcept],
+    query_embedding: np.ndarray,
+) -> tuple[tuple[NearestConceptMatch, ...], ...] | None:
+    """
+    Score standard concepts against a query embedding, as the matches of a single query.
+
+    Concepts without a stored embedding are embedded first when the KG computes missing
+    embeddings, and are otherwise left unscored.
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The knowledge graph holding the embedding store.
+    standard_concepts : Sequence[StandardConcept]
+        The concepts to score.
+    query_embedding : np.ndarray
+        The query vector, of shape ``(1, D)``.
+
+    Returns
+    -------
+    tuple[tuple[NearestConceptMatch, ...], ...] | None
+        The matches of the one query, or None when the KG has no embedding store, its model
+        is not registered or nothing matches.
+    """
+    if not kg.has_embeddings:
+        logger.info("The KG has no embedding store. Skipping similarity calculation.")
+        return None
+    concept_ids = tuple(dict.fromkeys(sc.concept_id for sc in standard_concepts))
+    missing = kg.concepts_without_embedding(concept_ids)
+    if missing and kg.compute_missing_embeddings:
+        logger.debug(
+            f"Concepts missing embeddings: {missing}. Computing missing embeddings on-the-fly."
+        )
+        kg.embed_concepts(missing)
+    elif missing:
+        logger.info(
+            f"Concepts missing embeddings: {missing}.\n"
+            "compute_missing_embeddings is disabled; these concepts will be skipped in similarity scoring.\n"
+            "Expect missing embedding scores for these concepts in the results."
+        )
+    try:
+        matches = kg.nearest_concepts(
+            query_embedding,
+            concept_filter=ConceptFilter(concept_ids=concept_ids),
+            k=len(concept_ids),
+        )
+    except EmbeddingModelNotRegisteredError as error:
+        logger.info(error)
+        return None
+    return (matches,) if matches else None
+
+
 def ground_term(
     resolver_pipeline: ResolverPipeline,
     kg: KnowledgeGraph,
@@ -132,7 +198,8 @@ def ground_term(
     constraints : GroundingConstraints
         Contextual constraints (parents, domains, etc.) to apply.
     max_candidates : int, optional
-        Limit for the number of candidates returned. If None, returns all candidates.
+        The most candidates to return, taken from the ranked candidates of all resolvers
+        together. If None, returns all candidates.
     context : str, optional
         Additional free-form context folded into the on-demand query-embedding
         text. Has no effect when ``query_embedding`` is supplied directly.
@@ -144,42 +211,34 @@ def ground_term(
     """
     standard_concepts: list[StandardConcept] = []
 
-    search_constraints = constraints.search_constraint
-    if search_constraints is not None:
-        kg.check_search_constraints(search_constraints)
+    concept_filter = constraints.concept_filter
+    if concept_filter is not None:
+        kg.check_concept_filter(concept_filter)
 
-    # Only do on demand embedding calculation if available and needed (having a EmbeddingResolver).
-    # Falls back to None to disable embedding-based features if not available or not required.
-    require_embedding = HAS_OMOP_EMB and any(
+    # Only embed the query on demand when an EmbeddingResolver needs it and the KG can embed text.
+    # Otherwise embedding-based features stay disabled for this call.
+    if query_embedding is None and any(
         isinstance(resolver, EmbeddingResolver) for resolver in resolver_pipeline.resolvers
-    )
-
-    if query_embedding is None and require_embedding:
-        embedding_writer = try_get_embedding_writer_interface(kg)
-        if embedding_writer is not None:
-            from omop_emb import EmbeddingRole
-
-            query_embedding = embedding_writer.embed_texts(
-                texts=(_query_text_with_context(query, context),),
-                role=EmbeddingRole.QUERY,
-            )
+    ):
+        if kg.can_embed_text:
+            query_embedding = kg.embed_text(_query_text_with_context(query, context))
         else:
             logger.info(
-                f"No embedding_writer available to embed query '{query}' on demand "
-                "(the KG's embedding configuration is read-only, or none was provided at all). "
+                f"The KG cannot embed the query '{query}' on demand "
+                "(its embedding configuration is read-only, or none was provided at all). "
                 "Embedding-based features will be disabled for this grounding operation."
             )
 
     if query_embedding is not None:
         assert query_embedding.shape[0] == 1, (
-            "query_embedding must have shape (1, D) — one vector per call to ground_term."
+            "query_embedding must have shape (1, D), one vector per call to ground_term."
         )
 
     resolved = list(
         resolver_pipeline.resolve(
             kg,
             query,
-            constraints=search_constraints,
+            concept_filter=concept_filter,
             query_embedding=query_embedding,
         )
     )
@@ -190,30 +249,27 @@ def ground_term(
         return []
 
     # Hierarchy anchoring (or unconstrained standardization when parent_ids is None)
-    for hit in resolved:
-        candidate_standard_concepts = find_standard_concepts(
-            kg=kg,
-            candidate=hit,
-            parent_ids=constraints.parent_ids,
-            max_depth=constraints.max_depth,
-            max_paths=None,
-            predicate_kinds=constraints.predicate_kinds,
-        )
-        if not candidate_standard_concepts:
-            concept_name = kg.concept_view(hit.concept_id).concept_name
-            if constraints.parent_ids:
-                logger.debug(
-                    f"Failed hierarchy constraint: {hit.concept_id} ({concept_name}) "
-                    f"has no path to parents {constraints.parent_ids} "
-                    f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
-                )
-            else:
-                logger.debug(
-                    f"No standard concept reachable from {hit.concept_id} ({concept_name}) "
-                    f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
-                )
-            continue
-        standard_concepts.extend(candidate_standard_concepts)
+    found_per_hit = find_standard_paths(
+        kg=kg,
+        targets=constraints.parent_ids,
+        candidates=resolved,
+        edge_filter=EdgeFilter(predicate_kinds=constraints.predicate_kinds, within_domain=True),
+        max_depth=constraints.max_depth,
+    )
+    for hit, found in zip(resolved, found_per_hit, strict=True):
+        if found:
+            standard_concepts.extend(found)
+        elif constraints.parent_ids:
+            logger.debug(
+                f"Failed hierarchy constraint: {hit.concept_id} ({hit.matched_concept_label}) "
+                f"has no path to parents {constraints.parent_ids} "
+                f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
+            )
+        else:
+            logger.debug(
+                f"No standard concept reachable from {hit.concept_id} ({hit.matched_concept_label}) "
+                f"(max_depth={constraints.max_depth}, predicates={constraints.predicate_kinds})"
+            )
 
     if not standard_concepts:
         logger.info(f"No standard concepts found for '{query}' after hierarchy validation.")
@@ -229,7 +285,7 @@ def ground_term(
             raise RuntimeError(
                 "Query embedding cannot be None if the EmbeddingResolver is used and returned matches."
             )
-        nearest_concept_matches_for_standard_embedding_concepts = semantic_similarity(
+        nearest_concept_matches_for_standard_embedding_concepts = _embedding_matches(
             kg=kg,
             standard_concepts=matched_standard_concepts_for_embedding,
             query_embedding=query_embedding,
@@ -268,52 +324,3 @@ def ground_term(
         best_by_concept_id.values(), key=lambda sc: sc.total_score, reverse=True
     )
     return deduped_ranked[:max_candidates] if max_candidates is not None else deduped_ranked
-
-
-def find_standard_concepts(
-    kg: KnowledgeGraph,
-    candidate: CandidateHit,
-    parent_ids: tuple[int, ...] | None,
-    max_depth: int,
-    max_paths: int | None = 3,
-    predicate_kinds: frozenset[PredicateKind] = frozenset({PredicateKind.IDENTITY}),
-) -> list[StandardConcept]:
-    """
-    Identify standard concepts related to a candidate, optionally satisfying parent
-    constraints.
-
-    Parameters
-    ----------
-    kg : KnowledgeGraph
-        The Knowledge Graph instance.
-    candidate : CandidateHit
-        The initial match found by a resolver.
-    parent_ids : tuple of int, optional
-        Acceptable ancestor concept IDs. When None, no ancestor verification is
-        performed. Instead, the candidate is standardized via identity hops only.
-    max_depth : int
-        Maximum min_levels_of_separation allowed in the ancestry check when
-        parent_ids is given, or maximum identity-hop count allowed when parent_ids
-        is None.
-    max_paths : int, optional
-        Per-target cap on unique standard concepts collected (or an overall cap when
-        parent_ids is None).
-    predicate_kinds : frozenset of PredicateKind, optional
-        Edge types to traverse. Defaults to IDENTITY only, which covers the OMOP
-        "Maps to" relationships between non-standard and standard concepts. See
-        GroundingConstraints.predicate_kinds for the rationale.
-
-    Returns
-    -------
-    list of StandardConcept
-        Standard concepts associated with the candidate that satisfy the ancestor
-        constraint, or, when parent_ids is None, every standard concept reached.
-    """
-    return find_standard_paths(
-        kg=kg,
-        candidate=candidate,
-        targets=parent_ids,
-        predicate_kinds=predicate_kinds,
-        max_depth=max_depth,
-        max_concepts=max_paths,
-    )

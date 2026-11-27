@@ -8,6 +8,7 @@ It provides:
 - **path discovery** with transparent scoring
 - **traceable explanations** of traversal decisions
 - multiple **rendering backends** (text, HTML, Mermaid)
+- an **[OAK](https://incatools.github.io/ontology-access-kit/) adapter**, so tools written for oaklib work on an OMOP CDM
 
 The library is designed for:
 - interactive analysis (Jupyter)
@@ -22,19 +23,7 @@ The library is designed for:
 pip install omop-graph
 ```
 
-For relationship classification and graph use against a DuckDB CDM:
-
-```bash
-pip install "omop-graph[duckdb]"
-```
-
-With embedding support:
-
-```bash
-pip install "omop-graph[emb]"
-```
-
-For larger deployments use `[pgvector]` or `[faiss-cpu]` instead (or in addition). Embedding support still needs a configured vector store, model, and provider (via oa-configurator); it isn't zero-config on its own. Full setup is covered in the [omop-emb documentation](https://australiancancerdatanetwork.github.io/omop-emb/).
+The extras for a DuckDB CDM (`[duckdb]`) and for embeddings (`[emb]`, `[pgvector]`, `[faiss-cpu]`) are described in [Installation](docs/usage/installation.md).
 
 ---
 
@@ -77,21 +66,39 @@ This classification drives traversal filtering and scoring.
 ### Traversal and Paths
 
 ```python
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.paths import find_shortest_paths
 from omop_graph.extensions.omop_alchemy import PredicateKind
 
-ingredient = kg.concept_id_by_code("RxNorm", "6809")  # Metformin
-drug = kg.concept_id_by_code("RxNorm", "860975")  # Metformin 500 MG Oral Tablet
+[ingredient] = kg.concepts_by_code("RxNorm", "6809")  # Metformin
+[drug] = kg.concepts_by_code("RxNorm", "860975")  # Metformin 500 MG Oral Tablet
 
 paths, trace = find_shortest_paths(
     kg,
     source=drug,
     target=ingredient,
-    predicate_kinds=frozenset({PredicateKind.HIERARCHY, PredicateKind.IDENTITY}),
+    edge_filter=EdgeFilter(
+        predicate_kinds=frozenset({PredicateKind.HIERARCHY, PredicateKind.IDENTITY}),
+        within_domain=True,
+    ),
     max_depth=6,
     traced=True,
 )
 ```
+
+### OAK adapter
+
+```python
+from oaklib import get_adapter
+
+adapter = get_adapter("omop:")  # the configured cdm_db
+
+adapter.label("OMOP:313217")  # Atrial fibrillation
+list(adapter.ancestors("OMOP:313217", reflexive=False))
+list(adapter.basic_search("atrial fibrillation"))
+```
+
+See the [OAK interface](docs/oaklib/interface.md) for what it implements.
 
 ### Rendering
 
@@ -116,6 +123,8 @@ omop_graph/
 │   ├── resolvers/  # resolve labels via exact / fuzzy / full-text / synonym search
 │   └── phenotypes/ # set operations for hierarchical groupings
 ├── oaklib_interface/  # OAK-compliant adapter
+├── extensions/     # optional omop-emb support and the classification tables
+├── data/           # the packaged relationship classification
 ├── api.py          # stable public API surface
 └── db/             # session helpers
 ```

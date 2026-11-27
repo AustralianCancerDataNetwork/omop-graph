@@ -12,19 +12,138 @@ These classes are primarily used for:
 
 from __future__ import annotations
 
-import logging
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum
+from enum import Enum, StrEnum, unique
 from html import escape
 from itertools import chain
+from typing import Self
 
 from omop_alchemy.cdm.model import normalised_flag
 from sqlalchemy import Row
 
-logger = logging.getLogger(__name__)
+
+@dataclass(frozen=True)
+class VocabularyView:
+    """
+    A row of the `vocabulary` table.
+
+    Parameters
+    ----------
+    vocabulary_id : str
+        The vocabulary identifier (e.g., 'SNOMED').
+    vocabulary_name : str
+        The full name of the vocabulary.
+    vocabulary_reference : str, optional
+        Where the vocabulary comes from.
+    vocabulary_version : str, optional
+        The loaded version of the vocabulary.
+    vocabulary_concept_id : int
+        The concept that stands for the vocabulary.
+    """
+
+    vocabulary_id: str
+    vocabulary_name: str
+    vocabulary_reference: str | None
+    vocabulary_version: str | None
+    vocabulary_concept_id: int
+
+
+@dataclass(frozen=True)
+class SynonymView:
+    """
+    A row of the `concept_synonym` table.
+
+    Parameters
+    ----------
+    concept_id : int
+        The concept the synonym belongs to.
+    name : str
+        The synonym text.
+    language_concept_id : int
+        The concept for the language of the synonym.
+    """
+
+    concept_id: int
+    name: str
+    language_concept_id: int
+
+
+class MappingCardinality(StrEnum):
+    """
+    How many subjects and objects a mapping connects, with the values of the SSSOM
+    ``mapping_cardinality``.
+
+    The first number is the subjects of the object, the second the objects of the subject.
+    Most subjects mapped to one object is ``n:1``, and one subject mapped to most objects
+    ``1:n``.
+    """
+
+    ONE_TO_ONE = "1:1"
+    ONE_TO_MANY = "1:n"
+    MANY_TO_ONE = "n:1"
+    MANY_TO_MANY = "n:n"
+    ONE_TO_NONE = "1:0"
+    NONE_TO_ONE = "0:1"
+    NONE_TO_NONE = "0:0"
+
+    @classmethod
+    def of(cls, subjects_of_object: int, objects_of_subject: int) -> MappingCardinality:
+        """The cardinality of a mapping whose ends are shared with that many others."""
+
+        def side(count: int) -> str:
+            return "n" if count > 1 else str(count)
+
+        return cls(f"{side(subjects_of_object)}:{side(objects_of_subject)}")
+
+
+@dataclass(frozen=True)
+class MappingView:
+    """
+    A concept relationship together with the vocabularies of its two concepts.
+
+    Parameters
+    ----------
+    subject_id : int
+        The concept the relationship starts from.
+    predicate_id : str
+        The relationship id.
+    object_id : int
+        The concept the relationship points to.
+    valid_start_date : date
+        When the relationship became valid.
+    subject_source : str
+        The vocabulary of the subject concept.
+    object_source : str
+        The vocabulary of the object concept.
+    cardinality : MappingCardinality
+        Counted from the valid relationships of the same id in the connected database, so
+        on a subset of the CDM it is relative to the rows that subset holds.
+    """
+
+    subject_id: int
+    predicate_id: str
+    object_id: int
+    valid_start_date: date
+    subject_source: str
+    object_source: str
+    cardinality: MappingCardinality
+
+
+class Standardness(Enum):
+    """
+    The standardness flag of a concept, with its value in the ``standard_concept`` column.
+
+    A standard concept is a valid target of a mapping. A classification concept is a
+    waypoint in the hierarchy and is not a valid mapping target. Any other concept carries
+    no flag.
+    """
+
+    STANDARD = "S"
+    CLASSIFICATION = "C"
+    NONE = None
 
 
 @dataclass(frozen=True)
@@ -54,7 +173,7 @@ class ConceptView:
         target.
     classification_concept : bool
         True only for a Classification Concept (raw flag ``'C'``). Valid for
-        hierarchy navigation but *not* as a mapping target. Kept distinct from
+        hierarchy navigation but not as a mapping target. Kept distinct from
         ``standard_concept`` so consumers can tell a classification node from a
         concept carrying no standardness flag at all.
     valid_start_date : date
@@ -80,11 +199,20 @@ class ConceptView:
     classification_concept: bool = False
 
     @property
+    def standardness(self) -> Standardness:
+        """The standardness flag of the concept, from ``standard_concept`` and ``classification_concept``."""
+        if self.standard_concept:
+            return Standardness.STANDARD
+        if self.classification_concept:
+            return Standardness.CLASSIFICATION
+        return Standardness.NONE
+
+    @property
     def is_active(self) -> bool:
         """Whether the concept is active under OMOP Alchemy's flag semantics.
 
         Delegates to ``normalised_flag`` so a blank or whitespace-only
-        ``invalid_reason`` — which some real-world loads carry instead of NULL —
+        ``invalid_reason``, which some real-world loads carry instead of NULL,
         is treated as unset, exactly as the SQL-side predicate does.
         """
         return normalised_flag(self.invalid_reason) is None
@@ -162,17 +290,31 @@ class ConceptView:
         return cls(**data)
 
 
+@unique
 class LabelMatchKind(Enum):
     """
     Classification of how a label matched a concept.
-    Value order defines priority (lower is better):
+
+    The value is the priority, where lower is better, and no two members share one. Sort a
+    list of kinds to get the order a search tries them in. Each member also carries the
+    badge text, badge colour and reason shown in notebook renderings.
+
+    Attributes
+    ----------
+    badge : str
+        Short text of the badge.
+    colour : str
+        Background colour of the badge.
+    reason : str
+        Why the label matched, for summaries.
 
     Notes
     -----
     Supported match kinds include:
     - EXACT: Direct case-insensitive match on concept_name.
-    - FTS: Full-text search match (fuzzy).
+    - STARTS_WITH: The label starts with the query, case-insensitively.
     - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
+    - FTS: Full-text search match (fuzzy).
     - EMBEDDING: Match based on vector similarity.
 
     It does not use synonym vs. concept_name as a ranking signal,
@@ -180,10 +322,23 @@ class LabelMatchKind(Enum):
     The ``LabelMatch.synonym`` field carries that distinction for callers that need it.
     """
 
-    EXACT = 0
-    FTS = 1
-    PARTIAL = 2
-    EMBEDDING = 3
+    EXACT = (0, "exact", "#2b7", "direct name match")
+    STARTS_WITH = (1, "starts with", "#84b", "label starts with the query")
+    PARTIAL = (2, "partial", "#888", "label contains the query")
+    FTS = (3, "fulltext", "#27a", "fulltext match")
+    EMBEDDING = (4, "embedding", "#a72", "embedding match")
+
+    badge: str
+    colour: str
+    reason: str
+
+    def __new__(cls, priority: int, badge: str, colour: str, reason: str) -> Self:
+        member = object.__new__(cls)
+        member._value_ = priority
+        member.badge = badge
+        member.colour = colour
+        member.reason = reason
+        return member
 
     def __lt__(self, other: LabelMatchKind) -> bool:
         return self.value < other.value
@@ -227,13 +382,10 @@ class LabelMatch:
         """
         Render a rich HTML representation for Jupyter notebooks.
         """
-        kind_badges = {
-            LabelMatchKind.EXACT: "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>exact</span>",
-            LabelMatchKind.FTS: "<span style='background:#27a; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>fulltext</span>",
-            LabelMatchKind.PARTIAL: "<span style='background:#888; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>partial</span>",
-            LabelMatchKind.EMBEDDING: "<span style='background:#a72; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>embedding</span>",
-        }
-        kind_badge = kind_badges[self.match_kind]
+        kind_badge = (
+            f"<span style='background:{self.match_kind.colour}; color:white; padding:2px 6px; "
+            f"border-radius:4px; font-size:0.75em;'>{self.match_kind.badge}</span>"
+        )
 
         std_badge = (
             "<span style='background:#2b7; color:white; padding:2px 6px; border-radius:4px; font-size:0.75em;'>standard</span>"
@@ -331,18 +483,7 @@ class LabelMatchGroupView:
         for cid, ms in self.groups.items():
             best = ms[0]
 
-            reasons = []
-            # Determine match kind
-            if best.match_kind is LabelMatchKind.EXACT:
-                reasons.append("direct name match")
-            elif best.match_kind is LabelMatchKind.PARTIAL:
-                reasons.append("synonym match")
-            elif best.match_kind is LabelMatchKind.FTS:
-                reasons.append("fulltext match")
-            elif best.match_kind is LabelMatchKind.EMBEDDING:
-                reasons.append("embedding match")
-            else:
-                reasons.append("unknown match")
+            reasons = [best.match_kind.reason]
 
             # Determine concept status
             reasons.append("standard" if best.is_standard else "non-standard")
@@ -357,7 +498,7 @@ class LabelMatchGroupView:
                 <td>{escape(best.matched_concept_label)}</td>
                 <td>{escape(", ".join(reasons))}</td>
                 <td style="font-size:0.85em; color:#666;">
-                  {other_labels if other_labels else "—"}
+                  {other_labels if other_labels else "-"}
                 </td>
               </tr>
             """)

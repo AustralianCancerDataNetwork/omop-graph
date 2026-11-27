@@ -3,8 +3,6 @@ from dataclasses import dataclass, field
 
 from omop_graph.graph.kg import KnowledgeGraph
 
-from ..concept_handlers import standardise_ids
-
 
 @dataclass
 class ParentStatistics:
@@ -69,7 +67,11 @@ def find_common_parents(
 ) -> dict[int, ParentStatistics]:
 
     seed_set = set(seeds)
-    standard_seeds = set(standardise_ids(seed_set, kg))
+    standard_seeds = {
+        standard_id
+        for standard_id in kg.standard_concept(seed_set).values()
+        if standard_id is not None
+    }
     candidates: defaultdict[int, ParentStatistics] = defaultdict(ParentStatistics)
     exclude = seed_set | standard_seeds
     # frontier items: (current_concept, originating_seed, depth)
@@ -94,11 +96,11 @@ def find_common_parents(
 
             frontier.append((parent, origin, depth + 1))
 
-    standard_map = standardise_ids(set(candidates.keys()), kg)
+    standard_map = kg.standard_concept(candidates.keys())
 
     final: defaultdict[int, ParentStatistics] = defaultdict(ParentStatistics)
     for parent, stats in candidates.items():
-        std_parent = standard_map[parent]
+        std_parent = standard_map[parent] or parent
         final[std_parent].descendants |= stats.descendants
         final[std_parent].found |= stats.found
 

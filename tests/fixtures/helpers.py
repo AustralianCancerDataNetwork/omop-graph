@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -31,3 +33,34 @@ def table_of(model: Any) -> sa.Table:
 
 # The minimal vocab bootstrap set every split/non-split fixture needs, in FK dependency order.
 VOCAB_TABLES = tuple(table_of(model) for model in (Domain, Vocabulary, Concept_Class, Concept))
+
+
+# The oaklib CURIEs of the relationships the oaklib tests use.
+SITE = "OMOP_REL:Has%20finding%20site"
+MAPS_TO = "OMOP_REL:Maps%20to"
+MAPPED_FROM = "OMOP_REL:Mapped%20from"
+SUBSUMES = "OMOP_REL:Subsumes"
+
+
+def curie(concept_id: int) -> str:
+    """The oaklib CURIE of an OMOP concept."""
+    return f"OMOP:{concept_id}"
+
+
+def docs_macros() -> dict[str, Callable[[], str]]:
+    """The macros of ``docs/mkdocs_macros.py``, by name, as the documentation build registers them."""
+    path = Path(__file__).parents[2] / "docs" / "mkdocs_macros.py"
+    spec = importlib.util.spec_from_file_location("mkdocs_macros", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    macros: dict[str, Callable[[], str]] = {}
+
+    class Environment:
+        @staticmethod
+        def macro(function):
+            macros[function.__name__] = function
+            return function
+
+    module.define_env(Environment())
+    return macros

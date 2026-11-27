@@ -25,12 +25,12 @@ from omop_emb.config import (
     parse_index_type,
     parse_metric_type,
 )
-from omop_emb.interface import EmbeddingRole
+from omop_emb.interface import EmbeddingWriterInterface
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
-from omop_graph.extensions.emb import MissingExtensionError, get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.capabilities.embeddings import MissingExtensionError
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.scoring import StandardConceptWithScore
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -425,7 +425,7 @@ def _evaluate_grounded_case(
 ) -> dict[str, object]:
     """Evaluate one case using ``ground_term`` and return poster-friendly results."""
 
-    search_constraint = case_constraints(case)
+    concept_filter = case_constraints(case)
     parent_ids = _resolve_parent_ids(case, default_parent_ids)
     if parent_ids is None:
         raise ValueError(
@@ -444,7 +444,7 @@ def _evaluate_grounded_case(
         query_embedding=text_embedding,
         constraints=GroundingConstraints(
             parent_ids=parent_ids,
-            search_constraint=search_constraint,
+            concept_filter=concept_filter,
             max_depth=6,
             predicate_kinds=frozenset({PredicateKind.IDENTITY}),
         ),
@@ -630,8 +630,8 @@ def run_benchmark(
             backend=embedding_backend,
         )
 
-        embedding_writer = get_embedding_writer_interface(embedding_kg)
-        assert embedding_writer is not None, (
+        embedding_writer = embedding_kg.emb
+        assert isinstance(embedding_writer, EmbeddingWriterInterface), (
             "Embedding backend does not support writing embeddings, which is required for this benchmark configuration."
         )
 
@@ -643,10 +643,7 @@ def run_benchmark(
             ),
         )
 
-        query_embeddings = {
-            case.id: embedding_writer.embed_texts(case.text, role=EmbeddingRole.QUERY)
-            for case in cases
-        }
+        query_embeddings = {case.id: embedding_kg.embed_text(case.text) for case in cases}
 
     kg = KnowledgeGraph(cdm_session_factory())
     configs = build_grounded_configs()

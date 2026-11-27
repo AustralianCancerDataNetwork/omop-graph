@@ -15,12 +15,10 @@ from collections import deque
 from collections.abc import Iterable
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import date
 from typing import TYPE_CHECKING
 
 # Local Application Imports
-from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeView
+from omop_graph.graph.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -116,9 +114,9 @@ class GraphTrace:
 def traverse(
     kg: KnowledgeGraph,
     seeds: Iterable[int],
-    predicate_kinds: set[PredicateKind] | None,
+    *,
+    edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
     max_depth: int,
-    on: date | None,
     max_nodes: int | None,
     trace: bool,
 ) -> tuple[Subgraph, GraphTrace | None]:
@@ -137,12 +135,11 @@ def traverse(
         The graph instance to query.
     seeds : Iterable[int]
         The starting Concept IDs.
-    predicate_kinds : set[PredicateKind], optional
-        Restrict traversal to specific edge types.
+    edge_filter : EdgeFilter, optional
+        Which edges to follow. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves out the
+        metadata relationships. None follows every classified relationship.
     max_depth : int
         Maximum distance from seeds to explore.
-    on : date, optional
-        Filter for edges active on this date.
     max_nodes : int, optional
         Stop after discovering this many unique nodes.
     trace : bool
@@ -185,9 +182,7 @@ def traverse(
                 session=session,
                 concept_ids=node,
                 direction="out",
-                predicate_kinds=frozenset(predicate_kinds) if predicate_kinds is not None else None,
-                active_only=True,
-                on=on,
+                edge_filter=edge_filter,
                 ordered=True,
             )
             with closing(edge_iter):

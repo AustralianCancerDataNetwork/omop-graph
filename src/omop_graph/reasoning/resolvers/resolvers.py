@@ -19,13 +19,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
 
-from omop_graph.extensions.emb import (
+from omop_graph.graph.capabilities.embeddings import (
     HAS_OMOP_EMB,
+    EmbeddingModelNotRegisteredError,
     MissingExtensionError,
-    get_neareast_concepts,
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.graph.nodes import LabelMatch, LabelMatchKind
+from omop_graph.graph.scope import ALL_CONCEPTS
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -89,8 +90,9 @@ class CandidateResolver:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: ConceptFilter | None = None,
+        concept_filter: ConceptFilter | None = None,
         sort: bool = False,
+        limit: int | None = None,
         **kwargs,
     ) -> tuple[LabelMatch, ...]:
         """
@@ -102,10 +104,12 @@ class CandidateResolver:
             The graph instance.
         query : str
             The input query to search for.
-        constraints : ConceptFilter, optional
-            Filters for domain/vocabulary.
+        concept_filter : ConceptFilter, optional
+            Filters for domain/vocabulary. A scope that must not set ``limit``.
         sort : bool, default False
             Whether to sort LabelMatch results by their internal relevance ranking.
+        limit : int, optional
+            The most matches to return.
 
         Returns
         -------
@@ -117,8 +121,9 @@ class CandidateResolver:
                 query_term=query,
                 match_kind=self.match_kind,
                 synonym=self.synonym,
-                search_constraint=constraints,
+                concept_filter=concept_filter,
                 sort=sort,
+                limit=limit,
             )
         )
 
@@ -126,7 +131,8 @@ class CandidateResolver:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: ConceptFilter | None = None,
+        concept_filter: ConceptFilter | None = None,
+        limit: int | None = None,
         **kwargs,
     ) -> Iterable[CandidateHit]:
         """
@@ -138,16 +144,18 @@ class CandidateResolver:
             The graph instance.
         query : str
             The input query.
-        constraints : ConceptFilter, optional
-            Filters for concepts to consider in the search. Also limits the number of candidates returned
-            using the `limit` field.
+        concept_filter : ConceptFilter, optional
+            Filters for the concepts to consider in the search. A scope that must not set
+            ``limit``.
+        limit : int, optional
+            The most candidates to return.
 
         Returns
         -------
         Iterable[CandidateHit]
             The formatted candidate hits.
         """
-        matches = self.get_matches(kg, query, constraints=constraints, **kwargs)
+        matches = self.get_matches(kg, query, concept_filter=concept_filter, limit=limit, **kwargs)
         hits = [
             CandidateHit(
                 concept_id=m.matched_concept_id,
@@ -237,49 +245,36 @@ class EmbeddingResolver(CandidateResolver):
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: ConceptFilter | None = None,
+        concept_filter: ConceptFilter | None = None,
         sort: bool = False,
+        limit: int | None = None,
         query_embedding: np.ndarray | None = None,
         **kwargs,
     ) -> tuple[LabelMatch, ...]:
         if not HAS_OMOP_EMB:
             raise MissingExtensionError("EmbeddingResolver")
 
-        from omop_emb.utils.embedding_utils import EmbeddingConceptFilter
-
-        concept_filter: EmbeddingConceptFilter | None = (
-            EmbeddingConceptFilter(
-                concept_ids=constraints.concept_ids,
-                domains=constraints.domains,
-                vocabularies=constraints.vocabularies,
-                require_standard=constraints.require_standard,
-            )
-            if isinstance(constraints, ConceptFilter)
-            else None
-        )
-
         if query_embedding is None:
             logger.warning(
                 f"No text embedding provided for {self.__class__.__name__}. Returning no matches."
             )
             return ()
-
-        matches = get_neareast_concepts(
-            kg=kg,
-            query_embedding=query_embedding,
-            concept_filter=concept_filter,
-            k=constraints.limit if isinstance(constraints, ConceptFilter) else None,
+        assert query_embedding.shape[0] == 1, (
+            "query_embedding should have shape (1, embedding_dim) for a single query."
         )
-        if matches is None:
+        if not kg.has_embeddings:
+            logger.info("The KG has no embedding store. Returning no matches.")
             return ()
-        if query_embedding is not None:
-            assert query_embedding.shape[0] == 1, (
-                "query_embedding should have shape (1, embedding_dim) for a single query."
+
+        try:
+            matches = kg.nearest_concepts(
+                query_embedding,
+                concept_filter=concept_filter if concept_filter is not None else ALL_CONCEPTS,
+                k=limit,
             )
-        assert len(matches) == 1, (
-            "Expected get_neareast_concepts to return a single dictionary given the query_embedding shape (1, embedding_dim)."
-        )
-        matches = matches[0]  # Unpack the single dictionary from the tuple
+        except EmbeddingModelNotRegisteredError as error:
+            logger.info(error)
+            return ()
         concept_views = kg.concept_views(
             concept_ids=tuple(m.concept_id for m in matches), sort=sort
         )
@@ -299,14 +294,17 @@ class EmbeddingResolver(CandidateResolver):
 
 
 # Default sequence of resolvers to be used in a pipeline
-ALL_RESOLVERS: tuple[CandidateResolver, ...] = (
-    ExactLabelResolver(),
-    ExactSynonymResolver(),
-    PartialLabelResolver(),
-    PartialSynonymResolver(),
-    FullTextResolver(),
-    FullTextSynonymResolver(),
+ALL_RESOLVERS: tuple[CandidateResolver, ...] = tuple(
+    sorted(
+        (
+            ExactLabelResolver(),
+            ExactSynonymResolver(),
+            PartialLabelResolver(),
+            PartialSynonymResolver(),
+            FullTextResolver(),
+            FullTextSynonymResolver(),
+            *((EmbeddingResolver(),) if HAS_OMOP_EMB else ()),
+        ),
+        key=lambda resolver: (resolver.match_kind, resolver.synonym),
+    )
 )
-
-if HAS_OMOP_EMB:
-    ALL_RESOLVERS = (*ALL_RESOLVERS, EmbeddingResolver())

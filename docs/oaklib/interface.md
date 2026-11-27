@@ -6,12 +6,12 @@ The `omop-graph` library provides an adapter for the [Ontology Access Kit (OAK)]
 
 ## Overview
 
-The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements core OAK interfaces for searching, graph traversal, and text annotation.
+The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies, and Concept IDs) into the standardized **CURIE** (Compact URI) format and implements the OAK interfaces for labels and metadata, relationships and entailment, graph traversal, mappings, searching, and text annotation. The adapter only reads: vocabularies are loaded with `omop-alchemy`, and embeddings with `omop-emb`.
 
 ### Compliance Status
-!!! info "Development Note"
-    
-    This interface is designed to adhere to OAK’s general design principles to ensure cross-compatibility with the ecosystem. While core features like searching and hierarchy traversal are stable, some advanced OWL-specific methods (like global relationship enumeration) are currently being refined to better align with the RDBMS nature of OMOP.
+The adapter implements the oaklib interfaces below and raises `OMOPUnsupportedError`, with the reason, for the methods that have no OMOP meaning. These tables are generated from the code, and a test reads the oaklib sources and checks that every method that raises `NotImplementedError` in an implemented interface is implemented, listed here, or guarded by a check the adapter always passes.
+
+{{ oaklib_compliance() }}
 
 ---
 
@@ -24,9 +24,112 @@ The OAK implementation translates OMOP-specific concepts (Domains, Vocabularies,
 ### `OMOPAlchemyImplementation` 
 The primary adapter class that inherits from multiple OAK interfaces:
 
-* **`BasicOntologyInterface`**: Handles labels, aliases, and metadata mapping.
-* **`SearchInterface`**: Enables term-based searching across labels and synonyms.
-* **`TextAnnotatorInterface`**: Provides a pipeline to ground raw text spans to OMOP Concept IDs using the internal `KnowledgeGraph` resolvers.
+* **`BasicOntologyInterface`**: Labels (also in other languages), aliases, ontologies, deprecation and replacements, relationships, and the roots, leaves and singletons of the hierarchy.
+* **`MappingProviderInterface`**: SSSOM mappings from the identity and mapping relationships, see [Mappings](#mappings).
+* **`OboGraphInterface`**: Nodes, `ancestors`, `descendants`, graphs and paths, see [Walking the hierarchy](#walking-the-hierarchy).
+* **`RelationGraphInterface`**: Relationships that follow from the stored ones through the `Is a` hierarchy, see [Entailed relationships](#entailed-relationships).
+* **`SearchInterface`**: Term-based searching across labels, synonyms and identifiers, see [Searching and Traversal](#searching-and-traversal).
+* **`SemanticSimilarityInterface`**: Common ancestors, information content and pairwise similarity from the `Is a` hierarchy, see [Similarity and embeddings](#similarity-and-embeddings).
+* **`EmbeddingProviderInterface`**: The closure models, and the stored `omop-emb` model when the graph has an embedding configuration.
+* **`SubsetterInterface`**: `gap_fill_relationships` and `extract_gap_filled_graph` over the entailed relationships.
+* **`SummaryStatisticsInterface`**: Counts of concepts, edges and synonyms, see [Summary statistics](#summary-statistics).
+* **`TextAnnotatorInterface`**: Grounds raw text to OMOP Concept IDs with the [grounding pipeline](../reasoning/grounding.md), see [Text Annotation](#text-annotation-grounding).
+
+### Identifiers
+| What | CURIE |
+| --- | --- |
+| A concept | `OMOP:<concept_id>`, for example `OMOP:313217`. A `vocabulary_id:concept_code`, such as `SNOMED:49436004`, is accepted as input. |
+| `Is a` | `rdfs:subClassOf` |
+| Any other relationship | `OMOP_REL:<relationship_id>`, percent-encoded, for example `OMOP_REL:Has%20finding%20site` |
+| An ontology | `OMOP:<vocabulary_concept_id>`, one for each vocabulary |
+| A category | `OMOP:<domain_concept_id>`, the domain of the concept |
+
+* A relationship is shown from the child to the parent: for hierarchy relationships only the upward direction (`Is a`) is listed, and the children of a concept are the subjects of the relationships into it. The downward direction (`Subsumes`) can be asked for by name.
+* A vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`, is written `Nebraska_Lexicon` in CURIEs, and either spelling is accepted as input, including in `id_prefixes`.
+* A concept code is percent-encoded in a CURIE, so the code `[iU]/L` of the `UCUM` vocabulary is `UCUM:%5BiU%5D%2FL`.
+* OMOP does not keep a code unique within its vocabulary. A `vocabulary_id:concept_code` names the valid concept when only one has the code. When several do, it names none and a warning lists their `OMOP:<concept_id>` CURIEs, which are always unambiguous.
+* A CURIE that names no concept is left out of the result instead of raising, and one info message names them. A predicate that names no OMOP relationship matches nothing and is named once, in a debug message when it is another ontology's, such as `BFO:0000050`, and in a warning when it has the `OMOP_REL` prefix, since it is then probably a typo.
+* `prefix_map` holds the oaklib defaults, `OMOP` and `OMOP_REL`. A vocabulary has no URI, since its name does not say whether it means what a registry prefix of the same name means, as `JAX` does not. Its CURIEs such as `LOINC:94762-2` are still valid, and `curie_to_uri` returns `None` for them.
+* `entities`, `roots`, `leafs` and `singletons` list active standard and classification concepts. Pass `concept_filter=ConceptFilter(...)` to the constructor to change that.
+* `roots`, `leafs` and `singletons` take the parents and children from the predicates you name. If no concept has an edge for a predicate, such as `BFO:0000050` (part of), then no concept has a parent through it, so every concept is a root.
+* An empty `subjects`, `objects` or `predicates` selects nothing, and only `None` selects everything.
+* `entities(filter_obsoletes=False)` lists the concepts of `entities()` and the deprecated concepts of the filter's vocabularies and domains, whatever their standardness. The deprecated ones are what `obsoletes` yields. With an explicit `concept_filter` argument, the filter is used as given and `filter_obsoletes` does not apply. `limit` keeps the first entities, concepts in the order of their ids.
+
+### Entailed relationships
+Entailed relationships are the ones that follow from the stored ones through the `Is a` hierarchy. A stored relationship is carried in two directions:
+
+* The object moves up. Lung cancer `Has finding site` Lung also gives Lung cancer `Has finding site` Thoracic organ, since Lung `Is a` Thoracic organ.
+* The subject moves down. Small cell lung cancer `Is a` Lung cancer, so it also has the finding site Lung, and Thoracic organ.
+
+| Stored | Entailed |
+| --- | --- |
+| Lung cancer `Has finding site` Lung | Lung cancer `Has finding site` Thoracic organ |
+| Lung `Is a` Thoracic organ | Small cell lung cancer `Has finding site` Lung |
+| Small cell lung cancer `Is a` Lung cancer | Small cell lung cancer `Has finding site` Thoracic organ |
+| Lung cancer `Is a` Cancer | Lung cancer `Is a` Disease |
+| Cancer `Is a` Disease | |
+
+Only some relationships are carried along, see [Generalising Relationships](../graph/edges.md#generalising-relationships):
+
+* Carried along: `Is a`, and relationships such as `Has finding site`, `Has method` and `May treat`.
+* Reported as stored only: the reverse of those (`Finding site of`), mappings and lineage (`Maps to`, `Concept replaced by`), `Subsumes`, and any relationship the data could not decide.
+
+How the entailment is implemented:
+
+* oaklib has largely subsumed `RelationGraphInterface` into `BasicOntologyInterface`, so the entailment is implemented on `OMOPBasicOntologyInterface` as `relationships(include_entailed=True)`. The `RelationGraphInterface` methods wrap it.
+* oaklib applies this to every relationship. The adapter applies it only to those that generalise. The other relation graph rules have nothing to act on here, since OMOP has no relationship hierarchy, declares no transitive relationships and stores both directions of each.
+* Only `Is a` is followed, not the other ancestry in `concept_ancestor` such as ATC or SPL classes.
+* Only concepts within the adapter's `concept_filter` are reported as entailed objects, and for incoming relationships as entailed subjects, though the walk passes through the others.
+* For a concept near the top of a hierarchy the incoming direction returns very many relationships, since each subtype below it is a subject.
+
+### Walking the hierarchy
+`ancestors`, `descendants` and the graphs built on them follow the predicates you give, each walk taking one query for all start concepts. Without predicates they follow `rdfs:subClassOf`, the strict `Is a` hierarchy. oaklib walks every predicate in that case, but over all OMOP relationships a walk reaches most of the vocabulary within a few hops.
+
+```python
+adapter.ancestors("OMOP:258369", reflexive=False)
+adapter.ancestors("OMOP:258369", predicates=["rdfs:subClassOf", "OMOP_REL:Has%20finding%20site"])
+```
+
+* `ancestors` and `descendants` report only concepts within the adapter's `concept_filter`, though the walk passes through the others. `ancestor_graph` and `descendant_graph` keep every concept on the walk so the graph stays connected.
+* A non-standard concept has no ancestry, so its `ancestors` are empty with `reflexive=False`. With `OMOPAlchemyImplementation(standardise=True)` it stands in for the one standard concept it maps to: its walks include that concept and its ancestors, and its entailed relationships are those of that concept that generalise, reported for the concept itself. A concept that maps to several standard concepts raises a `ValueError`. Mappings and lineage of the standard concepts are not lent to it, and `standardise` applies likewise to the similarity methods, while `hierarchical_parents` stays literal. This is off by default because the result holds concepts that no stored edge connects to the concept.
+* `hierarchical_parents` is one `Is a` step and `ancestors` follows `Is a` to the top, so the parents are always among the ancestors. The level 1 ancestors of `concept_ancestor`, which hold classification and cohort ancestry too, are `kg.parents`. The children of a concept are `relationships(objects=[...], predicates=["rdfs:subClassOf"])`.
+* `paths` finds shortest paths only, and `shortest=False` raises `OMOPUnsupportedError`.
+* `nodes`, `edges` and `as_obograph` enumerate the whole graph and are unbounded on a full vocabulary. `edges` lists only the relationships between the concepts that `nodes` lists, so a relationship to a deprecated concept is left out.
+* `descendants` of a concept near the top of a hierarchy return very many concepts.
+
+### Mappings
+`sssom_mappings` serves the OMOP mappings as SSSOM, with the looked up concept as the subject.
+
+| OMOP relationship | SSSOM predicate |
+| --- | --- |
+| Identity, exact equivalence (`Maps to`, `Mapped from`) | `skos:exactMatch` when one to one, otherwise `skos:closeMatch` |
+| Identity, near equivalence (`Tradename of`) | `skos:closeMatch` |
+| Association, mapping (`ICDO - SNOMED`) | `skos:relatedMatch` |
+| Concept vocabulary and code | `oio:hasDbXref` |
+
+* Version lineage such as `Concept replaced by` is not a mapping, and neither is a concept mapped to itself or the value family such as `Maps to value`, which only completes a `Maps to`.
+* Every mapping states its `mapping_cardinality`, `1:1`, `1:n`, `n:1` or `n:n`. It is counted from the valid relationships of the same id in the connected database, so on a subset of the CDM it is relative to the rows that subset holds. A concept that maps to several concepts, or shares its target with others, is not equivalent to one of them alone, so only a `1:1` mapping is `skos:exactMatch`.
+* OMOP stores each pair in both directions, so a standard concept has a mapping to every source concept that maps to it. Without concepts, `sssom_mappings` lists both directions of each pair.
+* The justification is `semapv:UnspecifiedMatching`, since OMOP does not record how a mapping was made. The date is when the relationship became valid, and is left out when it is Athena's placeholder `1970-01-01`. The comment names the OMOP relationship. The `subject_source` and `object_source` are the CURIEs of the vocabulary concepts of the two vocabularies, as `ontologies` lists them.
+* A source or code can use a vocabulary id that is not a valid CURIE prefix, such as `Nebraska Lexicon`. In a code it is written `Nebraska_Lexicon`. Either spelling, or the CURIE of the vocabulary concept, is accepted as a `source`.
+* The cross-reference is a mapping only, so it is not in `entity_alias_map`. It can be looked up from the concept or from `vocabulary_id:concept_code`.
+* Mappings are not limited to the adapter's `concept_filter`.
+* `get_transitive_mappings_by_curie` follows exact equivalence from a non-standard concept to the standard concepts it maps to, as `skos:exactMatch` when one to one and `skos:closeMatch` otherwise, and a standard concept has none. OMOP maps many concepts to one and stores each mapping in both directions, so following them both ways would join every concept that shares a target, and the result would be most of a vocabulary. `get_mapping_clusters` is unsupported since it would load about 20 million mappings.
+
+### Similarity and embeddings
+The similarity methods wrap [the graph's](../graph/kg.md#structural-similarity), and follow `rdfs:subClassOf` only, so a `predicates` argument must be empty or name it. Information content is computed from the hierarchy, so scores cannot be loaded or set. The `information_content_source` argument of `OMOPAlchemyImplementation` can be set to `ICSource.CONCEPT_ANCESTOR` for bulk scores.
+
+* `embedding_models()` lists the oaklib `closure` and `closure_ic` models, built from the ancestry, and the model of the graph's embedding configuration when it has one. That stored model is `default_embedding_model`, and otherwise the default is oaklib's `closure` model.
+* The stored model serves `entity_embeddings`, `embedding_similarity` and the nearest searches through the vector index of `omop-emb`. Embedding a text, and so `nearest_entities_to_text`, needs `write=True`, and raises `EmbeddingWriterRequiredError` otherwise.
+* The closure models are not searched without `candidates`, since that would compare against every concept. They cannot embed a text, so `text_embedding` and `nearest_entities_to_text` raise `OMOPUnsupportedError` for them, and for a graph with no embedding store. A model that `embedding_models()` does not list raises it too.
+* `owl:Thing` has an information content of 0.0 and is its own only ancestor.
+
+### Summary statistics
+The counts come from the database, where oaklib's default would read every concept and relationship.
+
+* The counts describe the adapter's view. Concepts are those of the adapter's `concept_filter` and its deprecated concepts. Edges are the active ones of the exposed relationships whose subject is in the adapter's vocabularies and domains. Synonyms are those of the concepts counted, and the distinct names are counted over them.
+* Groups are made by `omop:vocabulary` or `omop:domain`. Branches below roots and entailed edges are not counted, and raise `ValueError`.
+* On a full Athena release the whole count is quick, and the first group by vocabulary or domain is slow, since every group is counted in one pass and kept.
 
 ### Resource Management
 The adapter resolves its database through oa-configurator; there is no URL-based construction.
@@ -65,6 +168,8 @@ from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplement
 adapter = OMOPAlchemyImplementation(resolved=resolve_cdm_database("cdm_db"))
 ```
 
+The constructor also takes an existing `KnowledgeGraph` as `kg`, a `concept_filter` for the concepts the adapter lists, and `standardise` (see [Walking the hierarchy](#walking-the-hierarchy)).
+
 ### Searching and Traversal
 Since the adapter implements the `SearchInterface`, you can perform standardized searches:
 
@@ -73,22 +178,34 @@ Since the adapter implements the `SearchInterface`, you can perform standardized
 for curie in adapter.basic_search("Atrial Fibrillation"):
     print(f"Found: {curie}")
 
-# Traverse parents (returns CURIEs)
-for parent in adapter.parents("OMOP:313217"):
+# Direct parents (returns CURIEs)
+for parent in adapter.hierarchical_parents("OMOP:313217"):
     print(f"Parent CURIE: {parent}")
 ```
 
+`basic_search` returns the best matches first and honours `limit`:
+
+* Labels are always searched, aliases with the `ALIAS` property, and identifiers (an `OMOP` CURIE or `vocabulary:code`) with `IDENTIFIER` or `MAPPED_IDENTIFIER`.
+* The order is identifier, exact label, labels starting with the term (`STARTS_WITH` syntax or `is_partial`), then labels containing it (`is_partial`), then full-text matches (`is_fuzzy`, only where the database has the index). Within a kind, standard and active concepts come first.
+* Matching is case-insensitive, and `%`, `_` and `\` in the term match themselves. Deprecated concepts are left out unless `include_obsoletes_in_results` is set.
+* The adapter's `concept_filter` narrows the vocabularies and domains searched, but not standardness.
+* `categories`, `cursor`, `is_complete` and the `REPLACEMENT_IDENTIFIER` and `COMMENT` properties have no effect. An info message names the ones that were set.
+* Regular expression, SQL and Lucene syntax raise `ValueError` when the method is called.
+
 ### Text Annotation (Grounding)
-The interface allows you to process clinical text and ground it to OMOP:
+The whole text is grounded as one term, which requires to set `matches_whole_text=True`. Spans within a longer text are not annotated, and a configuration without `matches_whole_text` (including no configuration) raises `OMOPUnsupportedError`. A parent, vocabulary or domain that does not exist raises `ValueError` when the method is called, not when the result is read.
 
 ```python
 from oaklib.datamodels.text_annotator import TextAnnotationConfiguration
 
-text = "Patient presents with acute myocardial infarction."
-config = TextAnnotationConfiguration()
+config = TextAnnotationConfiguration(matches_whole_text=True, limit=5)
 
-for annotation in adapter.annotate_text(text, configuration=config):
+for annotation in adapter.annotate_text("atrial fibrillation", configuration=config):
     print(f"Match: {annotation.object_label} ({annotation.object_id})")
 ```
+
+* `annotate_text` yields nothing when the text does not ground, as a sentence such as `"patient has cancer"` usually does not.
+* `limit` caps the number of annotations, and `token_exclusion_list` drops tokens from the text before grounding.
+* `sources`, `categories`, `model` and `include_aliases` have no effect. An info message names the ones that were set.
 
 ---

@@ -1,7 +1,7 @@
 # Semantic Grounding
 
-Grounding is the process of mapping a raw string to a **Standard OMOP Concept ID**, i.e. a standardised Ontology.
-This extraction of standardised concepts from free-text and results in efficient information extraction.
+Grounding is the process of mapping a raw string to a **Standard OMOP Concept ID**, a concept of the standardised vocabulary.
+Extracting standardised concepts from free text makes the information searchable and comparable across sources.
 Traditional string matching fails on clinical free-text due to synonyms and ambiguity. By integrating **Database Constraints** and **Hierarchical Reasoning**, `omop-graph` ensures that an extraction of "Heart Attack" is correctly mapped to `OMOP:312327` (Acute myocardial infarction) and validated as a `Condition`.
 
 !!! info
@@ -22,27 +22,30 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 
 1. **Configuration**: Determine graph restrictions using [`GroundingConstraints`](#grounding-constraints)
     - `parent_ids`: OMOP Concept IDs that act as required ancestors — any valid result must be a descendant of at least one of these.
-    - `search_constraint`: A [`ConceptFilter`](#conceptfilter) that filters the initial resolver query by domain, vocabulary, active status, and/or standard status.
-    - `max_depth` / `predicate_kinds`: Control how far and along which relationship kinds the anchor walk is allowed to travel.
+    - `concept_filter`: A [`ConceptFilter`](#conceptfilter) that filters the initial resolver query by domain, vocabulary, active status, and/or standard status.
+    - `max_depth` / `predicate_kinds`: Control how far the ancestry check and the anchor walk may go, and along which relationship kinds.
 
 2.  **Resolve**: Use the [`ResolverPipeline`](resolvers.md) to find any concepts (Standard or Non-Standard) matching the text.
-3.  **Anchor**: For each candidate, find the nearest **Standard Concept**. This is required for Step 3 as all standard concepts are in `concept_ancestor`.
+3.  **Anchor**: For each candidate, find the nearest **Standard Concept**. This is required for Step 4, as `concept_ancestor` only holds standard and classification concepts.
     - If the candidate is already Standard, the hop count is 0.
     - If Non-Standard, follow `IDENTITY` relationship to the next standard concept.
+    - With `parent_ids`, a standard concept that descends from none of them is followed on through its identity edges, so a deprecated standard concept reaches its replacement.
+    - All candidates are searched together, one wave of edges at a time. Each wave reads its relationships, concepts and ancestors in single queries, so the queries made depend on the number of waves and not on the number of candidates.
 4.  **Verify**: Check the `concept_ancestor` table to see if the Standard Anchor is a descendant of the required `parent_ids`. 
     - Requires [`GroundingConstraints`](#grounding-constraints) for accurate grounding/verification
+    - `concept_ancestor` holds more than `Is a` ancestry, see [Two Kinds of Ancestry](../graph/kg.md#two-kinds-of-ancestry)
 5.  **Scoring**: Apply the scoring algorithm to the resulting valid Standard Concepts
     - Details of scoring algorithm shown [here](#scoring)
 
 ## Grounding Constraints
 
-`GroundingConstraints` is composed of two layers:
+`GroundingConstraints` has four fields. `parent_ids` and `concept_filter` have no default, and either can be `None`:
 
 | Field | Type | Default | Purpose |
 |---|---|---|---|
-| `parent_ids` | `tuple[int, ...]` | `None` | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). |
-| `search_constraint` | `ConceptFilter` | `None` | Filters applied to the initial resolver query (concept IDs, domain, vocabulary, standard/active flags, and limit). |
-| `max_depth` | `int` | `6` | Maximum hop distance allowed between a candidate and its standard anchor. |
+| `parent_ids` | `tuple[int, ...] \| None` | required | Only accept candidates that are descendants of these OMOP concept IDs (hierarchy validation via `concept_ancestor`). With `None` grounding runs unconstrained: candidates are standardised through identity edges but not checked against a hierarchy, which gives coverage but less disambiguation. |
+| `concept_filter` | `ConceptFilter \| None` | required | Filters applied to the initial resolver query (concept IDs, domain, vocabulary and standard/active flags). It is a scope, so it must not set `limit`. |
+| `max_depth` | `int` | `6` | With `parent_ids`, the largest `concept_ancestor` distance between a standard concept and a parent, and the identity hops to the standard concept are not capped. Without `parent_ids`, the largest number of identity hops from the candidate to a standard concept. |
 | `predicate_kinds` | `frozenset[PredicateKind]` | `{IDENTITY}` | Relationship kinds followed when walking from a non-standard candidate to its standard anchor. Currently locked: `__post_init__` raises `ValueError` for any value other than exactly `frozenset({PredicateKind.IDENTITY})` — not yet configurable in practice, despite being a normal dataclass field. |
 
 ### ConceptFilter
@@ -54,20 +57,22 @@ To accelerate the grounding to standard concepts, `omop-graph` makes use of:
 | `concept_ids` | `tuple[int, ...]` | `None` | Restrict to a specific set of concept IDs. |
 | `domains` | `tuple[str, ...]` | `None` | Restrict by OMOP Domain ID (e.g. `"Condition"`, `"Drug"`). |
 | `vocabularies` | `tuple[str, ...]` | `None` | Restrict by Vocabulary ID (e.g. `"SNOMED"`, `"RxNorm"`). |
-| `require_standard` | `bool` | `False` | When `True`, only concepts with `standard_concept` in `('S', 'C')` are returned. |
+| `require_standard` | `bool` | `False` | When `True`, only standard concepts (`'S'`) are returned. |
+| `include_classification` | `bool` | `False` | With `require_standard`, also admits classification concepts (`'C'`). |
 | `require_active` | `bool` | `False` | When `True`, only concepts with an unset `invalid_reason` are returned. |
-| `limit` | `int` | `None` | Cap the number of candidates returned from the resolver query. |
 
 ### Example
 
 ```python
-from omop_graph.reasoning.grounding import ground_term, GroundingConstraints
 from omop_alchemy.cdm.query import ConceptFilter
+
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
+from omop_graph.reasoning.resolvers import ResolverPipeline
 
 constraints = GroundingConstraints(
-    parent_ids=(441484,),  # 'Clinical Finding' — only accept descendants of this ancestor
-    search_constraint=ConceptFilter(
+    parent_ids=(441840,),  # 'Clinical finding': only accept descendants of this ancestor
+    concept_filter=ConceptFilter(
         domains=("Condition",),
         vocabularies=("SNOMED",),
         require_standard=True,
@@ -77,7 +82,7 @@ constraints = GroundingConstraints(
 )
 
 results = ground_term(
-    resolver_pipeline=pipeline,
+    resolver_pipeline=ResolverPipeline.with_all_resolvers(),
     kg=kg,
     query="chest pain",
     query_embedding=None,  # pass a precomputed vector, or None to skip embedding-based scoring
@@ -87,8 +92,10 @@ results = ground_term(
 
 `ground_term` also accepts an optional `context: str | None` folded into the on-demand query-embedding text (used only when `query_embedding` is omitted and the KG has a write-capable embedding config); see [`ground_term`'s own docstring](../reference/ref_grounding.md) for details.
 
+`max_candidates` caps the ranked results of all resolvers together. To cap each resolver on its own, call the resolvers one by one with `limit`, see [Resolvers](resolvers.md).
+
 ## Scoring
-It usually happens that multiple viable candidates are extracted for each search term, especially if multiple resolvers are used. To rank these exctracted concepts, we devised a scoring algorithm, which is detailed in the following:
+It usually happens that multiple viable candidates are extracted for each search term, especially if multiple resolvers are used. To rank these extracted concepts, we devised a scoring algorithm, which is detailed in the following:
 
 ### The Scoring Formula
 
@@ -115,11 +122,11 @@ OMOP is a deep hierarchy. A concept that is 1 hop away from your search term is 
 - **Formula**: $\alpha \times separation$
 - We apply a penalty for every "hop" in the graph required to reach a standard concept.
 
-#### 3. Broadness: Generality Bonus
+#### 3. Broadness Bonus
 In clinical coding, we often prefer a specific match, but when choosing between two equally relevant concepts, the "Broadness" bonus rewards concepts that have a well-defined place in the hierarchy.
 
 - **Formula**: $\beta \times \ln(1 + AncestorCount)$
-- Concepts with more ancestors are higher up in the hierarchy. This bonus helps "tie-break" by favoring well-established standard concepts.
+- `AncestorCount` is the number of ancestors of the concept in `concept_ancestor`. A concept with many ancestors sits deep in a well-populated hierarchy, so the bonus helps "tie-break" by favoring well-established standard concepts, and the log scale keeps very high counts from dominating.
 
 ### Implementation
 Scoring is performed in a batch operation to minimize database overhead:

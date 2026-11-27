@@ -107,7 +107,8 @@ class ResolverPipeline:
         self,
         kg: KnowledgeGraph,
         query: str,
-        constraints: ConceptFilter | None = None,
+        concept_filter: ConceptFilter | None = None,
+        limit: int | None = None,
         **kwargs,
     ) -> Generator[CandidateHit, None, None]:
         """
@@ -119,19 +120,23 @@ class ResolverPipeline:
             The graph instance used for lookups.
         query : str
             The input query to resolve.
-        constraints : ConceptFilter, optional
-            Domain or vocabulary restrictions to apply to the search.
-            Determines also the number of candidates returned for each resolver using the `limit` field. If None, no additional filtering is applied.
+        concept_filter : ConceptFilter, optional
+            Domain or vocabulary restrictions to apply to the search. A scope that must not
+            set ``limit``. If None, no additional filtering is applied.
+        limit : int, optional
+            The most candidates each resolver returns.
 
         Yields
-        -------
+        ------
         CandidateHit
             Candidate concepts found by the resolvers.
         """
         seen = set()
 
         for resolver in self.resolvers:
-            hits = resolver.resolve(kg=kg, query=query, constraints=constraints, **kwargs)
+            hits = resolver.resolve(
+                kg=kg, query=query, concept_filter=concept_filter, limit=limit, **kwargs
+            )
 
             for hit in hits:
                 if hit.concept_id not in seen:

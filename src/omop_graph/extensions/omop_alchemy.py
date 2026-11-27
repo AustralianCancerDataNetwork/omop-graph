@@ -1,7 +1,7 @@
 # Extension to omop-alchemy package
 from dataclasses import dataclass
 from enum import Enum
-from typing import cast
+from typing import ClassVar, cast
 
 import sqlalchemy as sa
 import sqlalchemy.orm as so
@@ -23,6 +23,40 @@ class PredicateKind(Enum):
     ASSOCIATION = "Association"
     ATTRIBUTE = "Attribute"
     METADATA = "Metadata"
+
+
+@dataclass(frozen=True, slots=True)
+class PredicateSubkind:
+    """A subkind name within its kind. The name alone is not unique across kinds."""
+
+    kind: PredicateKind
+    name: str
+
+
+class Subkinds:
+    """The subkinds that code depends on, each of which is a row of the packaged classification."""
+
+    EXACT_EQUIVALENCE: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.IDENTITY, "Exact equivalence"
+    )
+    NEAR_EQUIVALENCE: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.IDENTITY, "Near equivalence"
+    )
+    MAPPING: ClassVar[PredicateSubkind] = PredicateSubkind(PredicateKind.ASSOCIATION, "Mapping")
+    ADMINISTRATIVE: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.ASSOCIATION, "Administrative"
+    )
+    CONTRAINDICATION: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.ASSOCIATION, "Contraindication"
+    )
+    VALUE_MAPPING: ClassVar[PredicateSubkind] = PredicateSubkind(
+        PredicateKind.ASSOCIATION, "Value mapping"
+    )
+
+    @classmethod
+    def named(cls) -> tuple[PredicateSubkind, ...]:
+        """Every subkind the code depends on."""
+        return tuple(v for v in vars(cls).values() if isinstance(v, PredicateSubkind))
 
 
 class HierarchyDirection(Enum):
@@ -125,7 +159,7 @@ def create_extension_tables(
     *,
     resolved: ResolvedCDMDatabase,
 ) -> None:
-    """Create the extension tables as they can physically exist on *resolved*.
+    """Create the extension tables as they can physically exist on resolved.
 
     Goes through ``orm_loader``'s ``create_tables``: on a split deployment the
     foreign key to the vocabulary is left out, since no dialect can express a

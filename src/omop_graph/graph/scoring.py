@@ -10,7 +10,6 @@ This module implements the logic for scoring candidate OMOP concepts based on:
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -26,8 +25,6 @@ if TYPE_CHECKING:
     from omop_emb.utils.embedding_utils import NearestConceptMatch
 
     from omop_graph.graph.kg import KnowledgeGraph
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

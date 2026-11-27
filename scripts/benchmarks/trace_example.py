@@ -35,8 +35,8 @@ from sqlalchemy.exc import NoResultFound
 
 from omop_graph.config import OmopGraphConfig
 from omop_graph.db.session import cdm_session_factory
-from omop_graph.extensions.emb import get_embedding_writer_interface
 from omop_graph.extensions.omop_alchemy import PredicateKind
+from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph, KnowledgeGraphEmbeddingConfiguration
 from omop_graph.graph.nodes import LabelMatchKind
 from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
@@ -212,18 +212,15 @@ def _run_trace(
     query: str,
     case_id: str,
     parent_ids: tuple[int, ...],
-    search_constraint: ConceptFilter | None,
+    concept_filter: ConceptFilter | None,
     expected_concept_id: int | None,
     top_n: int,
 ) -> dict:
     # Stage 0: compute query embedding once (shared by individual resolvers + ground_term)
     query_embedding = None
     try:
-        from omop_emb.interface import EmbeddingRole
-
-        writer = get_embedding_writer_interface(kg)
-        if writer is not None:
-            query_embedding = writer.embed_texts(texts=(query,), role=EmbeddingRole.QUERY)
+        if kg.can_embed_text:
+            query_embedding = kg.embed_text(query)
             logger.info("Query embedding computed (shape=%s).", query_embedding.shape)
         else:
             logger.info("No embedding writer available; EmbeddingResolver will be skipped.")
@@ -241,7 +238,7 @@ def _run_trace(
         previously_unseen_hits = 0
         try:
             for hit in resolver.resolve(
-                kg=kg, query=query, constraints=search_constraint, query_embedding=query_embedding
+                kg=kg, query=query, constraints=concept_filter, query_embedding=query_embedding
             ):
                 hit_count += 1
                 if hit.concept_id not in seen:
@@ -259,7 +256,7 @@ def _run_trace(
     pipeline = ResolverPipeline(resolvers=tuple(ORDERED_RESOLVERS))
     grounding_constraints = GroundingConstraints(
         parent_ids=parent_ids,
-        search_constraint=search_constraint,
+        concept_filter=concept_filter,
     )
     scored = ground_term(
         resolver_pipeline=pipeline,
@@ -323,7 +320,7 @@ def _run_trace(
         return {
             "case_id": case_id,
             "query": query,
-            "constraints": _constraints_dict(search_constraint, parent_ids, kg),
+            "constraints": _constraints_dict(concept_filter, parent_ids, kg),
             "resolver_stages": resolver_stages,
             "hierarchy_validation": hierarchy_validation,
             "resolver_scoring": [],
@@ -488,7 +485,7 @@ def _run_trace(
     return {
         "case_id": case_id,
         "query": query,
-        "constraints": _constraints_dict(search_constraint, parent_ids, kg),
+        "constraints": _constraints_dict(concept_filter, parent_ids, kg),
         "resolver_stages": resolver_stages,
         "hierarchy_validation": hierarchy_validation,
         "resolver_scoring": resolver_scoring,
@@ -860,7 +857,7 @@ def _relationship_classification(kg: KnowledgeGraph, concept_id: int) -> dict:
     count in that class, is enough to show which classes are walkable for grounding (Identity)
     vs. excluded by default (everything else) without enumerating every edge.
     """
-    edges = kg.edges(concept_ids=concept_id, direction="out", active_only=True, within_domain=False)
+    edges = kg.edges(concept_ids=concept_id, direction="out")
     by_kind: dict[PredicateKind, list] = {}
     for edge in edges:
         by_kind.setdefault(edge.predicate_kind, []).append(edge)
@@ -1160,7 +1157,7 @@ def _resolve_identity_hop(kg: KnowledgeGraph, candidate_id: int, standard_id: in
     candidate is already standard there is no hop (`object_id` is None). Otherwise, prefers the
     real edge landing on `standard_id` (when known, i.e. the candidate passed); falls back to the
     candidate's first Identity edge so a failed candidate still shows where Identity mapping
-    *would* have led. `invalid_reason` (None when current/active) lets callers tell a genuine,
+    would have led. `invalid_reason` (None when current/active) lets callers tell a genuine,
     no-mapping-exists dead end apart from a deprecated concept whose mappings were dropped from
     the live vocabulary snapshot -- both render as "no Identity mapping found" but only the
     former is a clean illustrative example.
@@ -1179,9 +1176,7 @@ def _resolve_identity_hop(kg: KnowledgeGraph, candidate_id: int, standard_id: in
     edges = kg.edges(
         concept_ids=candidate_id,
         direction="out",
-        predicate_kinds=frozenset({PredicateKind.IDENTITY}),
-        active_only=True,
-        within_domain=False,
+        edge_filter=EdgeFilter(predicate_kinds=frozenset({PredicateKind.IDENTITY})),
     )
     target_edge = None
     if standard_id is not None:
@@ -1988,7 +1983,7 @@ def trace(
                 progress.advance(task_id)
                 continue
 
-            search_constraint = ConceptFilter(
+            concept_filter = ConceptFilter(
                 domains=tuple([str(c) for c in case_domains])
                 if isinstance(case_domains, list)
                 else None,
@@ -2004,7 +1999,7 @@ def trace(
                 kg=kg,
                 query=case_query,
                 parent_ids=tuple(case_parent_ids),
-                search_constraint=search_constraint,
+                concept_filter=concept_filter,
                 expected_concept_id=case_expected,
                 top_n=top_n,
             )

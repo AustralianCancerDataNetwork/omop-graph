@@ -1,6 +1,6 @@
-# Database Management CLI
+# Command Line
 
-The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local OHDSI Common Data Model (CDM) database using Athena vocabulary files and synthetic test data.
+The `omop-graph` command prepares a CDM for the graph. It has two commands: `relationship-classification`, which every database needs once, and `populate-with-test-data`, which fills a test database with synthetic data.
 
 !!! note "Verbosity flag placement"
     The `--verbose` / `-v` flag is a **global option** and must appear **before** the
@@ -15,26 +15,25 @@ The OMOP CDM instantiation tool provides a streamlined way to bootstrap a local 
 
 ---
 
-## `omop-cdm`
+!!! info "Loading vocabularies"
+    Athena vocabularies are loaded with the [`omop-alchemy` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/) of [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy).
 
-!!! info "Moved to `omop-maint`"
-    Vocabulary loading was previously exposed as `omop-graph omop-cdm`. It is now provided by the [`OMOP_Alchemy`](https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy) package under the [`omop-maint` CLI](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/).
+## `populate-with-test-data`
 
-Load Athena vocabulary CSV files from a configured source path into the OMOP CDM database using the ORM staged CSV loader.
-
-## `populate_with_test_data`
-
-This command adds synthetic patient data into the OMOP CDM after populating the vocabularies using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/)
+Adds synthetic patient data to a CDM whose vocabularies are loaded with [`omop-alchemy load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/). It refuses to run unless both the primary and the vocabulary connection of the configured database are marked `test_only`.
 
 ## `relationship-classification` {: #relationship-classification }
 
-This command ingests pre-defined relationship classifications and mappings into the database. It categorizes standard OMOP relationships into semantic groups (e.g., Hierarchical, Lateral, Mapping) to enable more intelligent graph reasoning.
+This command loads the classification of the OMOP relationships into the database. It sorts each relationship into a kind (`Hierarchy`, `Identity`, `Composition`, `Association` or `Attribute`) and a subkind, as described in [Classification of Edges](../graph/edges.md).
 
 ### Rationale
-The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. This tool maps those relationships to a specific `PredicateKind` (like `HIERARCHY`, `IDENTITY`, or `ASSOCIATION`) and provides detailed inference descriptions used by the `KnowledgeGraph` facade.
+The standard OMOP `relationship` table provides basic metadata, but lacks unified semantic "kinds" out of the box. The `KnowledgeGraph` reads this classification when it starts, and skips the edges of any relationship without one.
+
+!!! warning "Run it again after upgrading"
+    The command drops and recreates both classification tables. A database classified by an earlier release has no `direction` column on `relationship_class` and no `generalises` column on `relationship_mapping`, and the `KnowledgeGraph` refuses to start on it with an error naming this command.
 
 ### Prerequisites
-1. Prepopulated OMOP CDM (e.g. using [`omop-maint load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
+1. Prepopulated OMOP CDM (e.g. using [`omop-alchemy load-vocab-source`](https://australiancancerdatanetwork.github.io/OMOP_Alchemy/getting-started/maintenance/))
 2. `omop-graph` configured via oa-configurator (`omop-config configure omop_graph`, see [Getting Started: Configuration](../getting-started/configuration.md)); the CDM connection is resolved from `OmopGraphConfig.cdm_db`, no environment variables involved.
 3. Nothing further — the classification data ships with the package:
     - **`predicate_classification.csv`**: Defines the semantic classes and subclasses (descriptions, semantics, and inference rules).

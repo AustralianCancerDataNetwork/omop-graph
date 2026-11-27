@@ -1,0 +1,191 @@
+"""Text annotation over the OMOP knowledge graph."""
+
+import logging
+from collections.abc import Iterator
+from enum import StrEnum
+from itertools import islice
+from typing import ClassVar
+
+import numpy as np
+from linkml_runtime.linkml_model.annotations import Annotation
+from oaklib.datamodels.text_annotator import (
+    TextAnnotation,
+    TextAnnotationConfiguration,
+)
+from oaklib.interfaces import TextAnnotatorInterface
+from oaklib.interfaces.text_annotator_interface import nen_annotation
+from omop_alchemy.cdm.query import ConceptFilter
+
+from omop_graph.oaklib_interface.base import OMOPBaseInterface
+from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
+from omop_graph.reasoning.grounding import GroundingConstraints, ground_term
+from omop_graph.reasoning.resolvers.resolver_pipeline import ResolverPipeline
+
+logger = logging.getLogger(__name__)
+
+
+class AnnotationKey(StrEnum):
+    """The keys of the ``annotations`` argument of ``annotate_text``."""
+
+    PARENT_IDS = "parent_ids"
+    VOCABS = "vocabs"
+    DOMAINS = "domains"
+
+
+class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
+    """
+    Mixin providing text annotation capabilities.
+
+    Parameters
+    ----------
+    kg : KnowledgeGraph
+        The underlying OMOP knowledge graph.
+    """
+
+    ANNOTATION_SEPARATOR: ClassVar[str] = ","
+    """The character separating several values of one annotation."""
+
+    IGNORED_ANNOTATION_FIELDS: ClassVar[tuple[str, ...]] = (
+        "sources",
+        "categories",
+        "model",
+        "include_aliases",
+    )
+    """The ``TextAnnotationConfiguration`` fields that have no effect."""
+
+    def _parent_id(self, parent: str) -> int:
+        """
+        The concept id of a ``parent_ids`` entry, given as an id or as a CURIE.
+
+        Raises
+        ------
+        ValueError
+            If the entry names no concept.
+        """
+        concept_id = self.codec.resolve_reference(parent)
+        if concept_id is None:
+            raise ValueError(f"parent_ids entry {parent!r} names no concept.")
+        return concept_id
+
+    def annotate_text(
+        self,
+        text: str,
+        configuration: TextAnnotationConfiguration | None = None,
+        query_embedding: np.ndarray | None = None,
+        annotations: dict[str, Annotation] | None = None,
+        max_depth: int = GroundingConstraints.max_depth,
+    ) -> Iterator[TextAnnotation]:
+        """
+        Annotate text by grounding the whole text as one term to the OMOP vocabulary.
+
+        Parameters
+        ----------
+        text : str
+            The input text to annotate.
+        configuration : TextAnnotationConfiguration, optional
+            Must set ``matches_whole_text``. ``limit`` caps the annotations and
+            ``token_exclusion_list`` drops tokens from the text.
+        query_embedding : np.ndarray, optional
+            Pre-computed query embedding for the input text. When None and the KG
+            has a writer interface, the embedding is computed on demand.
+        annotations : Dict[str, Annotation], optional
+            LinkML annotations that provide context constraints (parent IDs,
+            vocabularies, domains).
+        max_depth : int
+            Maximum grounding hierarchy depth, ``GroundingConstraints.max_depth`` by default.
+
+        Returns
+        -------
+        Iterator[TextAnnotation]
+            One annotation per grounded concept. Nothing is yielded when the text
+            does not ground.
+
+        Raises
+        ------
+        OMOPUnsupportedError
+            If ``matches_whole_text`` is not set, since spans are not annotated.
+        ValueError
+            At the call, if a ``parent_ids`` entry names no concept, or a vocabulary or
+            domain does not exist.
+        """
+        if configuration is None:
+            configuration = TextAnnotationConfiguration()
+        if not configuration.matches_whole_text:
+            raise OMOPUnsupportedError(
+                "TextAnnotatorInterface.annotate_text(matches_whole_text=False)"
+            )
+
+        ignored = [
+            field for field in self.IGNORED_ANNOTATION_FIELDS if getattr(configuration, field)
+        ]
+        if ignored:
+            logger.info("The annotation configuration has no effect for %s.", ", ".join(ignored))
+
+        constraints = self._constraints(annotations, max_depth)
+        return islice(
+            self._ground_whole_text(text, configuration, query_embedding, constraints),
+            configuration.limit,
+        )
+
+    def _constraints(
+        self, annotations: dict[str, Annotation] | None, max_depth: int
+    ) -> GroundingConstraints:
+        """
+        The grounding constraints the annotations describe.
+
+        Raises
+        ------
+        ValueError
+            If a ``parent_ids`` entry names no concept, or a vocabulary or domain does not exist.
+        """
+        values: dict[AnnotationKey, tuple[str, ...] | None] = dict.fromkeys(AnnotationKey)
+        for key in AnnotationKey:
+            annotation = (annotations or {}).get(key)
+            if annotation is not None and isinstance(annotation.value, str):
+                values[key] = tuple(
+                    value.strip() for value in annotation.value.split(self.ANNOTATION_SEPARATOR)
+                )
+        parent_ids = values[AnnotationKey.PARENT_IDS]
+        concept_filter = ConceptFilter(
+            domains=values[AnnotationKey.DOMAINS],
+            vocabularies=values[AnnotationKey.VOCABS],
+            require_standard=False,
+        )
+        self.kg.check_concept_filter(concept_filter)
+        return GroundingConstraints(
+            parent_ids=tuple(self._parent_id(pid) for pid in parent_ids) if parent_ids else None,
+            concept_filter=concept_filter,
+            max_depth=max_depth,
+        )
+
+    def _ground_whole_text(
+        self,
+        text: str,
+        configuration: TextAnnotationConfiguration,
+        query_embedding: np.ndarray | None,
+        constraints: GroundingConstraints,
+    ) -> Iterator[TextAnnotation]:
+        """Ground the text, with its excluded tokens removed, as one term."""
+        if configuration.token_exclusion_list:
+            text = " ".join(
+                term for term in text.split() if term not in configuration.token_exclusion_list
+            )
+
+        grounded = ground_term(
+            resolver_pipeline=ResolverPipeline.with_all_resolvers(),
+            kg=self.kg,
+            query=text,
+            constraints=constraints,
+            query_embedding=query_embedding,
+        )
+
+        if not grounded:
+            logger.info("Nothing grounds %r", text)
+            return
+
+        for ground in grounded:
+            yield nen_annotation(
+                text=text,
+                object_id=self.codec.concept_curie(ground.concept_id),
+                object_label=ground.concept_name,
+            )

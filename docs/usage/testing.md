@@ -7,15 +7,30 @@ This page summarizes how tests are configured in `omop-graph` and what is curren
 The test runner configuration lives in `pytest.toml` at the repository root:
 
 - `testpaths = ["tests"]`
-- `addopts = ["-rf", "-rx", "--disable-pytest-warnings"]`
+- `addopts = ["-rf", "-rx", "--disable-pytest-warnings", "-m", "not db_dialect"]`, which leaves out the PostgreSQL-only suite
 - CLI logging enabled at `DEBUG`, filtered to `omop_graph`/`orm_loader`/`omop_spires`/`tests` namespaces (an autouse session fixture in `tests/conftest.py`)
+
+## Layout
+
+The tests are grouped by what they cover, in folders under `tests`:
+
+- `oaklib` for the oaklib adapter, one file per interface
+- `graph` for the knowledge graph: edges, queries, traversal and enumeration
+- `classification` for the relationship classification data and loader
+- `reasoning` for grounding and the resolvers
+- `db` for connections, schemas and the Postgres fixture
+- `extensions` for the optional embedding and full-text support
+- `cli` for the command line
+- `fixtures` for the shared mock CDM and `cdm_builders.py`, the builders of the small in-memory CDMs the oaklib tests describe
 
 ## What Is Currently Tested
 
 The default suite runs graph queries against an **in-memory SQLite mock CDM** (`tests/fixtures/mock_cdm.py`'s `mock_cdm_engine_sqlite` fixture, used by `mock_cdm_kg`). PostgreSQL-only integration tests use the separate `mock_cdm_engine` fixture and oa-configurator's isolated test database fixture. Current SQLite coverage includes:
 
 - Grounding behavior from text inputs to expected OMOP concept IDs
-- Rendering behavior for text and Mermaid output under `tests/render`
+- The knowledge graph: edge selection, traversal, enumeration and the two kinds of ancestry
+- The relationship classification data and loader
+- The oaklib adapter, one file per interface, each on a small CDM built row by row, and a compliance test that every method an implemented interface leaves unimplemented is either implemented or registered as unsupported
 - Optional full-text behavior guards when sidecar full-text metadata/columns are not present
 - KnowledgeGraph full-text lookup returning no matches when SQLite does not support full-text search
 
@@ -26,10 +41,9 @@ The grounding test suite is structured with parametrized cases so each clinical 
 A separate suite, tagged with the `db_dialect` marker and excluded from the
 default run (`pytest.toml`'s `-m "not db_dialect"`), runs against a real
 PostgreSQL database via oa-configurator's test infrastructure. This is where
-schema-drift protection and split-connection behavior are covered:
-`test_schema_provenance_guard.py`, `test_vocab_split_connection.py`,
-`test_oaklib_schema_awareness.py`, `test_fulltext_vocab_schema_postgres.py`,
-`test_predicate_flags.py`, `test_relationship_classification.py`.
+schema-drift protection and split-connection behavior are covered, mostly in
+`tests/db`: `test_schema_provenance_guard.py`, `test_vocab_split_connection.py` and
+`test_fulltext_vocab_schema_postgres.py`.
 
 ## Running Tests
 
@@ -48,11 +62,11 @@ pytest -m db_dialect
 Run one file:
 
 ```bash
-pytest tests/test_grounding.py
+pytest tests/reasoning/test_grounding.py
 ```
 
 Run one parametrized case (example):
 
 ```bash
-pytest tests/test_grounding.py -k thyroid-cancer
+pytest tests/reasoning/test_grounding.py -k thyroid-cancer
 ```

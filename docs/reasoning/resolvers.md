@@ -17,24 +17,22 @@ The backbone of the `ResolverPipeline` are specific **resolvers**. `omop-graph` 
     Traversing each of the resolvers one by one can be an exhaustive search. The `ResolverPipeline` therefore offers a `stop_after_resolver` option. If set, retrieval from the DB stops after that resolver has concluded. `ALL_RESOLVERS`, the default sequence, is ordered exactly as listed above (i.e. **`ExactLabelResolver`** >> **`ExactSynonymResolver`** >> **`PartialLabelResolver`** >> ... >> **`EmbeddingResolver`**).
 
 ```python
-from omop_alchemy.cdm.query import ConceptFilter
-
-from omop_graph.graph.nodes import LabelMatchKind
-from omop_graph.reasoning.grounding import GroundingConstraints
-
-# Simplified Logic View
-constraints = GroundingConstraints(
-    parent_ids=parsed_parent_ids,
-    search_constraint=ConceptFilter(
-        domains=parsed_domains,
-        vocabularies=parsed_vocabs,
-        require_standard=True,  # We prioritize Standard Concepts
-    ),
-    max_depth=6,  # How deep to traverse the hierarchy
+from omop_graph.reasoning.resolvers import (
+    ExactLabelResolver,
+    ExactSynonymResolver,
+    ResolverPipeline,
 )
 
-# The resolver pipeline stops once it finds a high-confidence match
-resolver_pipeline = ResolverPipeline.with_all_resolvers()
-# Optionally you can also set the stopping on a specific resolver. The order of the resolvers matters
-# resolver_pipeline = ResolverPipeline(<your_tuple_of_resolvers>, ExactLabelResolver)
+# Every resolver, in the order above
+pipeline = ResolverPipeline.with_all_resolvers()
+
+# Or some resolvers, stopping after one has run. The order of the resolvers matters
+pipeline = ResolverPipeline(
+    (ExactLabelResolver(), ExactSynonymResolver()),
+    stop_after_resolver=ExactLabelResolver,
+)
+
+candidates = pipeline.resolve(kg, "Hodgkin lymphoma", concept_filter=concept_filter)
 ```
+
+The pipeline is used by [`ground_term`](grounding.md), together with the `GroundingConstraints` described there. The `concept_filter` argument of `resolve` is a `ConceptFilter`, which restricts the candidates by domain, vocabulary and standard or active status. It must not set `limit`. The most candidates each resolver returns is the `limit` argument of `resolve`, and for the embedding resolver it is the number of nearest concepts.

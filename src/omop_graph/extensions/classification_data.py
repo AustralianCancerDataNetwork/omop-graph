@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .omop_alchemy import HierarchyDirection, PredicateKind
+from .omop_alchemy import HierarchyDirection, PredicateKind, Subkinds
 
 CLASSIFICATION_FILE = "predicate_classification.csv"
 MAPPING_FILE = "predicate_mapping.csv"
@@ -21,10 +21,13 @@ GENERALISING_KINDS = frozenset(
     }
 )
 NON_GENERALISING_SUBKINDS = frozenset(
-    {
-        (PredicateKind.ASSOCIATION.value, subkind)
-        for subkind in ("Mapping", "Administrative", "Contraindication", "Value mapping")
-    }
+    (subkind.kind.value, subkind.name)
+    for subkind in (
+        Subkinds.MAPPING,
+        Subkinds.ADMINISTRATIVE,
+        Subkinds.CONTRAINDICATION,
+        Subkinds.VALUE_MAPPING,
+    )
 )
 
 
