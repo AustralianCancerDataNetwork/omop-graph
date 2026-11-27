@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from fixtures.helpers import UP
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
@@ -14,9 +13,16 @@ from fixtures.hierarchy_cdm import (
 )
 
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.model.edges import IS_A_FILTER
 from omop_graph.graph.model.matches import LabelMatchKind
 from omop_graph.graph.paths import GraphPath, Node, PathStep
-from omop_graph.graph.traverse import GraphTrace, Subgraph, TraceStep, traverse
+from omop_graph.graph.traverse import (
+    GraphTrace,
+    Subgraph,
+    TerminationReason,
+    TraceStep,
+    traverse,
+)
 from omop_graph.reasoning.explanation import PathExplanation
 from omop_graph.render import (
     bind_default_renderers,
@@ -62,7 +68,7 @@ def path() -> GraphPath:
 @pytest.fixture(scope="module")
 def subgraph_and_trace(kg) -> tuple[Subgraph, GraphTrace]:
     subgraph, trace = traverse(
-        kg, [LUNG_CANCER], edge_filter=UP, max_depth=2, max_nodes=None, trace=True
+        kg, [LUNG_CANCER], edge_filter=IS_A_FILTER, max_depth=2, max_nodes=None, trace=True
     )
     assert trace is not None
     return subgraph, trace
@@ -70,18 +76,20 @@ def subgraph_and_trace(kg) -> tuple[Subgraph, GraphTrace]:
 
 def _crowded_trace(kg, edge_count: int) -> GraphTrace:
     """A trace in which one expansion has that many edges of the same relationship."""
-    edge = min(kg.edges(LUNG_CANCER, "out", UP), key=lambda edge: edge.object_id)
+    edge = min(kg.edges(LUNG_CANCER, "out", IS_A_FILTER), key=lambda edge: edge.object_id)
     return GraphTrace(
         seeds=(LUNG_CANCER,),
         steps=[TraceStep(depth=0, node=LUNG_CANCER, expanded_edges=(edge,) * edge_count)],
-        terminated_reason="max_depth",
+        terminated_reason=TerminationReason.MAX_NODES,
     )
 
 
 @pytest.fixture(scope="module")
 def small_subgraph(kg) -> Subgraph:
     """The concept and the two it is directly a kind of, so its nodes and edges differ in number."""
-    return traverse(kg, [LUNG_CANCER], edge_filter=UP, max_depth=1, max_nodes=None, trace=False)[0]
+    return traverse(
+        kg, [LUNG_CANCER], edge_filter=IS_A_FILTER, max_depth=1, max_nodes=None, trace=False
+    )[0]
 
 
 def test_a_path_in_text_has_a_line_for_each_step(kg, path) -> None:
@@ -183,7 +191,7 @@ def test_a_trace_in_text_lists_the_expansions_by_relationship(kg, subgraph_and_t
 
 def test_a_trace_in_text_says_why_it_ended(kg) -> None:
     assert render_trace(kg, _crowded_trace(kg, 1), format="text").endswith(
-        "\n[terminated: max_depth]"
+        "\n[terminated: max_nodes]"
     )
 
 
@@ -221,7 +229,7 @@ def test_a_trace_in_html_lists_the_expansions_in_order(kg, subgraph_and_trace) -
 def test_a_trace_in_html_says_why_it_ended(kg) -> None:
     rendered = render_trace(kg, _crowded_trace(kg, 1), format="html")
 
-    assert "<div style='color:#a00;'>[terminated: max_depth]</div>" in rendered
+    assert "<div style='color:#a00;'>[terminated: max_nodes]</div>" in rendered
 
 
 @pytest.mark.parametrize(("edges", "shown", "more"), [(5, 5, None), (6, 5, 1), (9, 5, 4)])

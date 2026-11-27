@@ -15,6 +15,7 @@ from collections import deque
 from collections.abc import Iterable
 from contextlib import closing
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 # Local Application Imports
@@ -22,6 +23,15 @@ from omop_graph.graph.model.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeVi
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
+
+
+class TerminationReason(StrEnum):
+    """Why a traversal or a path search stopped."""
+
+    MAX_NODES = "max_nodes"
+    SOURCE_EQUALS_TARGET = "source_equals_target"
+    SHORTEST_PATHS_FOUND = "shortest_paths_found"
+    NO_PATH = "no_path"
 
 
 @dataclass(frozen=True)
@@ -53,7 +63,7 @@ class TraceStep:
     node : int
         The Concept ID of the node being expanded.
     expanded_edges : tuple[EdgeView, ...]
-        The edges found outgoing from this node.
+        The edges read from this node, outgoing in a walk from a seed and towards it in a search from the target.
     """
 
     depth: int
@@ -74,13 +84,13 @@ class GraphTrace:
         The starting concept IDs.
     steps : list[TraceStep]
         The sequence of expansions performed.
-    terminated_reason : str, optional
-        Why the traversal stopped (e.g., 'max_nodes', 'max_depth').
+    terminated_reason : TerminationReason, optional
+        Why the traversal stopped, or None when it ran to its end.
     """
 
     seeds: tuple[int, ...]
     steps: list[TraceStep]
-    terminated_reason: str | None = None
+    terminated_reason: TerminationReason | None = None
 
     def summary(self, kg: KnowledgeGraph, max_steps: int = 10) -> str:
         """
@@ -164,13 +174,13 @@ def traverse(
 
     # Queue stores (concept_id, depth)
     q = deque((s, 0) for s in budgeted_seeds)
-    terminated = None
+    terminated: TerminationReason | None = None
 
     while q:
         node, depth = q.popleft()
 
         if max_nodes and len(discovered) >= max_nodes:
-            terminated = "max_nodes"
+            terminated = TerminationReason.MAX_NODES
             break
 
         if depth >= max_depth:
@@ -194,12 +204,12 @@ def traverse(
                     expanded.append(edge)
                     edges_out.append(edge)
                     if max_nodes and len(discovered) >= max_nodes:
-                        terminated = "max_nodes"
+                        terminated = TerminationReason.MAX_NODES
                         break
 
         if trace:
             trace_steps.append(TraceStep(depth=depth, node=node, expanded_edges=tuple(expanded)))
-        if terminated == "max_nodes":
+        if terminated == TerminationReason.MAX_NODES:
             break
 
     dedup = {(e.subject_id, e.predicate_id, e.object_id): e for e in edges_out}

@@ -185,12 +185,30 @@ class PathExplanation:
 
 def trace_contains_step(trace: GraphTrace, step: PathStep) -> TraceStep | None:
     """
-    Check if a specific path step appears in the search trace.
+    Find the first expansion in the trace that read the edge of a path step.
+
+    The search from the target reads an edge at its object, so the edge is matched
+    itself and not the concept it was read from.
+
+    Parameters
+    ----------
+    trace : GraphTrace
+        The trace of the search that found the path.
+    step : PathStep
+        The step of the path.
+
+    Returns
+    -------
+    TraceStep | None
+        The expansion, whose depth counts from the end of the search that read the edge,
+        or None when no expansion read it.
     """
     for ts in trace.steps:
-        if ts.node != step.subject.concept_id:
-            continue
         for e in ts.expanded_edges:
-            if e.object_id == step.object.concept_id and e.predicate_id == step.predicate:
+            if (
+                e.subject_id == step.subject.concept_id
+                and e.predicate_id == step.predicate
+                and e.object_id == step.object.concept_id
+            ):
                 return ts
     return None

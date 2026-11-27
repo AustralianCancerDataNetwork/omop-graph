@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Iterable, Iterator
-from types import SimpleNamespace
-from typing import cast
+from collections.abc import Iterator
 
 import pytest
-from fixtures.helpers import UP
+from fixtures.edge_list import EdgeList
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
@@ -21,8 +19,9 @@ from fixtures.hierarchy_cdm import (
 
 from omop_graph.graph import paths as paths_module
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.model.edges import EdgeFilter
-from omop_graph.graph.paths import find_shortest_paths, find_shortest_paths_batch
+from omop_graph.graph.model.edges import IS_A_FILTER, EdgeFilter
+from omop_graph.graph.paths import find_shortest_paths
+from omop_graph.graph.traverse import TerminationReason
 
 
 @pytest.fixture(scope="module")
@@ -31,65 +30,10 @@ def kg() -> Iterator[KnowledgeGraph]:
         yield KnowledgeGraph(sessions)
 
 
-class EdgeList:
-    """A graph of the given edges that answers the calls a path search makes, and counts them."""
-
-    def __init__(self, edges: Iterable[tuple[int, int]]) -> None:
-        self.edge_list = tuple(edges)
-        self.concepts = sorted({concept for edge in self.edge_list for concept in edge})
-        self.read_from: list[int] = []
-
-    def edges(self, concept_ids, direction, edge_filter=None):
-        ids = {concept_ids} if isinstance(concept_ids, int) else set(concept_ids)
-        self.read_from.extend(sorted(ids))
-        return tuple(
-            SimpleNamespace(subject_id=subject, object_id=object_, predicate_id="Is a")
-            for subject, object_ in self.edge_list
-            if (subject if direction == "out" else object_) in ids
-        )
-
-    def concept_views(self, concept_ids, sort=True):
-        return tuple(
-            SimpleNamespace(concept_id=concept_id, standard_concept=concept_id % 2 == 1)
-            for concept_id in concept_ids
-        )
-
-    @property
-    def graph(self) -> KnowledgeGraph:
-        """This list as the graph a search takes, which only needs the calls it answers."""
-        return cast(KnowledgeGraph, self)
-
-    def shortest_routes(self, source: int, target: int) -> list[tuple[int, ...]]:
-        """Every shortest route, by enumerating the routes breadth first."""
-        found: list[tuple[int, ...]] = []
-        routes = [(source,)]
-        while routes and not found:
-            routes = [
-                route + (object_,)
-                for route in routes
-                for subject, object_ in self.edge_list
-                if subject == route[-1] and object_ not in route
-            ]
-            found = [route for route in routes if route[-1] == target]
-        return sorted(found)
-
-
-@pytest.fixture(params=["bidirectional", "batched"])
-def search_in(request):
-    """Both searches, called alike on a graph and returning the paths."""
-    searches = {
-        "bidirectional": lambda graph, *args, **kwargs: find_shortest_paths(graph, *args, **kwargs)[
-            0
-        ],
-        "batched": find_shortest_paths_batch,
-    }
-    return searches[request.param]
-
-
 @pytest.fixture
-def search(search_in, kg):
-    """Both searches on the hierarchy CDM."""
-    return lambda *args, **kwargs: search_in(kg, *args, **kwargs)
+def search(kg):
+    """The search on the hierarchy CDM, returning the paths."""
+    return lambda *args, **kwargs: find_shortest_paths(kg, *args, **kwargs)[0]
 
 
 def _routes(paths) -> list[tuple[int, ...]]:
@@ -104,7 +48,7 @@ def test_a_concept_is_its_own_empty_path(search) -> None:
 
 
 def test_every_shortest_path_is_found(search) -> None:
-    paths = search(LUNG_CANCER, DISEASE, edge_filter=UP)
+    paths = search(LUNG_CANCER, DISEASE, edge_filter=IS_A_FILTER)
 
     assert _routes(paths) == [
         (LUNG_CANCER, CANCER, DISEASE),
@@ -120,28 +64,35 @@ def test_the_edge_filter_decides_which_edges_are_followed(search) -> None:
     assert search(LUNG_CANCER, DISEASE, edge_filter=only_sites) == []
 
 
-def test_max_depth_bounds_the_search_from_each_end(search) -> None:
-    assert search(LUNG_CANCER, DISEASE, edge_filter=UP, max_depth=0) == []
-    assert search(LUNG_CANCER, OUTER_ROOT, edge_filter=UP, max_depth=1) == []
-    assert _routes(search(LUNG_CANCER, OUTER_ROOT, edge_filter=UP, max_depth=2)) == [
+def test_max_depth_bounds_the_length_of_a_path(search) -> None:
+    assert search(LUNG_CANCER, DISEASE, edge_filter=IS_A_FILTER, max_depth=0) == []
+    assert search(LUNG_CANCER, OUTER_ROOT, edge_filter=IS_A_FILTER, max_depth=2) == []
+    assert _routes(search(LUNG_CANCER, OUTER_ROOT, edge_filter=IS_A_FILTER, max_depth=3)) == [
         (LUNG_CANCER, CANCER, OUTDATED, OUTER_ROOT)
     ]
 
 
 def test_max_paths_limits_the_result(search) -> None:
-    assert len(search(LUNG_CANCER, DISEASE, edge_filter=UP, max_paths=1)) == 1
+    assert len(search(LUNG_CANCER, DISEASE, edge_filter=IS_A_FILTER, max_paths=1)) == 1
 
 
-def test_unconnected_concepts_have_no_path(search) -> None:
-    assert search(ORPHAN, DISEASE) == []
+def test_unconnected_concepts_have_no_path(kg) -> None:
+    paths, trace = find_shortest_paths(kg, ORPHAN, DISEASE, traced=True)
+
+    assert paths == []
+    assert trace is not None
+    assert trace.terminated_reason is TerminationReason.NO_PATH
 
 
 def test_a_traced_search_records_how_it_ended(kg) -> None:
-    paths, trace = find_shortest_paths(kg, LUNG_CANCER, DISEASE, edge_filter=UP, traced=True)
+    paths, trace = find_shortest_paths(
+        kg, LUNG_CANCER, DISEASE, edge_filter=IS_A_FILTER, traced=True
+    )
 
     assert paths
     assert trace is not None
-    assert trace.seeds
+    assert trace.terminated_reason is TerminationReason.SHORTEST_PATHS_FOUND
+    assert trace.seeds == (LUNG_CANCER,)
     assert trace.steps
 
 
@@ -149,7 +100,18 @@ def test_a_traced_search_of_a_concept_to_itself_says_so(kg) -> None:
     _, trace = find_shortest_paths(kg, DISEASE, DISEASE, traced=True)
 
     assert trace is not None
-    assert trace.terminated_reason == "source_equals_target"
+    assert trace.terminated_reason is TerminationReason.SOURCE_EQUALS_TARGET
+
+
+def test_an_untraced_search_returns_no_trace(kg) -> None:
+    assert find_shortest_paths(kg, LUNG_CANCER, DISEASE)[1] is None
+    assert find_shortest_paths(kg, ORPHAN, DISEASE)[1] is None
+    assert find_shortest_paths(kg, DISEASE, DISEASE)[1] is None
+
+
+def test_the_options_of_a_search_are_keywords(kg) -> None:
+    with pytest.raises(TypeError):
+        find_shortest_paths(kg, LUNG_CANCER, DISEASE, IS_A_FILTER)  # ty: ignore[too-many-positional-arguments]
 
 
 DIAMONDS = ((1, 2), (1, 3), (2, 4), (3, 4), (4, 5), (4, 6), (5, 7), (6, 7))
@@ -159,51 +121,74 @@ REPEATED = ((1, 4), (1, 5), (2, 5), (4, 6), (4, 7), (5, 3), (6, 1), (6, 2), (6, 
 """A graph where paths from 4 to 3 meet at more than one node: 4-6-1-5-3, 4-7-1-5-3 and 4-6-2-5-3."""
 
 
-def test_a_path_through_several_meeting_nodes_is_found_once(search_in) -> None:
+def _find(edges: EdgeList, source: int, target: int, **kwargs):
+    return find_shortest_paths(edges.graph, source, target, **kwargs)[0]
+
+
+def test_a_path_through_several_meeting_nodes_is_found_once() -> None:
     edges = EdgeList(REPEATED)
 
-    assert _routes(search_in(edges, 4, 3, max_depth=3)) == [
+    assert _routes(_find(edges, 4, 3, max_depth=4)) == [
         (4, 6, 1, 5, 3),
         (4, 6, 2, 5, 3),
         (4, 7, 1, 5, 3),
     ]
 
 
-def test_a_search_cut_by_max_depth_keeps_every_shortest_path(search_in) -> None:
-    edges = EdgeList(REPEATED)
-
-    assert _routes(search_in(edges, 4, 3, max_depth=2)) == edges.shortest_routes(4, 3)
-
-
-@pytest.mark.parametrize(("steps", "max_depth"), [(2, 1), (3, 2), (4, 2), (5, 3), (6, 3)])
-def test_max_depth_from_each_end_reaches_a_path_of_twice_the_steps(
-    search_in, steps, max_depth
-) -> None:
+@pytest.mark.parametrize("steps", [1, 2, 3, 5, 6])
+def test_max_depth_is_the_most_steps_a_path_may_have(steps) -> None:
     chain = EdgeList((n, n + 1) for n in range(1, steps + 1))
 
-    assert _routes(search_in(chain, 1, steps + 1, max_depth=max_depth)) == [
-        tuple(range(1, steps + 2))
-    ]
-    assert search_in(chain, 1, steps + 1, max_depth=max_depth - 1) == []
+    assert _routes(_find(chain, 1, steps + 1, max_depth=steps)) == [tuple(range(1, steps + 2))]
+    assert _find(chain, 1, steps + 1, max_depth=steps - 1) == []
 
 
-def test_max_paths_cuts_a_meeting_node_that_has_more_paths(search_in) -> None:
+def test_max_paths_cuts_a_meeting_node_that_has_more_paths() -> None:
     edges = EdgeList(DIAMONDS)
 
     assert len(edges.shortest_routes(1, 7)) == 4
-    assert len(search_in(edges, 1, 7, max_paths=3)) == 3
-    assert len(search_in(edges, 1, 7, max_paths=2)) == 2
-    assert len(search_in(edges, 1, 7, max_paths=9)) == 4
+    assert len(_find(edges, 1, 7, max_paths=3)) == 3
+    assert len(_find(edges, 1, 7, max_paths=2)) == 2
+    assert len(_find(edges, 1, 7, max_paths=9)) == 4
 
 
-def test_a_search_stops_reading_once_its_paths_are_found(search_in) -> None:
+def test_a_search_reads_each_frontier_once_and_stops_when_its_paths_are_found() -> None:
     edges = EdgeList([(1, 2), (2, 3), (1, 10), (10, 11), (11, 12), (12, 13), (3, 20), (20, 21)])
 
-    assert _routes(search_in(edges, 1, 3)) == [(1, 2, 3)]
-    assert {12, 13, 20, 21}.isdisjoint(edges.read_from)
+    assert _routes(_find(edges, 1, 3)) == [(1, 2, 3)]
+    assert edges.read_from == [1, 3]
 
 
-def test_both_searches_find_every_shortest_path_of_random_graphs(search_in) -> None:
+def test_the_end_with_fewer_concepts_is_read_next() -> None:
+    edges = EdgeList(
+        [(1, 2), (1, 3), (2, 10), (3, 11), (6, 9), (7, 9), (8, 9), (5, 6), (5, 7), (4, 5)]
+    )
+
+    _find(edges, 1, 9)
+
+    assert edges.read_from[:4] == [1, 9, 2, 3]
+
+
+def test_a_search_stops_when_an_end_has_nothing_left_to_expand() -> None:
+    edges = EdgeList([(1, 2), (1, 3), (2, 4), (3, 5), (4, 6), (5, 7)])
+
+    paths, trace = find_shortest_paths(edges.graph, 1, 99, traced=True)
+
+    assert paths == []
+    assert edges.read_from == [1, 99]
+    assert trace is not None
+    assert trace.terminated_reason is TerminationReason.NO_PATH
+    assert [step.node for step in trace.steps] == [1, 99]
+
+
+def test_a_search_cut_by_max_depth_reads_no_deeper_than_the_budget() -> None:
+    edges = EdgeList((n, n + 1) for n in range(1, 10))
+
+    assert _find(edges, 1, 10, max_depth=3) == []
+    assert edges.read_from == [1, 2, 3]
+
+
+def test_every_shortest_path_of_random_graphs_is_found_and_none_longer_than_max_depth() -> None:
     generator = random.Random(7)
     for _ in range(200):
         size = generator.randint(4, 9)
@@ -223,15 +208,32 @@ def test_both_searches_find_every_shortest_path_of_random_graphs(search_in) -> N
         max_depth = generator.choice([1, 2, 3, 6])
         expected = edges.shortest_routes(source, target)
 
-        found = _routes(search_in(edges, source, target, max_depth=max_depth, max_paths=1000))
+        found = _routes(_find(edges, source, target, max_depth=max_depth, max_paths=1000))
 
         assert len(found) == len(set(found))
-        if expected and len(expected[0]) - 1 <= 2 * max_depth:
+        if expected and len(expected[0]) - 1 <= max_depth:
             assert found == expected, (edges.edge_list, source, target, max_depth)
+        else:
+            assert found == [], (edges.edge_list, source, target, max_depth)
 
 
-def test_the_nodes_of_a_path_say_whether_they_are_standard(search_in) -> None:
-    [path] = search_in(EdgeList([(1, 2), (2, 3)]), 1, 3)
+def test_two_relationships_between_a_pair_make_two_paths_on_either_side_of_the_meeting() -> None:
+    edges = EdgeList(
+        [(1, 2, "A"), (1, 2, "B"), (2, 3), (3, 4, "X"), (3, 4, "Y"), (1, 5), (1, 6), (1, 7)]
+    )
+
+    paths = _find(edges, 1, 4)
+
+    assert sorted(tuple(step.predicate for step in path.steps) for path in paths) == [
+        ("A", "Is a", "X"),
+        ("A", "Is a", "Y"),
+        ("B", "Is a", "X"),
+        ("B", "Is a", "Y"),
+    ]
+
+
+def test_the_nodes_of_a_path_say_whether_they_are_standard() -> None:
+    [path] = _find(EdgeList([(1, 2), (2, 3)]), 1, 3)
 
     assert [(step.subject.is_standard, step.object.is_standard) for step in path.steps] == [
         (True, False),
@@ -239,13 +241,13 @@ def test_the_nodes_of_a_path_say_whether_they_are_standard(search_in) -> None:
     ]
 
 
-def test_the_paths_of_the_lowest_meeting_node_come_first(search_in) -> None:
+def test_the_paths_of_the_lowest_meeting_node_come_first() -> None:
     edges = EdgeList([(100, 1), (100, 8), (1, 200), (8, 200)])
 
-    assert _routes(search_in(edges, 100, 200, max_paths=1)) == [(100, 1, 200)]
+    assert _routes(_find(edges, 100, 200, max_paths=1)) == [(100, 1, 200)]
 
 
-def test_paths_are_not_built_once_enough_are_found(search_in, monkeypatch) -> None:
+def test_paths_are_not_built_once_enough_are_found(monkeypatch) -> None:
     built = []
     reconstruct = paths_module.reconstruct_paths
     monkeypatch.setattr(
@@ -254,9 +256,39 @@ def test_paths_are_not_built_once_enough_are_found(search_in, monkeypatch) -> No
         lambda *args: built.append(args[2]) or reconstruct(*args),
     )
 
-    search_in(EdgeList(REPEATED), 4, 3, max_paths=1)
+    _find(EdgeList(REPEATED), 4, 3, max_depth=4, max_paths=1)
 
     assert len(built) == 1
+
+
+@pytest.mark.parametrize("max_paths", [1, 2, 3, 20])
+@pytest.mark.parametrize("graph", [DIAMONDS, REPEATED])
+def test_the_result_does_not_depend_on_the_order_the_edges_are_read_in(graph, max_paths) -> None:
+    source, target = (1, 7) if graph is DIAMONDS else (4, 3)
+    shuffled = random.Random(3)
+    results = []
+    for _ in range(12):
+        edge_list = list(graph)
+        shuffled.shuffle(edge_list)
+        paths, trace = find_shortest_paths(
+            EdgeList(edge_list).graph, source, target, max_paths=max_paths, traced=True
+        )
+        assert trace is not None
+        results.append(
+            (
+                paths,
+                [
+                    (
+                        step.depth,
+                        step.node,
+                        [(e.subject_id, e.object_id) for e in step.expanded_edges],
+                    )
+                    for step in trace.steps
+                ],
+            )
+        )
+
+    assert all(result == results[0] for result in results)
 
 
 def test_a_trace_lists_the_expansions_in_order() -> None:
@@ -265,7 +297,7 @@ def test_a_trace_lists_the_expansions_in_order() -> None:
     _, trace = find_shortest_paths(edges.graph, 1, 3, traced=True)
 
     assert trace is not None
-    assert trace.terminated_reason == "shortest_paths_found"
+    assert trace.terminated_reason is TerminationReason.SHORTEST_PATHS_FOUND
     assert trace.seeds == (1,)
     assert [
         (step.depth, step.node, [(edge.subject_id, edge.object_id) for edge in step.expanded_edges])
@@ -273,11 +305,23 @@ def test_a_trace_lists_the_expansions_in_order() -> None:
     ] == [(0, 1, [(1, 2)]), (1, 2, [(2, 3), (2, 9)])]
 
 
+def test_a_trace_records_the_edges_read_towards_the_target_by_the_concept_they_end_at() -> None:
+    edges = EdgeList([(1, 2), (1, 3), (2, 4), (3, 4), (4, 5)])
+
+    _, trace = find_shortest_paths(edges.graph, 1, 5, traced=True)
+
+    assert trace is not None
+    assert [
+        (step.depth, step.node, [(edge.subject_id, edge.object_id) for edge in step.expanded_edges])
+        for step in trace.steps
+    ] == [(0, 1, [(1, 2), (1, 3)]), (0, 5, [(4, 5)]), (1, 4, [(2, 4), (3, 4)])]
+
+
 def test_a_trace_of_a_search_without_a_path_says_so() -> None:
     paths, trace = find_shortest_paths(EdgeList([(1, 2), (2, 3)]).graph, 3, 1, traced=True)
 
     assert paths == []
     assert trace is not None
-    assert trace.terminated_reason == "no_path"
+    assert trace.terminated_reason is TerminationReason.NO_PATH
     assert trace.seeds == (3,)
-    assert [(step.depth, step.node) for step in trace.steps] == [(0, 3), (0, 1)]
+    assert [(step.depth, step.node) for step in trace.steps] == [(0, 3)]
