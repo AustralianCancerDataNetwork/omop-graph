@@ -75,4 +75,6 @@ Two findings are logged as warnings with their ids and counts, and fail the load
 - a CDM relationship has no classification, so the `KnowledgeGraph` skips the edges of that relationship
 - a classified `relationship_id` is not in the CDM, which happens with a subset or an older vocabulary. These rows are not loaded.
 
+The packaged classification was last checked in strict mode against Athena release v5.0 29-AUG-26. A later release can add relationships it does not classify yet, which the load reports as a warning.
+
 A failed check prints its message and exits with code 1.
