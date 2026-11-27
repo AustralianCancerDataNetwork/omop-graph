@@ -97,11 +97,6 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             for predicate in self.kg.predicates()
         }
 
-    @cached_property
-    def _predicates_by_relationship_id(self) -> dict[str, Predicate]:
-        """The classified relationships, keyed by their relationship id."""
-        return {predicate.relationship_id: predicate for predicate in self.kg.predicates()}
-
     def predicate(self, curie: CURIE) -> Predicate | None:
         """
         The classified relationship a predicate CURIE names.
@@ -119,7 +114,7 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
             The relationship, or None when the CURIE names no classified relationship.
         """
         relationship_id = self.codec.parse_predicate(curie)
-        return self._predicates_by_relationship_id.get(relationship_id) if relationship_id else None
+        return self.kg.find_predicate(relationship_id) if relationship_id else None
 
     def _scope(
         self, filter_obsoletes: bool, id_prefixes: Iterable[str] | None = None

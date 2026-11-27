@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Generator, Iterable
 from dataclasses import replace
-from itertools import product
 from typing import Literal
 
 from sqlalchemy import Row
@@ -21,10 +20,7 @@ from ..edges import (
     EdgeFilter,
     EdgeView,
 )
-from ..queries import (
-    q_edges,
-    q_relationships,
-)
+from ..queries import q_edges
 from .predicates import PredicatesMixin
 
 
@@ -45,6 +41,10 @@ class EdgesMixin(PredicatesMixin):
         Any number of subjects and objects is allowed. With neither, every relationship
         the filter selects is read through a server-side cursor, so the table is never
         held in memory.
+
+        This is the method for bulk reads, such as a closure, an entailment or a full scan.
+        It returns plain tuples, which cost about 55 times less per row than the
+        :class:`EdgeView` that :meth:`edges` builds with its dates and kind.
 
         Parameters
         ----------
@@ -79,13 +79,11 @@ class EdgesMixin(PredicatesMixin):
             return
 
         if subjects is None and objects is None:
-            statements = (stream(q_relationships(None, None, resolved)),)
+            statements = (stream(q_edges(None, None, resolved)),)
         else:
-            subject_batches = (None,) if subjects is None else tuple(self.batches(subjects))
-            object_batches = (None,) if objects is None else tuple(self.batches(objects))
             statements = tuple(
-                q_relationships(subject_batch, object_batch, resolved)
-                for subject_batch, object_batch in product(subject_batches, object_batches)
+                q_edges(subject_batch, object_batch, resolved)
+                for subject_batch, object_batch in self._pair_batches(subjects, objects)
             )
         yield from self._classified_triples(statements)
 
@@ -159,9 +157,10 @@ class EdgesMixin(PredicatesMixin):
         rows = self._rows_in_batches(
             session,
             lambda batch: q_edges(
-                concept_ids=batch,
-                direction=direction,
-                edge_filter=resolved,
+                batch if direction == "out" else None,
+                batch if direction == "in" else None,
+                resolved,
+                detailed=True,
                 ordered=ordered,
             ),
             ids,
@@ -192,16 +191,16 @@ class EdgesMixin(PredicatesMixin):
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
             return ()
-        subjects, objects = tuple(dict.fromkeys(subject_ids)), tuple(dict.fromkeys(object_ids))
         found: list[EdgeView] = []
         with self.session_factory() as session:
-            for subject_batch in self.batches(subjects):
-                for object_batch in self.batches(objects):
-                    for row in session.execute(
-                        q_edges(subject_batch, "out", resolved, others=object_batch)
-                    ):
-                        if (edge := self._edge_view(row)) is not None:
-                            found.append(edge)
+            for subject_batch, object_batch in self._pair_batches(
+                dict.fromkeys(subject_ids), dict.fromkeys(object_ids)
+            ):
+                for row in session.execute(
+                    q_edges(subject_batch, object_batch, resolved, detailed=True)
+                ):
+                    if (edge := self._edge_view(row)) is not None:
+                        found.append(edge)
         return tuple(found)
 
     def _edge_view(self, row: Row) -> EdgeView | None:

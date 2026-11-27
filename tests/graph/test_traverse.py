@@ -175,12 +175,12 @@ def test_seeds_at_node_budget_are_not_expanded() -> None:
 
 def test_q_edges_ordering_is_opt_in_and_total() -> None:
     ordered_sql = str(
-        q_edges(1, direction="out", edge_filter=EdgeFilter(), ordered=True).compile(
+        q_edges((1,), None, EdgeFilter(), detailed=True, ordered=True).compile(
             dialect=postgresql.dialect()
         )
     )
     unordered_sql = str(
-        q_edges(1, direction="out", edge_filter=EdgeFilter(), ordered=False).compile(
+        q_edges((1,), None, EdgeFilter(), detailed=True, ordered=False).compile(
             dialect=postgresql.dialect()
         )
     )

@@ -122,13 +122,13 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
             props & {SearchProperty.IDENTIFIER.text, SearchProperty.MAPPED_IDENTIFIER.text}
         )
         starts_with = config.syntax == SearchTermSyntax(SearchTermSyntax.STARTS_WITH.text)
-        kinds = [LabelMatchKind.EXACT]
+        kinds = {LabelMatchKind.EXACT}
         if starts_with or config.is_partial:
-            kinds.append(LabelMatchKind.STARTS_WITH)
+            kinds.add(LabelMatchKind.STARTS_WITH)
         if config.is_partial and not starts_with:
-            kinds.append(LabelMatchKind.PARTIAL)
+            kinds.add(LabelMatchKind.PARTIAL)
         if config.is_fuzzy:
-            kinds.append(LabelMatchKind.FTS)
+            kinds.add(LabelMatchKind.FTS)
 
         concept_filter = replace(
             every_concept(self._population),
@@ -139,7 +139,7 @@ class OMOPSearchInterface(OMOPBasicOntologyInterface, SearchInterface):
             identifiers = self.codec.concept_candidates(search_term)
         for concept_id in self.kg.search(
             search_term,
-            kinds,
+            sorted(kinds),
             synonyms=SearchProperty.ALIAS.text in props,
             concept_filter=concept_filter,
             limit=config.limit,

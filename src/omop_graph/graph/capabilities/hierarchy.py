@@ -19,7 +19,6 @@ from ..edges import (
 )
 from ..nodes import (
     AncestorMatch,
-    Standardness,
 )
 from ..queries import (
     q_children,
@@ -287,14 +286,7 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
 
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:
         """Select the standard concepts among concept_ids, the valid mapping targets."""
-        found: set[int] = set()
-        for batch in self.batches(set(concept_ids)):
-            found.update(
-                view.concept_id
-                for view in self.concept_views(batch, sort=False)
-                if view.standardness is Standardness.STANDARD
-            )
-        return found
+        return self._within(concept_ids, ConceptFilter(require_standard=True))
 
     def _within(self, concept_ids: Iterable[int], concept_filter: ConceptFilter) -> set[int]:
         """Select the concepts among concept_ids that concept_filter selects."""
@@ -345,11 +337,8 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
 
         rows: list[Row] = []
         with self.session_factory() as session:
-            for children in self.batches(child_ids):
-                for parents in self.batches(parent_ids):
-                    rows.extend(
-                        session.execute(q_concept_potential_ancestors_batch(children, parents))
-                    )
+            for children, parents in self._pair_batches(child_ids, parent_ids):
+                rows.extend(session.execute(q_concept_potential_ancestors_batch(children, parents)))
 
         result: dict[int, dict[int, AncestorMatch]] = defaultdict(dict)
         for row in rows:

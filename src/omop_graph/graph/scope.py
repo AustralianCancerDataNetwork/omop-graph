@@ -6,7 +6,12 @@ concepts the method reports or counts. ``limit`` truncates a list and decides no
 so a scope that sets it is refused, and the methods that truncate take a ``limit`` parameter.
 A scope never changes which concepts a walk passes through. It decides what is reported,
 also of the concepts the caller named, and only a relationship asserted to a concept is
-reported regardless.
+reported regardless. 
+
+Important
+---------
+The ids of a scope are one condition of the query and are never
+batched, so a scope with more than about 65,000 ids fails on PostgreSQL.
 """
 
 from __future__ import annotations

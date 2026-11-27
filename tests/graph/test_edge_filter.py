@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
-from omop_graph.graph.queries import q_edges, q_relationships
+from omop_graph.graph.queries import q_edges
 
 SOURCE = 900001
 
@@ -135,7 +135,7 @@ def two_edges() -> Iterator[Session]:
 def test_on_selects_edges_by_validity_period_independently_of_active_only(
     two_edges: Session, edge_filter: EdgeFilter, expected_objects: set[int]
 ) -> None:
-    rows = two_edges.execute(q_edges(1, "out", edge_filter))
+    rows = two_edges.execute(q_edges((1,), None, edge_filter, detailed=True))
 
     assert {row.object_id for row in rows} == expected_objects
 
@@ -151,6 +151,19 @@ def test_on_selects_edges_by_validity_period_independently_of_active_only(
 def test_relationships_apply_the_same_validity_conditions_as_edges(
     two_edges: Session, edge_filter: EdgeFilter, expected_objects: set[int]
 ) -> None:
-    rows = two_edges.execute(q_relationships((1,), None, edge_filter))
+    rows = two_edges.execute(q_edges((1,), None, edge_filter))
 
-    assert {row.concept_id_2 for row in rows} == expected_objects
+    assert {row.object_id for row in rows} == expected_objects
+
+
+def test_a_query_selects_by_subjects_and_objects_together_or_alone(two_edges: Session) -> None:
+    def objects(subjects, objects_) -> set[int]:
+        edge_filter = EdgeFilter(active_only=False)
+        return {
+            row.object_id for row in two_edges.execute(q_edges(subjects, objects_, edge_filter))
+        }
+
+    assert objects((1,), None) == {2, 3}
+    assert objects((1,), (3,)) == {3}
+    assert objects(None, (2,)) == {2}
+    assert objects((9,), None) == set()

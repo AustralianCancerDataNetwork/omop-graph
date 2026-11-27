@@ -16,7 +16,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum
+from enum import Enum, unique
 from html import escape
 from itertools import chain
 from typing import Self
@@ -258,11 +258,13 @@ class ConceptView:
         return cls(**data)
 
 
+@unique
 class LabelMatchKind(Enum):
     """
     Classification of how a label matched a concept.
 
-    The value is the priority, where lower is better. Each member also carries the
+    The value is the priority, where lower is better, and no two members share one. Sort a
+    list of kinds to get the order a search tries them in. Each member also carries the
     badge text, badge colour and reason shown in notebook renderings.
 
     Attributes
@@ -279,8 +281,8 @@ class LabelMatchKind(Enum):
     Supported match kinds include:
     - EXACT: Direct case-insensitive match on concept_name.
     - STARTS_WITH: The label starts with the query, case-insensitively.
-    - FTS: Full-text search match (fuzzy).
     - PARTIAL: Partial match (fuzzy) substrings with ILIKE.
+    - FTS: Full-text search match (fuzzy).
     - EMBEDDING: Match based on vector similarity.
 
     It does not use synonym vs. concept_name as a ranking signal,
@@ -290,8 +292,8 @@ class LabelMatchKind(Enum):
 
     EXACT = (0, "exact", "#2b7", "direct name match")
     STARTS_WITH = (1, "starts with", "#84b", "label starts with the query")
-    FTS = (2, "fulltext", "#27a", "fulltext match")
-    PARTIAL = (3, "partial", "#888", "label contains the query")
+    PARTIAL = (2, "partial", "#888", "label contains the query")
+    FTS = (3, "fulltext", "#27a", "fulltext match")
     EMBEDDING = (4, "embedding", "#a72", "embedding match")
 
     badge: str

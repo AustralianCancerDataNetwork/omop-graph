@@ -17,11 +17,11 @@ from ..nodes import (
     LabelMatchKind,
 )
 from ..queries import (
-    q_concept_domain_ids,
     q_concept_name_fulltext,
     q_concept_name_ilike,
     q_concept_name_match,
-    q_concept_vocabulary_ids,
+    q_domain_ids,
+    q_vocabulary_ids,
 )
 from ..scope import ALL_CONCEPTS, _require_scope, limited, restricted_to_ids
 from .enumeration import EnumerationMixin
@@ -151,10 +151,16 @@ class SearchMixin(EnumerationMixin):
         def full() -> bool:
             return limit is not None and len(found) >= limit
 
-        named = tuple(identifiers)
+        named = tuple(dict.fromkeys(identifiers))
         if named and not full():
-            in_scope = tuple(self.entities(restricted_to_ids(concept_filter, named)))
-            for concept_id in in_scope[:limit]:
+            in_scope = {
+                concept_id
+                for batch in self.batches(named)
+                for concept_id in self.entities(restricted_to_ids(concept_filter, batch))
+            }
+            for concept_id in tuple(concept_id for concept_id in named if concept_id in in_scope)[
+                :limit
+            ]:
                 found[concept_id] = None
                 yield concept_id
         for kind in kinds:
@@ -226,11 +232,11 @@ class SearchMixin(EnumerationMixin):
     @functools.cached_property
     def _valid_domains(self) -> frozenset[str]:
         with self.session_factory() as session:
-            rows = session.execute(q_concept_domain_ids()).all()
+            rows = session.execute(q_domain_ids()).all()
         return frozenset(row.domain_id for row in rows)
 
     @functools.cached_property
     def _valid_vocabularies(self) -> frozenset[str]:
         with self.session_factory() as session:
-            rows = session.execute(q_concept_vocabulary_ids()).all()
+            rows = session.execute(q_vocabulary_ids()).all()
         return frozenset(row.vocabulary_id for row in rows)

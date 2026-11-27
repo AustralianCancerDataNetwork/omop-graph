@@ -294,14 +294,17 @@ class EmbeddingResolver(CandidateResolver):
 
 
 # Default sequence of resolvers to be used in a pipeline
-ALL_RESOLVERS: tuple[CandidateResolver, ...] = (
-    ExactLabelResolver(),
-    ExactSynonymResolver(),
-    PartialLabelResolver(),
-    PartialSynonymResolver(),
-    FullTextResolver(),
-    FullTextSynonymResolver(),
+ALL_RESOLVERS: tuple[CandidateResolver, ...] = tuple(
+    sorted(
+        (
+            ExactLabelResolver(),
+            ExactSynonymResolver(),
+            PartialLabelResolver(),
+            PartialSynonymResolver(),
+            FullTextResolver(),
+            FullTextSynonymResolver(),
+            *((EmbeddingResolver(),) if HAS_OMOP_EMB else ()),
+        ),
+        key=lambda resolver: (resolver.match_kind, resolver.synonym),
+    )
 )
-
-if HAS_OMOP_EMB:
-    ALL_RESOLVERS = (*ALL_RESOLVERS, EmbeddingResolver())

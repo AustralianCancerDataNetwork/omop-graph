@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from typing import Literal, cast
+from typing import cast
 
 from omop_alchemy.backends import (
     resolve_backend,
@@ -376,13 +376,6 @@ def q_concept_name_fulltext(
     return stmt
 
 
-def q_predicate_name(relationship_id: str) -> Select:
-    """Query for the human-readable name of a relationship."""
-    return select(Relationship.relationship_name).where(
-        Relationship.relationship_id == relationship_id
-    )
-
-
 def q_all_predicates() -> Select:
     """Query all defined relationships."""
     return select(
@@ -390,11 +383,6 @@ def q_all_predicates() -> Select:
         Relationship.relationship_name,
         Relationship.reverse_relationship_id,
     )
-
-
-def q_predicate_row(relationship_id: str) -> Select:
-    """Query for a specific relationship definition."""
-    return q_all_predicates().where(Relationship.relationship_id == relationship_id)
 
 
 def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Select:
@@ -428,49 +416,55 @@ def _filter_concept_relationships(stmt: Select, edge_filter: EdgeFilter) -> Sele
 
 
 def q_edges(
-    concept_ids: tuple[int, ...] | int,
-    direction: Literal["in", "out"],
+    subjects: tuple[int, ...] | None,
+    objects: tuple[int, ...] | None,
     edge_filter: EdgeFilter,
+    *,
+    detailed: bool = False,
     ordered: bool = False,
-    others: tuple[int, ...] | None = None,
 ) -> Select:
-    """Query edges for a batch of concept IDs, in either direction.
+    """
+    Query the edges between some subjects and some objects.
 
     Parameters
     ----------
-    direction : {"in", "out"}
-        Whether to query incoming or outgoing edges for ``concept_ids``.
+    subjects : tuple[int, ...], optional
+        Only edges that start at one of these concepts, or any when None.
+    objects : tuple[int, ...], optional
+        Only edges that end at one of these concepts, or any when None.
     edge_filter : EdgeFilter
         Conditions on the edges. Its kind and subkind fields are ignored, see
         :func:`_filter_concept_relationships`.
+    detailed : bool, default=False
+        If True, also select the validity dates and the deprecation reason, which an
+        edge view needs. Without them the rows are (subject_id, predicate_id, object_id).
     ordered : bool, default=False
         If True, order by source concept, target concept, and relationship ID
         to make results reproducible. If False, row order is unspecified and
         may differ between runs and backends.
-    others : tuple[int, ...], optional
-        Only the edges whose other end is one of these concepts.
     """
-    if isinstance(concept_ids, int):
-        concept_ids = (concept_ids,)
-
-    stmt = select(
+    details = (
+        (
+            Concept_Relationship.valid_start_date,
+            Concept_Relationship.valid_end_date,
+            Concept_Relationship.invalid_reason,
+        )
+        if detailed
+        else ()
+    )
+    columns = (
         Concept_Relationship.concept_id_1.label("subject_id"),
         Concept_Relationship.relationship_id.label("predicate_id"),
         Concept_Relationship.concept_id_2.label("object_id"),
-        Concept_Relationship.valid_start_date,
-        Concept_Relationship.valid_end_date,
-        Concept_Relationship.invalid_reason,
+        *details,
     )
-    stmt = _filter_concept_relationships(stmt, edge_filter)
+    stmt = _filter_concept_relationships(select(*columns), edge_filter)
 
-    if direction == "in":
-        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(concept_ids))
-        if others is not None:
-            stmt = stmt.where(Concept_Relationship.concept_id_1.in_(others))
-    elif direction == "out":
-        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(concept_ids))
-        if others is not None:
-            stmt = stmt.where(Concept_Relationship.concept_id_2.in_(others))
+    if subjects is not None:
+        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
+
+    if objects is not None:
+        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
 
     if ordered:
         stmt = stmt.order_by(
@@ -586,28 +580,6 @@ def q_mappings(
             )
         ),
     )
-
-
-def q_relationships(
-    subjects: tuple[int, ...] | None,
-    objects: tuple[int, ...] | None,
-    edge_filter: EdgeFilter,
-) -> Select:
-    """Query (subject, relationship_id, object) triples. See :func:`q_edges` for edge_filter."""
-    stmt = select(
-        Concept_Relationship.concept_id_1,
-        Concept_Relationship.relationship_id,
-        Concept_Relationship.concept_id_2,
-    )
-    stmt = _filter_concept_relationships(stmt, edge_filter)
-
-    if subjects is not None:
-        stmt = stmt.where(Concept_Relationship.concept_id_1.in_(subjects))
-
-    if objects is not None:
-        stmt = stmt.where(Concept_Relationship.concept_id_2.in_(objects))
-
-    return stmt
 
 
 DEFAULT_CONCEPT_FILTER = ConceptFilter(
@@ -838,14 +810,14 @@ def q_singletons(
     )
 
 
-def q_concept_domain_ids() -> Select:
-    """Query distinct domain IDs."""
-    return select(Concept.domain_id).distinct().where(Concept.domain_id.is_not(None))
+def q_domain_ids() -> Select:
+    """Query the domain IDs of the domain table."""
+    return select(Domain.domain_id)
 
 
-def q_concept_vocabulary_ids() -> Select:
-    """Query distinct vocabulary IDs."""
-    return select(Concept.vocabulary_id).distinct().where(Concept.vocabulary_id.is_not(None))
+def q_vocabulary_ids() -> Select:
+    """Query the vocabulary IDs of the vocabulary table."""
+    return select(Vocabulary.vocabulary_id)
 
 
 def q_concept_potential_ancestor(child_id: int, parent_id: int) -> Select:

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Concatenate, cast
 
 import numpy as np
 from omop_alchemy.cdm.query import ConceptFilter
+from sqlalchemy import Row
 
 from ..scope import ALL_CONCEPTS, _require_scope
 from ._core import GraphCore
@@ -38,19 +39,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _omop_emb_installed() -> bool:
-    """Whether the optional ``omop-emb`` package can be imported."""
-    if importlib.util.find_spec("omop_emb") is None:
-        return False
+HAS_OMOP_EMB = importlib.util.find_spec("omop_emb") is not None
+"""Whether the optional ``omop-emb`` package is installed. It is imported on first use."""
+
+
+def _import_omop_emb() -> None:
+    """Import ``omop-emb``, raising :class:`MissingExtensionError` when it does not import."""
     try:
         importlib.import_module("omop_emb")
-    except ImportError:
-        return False
-    return True
-
-
-HAS_OMOP_EMB = _omop_emb_installed()
-"""Whether the optional ``omop-emb`` package is installed and imports."""
+    except ImportError as error:
+        raise MissingExtensionError() from error
 
 
 class EmbeddingError(Exception):
@@ -285,6 +283,7 @@ class EmbeddingsMixin(GraphCore):
         """Raise the error that names why the embedding store is unavailable."""
         if not HAS_OMOP_EMB:
             raise MissingExtensionError()
+        _import_omop_emb()
         if self._emb_config is None:
             raise EmbeddingsNotConfiguredError()
 
@@ -460,14 +459,28 @@ class EmbeddingsMixin(GraphCore):
 
     @requires_embeddings
     def concepts_without_embedding(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
-        """Return the concepts among concept_ids that have no stored embedding."""
+        """Return the concepts among concept_ids that exist and have no stored embedding."""
+        return tuple(self._rows_without_embedding(concept_ids))
+
+    def _rows_without_embedding(self, concept_ids: Iterable[int]) -> dict[int, Row]:
+        """
+        Read the CDM rows of the concepts among concept_ids that have no stored embedding.
+
+        The stored ids are asked per batch of ids, see :meth:`_stored_concept_ids`, so the
+        store never lists every id it holds.
+        """
+        from omop_emb.utils.cdm import fetch_cdm_concepts_for_filter
+
         ids = tuple(dict.fromkeys(concept_ids))
-        if not ids:
-            return ()
-        missing = self.emb.get_concepts_without_embedding(
-            concept_filter=ConceptFilter(concept_ids=ids)
-        )
-        return tuple(missing)
+        stored = set(self._stored_concept_ids(ids))
+        rows: dict[int, Row] = {}
+        for batch in self.batches(concept_id for concept_id in ids if concept_id not in stored):
+            rows.update(
+                fetch_cdm_concepts_for_filter(
+                    ConceptFilter(concept_ids=batch), cdm_session_factory=self.session_factory
+                )
+            )
+        return rows
 
     @requires_embedding_writer
     def embed_concepts(self, concept_ids: Iterable[int]) -> tuple[int, ...]:
@@ -479,25 +492,15 @@ class EmbeddingsMixin(GraphCore):
         tuple[int, ...]
             The concepts that were embedded.
         """
-        from omop_emb.utils.cdm import fetch_cdm_concepts_for_filter
-
-        ids = tuple(dict.fromkeys(concept_ids))
-        if not ids:
-            return ()
-        writer = cast("EmbeddingWriterInterface", self.emb)
-        missing = writer.get_concepts_without_embedding(
-            concept_filter=ConceptFilter(concept_ids=ids)
-        )
+        missing = self._rows_without_embedding(concept_ids)
         if not missing:
             return ()
+        writer = cast("EmbeddingWriterInterface", self.emb)
         missing_ids = tuple(missing)
         writer.embed_and_upsert_concepts(
             concept_ids=missing_ids,
             concept_texts=tuple(row.concept_name for row in missing.values()),
-            concept_meta=fetch_cdm_concepts_for_filter(
-                ConceptFilter(concept_ids=missing_ids),
-                cdm_session_factory=self.session_factory,
-            ),
+            concept_meta=missing,
         )
         return missing_ids
 

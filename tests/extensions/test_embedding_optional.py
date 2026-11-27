@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -340,33 +339,55 @@ def test_the_models_are_those_registered_in_the_store() -> None:
     assert kg.embedding_models() == ("record",)
 
 
-def test_missing_embeddings_are_embedded_from_their_names(
-    mock_cdm_kg: KnowledgeGraph, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    writer = Mock()
-    writer.get_concepts_without_embedding.return_value = {
-        196653: SimpleNamespace(concept_name="Malignant tumor of kidney")
-    }
-    fetched = Mock(return_value={196653: "meta"})
-    monkeypatch.setattr("omop_emb.utils.cdm.fetch_cdm_concepts_for_filter", fetched)
+def _writer_holding(*stored: int) -> Mock:
+    """A write-capable interface whose store holds the given concepts."""
+    writer = _registered_interface()
+    writer.backend.get_stored_concept_ids.side_effect = lambda *, model_name, concept_filter: (
+        set(stored) & set(concept_filter.concept_ids)
+    )
+    return writer
+
+
+def test_missing_embeddings_are_embedded_from_their_names(mock_cdm_kg: KnowledgeGraph) -> None:
+    writer = _writer_holding()
     mock_cdm_kg._emb_config = _configuration(write=True)
     mock_cdm_kg._emb = writer
+    name = mock_cdm_kg.concept_view(196653).concept_name
 
-    assert mock_cdm_kg.embed_concepts([196653]) == (196653,)
+    assert mock_cdm_kg.embed_concepts([196653, 196653]) == (196653,)
     call = writer.embed_and_upsert_concepts.call_args.kwargs
     assert call["concept_ids"] == (196653,)
-    assert call["concept_texts"] == ("Malignant tumor of kidney",)
-    assert call["concept_meta"] == {196653: "meta"}
+    assert call["concept_texts"] == (name,)
+    assert set(call["concept_meta"]) == {196653}
 
 
 def test_nothing_is_embedded_when_nothing_is_missing(mock_cdm_kg: KnowledgeGraph) -> None:
-    writer = Mock()
-    writer.get_concepts_without_embedding.return_value = {}
+    writer = _writer_holding(196653)
     mock_cdm_kg._emb_config = _configuration(write=True)
     mock_cdm_kg._emb = writer
 
     assert mock_cdm_kg.embed_concepts([196653]) == ()
     writer.embed_and_upsert_concepts.assert_not_called()
+
+
+def test_the_concepts_without_an_embedding_exist_and_have_no_vector(
+    mock_cdm_kg: KnowledgeGraph,
+) -> None:
+    mock_cdm_kg._emb_config = _configuration()
+    mock_cdm_kg._emb = sqlite_vec_reader({196653: [1.0, 0.0]})
+
+    assert mock_cdm_kg.concepts_without_embedding([196653, 900001, 999999999]) == (900001,)
+    assert mock_cdm_kg.concepts_without_embedding([]) == ()
+
+
+def test_the_concepts_without_an_embedding_are_read_in_batches(
+    mock_cdm_kg: KnowledgeGraph, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_cdm_kg._emb_config = _configuration()
+    mock_cdm_kg._emb = sqlite_vec_reader({196653: [1.0, 0.0]})
+    monkeypatch.setattr(KnowledgeGraph, "LOOKUP_BATCH_SIZE", 1)
+
+    assert set(mock_cdm_kg.concepts_without_embedding([196653, 900001, 999999999])) == {900001}
 
 
 # grounding
@@ -504,8 +525,24 @@ def test_a_registered_model_is_checked_once() -> None:
     assert interface.is_model_registered.call_count == 1
 
 
-def test_a_missing_package_that_is_found_but_does_not_import_is_missing() -> None:
-    from omop_graph.graph.capabilities.embeddings import _omop_emb_installed
+def test_a_package_that_is_found_but_does_not_import_is_missing_on_first_use() -> None:
+    kg = _bare_graph(_configuration())
 
-    with patch("importlib.import_module", side_effect=ImportError("broken")):
-        assert not _omop_emb_installed()
+    with (
+        patch("importlib.import_module", side_effect=ImportError("broken")),
+        pytest.raises(MissingExtensionError),
+    ):
+        kg.concept_embeddings([1])
+
+
+def test_importing_the_knowledge_graph_does_not_import_the_extension() -> None:
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, omop_graph.graph.kg, omop_graph.reasoning.grounding, "
+        "omop_graph.oaklib_interface.omop_implementation; "
+        "sys.exit('omop_emb' in sys.modules)"
+    )
+
+    assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0

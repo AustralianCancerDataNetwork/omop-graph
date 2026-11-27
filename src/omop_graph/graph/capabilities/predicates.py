@@ -15,11 +15,7 @@ from ...extensions.omop_alchemy import (
 from ..edges import (
     Predicate,
 )
-from ..queries import (
-    q_all_predicates,
-    q_predicate_name,
-    q_predicate_row,
-)
+from ..queries import q_all_predicates
 from ._core import GraphCore
 
 
@@ -52,19 +48,31 @@ class PredicatesMixin(GraphCore):
         -------
         Predicate
             The predicate definition.
+
+        Raises
+        ------
+        AttributeError
+            If the relationship has no classification.
         """
-        with self.session_factory() as session:
-            row = session.execute(q_predicate_row(relationship_id)).one()
-        return _predicate_from_rows(row, self._mapping_for(relationship_id))
+        found = self.find_predicate(relationship_id)
+        if found is None:
+            raise AttributeError(f"`{relationship_id}` not in relationship mapping.")
+        return found
+
+    def find_predicate(self, relationship_id: str) -> Predicate | None:
+        """Retrieve a Predicate by its relationship ID, or None when it has no classification."""
+        return self._predicates_by_id.get(relationship_id)
 
     def predicate_name(self, relationship_id: str) -> str:
         """
-        Retrieve the human-readable name of a relationship.
+        Retrieve the human-readable name of a classified relationship.
+
+        Raises
+        ------
+        AttributeError
+            If the relationship has no classification.
         """
-        # TODO: Not really necessary. The "ID" is mostly human-readable anyways.
-        with self.session_factory() as session:
-            predicate_name = session.execute(q_predicate_name(relationship_id)).scalar_one()
-        return predicate_name
+        return self.predicate(relationship_id).name
 
     def predicate_kind(self, relationship_id: str) -> PredicateKind:
         """
@@ -111,15 +119,17 @@ class PredicatesMixin(GraphCore):
         return self.predicate(relationship_id).reverse_id
 
     @functools.cached_property
-    def _predicates(self) -> tuple[Predicate, ...]:
-        """The classified predicates, read once for the life of the graph."""
+    def _predicates_by_id(self) -> dict[str, Predicate]:
+        """The classified predicates by relationship id, read once for the life of the graph."""
         with self.session_factory() as session:
             rows = session.execute(q_all_predicates()).all()
-        return tuple(
-            _predicate_from_rows(row, self._relationship_mapping[row.relationship_id])
+        return {
+            row.relationship_id: _predicate_from_rows(
+                row, self._relationship_mapping[row.relationship_id]
+            )
             for row in rows
             if row.relationship_id in self._relationship_mapping
-        )
+        }
 
     def predicates(self) -> tuple[Predicate, ...]:
         """
@@ -127,4 +137,4 @@ class PredicatesMixin(GraphCore):
 
         They are read once, like the relationship classification they are built from.
         """
-        return self._predicates
+        return tuple(self._predicates_by_id.values())

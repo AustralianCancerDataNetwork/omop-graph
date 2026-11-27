@@ -164,6 +164,7 @@ CALLS: dict[str, Callable[[OMOPAlchemyImplementation], Any]] = {
     "entailed_between": lambda a: set(a.kg.entailed_relationships(IDS, IDS)),
     "gap_filled": lambda a: a.kg.gap_filled_relationships(IDS[:-1]),
     "edges_between": lambda a: _edge_triples(a.kg.edges_between(IDS, IDS)),
+    "search_identifiers": lambda a: list(a.kg.search("no such name", identifiers=IDS)),
 }
 
 ID_CALLS = {
@@ -206,6 +207,7 @@ SWEPT_METHODS = {
     "missing_concepts",
     "relationships",
     "replacements",
+    "search",
     "standard_concept",
     "standard_mappings",
     "standardise",
@@ -219,7 +221,7 @@ UNSWEPT_METHODS = {
     "iter_edges",
     "require_concepts",
 }
-"""The methods the embedding store or another sweep handles, and the one that checks only."""
+"""The methods that need an embedding store, batched and tested in test_embedding_optional, and the one that checks only."""
 
 
 def test_every_method_that_takes_many_ids_is_swept() -> None:
@@ -231,6 +233,7 @@ def test_every_method_that_takes_many_ids_is_swept() -> None:
         "objects",
         "subject_ids",
         "object_ids",
+        "identifiers",
     }
     taking_ids = {
         name
@@ -278,6 +281,29 @@ def test_a_batch_binds_fewer_ids_than_the_whole_list(
     monkeypatch.setattr(KnowledgeGraph, "LOOKUP_BATCH_SIZE", TINY_BATCH)
 
     assert _largest_binding(adapter, CALLS[name]) < whole
+
+
+def test_the_identifiers_of_a_search_are_looked_up_in_batches(
+    adapter: OMOPAlchemyImplementation, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(KnowledgeGraph, "LOOKUP_BATCH_SIZE", TINY_BATCH)
+    in_lists: list[int] = []
+    with adapter.kg.session_factory() as session:
+        engine = session.get_bind()
+
+    def record(conn, cursor, statement, parameters, *args):
+        if "concept_id IN" in statement:
+            in_lists.append(len(parameters))
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        found = list(adapter.kg.search("no such name", identifiers=IDS[::-1]))
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert in_lists
+    assert max(in_lists) <= TINY_BATCH
+    assert found == list(IDS[::-1])
 
 
 def test_the_batched_methods_find_something_to_compare(adapter: OMOPAlchemyImplementation) -> None:

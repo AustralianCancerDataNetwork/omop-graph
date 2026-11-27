@@ -80,7 +80,7 @@ if matches:
 Every `concept_filter` a method takes is a scope, a membership rule that decides which concepts are reported or counted.
 
 * A scope that sets `limit` is refused, since a limit truncates a list and cannot decide membership. For a generator the error comes with its first item. The methods that truncate take a `limit` parameter of their own: `entities`, `roots`, `leaves`, `singletons`, `obsolete_concepts`, `concept_lookup` and `search`. With a `limit`, the enumerators return the concepts with the lowest ids, so the same ones come back on every run.
-* A scope that sets `concept_ids` restricts what is reported to those ids.
+* A scope that sets `concept_ids` restricts what is reported to those ids. The ids are sent to the database as one list and are never batched, so a scope with more than about 65,000 ids fails on PostgreSQL. Use a vocabulary or a domain, or pass the ids to the method that takes ids.
 * A scope only filters what is reported. A walk still passes through the concepts it excludes. A scope also applies to the concepts you name, and a relationship asserted to a concept is reported whatever the scope. In `entailed_relationships`, a requested object the scope excludes gets only the relationships asserted to it, and a warning lists it.
 * The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, and the counts and lookups to `ALL_CONCEPTS`.
 * `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
