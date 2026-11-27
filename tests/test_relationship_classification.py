@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 import sqlalchemy as sa
+import sqlalchemy.orm as so
 from fixtures.helpers import require_cdm
 from fixtures.mock_cdm import load_seeded_relationship_classification, seed_relationship_vocabulary
 from oa_configurator import Role
@@ -24,6 +25,8 @@ from omop_graph.extensions.omop_alchemy import (
     PredicateKind,
     RelationshipClass,
     RelationshipMapping,
+    StaleClassificationError,
+    load_relationship_mapping,
 )
 
 
@@ -189,3 +192,29 @@ def test_relationship_classification_replaces_a_predicate_kind_type_from_an_olde
             )
 
     assert labels == {kind.value for kind in PredicateKind}
+
+
+def test_a_database_loaded_by_an_older_release_raises_one_error_naming_the_columns(pg_db):
+    with scoped_test_schema(
+        pg_db.resolved, prefix="relclass_stale_columns", schema_claims=[staging_schema_claim()]
+    ) as scoped:
+        Base.metadata.create_all(bind=scoped.engine, checkfirst=True)
+        seed_relationship_vocabulary(scoped.engine)
+        load_seeded_relationship_classification(require_cdm(scoped.resolved))
+        with scoped.engine.begin() as connection:
+            for column in ("direction", "generalises"):
+                connection.execute(
+                    sa.text(
+                        f'ALTER TABLE "{scoped.schemas[Role.PRIMARY]}".relationship_mapping '
+                        f"DROP COLUMN {column}"
+                    )
+                )
+
+        with (
+            so.Session(scoped.engine) as session,
+            pytest.raises(
+                StaleClassificationError,
+                match="relationship_mapping lacks the columns.*direction.*generalises",
+            ),
+        ):
+            load_relationship_mapping(session)

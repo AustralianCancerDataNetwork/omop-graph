@@ -65,10 +65,11 @@ omop-graph relationship-classification --pred-class-dir <PATH_TO_CSV_DIR>
 
 Before any existing classification table is dropped, the load fails with the offending rows if:
 
-- a row of `predicate_mapping.csv` has a `class` and `subclass` that `predicate_classification.csv` does not define, or a class that is not one of the five kinds above
+- a row of `predicate_mapping.csv` has a `class` and `subclass` that `predicate_classification.csv` does not define, or a class that is not a `PredicateKind`
 - a `class` and `subclass` is defined more than once in `predicate_classification.csv`
 - a mapping row's `r_name` differs from that relationship's CDM `relationship_name`, or a `relationship_id` is mapped more than once
 - a `Hierarchy` row has no `up` or `down` `direction`, another row has one, or a `Hierarchy` relationship and its CDM reverse are not both `Hierarchy` with opposite directions
+- a `generalises` cell is not empty, `true` or `false`, a relationship that cannot generalise is `true` (see [Generalising Relationships](../graph/edges.md#generalising-relationships)), or a relationship and its CDM reverse are both `true`
 
 Two findings are logged as warnings with their ids and counts, and fail the load under `--strict`, which the tests of omop-graph use:
 
@@ -78,3 +79,7 @@ Two findings are logged as warnings with their ids and counts, and fail the load
 The packaged classification was last checked in strict mode against Athena release v5.0 29-AUG-26. A later release can add relationships it does not classify yet, which the load reports as a warning.
 
 A failed check prints its message and exits with code 1.
+
+### After upgrading
+
+A database loaded by an earlier release lacks the `direction` and `generalises` columns of `relationship_mapping`. The `KnowledgeGraph` then raises a `StaleClassificationError` that names the missing columns and this command. Run the command again to load the current schema. A read-only DuckDB file has to be rebuilt.

@@ -194,17 +194,10 @@ class KnowledgeGraph(GraphBackend):
                 "pass cdm_session_factory() or a sessionmaker."
             )
         self.session_factory = cdm_sessions
-        try:
-            with self.session_factory() as session:
-                self._relationship_mapping: dict[str, RelationshipMappingElement] = (
-                    load_relationship_mapping(session)
-                )
-        except Exception as exc:
-            raise RuntimeError(
-                "Failed to load relationship mapping. "
-                "The KnowledgeGraph requires relationship classification data. "
-                "Run `omop-graph relationship-classification` to populate it."
-            ) from exc
+        with self.session_factory() as session:
+            self._relationship_mapping: dict[str, RelationshipMappingElement] = (
+                load_relationship_mapping(session)
+            )
 
         if not self._relationship_mapping:
             raise RuntimeError(

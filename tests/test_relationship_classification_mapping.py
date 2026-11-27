@@ -5,6 +5,7 @@ from omop_graph.extensions.classification_data import (
     ClassificationDataError,
     check_classification,
     check_mapping_against_cdm,
+    parse_generalises,
     read_classification_files,
 )
 from omop_graph.extensions.omop_alchemy import HierarchyDirection, PredicateKind
@@ -16,12 +17,15 @@ RELATIONSHIPS = {
     "Has scale type": ("Has scale type", "Scale type of"),
     "Scale type of": ("Scale type of", "Has scale type"),
     "Self": ("Self", "Self"),
+    "Has finding site": ("Has finding site", "Finding site of"),
+    "Finding site of": ("Finding site of", "Has finding site"),
 }
 HIERARCHY, IDENTITY_KIND = PredicateKind.HIERARCHY.value, PredicateKind.IDENTITY.value
-UP, DOWN, IDENTITY = (
+UP, DOWN, IDENTITY, SITE = (
     (HIERARCHY, "Taxonomic", HierarchyDirection.UP.value),
     (HIERARCHY, "Taxonomic", HierarchyDirection.DOWN.value),
     (IDENTITY_KIND, "x", None),
+    (PredicateKind.ATTRIBUTE.value, "Anatomical", None),
 )
 CLASSIFICATION = pd.DataFrame(
     [(HIERARCHY, "Taxonomic", "d", "s", "i"), (IDENTITY_KIND, "x", "d", "s", "i")],
@@ -29,11 +33,20 @@ CLASSIFICATION = pd.DataFrame(
 )
 
 
-def _mapping(*rows: tuple[str, tuple[str, str, str | None]]) -> pd.DataFrame:
-    records = [(rid, RELATIONSHIPS[rid][0], *kind) for rid, kind in rows]
+def _mapping(
+    *rows: tuple[str, tuple[str, str, str | None]], generalising: tuple[str, ...] = ()
+) -> pd.DataFrame:
+    records = [(rid, RELATIONSHIPS[rid][0], *kind, rid in generalising) for rid, kind in rows]
     return pd.DataFrame(
         records,
-        columns=["relationship_id", "r_name", "predicate_kind", "predicate_subkind", "direction"],
+        columns=[
+            "relationship_id",
+            "r_name",
+            "predicate_kind",
+            "predicate_subkind",
+            "direction",
+            "generalises",
+        ],
     )
 
 
@@ -48,6 +61,9 @@ GOOD = _mapping(
     ("Has scale type", UP),
     ("Scale type of", DOWN),
     ("Self", IDENTITY),
+    ("Has finding site", SITE),
+    ("Finding site of", SITE),
+    generalising=("Is a", "Has finding site"),
 )
 
 
@@ -108,6 +124,19 @@ def test_a_hierarchy_pair_with_one_direction_is_rejected_once(mapping):
     assert str(error.value).count("are both") == 1
 
 
+def test_a_relationship_and_its_reverse_may_not_both_generalise():
+    mapping = _mapping(
+        ("Has finding site", SITE),
+        ("Finding site of", SITE),
+        generalising=("Has finding site", "Finding site of"),
+    )
+
+    with pytest.raises(ClassificationDataError, match="both generalise") as error:
+        _check(mapping)
+
+    assert str(error.value).count("both generalise") == 1
+
+
 @pytest.mark.parametrize(
     ("hierarchy_id", "other_id"),
     [("Is a", "Subsumes"), ("Subsumes", "Is a"), ("Has scale type", "Scale type of")],
@@ -161,6 +190,24 @@ def test_a_classification_must_define_each_kind_and_subkind_once(rows, message):
         check_classification(classification)
 
 
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        (["", "false", "FALSE", " False "], [False] * 4),
+        (["true", "True", " TRUE "], [True] * 3),
+        ([None, True, False], [False, True, False]),
+    ],
+)
+def test_generalises_flags_are_read_as_booleans(flags, expected):
+    assert parse_generalises(pd.Series(flags, dtype="object")).tolist() == expected
+
+
+@pytest.mark.parametrize("flag", ["yes", "1", "maybe"])
+def test_a_generalises_flag_must_be_empty_true_or_false(flag):
+    with pytest.raises(ClassificationDataError, match=f"generalises must be.*'{flag}'"):
+        parse_generalises(pd.Series([flag, "true"]))
+
+
 def _write(directory, classification: str, mapping: str):
     (directory / "predicate_classification.csv").write_text(
         "class,subclass,description,semantics,inference\n" + classification
@@ -191,6 +238,51 @@ def test_a_mapping_without_a_direction_column_has_no_direction(tmp_path):
     _, mapping = read_classification_files(tmp_path)
 
     assert mapping["direction"].isna().all()
+
+
+def test_the_generalises_column_is_read_and_defaults_to_false(tmp_path):
+    _write(
+        tmp_path,
+        "Attribute,Anatomical,d,s,i\n",
+        "class,subclass,r_id,r_name,generalises\n"
+        "Attribute,Anatomical,Has finding site,Has finding site,true\n"
+        "Attribute,Anatomical,Finding site of,Finding site of,\n",
+    )
+
+    _, mapping = read_classification_files(tmp_path)
+
+    assert mapping["generalises"].tolist() == [True, False]
+
+
+@pytest.mark.parametrize(
+    ("kind", "subkind", "direction", "valid"),
+    [
+        ("Attribute", "Anatomical", "", True),
+        ("Composition", "Physical", "", True),
+        ("Association", "Therapeutic", "", True),
+        ("Hierarchy", "Taxonomic", "up", True),
+        ("Hierarchy", "Taxonomic", "down", False),
+        ("Identity", "Exact equivalence", "", False),
+        ("Metadata", "CDM version", "", False),
+        ("Association", "Mapping", "", False),
+        ("Association", "Administrative", "", False),
+        ("Association", "Contraindication", "", False),
+        ("Association", "Value mapping", "", False),
+    ],
+)
+def test_only_some_relationships_may_generalise(tmp_path, kind, subkind, direction, valid):
+    _write(
+        tmp_path,
+        f"{kind},{subkind},d,s,i\n",
+        f"class,subclass,r_id,r_name,direction,generalises\n"
+        f"{kind},{subkind},Is a,Is a,{direction},true\n",
+    )
+
+    if valid:
+        read_classification_files(tmp_path)
+    else:
+        with pytest.raises(ClassificationDataError, match="cannot generalise: \\['Is a'\\]"):
+            read_classification_files(tmp_path)
 
 
 @pytest.mark.parametrize("subclass", ["unknown", ""])
