@@ -62,10 +62,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         classification concepts. ``limit`` and ``concept_ids`` are rejected because they
         would silently truncate every enumeration.
     standardise : bool
-        If True, a non-standard concept stands in for the standard concepts it maps to
-        when walking the hierarchy and entailing relationships. Its walks include those
-        concepts and their ancestors, and its entailed relationships those of each of them,
-        reported for the concept itself. Off by default, since the result then holds
+        If True, a non-standard concept stands in for the one standard concept it maps to
+        when walking the hierarchy and entailing relationships. Its walks include that
+        concept and its ancestors, and its entailed relationships are those of that
+        concept, reported for the concept itself. A concept that maps to several standard
+        concepts raises a ``ValueError``, since none of them is the more standard. Off by default, since the result then holds
         concepts that no stored edge connects to the concept.
 
     Raises

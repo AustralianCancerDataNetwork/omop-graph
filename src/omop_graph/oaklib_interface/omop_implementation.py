@@ -94,8 +94,9 @@ class OMOPAlchemyImplementation(
         The concepts the adapter enumerates. Defaults to active standard and
         classification concepts.
     standardise : bool, optional
-        If True, a non-standard concept stands in for the standard concepts it maps to
-        when walking the hierarchy and entailing relationships. Defaults to False.
+        If True, a non-standard concept stands in for the one standard concept it maps to
+        when walking the hierarchy and entailing relationships. A concept that maps to
+        several standard concepts raises a ``ValueError``. Defaults to False.
     """
 
     # oaklib's class_resolver keys plugins by class name; this adds the "omop:" scheme.

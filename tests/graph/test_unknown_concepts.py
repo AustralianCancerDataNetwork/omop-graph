@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 
 import pytest
-from fixtures.hierarchy_cdm import CANCER, DISEASE, LUNG_CANCER, hierarchy_cdm
+from fixtures.hierarchy_cdm import CANCER, DISEASE, hierarchy_cdm
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
@@ -59,7 +59,7 @@ def test_an_information_content_over_no_concepts_is_refused(kg) -> None:
 
 
 def test_descendants_outnumbering_the_scope_are_refused_and_not_clipped(kg) -> None:
-    narrow = ConceptFilter(concept_ids=(LUNG_CANCER,), require_active=True)
+    narrow = ConceptFilter(concept_ids=(DISEASE,), require_active=True)
 
     with pytest.raises(ValueError, match="outnumber"):
         kg.information_content([DISEASE], ICSource.CONCEPT_ANCESTOR, narrow)

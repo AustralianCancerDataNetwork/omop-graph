@@ -19,6 +19,7 @@ from fixtures.hierarchy_cdm import (
     OUTER_ROOT,
     SMOKING_RELATED,
     SOURCE,
+    SOURCE_LUNG,
     SOURCE_TWO,
     THORAX_ORGAN,
     hierarchy_cdm,
@@ -30,7 +31,6 @@ from omop_graph.extensions.omop_alchemy import (
 )
 from omop_graph.graph.kg import KnowledgeGraph
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
-from omop_graph.reasoning.concept_handlers import standardise_ids
 
 
 @pytest.fixture(scope="module")
@@ -131,6 +131,7 @@ def test_by_curie_variants_delegate(adapter) -> None:
     assert set(adapter.entailed_incoming_relationships_by_curie(curie(LUNG))) == {
         (SITE, curie(LUNG_CANCER)),
         (MAPS_TO, curie(SOURCE_TWO)),
+        (MAPS_TO, curie(SOURCE_LUNG)),
     }
 
 
@@ -331,14 +332,6 @@ def test_a_concept_stands_for_its_standard_concepts(adapter) -> None:
     }
 
 
-def test_standardise_ids_picks_the_lowest_standard_concept(adapter) -> None:
-    assert standardise_ids({SOURCE_TWO, ORPHAN, CANCER}, adapter.kg) == {
-        SOURCE_TWO: LUNG_CANCER,
-        ORPHAN: ORPHAN,
-        CANCER: CANCER,
-    }
-
-
 def test_a_non_standard_concept_has_no_ancestors_by_default(adapter) -> None:
     assert list(adapter.ancestors(curie(SOURCE), reflexive=False)) == []
 
@@ -349,11 +342,18 @@ def test_a_non_standard_concept_takes_the_ancestors_of_its_standard_concepts(
     assert set(standardising.ancestors(curie(SOURCE), reflexive=False)) == {
         curie(c) for c in (LUNG_CANCER, CANCER, SMOKING_RELATED, DISEASE, OUTER_ROOT)
     }
-    assert set(standardising.ancestors(curie(SOURCE_TWO), reflexive=False)) >= {
+    assert set(standardising.ancestors(curie(SOURCE_LUNG), reflexive=False)) == {
+        curie(LUNG),
         curie(THORAX_ORGAN),
-        curie(DISEASE),
     }
     assert list(standardising.ancestors(curie(ORPHAN), reflexive=False)) == []
+
+
+def test_a_concept_with_several_standard_concepts_cannot_be_walked_with_standardise(
+    standardising,
+) -> None:
+    with pytest.raises(ValueError, match="several standard concepts"):
+        list(standardising.ancestors(curie(SOURCE_TWO), reflexive=False))
 
 
 def test_a_standard_concept_walks_as_before_with_standardise(adapter, standardising) -> None:

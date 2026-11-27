@@ -86,12 +86,13 @@ class PredicatesMixin(GraphCore):
 
         A Hierarchy relationship is included in its up direction only, so each hierarchical
         edge appears once, from the child to the parent. The down direction is available by
-        naming it.
+        naming it. The metadata relationships are left out.
         """
         return frozenset(
             relationship_id
             for relationship_id, mapping in self._relationship_mapping.items()
-            if not (
+            if mapping.predicate_kind is not PredicateKind.METADATA
+            and not (
                 mapping.predicate_kind is PredicateKind.HIERARCHY
                 and mapping.direction is HierarchyDirection.DOWN
             )

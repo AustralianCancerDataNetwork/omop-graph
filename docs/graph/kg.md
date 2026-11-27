@@ -71,7 +71,7 @@ if matches:
 | Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `concepts_without_embedding`, `embed_text`, `embed_concepts` |
 
 * A scope is a `ConceptFilter` that decides which concepts a method reports or counts, see [Scopes](#scopes).
-* `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the standard concepts it maps to. A stand-in reports the entailed relationships of the standard concepts for itself, and not the mappings. With both subjects and objects, the stand-ins apply to the subjects.
+* `closure`, `entailed_relationships` and `all_entailed_relationships` take `standardise=True`, so that a non-standard concept stands in for the one standard concept it maps to. A stand-in reports the entailed relationships of the standard concept for itself, and not the mappings. With both subjects and objects, the stand-ins apply to the subjects. A concept that maps to several standard concepts raises a `ValueError`, since none is the more standard. `standardise` lists them, and `standard_concept` returns the one or raises.
 * `entailed_relationships` entails the relationships that generalise and returns the others as stored, first.
 * `search` ranks the matches of the kinds you give, on concept names and then, if asked, synonyms, with the concepts you name as identifiers first.
 
@@ -81,7 +81,7 @@ Every `concept_filter` a method takes is a scope, a membership rule that decides
 
 * A scope that sets `limit` is refused, since a limit truncates a list and cannot decide membership. For a generator the error comes with its first item. The methods that truncate take a `limit` parameter of their own: `entities`, `roots`, `leaves`, `singletons`, `obsolete_concepts`, `concept_lookup` and `search`. With a `limit`, the enumerators return the concepts with the lowest ids, so the same ones come back on every run.
 * A scope that sets `concept_ids` restricts what is reported to those ids.
-* A scope only filters what is reported. A walk still passes through the concepts it excludes, and the concepts you ask about are always reported.
+* A scope only filters what is reported. A walk still passes through the concepts it excludes. A scope also applies to the concepts you name, and a relationship asserted to a concept is reported whatever the scope. In `entailed_relationships`, a requested object the scope excludes gets only the relationships asserted to it, and a warning lists it.
 * The methods that describe the stored graph, `closure`, `relationships` and `entailed_relationships`, default to no scope. The methods that report or count concepts default to `DEFAULT_CONCEPT_FILTER`, active standard and classification concepts, and the counts and lookups to `ALL_CONCEPTS`.
 * `omop_graph.graph.scope` has the constants and the helpers that derive one scope from another, which keep the restrictions the scope already has.
 
@@ -127,7 +127,7 @@ kg.closure([concept_id])[concept_id]  # strict Is a ancestors
 kg.closure([concept_id], HierarchyDirection.DOWN)[concept_id]  # strict Is a descendants
 ```
 
-A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg.standardise([concept_id])` maps it to the standard concepts at the end of its identity edges such as `Maps to`, which can be several.
+A non-standard concept, such as an ICD10CM code, has no ancestry of its own. `kg.standardise([concept_id])` maps it to the standard concepts at the end of its identity edges such as `Maps to`, which can be several. `kg.standard_concept` returns the one standard concept, and raises when there are several. A classification concept with a `Maps to` stands for its target in the same way, as an ATC class stands for its ingredient. Only a standard concept is a valid target.
 
 ---
 

@@ -13,6 +13,7 @@ from fixtures.hierarchy_cdm import (
     OUTER_ROOT,
     SMOKING_RELATED,
     SOURCE,
+    SOURCE_LUNG,
     SOURCE_TWO,
     THORAX_ORGAN,
     hierarchy_cdm,
@@ -34,12 +35,19 @@ def test_a_non_standard_concept_reaches_nothing_unless_it_stands_in(kg) -> None:
     assert kg.closure([SOURCE])[SOURCE] == frozenset()
 
 
-def test_a_non_standard_concept_reaches_its_standard_concepts_and_their_ancestors(kg) -> None:
-    reached = kg.closure([SOURCE, SOURCE_TWO, ORPHAN], standardise=True)
+def test_a_non_standard_concept_reaches_its_standard_concept_and_its_ancestors(kg) -> None:
+    reached = kg.closure([SOURCE, SOURCE_LUNG, ORPHAN], standardise=True)
 
     assert reached[SOURCE] == {LUNG_CANCER, CANCER, SMOKING_RELATED, DISEASE, OUTDATED, OUTER_ROOT}
-    assert reached[SOURCE_TWO] == reached[SOURCE] | {LUNG, THORAX_ORGAN}
+    assert reached[SOURCE_LUNG] == {LUNG, THORAX_ORGAN}
     assert reached[ORPHAN] == frozenset()
+
+
+def test_a_concept_with_several_standard_concepts_cannot_be_standardised(kg) -> None:
+    with pytest.raises(ValueError, match="several standard concepts") as raised:
+        kg.closure([SOURCE_TWO], standardise=True)
+
+    assert str(SOURCE_TWO) in str(raised.value)
 
 
 def test_a_standard_concept_reaches_the_same_with_and_without_standardise(kg) -> None:

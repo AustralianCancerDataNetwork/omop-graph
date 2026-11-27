@@ -109,9 +109,10 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             so a concept above an excluded one is still reached. It is a scope, so it
             must not set ``limit``.
         standardise : bool
-            If True, a non-standard concept stands in for the standard concepts it maps to,
-            see :meth:`standardise`. It reaches those concepts and everything reached from
-            them, whether or not concept_filter selects the standard concepts themselves.
+            If True, a non-standard concept stands in for the one standard concept it maps
+            to, see :meth:`standard_concept`. It reaches that concept and everything reached
+            from it, whether or not concept_filter selects the standard concept itself. A
+            concept without a standard concept reaches nothing.
 
         Returns
         -------
@@ -122,6 +123,8 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
         ------
         UnknownConceptError
             If a requested concept does not exist.
+        ValueError
+            If ``standardise`` is True and a concept maps to several standard concepts.
         """
         starts = tuple(dict.fromkeys(concept_ids))
         self.require_concepts(starts)
@@ -178,10 +181,10 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
 
         A standard concept stands for itself. Any other concept stands for the standard
         concepts at the end of its identity edges, such as ``Maps to`` and ``Concept
-        replaced by``, which may be several. Edges to concepts that are not standard are
-        not followed further. A classification concept is not a valid mapping target, so
-        it stands for no standard concept, although a walk from it still passes through
-        itself, see :meth:`closure`.
+        replaced by``, which may be several, and which this lists all of. Only a standard concept is a valid mapping
+        target, so an edge to any other concept is not followed. A classification concept
+        stands for the standard concept it maps to, as an ATC class stands for its
+        ingredient, and for none when it has no mapping.
 
         Parameters
         ----------
@@ -225,12 +228,61 @@ class HierarchyMixin(EdgesMixin, ConceptsMixin):
             for concept_id in ids
         }
 
-    def _stands_in(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
-        """Map each concept to the concepts it stands in for: itself, then its standard concepts."""
+    def standard_concept(
+        self, concept_ids: Iterable[int], edge_filter: EdgeFilter = IDENTITY_FILTER
+    ) -> dict[int, int | None]:
+        """
+        Find the one standard concept each concept stands for.
+
+        Where :meth:`standardise` lists every standard concept, this is for callers that
+        need a single one, which none of several can be.
+
+        Parameters
+        ----------
+        concept_ids : Iterable[int]
+            Concepts to standardise.
+        edge_filter : EdgeFilter
+            The edges that map a concept to its standard concepts.
+
+        Returns
+        -------
+        dict[int, int | None]
+            Every requested concept mapped to its standard concept, which is itself when it
+            is standard, and None when it has none.
+
+        Raises
+        ------
+        UnknownConceptError
+            If a requested concept does not exist.
+        ValueError
+            If a concept maps to several standard concepts, naming them. Pass the standard
+            concept you mean.
+        """
         ids = tuple(dict.fromkeys(concept_ids))
+        self.require_concepts(ids)
+        return self._standard_concept(ids, edge_filter)
+
+    def _standard_concept(
+        self, ids: tuple[int, ...], edge_filter: EdgeFilter = IDENTITY_FILTER
+    ) -> dict[int, int | None]:
+        """Find the standard concepts as :meth:`standard_concept` does, for concepts that exist."""
+        targets = self._standardise(ids, edge_filter)
+        if several := {
+            concept_id: found for concept_id, found in targets.items() if len(found) > 1
+        }:
+            raise ValueError(
+                f"Each of these concepts maps to several standard concepts, so none can stand "
+                f"for it: {several}. Pass the standard concept you mean."
+            )
+        return {concept_id: found[0] if found else None for concept_id, found in targets.items()}
+
+    def _stands_in(self, concept_ids: Iterable[int]) -> dict[int, tuple[int, ...]]:
+        """Map each concept to the concepts it stands in for: itself, then its one standard concept."""
         return {
-            concept_id: tuple(dict.fromkeys((concept_id, *targets)))
-            for concept_id, targets in self._standardise(ids).items()
+            concept_id: (concept_id,) if standard in (None, concept_id) else (concept_id, standard)
+            for concept_id, standard in self._standard_concept(
+                tuple(dict.fromkeys(concept_ids))
+            ).items()
         }
 
     def _standard_among(self, concept_ids: Iterable[int]) -> set[int]:

@@ -4,8 +4,9 @@ Concept filters used as scopes, and the helpers that derive one scope from anoth
 A ``ConceptFilter`` given to a graph method is a scope, a membership rule that decides which
 concepts the method reports or counts. ``limit`` truncates a list and decides no membership,
 so a scope that sets it is refused, and the methods that truncate take a ``limit`` parameter.
-A scope never changes which concepts a walk passes through, and never removes a concept the
-caller asked about.
+A scope never changes which concepts a walk passes through. It decides what is reported,
+also of the concepts the caller named, and only a relationship asserted to a concept is
+reported regardless.
 """
 
 from __future__ import annotations

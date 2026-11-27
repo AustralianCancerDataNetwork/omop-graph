@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 from collections import defaultdict
 from collections.abc import Generator, Iterable
 from dataclasses import replace
@@ -13,6 +14,7 @@ from ...extensions.omop_alchemy import (
     HierarchyDirection,
 )
 from ..edges import (
+    DEFAULT_EDGE_FILTER,
     IS_A_RELATIONSHIP_ID,
     EdgeFilter,
 )
@@ -22,6 +24,8 @@ from ..scope import _require_scope
 # Local Application Imports
 from .enumeration import EnumerationMixin
 from .hierarchy import HierarchyMixin
+
+logger = logging.getLogger(__name__)
 
 
 class EntailmentMixin(HierarchyMixin, EnumerationMixin):
@@ -40,7 +44,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         self,
         subjects: tuple[int, ...] | None,
         objects: tuple[int, ...] | None,
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
         concept_filter: ConceptFilter | None = None,
         standardise: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
@@ -61,7 +65,9 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             Which asserted relationships to start from, as in :meth:`relationships`.
         concept_filter : ConceptFilter, optional
             Which concepts count as entailed objects, and for incoming relationships as
-            entailed subjects, as in :meth:`closure`. Asserted edges are unaffected.
+            entailed subjects, as in :meth:`closure`. Asserted edges are unaffected. A
+            requested object it excludes only gets the relationships asserted to it, and a
+            warning lists such objects.
         standardise : bool
             If True, a concept also has the entailed relationships of the standard concepts
             it maps to, see :meth:`standardise`, reported for the concept itself. Stored
@@ -88,6 +94,8 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             raise ValueError("Entailed relationships need subjects or objects")
         if concept_filter is not None:
             _require_scope(concept_filter)
+            if objects is not None and not standardise:
+                self._warn_outside_scope(objects, concept_filter)
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
             return
@@ -109,8 +117,18 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
                 standardise,
             )
 
+    def _warn_outside_scope(self, objects: tuple[int, ...], concept_filter: ConceptFilter) -> None:
+        """Log the requested objects that concept_filter excludes, which are not entailed."""
+        outside = sorted(set(objects) - self._within(objects, concept_filter))
+        if outside:
+            logger.warning(
+                "The concepts %s are outside the concept_filter, so no relationship is "
+                "entailed to them. Only the relationships asserted to them are reported.",
+                outside,
+            )
+
     def gap_filled_relationships(
-        self, concept_ids: Iterable[int], edge_filter: EdgeFilter | None = None
+        self, concept_ids: Iterable[int], edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER
     ) -> tuple[tuple[int, str, int], ...]:
         """
         Find the non-redundant relationships that connect a set of concepts.
@@ -155,7 +173,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
 
     def all_entailed_relationships(
         self,
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
         standardise: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
@@ -284,9 +302,11 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
         to the ``Is a`` descendants of its subject.
 
         The descendants of the objects are all followed, whatever concept_filter selects,
-        since an edge can end on a concept outside it. The filter limits only the subjects
-        that receive an edge, and the objects asked for are always reported.
+        since an edge can end on a concept outside it. The filter limits the subjects that
+        receive an edge and the objects an edge is entailed to. An edge asserted to an
+        object is always reported.
         """
+        in_scope = set(objects) if concept_filter is None else self._within(objects, concept_filter)
         descendants = self._closure(objects, HierarchyDirection.DOWN)
         targets_by_filler: dict[int, list[int]] = defaultdict(list)
         for target, below in descendants.items():
@@ -306,5 +326,7 @@ class EntailmentMixin(HierarchyMixin, EnumerationMixin):
             if relationship_id != IS_A_RELATIONSHIP_ID:
                 holders = (subject_id, *subtypes[subject_id])
             for target in targets_by_filler[filler]:
+                if target != filler and target not in in_scope:
+                    continue
                 for holder in holders:
                     yield holder, relationship_id, target

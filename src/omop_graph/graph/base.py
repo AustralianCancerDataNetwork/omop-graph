@@ -7,7 +7,7 @@ from typing import Literal
 from sqlalchemy.orm import Session
 
 from ..extensions.omop_alchemy import PredicateKind
-from .edges import EdgeFilter, EdgeView
+from .edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
 from .nodes import ConceptView
 
 
@@ -36,7 +36,7 @@ class GraphBackend(ABC):
         session: Session,
         concept_ids: int | tuple[int, ...],
         direction: Literal["in", "out"],
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
     ) -> Iterable[EdgeView]:
         """
         Iterate over edges for a concept with filtering.
@@ -52,8 +52,8 @@ class GraphBackend(ABC):
         direction : str
             'out' for outgoing, 'in' for incoming.
         edge_filter : EdgeFilter, optional
-            Which edges to return. Defaults to ``EdgeFilter()``: active edges of any
-            relationship, across domains.
+            Which edges to return. Defaults to ``DEFAULT_EDGE_FILTER``: active edges of any
+            relationship but the metadata ones, across domains.
 
         Yields
         ------

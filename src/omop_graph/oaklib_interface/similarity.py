@@ -182,7 +182,8 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         ------
         ValueError
             At the call, if object_closure_predicates names more than ``rdfs:subClassOf``,
-            or use_associations is set.
+            or use_associations is set. While iterating, if a concept is outside the
+            adapter's concepts, which have no information content.
         """
         self._check_predicates(object_closure_predicates)
         if use_associations:
@@ -241,6 +242,12 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
         TermPairwiseSimilarity | None
             The similarity, with no ancestor when the concepts share none. None when a
             CURIE names no concept, or a minimum is not met.
+
+        Raises
+        ------
+        ValueError
+            If a concept is outside the adapter's concepts and ``standardise`` is off, or
+            ``standardise`` is on and a concept maps to several standard concepts.
         """
         self._check_predicates(predicates)
         pair = self._resolve_pair(subject, object)

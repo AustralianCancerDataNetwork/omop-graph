@@ -152,11 +152,11 @@ def test_a_non_standard_concept_stands_in_for_its_standard_concept_when_asked(ad
     standardising = OMOPAlchemyImplementation(kg=adapter.kg, standardise=True)
     pair = (curie(SOURCE), curie(CANCER))
 
-    plain = adapter.pairwise_similarity(*pair)
+    with pytest.raises(ValueError, match="outside the concept_filter"):
+        adapter.pairwise_similarity(*pair)
     stood_in = standardising.pairwise_similarity(*pair)
 
-    assert plain is not None and stood_in is not None
-    assert plain.jaccard_similarity == 0.0
+    assert stood_in is not None
     assert stood_in.jaccard_similarity
     assert curie(CANCER) in set(standardising.common_ancestors(*pair))
     assert curie(CANCER) not in set(adapter.common_ancestors(*pair))

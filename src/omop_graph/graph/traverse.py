@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 # Local Application Imports
-from omop_graph.graph.edges import EdgeFilter, EdgeView
+from omop_graph.graph.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
 
 if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
@@ -114,7 +114,8 @@ class GraphTrace:
 def traverse(
     kg: KnowledgeGraph,
     seeds: Iterable[int],
-    edge_filter: EdgeFilter | None,
+    *,
+    edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
     max_depth: int,
     max_nodes: int | None,
     trace: bool,
@@ -135,7 +136,8 @@ def traverse(
     seeds : Iterable[int]
         The starting Concept IDs.
     edge_filter : EdgeFilter, optional
-        Which edges to follow. Defaults to ``EdgeFilter()``.
+        Which edges to follow. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves out the
+        metadata relationships. None follows every classified relationship.
     max_depth : int
         Maximum distance from seeds to explore.
     max_nodes : int, optional

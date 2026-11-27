@@ -81,6 +81,18 @@ def test_the_prefixes_narrow_the_vocabularies(adapter) -> None:
     assert narrowed.edge_count_by_predicate[MAPS_TO].filtered_count == 1
 
 
+def test_the_omop_prefix_names_every_concept_and_narrows_nothing(adapter) -> None:
+    def counts(**kwargs) -> tuple[int, int, int]:
+        statistics = adapter.branch_summary_statistics(**kwargs)
+        return statistics.class_count, statistics.edge_count, statistics.synonym_statement_count
+
+    everything = counts()
+
+    assert everything[0] > 0 and everything[1] > 0
+    assert counts(prefixes=["OMOP"]) == everything
+    assert counts(prefixes=["OMOP", "ICD10CM"]) == everything
+
+
 def test_what_cannot_be_counted_is_refused(adapter) -> None:
     with pytest.raises(ValueError, match="roots"):
         adapter.branch_summary_statistics(branch_roots=[curie(1)])

@@ -16,14 +16,14 @@ from __future__ import annotations
 import heapq
 from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import (
     TYPE_CHECKING,
 )
 
 # Local Application Imports
 from omop_graph.extensions.omop_alchemy import PredicateKind
-from omop_graph.graph.edges import EdgeFilter, EdgeView
+from omop_graph.graph.edges import DEFAULT_EDGE_FILTER, EdgeFilter, EdgeView
 from omop_graph.graph.nodes import AncestorMatch, ConceptView, LabelMatchKind
 from omop_graph.graph.traverse import GraphTrace, TraceStep
 from omop_graph.reasoning.resolvers import CandidateHit
@@ -32,8 +32,8 @@ if TYPE_CHECKING:
     from omop_graph.graph.kg import KnowledgeGraph
 
 
-DEFAULT_PATH_FILTER = EdgeFilter(within_domain=True)
-"""Edges path search follows by default: active, within one domain to limit noise."""
+DEFAULT_PATH_FILTER = replace(DEFAULT_EDGE_FILTER, within_domain=True)
+"""Edges path search follows by default: active, not metadata, within one domain to limit noise."""
 
 
 @dataclass(frozen=True)

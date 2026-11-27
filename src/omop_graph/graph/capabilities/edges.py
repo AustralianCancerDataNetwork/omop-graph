@@ -17,6 +17,7 @@ from ...extensions.omop_alchemy import (
 )
 from .._streaming import stream
 from ..edges import (
+    DEFAULT_EDGE_FILTER,
     EdgeFilter,
     EdgeView,
 )
@@ -35,7 +36,7 @@ class EdgesMixin(PredicatesMixin):
         subjects: Iterable[int] | None,
         *,
         objects: Iterable[int] | None = None,
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
         invert: bool = False,
     ) -> Generator[tuple[int, str, int], None, None]:
         """
@@ -52,8 +53,9 @@ class EdgesMixin(PredicatesMixin):
         objects : Iterable[int] | None
             Object concept ids, or None for any.
         edge_filter : EdgeFilter, optional
-            Which relationships to return. Defaults to ``EdgeFilter()``. Relationships
-            without a classification are skipped, as in :meth:`iter_edges`.
+            Which relationships to return. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves
+            out the metadata relationships. None selects every classified relationship.
+            Relationships without a classification are skipped, as in :meth:`iter_edges`.
         invert : bool
             If True, swaps subjects and objects in the query and result.
 
@@ -88,7 +90,7 @@ class EdgesMixin(PredicatesMixin):
         yield from self._classified_triples(statements)
 
     def all_relationships(
-        self, edge_filter: EdgeFilter | None = None
+        self, edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER
     ) -> Generator[tuple[int, str, int], None, None]:
         """Yield every relationship selected by edge_filter, as :meth:`relationships` does."""
         yield from self.relationships(None, edge_filter=edge_filter)
@@ -107,7 +109,7 @@ class EdgesMixin(PredicatesMixin):
         self,
         concept_ids: Iterable[int] | int,
         direction: Literal["in", "out"],
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
     ) -> tuple[EdgeView, ...]:
         """
         Convenience method to retrieve all edges from one or multiple concepts.
@@ -119,7 +121,8 @@ class EdgesMixin(PredicatesMixin):
         direction : str
             'out' for outgoing, 'in' for incoming.
         edge_filter : EdgeFilter, optional
-            Which edges to return. Defaults to ``EdgeFilter()``.
+            Which edges to return. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves out the
+            metadata relationships. None selects every classified relationship.
         """
         with self.session_factory() as session:
             edges = tuple(
@@ -137,7 +140,7 @@ class EdgesMixin(PredicatesMixin):
         session: Session,
         concept_ids: int | Iterable[int],
         direction: Literal["in", "out"],
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
         ordered: bool = False,
     ) -> Generator[EdgeView, None, None]:
         """Yield edges of concept_ids on session, classified from the relationship mapping.
@@ -171,7 +174,7 @@ class EdgesMixin(PredicatesMixin):
         self,
         subject_ids: Iterable[int],
         object_ids: Iterable[int],
-        edge_filter: EdgeFilter | None = None,
+        edge_filter: EdgeFilter | None = DEFAULT_EDGE_FILTER,
     ) -> tuple[EdgeView, ...]:
         """
         Retrieve the edges that run from one of subject_ids to one of object_ids.
@@ -183,7 +186,8 @@ class EdgesMixin(PredicatesMixin):
         object_ids : Iterable[int]
             The concepts the edges end at, however many.
         edge_filter : EdgeFilter, optional
-            Which edges to return. Defaults to ``EdgeFilter()``.
+            Which edges to return. Defaults to ``DEFAULT_EDGE_FILTER``, which leaves out the
+            metadata relationships. None selects every classified relationship.
         """
         resolved = self._resolve_edge_filter(edge_filter)
         if resolved is None:
@@ -215,21 +219,22 @@ class EdgesMixin(PredicatesMixin):
         """Fold the kind and subkind fields of edge_filter into ``predicate_ids``.
 
         Returns None when they select no relationship, so the caller has nothing
-        to query. An empty ``predicate_ids`` selects none, where None selects all.
+        to query. An empty set in any of the three fields selects none, where None selects all.
 
         Raises
         ------
         ValueError
             If ``predicate_subkinds`` names a subkind no relationship is classified under.
         """
-        edge_filter = edge_filter or EdgeFilter()
+        if edge_filter is None:
+            edge_filter = EdgeFilter()
         if edge_filter.predicate_ids is not None and not edge_filter.predicate_ids:
             return None
         kinds, subkinds = edge_filter.predicate_kinds, edge_filter.predicate_subkinds
-        if not kinds and not subkinds:
+        if kinds is None and subkinds is None:
             return edge_filter
 
-        if subkinds:
+        if subkinds is not None:
             known = {
                 PredicateSubkind(m.predicate_kind, m.predicate_subkind)
                 for m in self._relationship_mapping.values()
@@ -243,9 +248,10 @@ class EdgesMixin(PredicatesMixin):
         selected = frozenset(
             relationship_id
             for relationship_id, m in self._relationship_mapping.items()
-            if (not kinds or m.predicate_kind in kinds)
+            if (kinds is None or m.predicate_kind in kinds)
             and (
-                not subkinds or PredicateSubkind(m.predicate_kind, m.predicate_subkind) in subkinds
+                subkinds is None
+                or PredicateSubkind(m.predicate_kind, m.predicate_subkind) in subkinds
             )
         )
         if edge_filter.predicate_ids is not None:

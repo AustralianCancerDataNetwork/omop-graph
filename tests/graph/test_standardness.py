@@ -27,7 +27,9 @@ from omop_graph.graph.nodes import Standardness
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
-STANDARD, CLASSIFICATION, SOURCE, DEPRECATED = range(500, 504)
+STANDARD, CLASSIFICATION, SOURCE, DEPRECATED, UNMAPPED_CLASSIFICATION, TO_CLASSIFICATION = range(
+    500, 506
+)
 REPLACED_BY = "IAO:0100001"
 
 
@@ -38,6 +40,8 @@ def kg() -> Iterator[KnowledgeGraph]:
         concept(CLASSIFICATION, standard_concept="C"),
         concept(SOURCE, standard_concept=None),
         concept(DEPRECATED, standard_concept=None, invalid_reason="D"),
+        concept(UNMAPPED_CLASSIFICATION, standard_concept="C"),
+        concept(TO_CLASSIFICATION, standard_concept=None),
         relationship("Maps to", "Mapped from"),
         relationship("Mapped from", "Maps to"),
         relationship_class(PredicateKind.IDENTITY, "Exact"),
@@ -45,6 +49,8 @@ def kg() -> Iterator[KnowledgeGraph]:
         classified("Mapped from", PredicateKind.IDENTITY, "Exact"),
         edge(SOURCE, "Maps to", STANDARD),
         edge(STANDARD, "Mapped from", SOURCE),
+        edge(CLASSIFICATION, "Maps to", STANDARD),
+        edge(TO_CLASSIFICATION, "Maps to", UNMAPPED_CLASSIFICATION),
     ]
     models = (
         Concept,
@@ -70,11 +76,18 @@ def test_a_concept_has_the_standardness_of_its_flag(kg) -> None:
     }
 
 
-def test_only_a_standard_concept_is_a_mapping_target(kg) -> None:
+def test_a_classification_concept_stands_for_the_standard_concept_it_maps_to(kg) -> None:
     assert kg.standardise([STANDARD, CLASSIFICATION, SOURCE]) == {
         STANDARD: (STANDARD,),
-        CLASSIFICATION: (),
+        CLASSIFICATION: (STANDARD,),
         SOURCE: (STANDARD,),
+    }
+
+
+def test_only_a_standard_concept_is_a_mapping_target(kg) -> None:
+    assert kg.standardise([UNMAPPED_CLASSIFICATION, TO_CLASSIFICATION]) == {
+        UNMAPPED_CLASSIFICATION: (),
+        TO_CLASSIFICATION: (),
     }
 
 

@@ -34,11 +34,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         self, property_values: dict[CURIE, Any] | None, prefixes: list[CURIE] | None
     ) -> ConceptFilter:
         """The adapter's concepts narrowed to the vocabularies, domains and prefixes asked for."""
-        concept_filter = self._population
-        if prefixes:
-            concept_filter = narrowed_to_vocabularies(
-                concept_filter, (self.codec.vocabulary_id(prefix) for prefix in prefixes)
-            )
+        concept_filter = self._scope(filter_obsoletes=True, id_prefixes=prefixes)
         for key, value in (property_values or {}).items():
             if key == OMOPMetadataKey.VOCABULARY:
                 concept_filter = narrowed_to_vocabularies(concept_filter, [value])

@@ -10,9 +10,11 @@ from fixtures.hierarchy_cdm import (
     IN_SCOPE,
     LUNG,
     LUNG_CANCER,
+    ORPHAN,
     OUTER_ROOT,
     SMOKING_RELATED,
     SOURCE,
+    SOURCE_TWO,
     hierarchy_cdm,
 )
 from omop_alchemy.cdm.query import ConceptFilter
@@ -71,8 +73,48 @@ def test_information_content_falls_with_the_descendants(kg) -> None:
     assert scores[DISEASE] < scores[CANCER] < scores[LUNG_CANCER]
 
 
-def test_a_concept_outside_the_scope_counts_itself(kg) -> None:
-    assert kg.information_content([SOURCE])[SOURCE] == pytest.approx(math.log2(IN_SCOPE))
+def test_a_concept_outside_the_scope_has_no_information_content(kg) -> None:
+    with pytest.raises(ValueError, match=rf"\[{SOURCE}\] are outside the concept_filter"):
+        kg.information_content([SOURCE])
+
+
+def test_a_pair_with_a_concept_outside_the_scope_is_refused_unless_it_is_standardised(kg) -> None:
+    with pytest.raises(ValueError, match="outside the concept_filter"):
+        kg.pairwise_similarity(SOURCE, CANCER)
+
+
+def test_a_standardised_pair_scores_the_one_standard_concept_of_an_outside_concept(kg) -> None:
+    similarity = kg.pairwise_similarity(SOURCE, CANCER, standardise=True)
+    standard = kg.information_content([LUNG_CANCER])[LUNG_CANCER]
+
+    assert similarity.information_content_a == standard
+    assert similarity.information_content_b == kg.information_content([CANCER])[CANCER]
+
+
+def test_a_standardised_concept_with_several_standard_concepts_cannot_be_scored(kg) -> None:
+    with pytest.raises(ValueError, match="several standard concepts"):
+        kg.pairwise_similarity(SOURCE_TWO, CANCER, standardise=True)
+    with pytest.raises(ValueError, match="several standard concepts"):
+        kg.jaccard_similarity(SOURCE_TWO, CANCER, standardise=True)
+
+
+def test_a_standardised_concept_without_a_standard_concept_cannot_be_scored(kg) -> None:
+    with pytest.raises(ValueError, match="outside the concept_filter"):
+        kg.pairwise_similarity(ORPHAN, CANCER, standardise=True)
+
+
+def test_a_jaccard_of_a_concept_outside_the_scope_is_refused_unless_it_is_standardised(kg) -> None:
+    with pytest.raises(ValueError, match="outside the concept_filter"):
+        kg.jaccard_similarity(SOURCE, CANCER)
+    assert kg.jaccard_similarity(SOURCE, CANCER, standardise=True) > 0
+
+
+def test_a_concept_the_scope_includes_never_scores_below_zero(kg) -> None:
+    everything = ConceptFilter(concept_ids=(DISEASE,))
+    score = kg.information_content([DISEASE], concept_filter=everything)[DISEASE]
+
+    assert score == 0.0
+    assert math.copysign(1.0, score) == 1.0
 
 
 def test_the_information_content_is_the_same_when_read_again(kg) -> None:

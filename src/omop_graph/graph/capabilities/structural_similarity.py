@@ -150,10 +150,15 @@ class StructuralSimilarityMixin(HierarchyMixin):
         ------
         UnknownConceptError
             If either concept does not exist.
+        ValueError
+            If ``standardise`` is False and a concept is outside ``concept_filter``, or if
+            ``standardise`` is True and a concept maps to several standard concepts.
         """
         lineage = self._pair_lineage(
             concept_a, concept_b, HierarchyDirection.UP, edge_filter, concept_filter, standardise
         )
+        if not standardise:
+            self._require_in_scope((concept_a, concept_b), concept_filter)
         return len(lineage[concept_a] & lineage[concept_b]) / len(
             lineage[concept_a] | lineage[concept_b]
         )
@@ -165,11 +170,11 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_filter: ConceptFilter = DEFAULT_CONCEPT_FILTER,
     ) -> dict[int, float]:
         """
-        Return the information content of each concept, ``-log2(descendants / concepts)``.
+        Return the information content of each concept, ``log2(concepts / descendants)``.
 
-        The descendants include the concept itself, and the concepts are all those in
-        ``concept_filter``, so the top of a hierarchy is near zero and a leaf is high. Counts are
-        cached for the lifetime of the graph.
+        The descendants include the concept itself. Both the descendants and the concepts
+        are those in ``concept_filter``, so the top of a hierarchy is near zero and a leaf
+        is high. Counts are cached for the lifetime of the graph.
 
         Parameters
         ----------
@@ -191,29 +196,37 @@ class StructuralSimilarityMixin(HierarchyMixin):
         UnknownConceptError
             If a requested concept does not exist.
         ValueError
-            If ``concept_filter`` selects no concept, or selects fewer concepts than
-            the descendants counted for one concept, as when ``CONCEPT_ANCESTOR`` is used
-            with a scope narrower than the table.
+            If a requested concept is outside ``concept_filter``, if it selects no concept,
+            or if it selects fewer concepts than the descendants counted for one concept,
+            as when ``CONCEPT_ANCESTOR`` is used with a scope narrower than the table.
         """
         ids = tuple(dict.fromkeys(concept_ids))
         self.require_concepts(ids)
         return self._information_content(ids, source, concept_filter)
 
     def _information_content(
-        self, ids: tuple[int, ...], source: ICSource, concept_filter: ConceptFilter
+        self,
+        ids: tuple[int, ...],
+        source: ICSource,
+        concept_filter: ConceptFilter,
     ) -> dict[int, float]:
         """Score concepts that exist, as :meth:`information_content` does."""
-        counts = self._count_descendants(ids, source, concept_filter)
         total = self._scope_size(concept_filter)
         if not total:
             raise ValueError("The concept_filter selects no concept, so there is nothing to count.")
+        self._require_in_scope(ids, concept_filter)
+        counts = self._count_descendants(ids, source, concept_filter)
         if too_many := [concept_id for concept_id in ids if counts[concept_id] > total]:
             raise ValueError(
                 f"The descendants counted for {too_many[:3]} outnumber the {total} concepts the "
-                f"concept_filter selects. Count the descendants within the concept_filter, with "
-                f"ICSource.IS_A, or widen the concept_filter."
+                f"concept_filter selects. Widen the concept_filter"
+                + (
+                    "."
+                    if source is ICSource.IS_A
+                    else ", or count the descendants within it with ICSource.IS_A."
+                )
             )
-        return {concept_id: -math.log2(counts[concept_id] / total) for concept_id in ids}
+        return {concept_id: math.log2(total / counts[concept_id]) for concept_id in ids}
 
     def _scope_size(self, concept_filter: ConceptFilter) -> int:
         """The number of concepts ``concept_filter`` selects."""
@@ -251,6 +264,30 @@ class StructuralSimilarityMixin(HierarchyMixin):
             for concept_id in concept_ids
         }
 
+    def _require_in_scope(self, concept_ids: Iterable[int], concept_filter: ConceptFilter) -> None:
+        """Raise when a concept lies outside concept_filter, since it has no score there."""
+        if outside := sorted(set(concept_ids) - self._within(concept_ids, concept_filter)):
+            raise ValueError(
+                f"The concepts {outside} are outside the concept_filter, so they cannot be "
+                f"scored. Ask for a concept the scope selects, or widen the scope."
+            )
+
+    def _scored_concepts(
+        self, concept_ids: tuple[int, ...], concept_filter: ConceptFilter, standardise: bool
+    ) -> dict[int, int]:
+        """
+        The concept whose information content scores each concept, the concept itself.
+
+        With standardise, a concept outside concept_filter is scored by the one standard
+        concept it maps to. One that maps to several raises, see :meth:`standard_concept`.
+        """
+        scored = {concept_id: concept_id for concept_id in concept_ids}
+        if standardise:
+            outside = tuple(set(concept_ids) - self._within(concept_ids, concept_filter))
+            for concept_id, standard in self._standard_concept(outside).items():
+                scored[concept_id] = concept_id if standard is None else standard
+        return scored
+
     def pairwise_similarity(
         self,
         concept_a: int,
@@ -276,22 +313,27 @@ class StructuralSimilarityMixin(HierarchyMixin):
         concept_filter : ConceptFilter
             The concepts that are reported and counted.
         standardise : bool
-            If True, a non-standard concept stands in for the standard concepts it maps to
-            when its ancestors are found, see :meth:`closure`. The information content is
-            that of the concept itself.
+            If True, a non-standard concept stands in for the one standard concept it maps
+            to when its ancestors are found, see :meth:`closure`. A concept outside
+            ``concept_filter`` has its information content read from that standard concept.
 
         Raises
         ------
         UnknownConceptError
             If either concept does not exist.
+        ValueError
+            If a concept is outside ``concept_filter`` and ``standardise`` is False, or if
+            ``standardise`` is True and a concept maps to several standard concepts.
+            Otherwise see :meth:`information_content`.
         """
         lineage = self._pair_lineage(
             concept_a, concept_b, HierarchyDirection.UP, IS_A_FILTER, concept_filter, standardise
         )
         common = lineage[concept_a] & lineage[concept_b]
         recent = self._most_recent(common, IS_A_FILTER, concept_filter)
+        scored = self._scored_concepts((concept_a, concept_b), concept_filter, standardise)
         scores = self._information_content(
-            tuple({concept_a, concept_b, *recent}), source, concept_filter
+            tuple({*scored.values(), *recent}), source, concept_filter
         )
         best = max(sorted(recent), key=lambda concept_id: scores[concept_id], default=None)
         ancestor_ic = scores[best] if best is not None else 0.0
@@ -304,7 +346,7 @@ class StructuralSimilarityMixin(HierarchyMixin):
             jaccard=jaccard,
             ancestor_id=best,
             ancestor_information_content=ancestor_ic,
-            information_content_a=scores[concept_a],
-            information_content_b=scores[concept_b],
+            information_content_a=scores[scored[concept_a]],
+            information_content_b=scores[scored[concept_b]],
             phenodigm=math.sqrt(jaccard * ancestor_ic) if jaccard and ancestor_ic else 0.0,
         )

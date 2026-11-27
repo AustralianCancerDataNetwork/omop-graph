@@ -47,10 +47,11 @@ class EdgeFilter:
     predicate_ids : frozenset[str], optional
         Only these relationship ids. An empty set selects no edge, and None selects all.
     predicate_kinds : frozenset[PredicateKind], optional
-        Only relationships of these kinds.
+        Only relationships of these kinds. An empty set selects no edge, and None selects all.
     predicate_subkinds : frozenset[PredicateSubkind], optional
-        Only relationships of these subkinds. The knowledge graph rejects a subkind
-        that no relationship is classified under, listing the valid ones.
+        Only relationships of these subkinds. An empty set selects no edge, and None
+        selects all. The knowledge graph rejects a subkind that no relationship is
+        classified under, listing the valid ones.
     active_only : bool
         If True, only edges that are not deprecated (``invalid_reason`` is unset).
     on : date, optional
@@ -79,6 +80,16 @@ class EdgeFilter:
                     f"predicate_subkinds must hold PredicateSubkind members, got {subkind!r}"
                 )
 
+
+DEFAULT_EDGE_FILTER = EdgeFilter(
+    predicate_kinds=frozenset(PredicateKind) - {PredicateKind.METADATA}
+)
+"""
+Selects the active edges of every relationship but the metadata ones.
+
+The metadata relationships, such as ``Has Module``, link every concept to a few vocabulary
+concepts and carry no meaning of their own. Name ``PredicateKind.METADATA`` to read them.
+"""
 
 IS_A_FILTER = EdgeFilter(predicate_ids=frozenset({IS_A_RELATIONSHIP_ID}))
 """Selects the active ``Is a`` edges."""

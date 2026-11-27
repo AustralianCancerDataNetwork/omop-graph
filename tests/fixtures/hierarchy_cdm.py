@@ -43,7 +43,7 @@ from omop_graph.graph.language import OMOPLanguage
     LOOP_A,
     LOOP_B,
 ) = range(200, 210)
-OUTDATED, OUTER_ROOT, SOURCE, SOURCE_TWO, ORPHAN = range(210, 215)
+OUTDATED, OUTER_ROOT, SOURCE, SOURCE_TWO, ORPHAN, SOURCE_LUNG = range(210, 216)
 IN_SCOPE = 11
 
 
@@ -56,7 +56,7 @@ def hierarchy_cdm() -> Generator[sessionmaker[Session]]:
         concept(OUTER_ROOT),
         *(
             concept(concept_id, standard_concept=None)
-            for concept_id in (SOURCE, SOURCE_TWO, ORPHAN)
+            for concept_id in (SOURCE, SOURCE_TWO, ORPHAN, SOURCE_LUNG)
         ),
         relationship("Is a", "Subsumes"),
         relationship("Subsumes", "Is a"),
@@ -87,6 +87,7 @@ def hierarchy_cdm() -> Generator[sessionmaker[Session]]:
         edge(SOURCE, "Maps to", LUNG_CANCER),
         edge(SOURCE_TWO, "Maps to", LUNG_CANCER),
         edge(SOURCE_TWO, "Maps to", LUNG),
+        edge(SOURCE_LUNG, "Maps to", LUNG),
         edge(LUNG_CANCER, "Mapped from", SOURCE),
         edge(DISEASE, "Subsumes", CANCER),
         edge(CANCER, "Subsumes", LUNG_CANCER),

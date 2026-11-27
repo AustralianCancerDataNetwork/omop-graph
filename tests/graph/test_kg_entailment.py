@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 
 import pytest
+from fixtures.filler_cdm import HOLDER, NON_STANDARD_FILLER, STANDARD_PARENT, filler_cdm
 from fixtures.hierarchy_cdm import (
     CANCER,
     DISEASE,
@@ -12,10 +14,12 @@ from fixtures.hierarchy_cdm import (
     OUTER_ROOT,
     SMOKING_RELATED,
     SOURCE,
+    SOURCE_LUNG,
     SOURCE_TWO,
     THORAX_ORGAN,
     hierarchy_cdm,
 )
+from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.edges import EdgeFilter
 from omop_graph.graph.kg import KnowledgeGraph
@@ -103,10 +107,17 @@ def test_standardise_lends_the_entailed_relationships_of_the_standard_concepts(k
 
 
 def test_standardise_reports_incoming_relationships_for_the_concept_standing_in(kg) -> None:
-    triples = set(kg.entailed_relationships(None, (SOURCE_TWO,), ENTAILING, standardise=True))
+    triples = set(kg.entailed_relationships(None, (SOURCE_LUNG,), ENTAILING, standardise=True))
 
-    assert (LUNG_CANCER, "Has finding site", SOURCE_TWO) in triples
-    assert {t[2] for t in triples} == {SOURCE_TWO}
+    assert (LUNG_CANCER, "Has finding site", SOURCE_LUNG) in triples
+    assert {t[2] for t in triples} == {SOURCE_LUNG}
+
+
+def test_a_concept_with_several_standard_concepts_cannot_be_standardised_for_entailment(kg) -> None:
+    with pytest.raises(ValueError, match="several standard concepts"):
+        list(kg.entailed_relationships((SOURCE_TWO,), None, ENTAILING, standardise=True))
+    with pytest.raises(ValueError, match="several standard concepts"):
+        list(kg.entailed_relationships(None, (SOURCE_TWO,), ENTAILING, standardise=True))
 
 
 def test_standardise_does_not_lend_stored_relationships(kg) -> None:
@@ -133,3 +144,114 @@ def test_streaming_with_standardise_reports_for_each_concept_in_scope(kg) -> Non
     streamed = set(kg.all_entailed_relationships(ENTAILING, standardise=True))
 
     assert (SOURCE, "Has finding site", LUNG) not in streamed
+
+
+@pytest.fixture(scope="module")
+def filler_kg() -> Iterator[KnowledgeGraph]:
+    with filler_cdm() as sessions:
+        yield KnowledgeGraph(sessions)
+
+
+WITHOUT_PARENT = ConceptFilter(concept_ids=(HOLDER, NON_STANDARD_FILLER))
+"""A scope that excludes STANDARD_PARENT, which the filler of HOLDER is a kind of."""
+
+ENTAILED_TO_PARENT = (HOLDER, "Has finding site", STANDARD_PARENT)
+
+
+def test_a_requested_object_the_scope_excludes_is_not_entailed_from_either_end(filler_kg) -> None:
+    from_subject = set(
+        filler_kg.entailed_relationships(
+            (HOLDER,), (STANDARD_PARENT,), concept_filter=WITHOUT_PARENT
+        )
+    )
+    into_object = set(
+        filler_kg.entailed_relationships(None, (STANDARD_PARENT,), concept_filter=WITHOUT_PARENT)
+    )
+
+    assert from_subject == set()
+    assert into_object == {(NON_STANDARD_FILLER, "Is a", STANDARD_PARENT)}
+
+
+def test_a_requested_object_the_scope_includes_is_entailed_from_either_end(filler_kg) -> None:
+    everything = ConceptFilter()
+
+    from_subject = set(
+        filler_kg.entailed_relationships((HOLDER,), (STANDARD_PARENT,), concept_filter=everything)
+    )
+    into_object = set(
+        filler_kg.entailed_relationships(None, (STANDARD_PARENT,), concept_filter=everything)
+    )
+
+    assert ENTAILED_TO_PARENT in from_subject
+    assert ENTAILED_TO_PARENT in into_object
+
+
+def test_a_relationship_asserted_to_an_excluded_object_is_still_reported(filler_kg) -> None:
+    scope = ConceptFilter(concept_ids=(HOLDER,))
+    asserted = (HOLDER, "Has finding site", NON_STANDARD_FILLER)
+
+    from_subject = set(
+        filler_kg.entailed_relationships((HOLDER,), (NON_STANDARD_FILLER,), concept_filter=scope)
+    )
+    into_object = set(
+        filler_kg.entailed_relationships(None, (NON_STANDARD_FILLER,), concept_filter=scope)
+    )
+
+    assert asserted in from_subject
+    assert asserted in into_object
+
+
+def test_the_requested_objects_a_scope_excludes_are_named_in_one_warning(
+    filler_kg, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        list(
+            filler_kg.entailed_relationships(
+                None, (STANDARD_PARENT, NON_STANDARD_FILLER), concept_filter=WITHOUT_PARENT
+            )
+        )
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert str(STANDARD_PARENT) in warnings[0].getMessage()
+    assert str(NON_STANDARD_FILLER) not in warnings[0].getMessage()
+
+
+def test_nothing_is_warned_when_the_scope_keeps_every_requested_object(
+    filler_kg, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        list(
+            filler_kg.entailed_relationships(
+                None, (STANDARD_PARENT,), concept_filter=ConceptFilter()
+            )
+        )
+        list(filler_kg.entailed_relationships((HOLDER,), None, concept_filter=WITHOUT_PARENT))
+
+    assert not caplog.records
+
+
+def test_a_concept_the_walk_finds_and_the_scope_removes_is_silent(
+    filler_kg, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        triples = set(
+            filler_kg.entailed_relationships((HOLDER,), None, concept_filter=WITHOUT_PARENT)
+        )
+
+    assert ENTAILED_TO_PARENT not in triples
+    assert not caplog.records
+
+
+def test_standardise_names_no_objects_in_a_warning_since_it_reports_for_the_stand_in(
+    kg, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        triples = set(
+            kg.entailed_relationships(
+                None, (SOURCE_LUNG,), ENTAILING, DEFAULT_CONCEPT_FILTER, standardise=True
+            )
+        )
+
+    assert (LUNG_CANCER, "Has finding site", SOURCE_LUNG) in triples
+    assert not caplog.records

@@ -29,10 +29,10 @@ def kg() -> Iterator[KnowledgeGraph]:
 def test_concepts_are_counted_by_vocabulary_domain_and_validity(kg) -> None:
     counts = kg.concept_counts()
 
-    assert counts.total == 15
+    assert counts.total == 16
     assert counts.deprecated == 1
-    assert counts.by_vocabulary() == {"SNOMED": 15}
-    assert counts.by_domain() == {"Condition": 15}
+    assert counts.by_vocabulary() == {"SNOMED": 16}
+    assert counts.by_domain() == {"Condition": 16}
 
 
 def test_a_scope_narrows_the_concept_counts(kg) -> None:
@@ -44,7 +44,7 @@ def test_a_scope_narrows_the_concept_counts(kg) -> None:
 def test_active_relationships_are_counted_by_id(kg) -> None:
     assert kg.relationship_counts() == {
         "Is a": 9,
-        "Maps to": 3,
+        "Maps to": 4,
         "Mapped from": 1,
         "Subsumes": 2,
         "Has finding site": 1,
