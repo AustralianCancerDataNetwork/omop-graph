@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from fixtures.cdm_builders import (
@@ -30,6 +32,7 @@ from omop_graph.extensions.omop_alchemy import (
     RelationshipMapping,
 )
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.oaklib_interface.codec import OMOPCodec
 from omop_graph.oaklib_interface.omop_implementation import OMOPAlchemyImplementation
 
 PARENT, CHILD, BRACES, BRACKETS, COLON, SPACE = range(400, 406)
@@ -273,9 +276,23 @@ def test_the_prefix_map_covers_the_prefixes_the_adapter_emits(adapter) -> None:
         adapter.curie_to_uri("rdfs:subClassOf") == "http://www.w3.org/2000/01/rdf-schema#subClassOf"
     )
     assert adapter.curie_to_uri(curie(PARENT)) == f"{prefixes['OMOP']}{PARENT}"
-    assert prefixes["ICD10CM"].startswith("https://")
+    assert "ICD10CM" not in prefixes
     assert "Nebraska_Lexicon" not in prefixes
     assert adapter.curie_to_uri("Nebraska_Lexicon:X%3AY") is None
+
+
+def test_a_vocabulary_has_no_uri_even_when_a_registry_prefix_has_its_name() -> None:
+    kg = Mock()
+    kg.vocabularies.return_value = [
+        SimpleNamespace(vocabulary_id=name) for name in ("LOINC", "JAX", "Mondo")
+    ]
+    kg.predicates.return_value = []
+
+    prefixes = OMOPCodec(kg).prefix_map()
+
+    assert not {"LOINC", "JAX", "Mondo"} & prefixes.keys()
+    assert prefixes["OMOP"] == "https://athena.ohdsi.org/search-terms/terms/"
+    assert prefixes["MONDO"] == "http://purl.obolibrary.org/obo/MONDO_"
 
 
 def test_a_predicate_that_matches_nothing_is_mentioned_once(
@@ -294,7 +311,7 @@ def test_a_filter_that_names_no_concept_is_mentioned(
     with caplog.at_level(logging.INFO):
         assert list(adapter.relationships(subjects=[UNKNOWN])) == []
 
-    assert f"No CURIE names a concept, so nothing matches: ['{UNKNOWN}']" in caplog.text
+    assert caplog.text.count(f"1 CURIEs name no concept, such as ['{UNKNOWN}']") == 1
 
 
 def test_a_foreign_predicate_is_logged_quietly_and_an_omop_one_with_a_warning(

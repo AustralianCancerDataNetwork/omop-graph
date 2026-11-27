@@ -15,7 +15,7 @@ from sssom.constants import SEMAPV
 from sssom_schema import Mapping
 
 from omop_graph.graph.edges import EdgeFilter, MappingStrength
-from omop_graph.graph.nodes import ConceptView, MappingView
+from omop_graph.graph.nodes import ConceptView, MappingCardinality, MappingView
 from omop_graph.graph.scope import narrowed_to_vocabularies
 from omop_graph.oaklib_interface.base import as_list
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
@@ -28,9 +28,13 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
 
     A mapping is an identity relationship of the concept, or an association classified as a
     mapping, and the concept is always its subject. Exact equivalence is
-    ``skos:exactMatch``, near equivalence ``skos:closeMatch`` and the association
-    ``skos:relatedMatch``. Version lineage, such as ``Concept replaced by``, is not a
-    mapping. Each pair is stored in both directions, so it is a mapping of both concepts.
+    ``skos:exactMatch`` when it is one to one and ``skos:closeMatch`` otherwise, since a
+    concept that maps to several, or that shares its target, is not equivalent to it alone.
+    Near equivalence is ``skos:closeMatch`` and the association ``skos:relatedMatch``.
+    Every mapping states its ``mapping_cardinality``. Version lineage, such as
+    ``Concept replaced by``, and the value family, such as ``Maps to value``, which only
+    completes a ``Maps to``, are not mappings. Each pair is stored in both directions, so it
+    is a mapping of both concepts.
     The vocabulary code of a concept is a mapping with ``oio:hasDbXref``, and is looked up
     from either the concept or its ``vocabulary_id:concept_code``.
 
@@ -140,15 +144,23 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
             self.kg.concept_views(concept_ids, sort=False), source, subject
         )
 
+    @staticmethod
+    def _match_predicate(predicate: PRED_CURIE, cardinality: MappingCardinality) -> PRED_CURIE:
+        """The predicate of a mapping, where ``skos:exactMatch`` holds only one to one."""
+        if predicate == SKOS_EXACT_MATCH and cardinality is not MappingCardinality.ONE_TO_ONE:
+            return SKOS_CLOSE_MATCH
+        return predicate
+
     def _edge_mapping(self, edge: MappingView, predicates: dict[str, PRED_CURIE]) -> Mapping:
         """Build the mapping of a stored relationship."""
         return self._mapping(
             self.codec.concept_curie(edge.subject_id),
-            predicates[edge.predicate_id],
+            self._match_predicate(predicates[edge.predicate_id], edge.cardinality),
             self.codec.concept_curie(edge.object_id),
             self.codec.vocabulary_prefix(edge.subject_source),
             self.codec.vocabulary_prefix(edge.object_source),
             mapping_date=edge.valid_start_date,
+            mapping_cardinality=edge.cardinality.value,
             comment=f"OMOP relationship {edge.predicate_id}",
         )
 
@@ -163,7 +175,10 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
 
     def get_transitive_mappings_by_curie(self, curie: CURIE) -> Iterator[Mapping]:
         """
-        Yield a ``skos:exactMatch`` to each standard concept a non-standard concept maps to.
+        Yield a mapping to each standard concept a non-standard concept maps to.
+
+        The mapping is ``skos:exactMatch`` when it is one to one and ``skos:closeMatch``
+        otherwise, as in :meth:`sssom_mappings`.
 
         OMOP stores a mapping in both directions and maps many concepts to one, so
         following the exact equivalences both ways would join every concept that shares
@@ -181,6 +196,19 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         if concept_id is None:
             return
         targets = self.kg.standard_mappings([concept_id])[concept_id]
+        cardinalities = {
+            edge.object_id: edge.cardinality
+            for edge in self.kg.mappings(
+                [concept_id],
+                EdgeFilter(
+                    predicate_ids=frozenset(
+                        relationship_id
+                        for relationship_id, strength in self.kg.mapping_predicates().items()
+                        if strength is MappingStrength.EXACT
+                    )
+                ),
+            )
+        }
         views = {
             view.concept_id: view
             for view in self.kg.concept_views((concept_id, *targets), sort=False)
@@ -188,10 +216,11 @@ class OMOPMappingProviderInterface(OMOPBasicOntologyInterface, MappingProviderIn
         for other in targets:
             yield self._mapping(
                 self.codec.concept_curie(concept_id),
-                SKOS_EXACT_MATCH,
+                self._match_predicate(SKOS_EXACT_MATCH, cardinalities[other]),
                 self.codec.concept_curie(other),
                 self.codec.vocabulary_prefix(views[concept_id].vocabulary_id),
                 self.codec.vocabulary_prefix(views[other].vocabulary_id),
+                mapping_cardinality=cardinalities[other].value,
             )
 
     def get_mapping_clusters(self, *args, **kwargs):

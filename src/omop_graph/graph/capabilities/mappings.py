@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Generator, Iterable
 
+from sqlalchemy import Row
+
 from ...extensions.omop_alchemy import PredicateSubkind
 
 # Local Application Imports
@@ -15,6 +17,7 @@ from ..edges import (
     MappingStrength,
 )
 from ..nodes import (
+    MappingCardinality,
     MappingView,
 )
 from ..queries import (
@@ -59,7 +62,16 @@ class MappingsMixin(HierarchyMixin):
             for stmt in statements:
                 for row in session.execute(stmt):
                     if row.predicate_id in self._relationship_mapping:
-                        yield MappingView(**row._mapping)
+                        yield self._mapping_view(row)
+
+    @staticmethod
+    def _mapping_view(row: Row) -> MappingView:
+        """Build a mapping from a row of :func:`q_mappings`."""
+        fields = row._asdict()
+        cardinality = MappingCardinality.of(
+            fields.pop("subjects_of_object"), fields.pop("objects_of_subject")
+        )
+        return MappingView(**fields, cardinality=cardinality)
 
     def mapping_predicates(self) -> dict[str, MappingStrength]:
         """Return the strength of each relationship that is a mapping, by relationship id."""

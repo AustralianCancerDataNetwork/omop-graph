@@ -105,13 +105,16 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         ------
         OMOPUnsupportedError
             If ``matches_whole_text`` is not set, since spans are not annotated.
-        Exception
-            If annotations are malformed.
+        ValueError
+            At the call, if a ``parent_ids`` entry names no concept, or a vocabulary or
+            domain does not exist.
         """
         if configuration is None:
             configuration = TextAnnotationConfiguration()
         if not configuration.matches_whole_text:
-            raise OMOPUnsupportedError("TextAnnotatorInterface.annotate_text")
+            raise OMOPUnsupportedError(
+                "TextAnnotatorInterface.annotate_text(matches_whole_text=False)"
+            )
 
         ignored = [
             field for field in self.IGNORED_ANNOTATION_FIELDS if getattr(configuration, field)
@@ -119,9 +122,42 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         if ignored:
             logger.info("The annotation configuration has no effect for %s.", ", ".join(ignored))
 
+        constraints = self._constraints(annotations, max_depth)
         return islice(
-            self._ground_whole_text(text, configuration, query_embedding, annotations, max_depth),
+            self._ground_whole_text(text, configuration, query_embedding, constraints),
             configuration.limit,
+        )
+
+    def _constraints(
+        self, annotations: dict[str, Annotation] | None, max_depth: int
+    ) -> GroundingConstraints:
+        """
+        The grounding constraints the annotations describe.
+
+        Raises
+        ------
+        ValueError
+            If a ``parent_ids`` entry names no concept, or a vocabulary or domain does not exist.
+        """
+        values: dict[AnnotationKey, tuple[str, ...] | None] = dict.fromkeys(AnnotationKey)
+        for key in AnnotationKey:
+            annotation = (annotations or {}).get(key)
+            if annotation is not None and isinstance(annotation.value, str):
+                values[key] = tuple(
+                    value.strip() for value in annotation.value.split(self.ANNOTATION_SEPARATOR)
+                )
+        parent_ids = values[AnnotationKey.PARENT_IDS]
+        concept_filter = ConceptFilter(
+            domains=values[AnnotationKey.DOMAINS],
+            vocabularies=values[AnnotationKey.VOCABS],
+            require_standard=False,
+        )
+        self.kg.check_concept_filter(concept_filter)
+        return GroundingConstraints(
+            parent_ids=tuple(self._parent_id(pid) for pid in parent_ids) if parent_ids else None,
+            concept_filter=concept_filter,
+            predicate_kinds=frozenset([PredicateKind.IDENTITY]),
+            max_depth=max_depth,
         )
 
     def _ground_whole_text(
@@ -129,8 +165,7 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
         text: str,
         configuration: TextAnnotationConfiguration,
         query_embedding: np.ndarray | None,
-        annotations: dict[str, Annotation] | None,
-        max_depth: int,
+        constraints: GroundingConstraints,
     ) -> Iterator[TextAnnotation]:
         """Ground the text, with its excluded tokens removed, as one term."""
         if configuration.token_exclusion_list:
@@ -138,42 +173,8 @@ class OMOPTextAnnotatorInterface(OMOPBaseInterface, TextAnnotatorInterface):
                 term for term in text.split() if term not in configuration.token_exclusion_list
             )
 
-        if annotations is not None:
-
-            def split_annotations(ann):
-                if ann is not None and isinstance(ann.value, str):
-                    return tuple(val.strip() for val in ann.value.split(self.ANNOTATION_SEPARATOR))
-                return None
-
-            try:
-                parent_ids = split_annotations(annotations.get(AnnotationKey.PARENT_IDS, None))
-                vocabs = split_annotations(annotations.get(AnnotationKey.VOCABS, None))
-                domains = split_annotations(annotations.get(AnnotationKey.DOMAINS, None))
-            except Exception:
-                logger.error(
-                    f"Annotations passed in wrong format. Expected key: val, "
-                    f"where val is separated by '{self.ANNOTATION_SEPARATOR}' if using multiple values."
-                )
-                raise
-        else:
-            parent_ids = None
-            vocabs = None
-            domains = None
-
-        constraints = GroundingConstraints(
-            parent_ids=tuple(self._parent_id(pid) for pid in parent_ids) if parent_ids else None,
-            concept_filter=ConceptFilter(
-                domains=domains,
-                vocabularies=vocabs,
-                require_standard=False,
-            ),
-            predicate_kinds=frozenset([PredicateKind.IDENTITY]),
-            max_depth=max_depth,
-        )
-
-        resolver_pipeline = ResolverPipeline.with_all_resolvers()
         grounded = ground_term(
-            resolver_pipeline=resolver_pipeline,
+            resolver_pipeline=ResolverPipeline.with_all_resolvers(),
             kg=self.kg,
             query=text,
             constraints=constraints,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+from dataclasses import replace
 
 from omop_alchemy.cdm.query import ConceptFilter
 
@@ -13,7 +14,7 @@ from ..queries import (
     q_synonym_counts,
     q_synonym_counts_by,
 )
-from ..scope import ALL_CONCEPTS
+from ..scope import ALL_CONCEPTS, every_concept
 from ..statistics import ConceptCount, ConceptCounts, Grouping, GroupStatistics, SynonymCounts
 from ._core import GraphCore
 
@@ -109,3 +110,41 @@ class StatisticsMixin(GraphCore):
                 for group in sorted(relationships.keys() | synonyms.keys())
             }
         return self._group_statistics[grouping]
+
+    def scope_statistics(
+        self, concept_filter: ConceptFilter = ALL_CONCEPTS, by_group: bool = False
+    ) -> GroupStatistics:
+        """
+        Count the relationships and synonyms of the concepts concept_filter selects.
+
+        Concepts are counted whatever their standardness or validity, so only the
+        vocabularies, domains and ids of concept_filter apply.
+
+        Parameters
+        ----------
+        concept_filter : ConceptFilter
+            The scope to count.
+        by_group : bool
+            If True and the scope is a single vocabulary or domain, it is read from
+            :meth:`group_statistics`, which counts every group once for the life of the
+            graph. This pays off when several groups are asked for, and costs about a
+            minute on a full Athena release for the first.
+
+        Returns
+        -------
+        GroupStatistics
+            The active relationships of each relationship id, classified or not, counted by
+            their subject, and the synonyms.
+        """
+        every = every_concept(concept_filter)
+        if by_group:
+            for grouping, field in (
+                (Grouping.VOCABULARY, "vocabularies"),
+                (Grouping.DOMAIN, "domains"),
+            ):
+                group = getattr(every, field)
+                if group and len(group) == 1 and replace(every, **{field: None}) == ALL_CONCEPTS:
+                    return self.group_statistics(grouping).get(
+                        group[0], GroupStatistics({}, SynonymCounts(0, 0))
+                    )
+        return GroupStatistics(self.relationship_counts(every), self.synonym_counts(every))

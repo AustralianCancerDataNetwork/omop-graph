@@ -62,12 +62,12 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         ------
         omop_graph.graph.capabilities.embeddings.EmbeddingWriterRequiredError
             If the configuration is read-only.
-        NotImplementedError
-            If model is a closure model, which cannot embed text.
+        omop_graph.oaklib_interface.unsupported.OMOPUnsupportedError
+            If model is not the stored model, or the graph has no embedding store.
         """
-        if self._is_store_model(model):
-            return self.kg.embed_text(text)[0]
-        return super().text_embedding(text, model)
+        if not self._is_store_model(model):
+            raise OMOPUnsupportedError("EmbeddingProviderInterface.text_embedding(model=closure)")
+        return self.kg.embed_text(text)[0]
 
     def _nearest(
         self, query: int | np.ndarray, limit: int, exclude: int | None
@@ -96,7 +96,9 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         if candidates is not None:
             return super().nearest_entities(curie, limit, model, candidates)
         if not self._is_store_model(model):
-            raise OMOPUnsupportedError("EmbeddingProviderInterface.nearest_entities")
+            raise OMOPUnsupportedError(
+                "EmbeddingProviderInterface.nearest_entities(model=closure, candidates=None)"
+            )
         concept_id = self._resolve_concepts([curie]).get(curie)
         return iter(()) if concept_id is None else self._nearest(concept_id, limit, concept_id)
 
@@ -116,5 +118,7 @@ class OMOPEmbeddingProviderInterface(OMOPBasicOntologyInterface, EmbeddingProvid
         if candidates is not None:
             return super().nearest_entities_to_vector(vector, limit, model, candidates)
         if not self._is_store_model(model):
-            raise OMOPUnsupportedError("EmbeddingProviderInterface.nearest_entities_to_vector")
+            raise OMOPUnsupportedError(
+                "EmbeddingProviderInterface.nearest_entities_to_vector(model=closure, candidates=None)"
+            )
         return self._nearest(np.asarray(vector), limit, None)

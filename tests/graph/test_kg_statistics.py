@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from unittest.mock import patch
 
 import pytest
 from fixtures.hierarchy_cdm import (
@@ -121,3 +122,31 @@ def test_the_statistics_of_each_group_are_those_counted_for_the_group_alone(kg, 
 
 def test_the_statistics_of_every_group_are_counted_once(kg) -> None:
     assert kg.group_statistics(Grouping.VOCABULARY) is kg.group_statistics(Grouping.VOCABULARY)
+
+
+def test_a_scope_is_counted_whatever_the_standardness_of_its_concepts(kg) -> None:
+    scope = ConceptFilter(vocabularies=("SNOMED",), require_standard=True, require_active=True)
+    counted = kg.scope_statistics(scope)
+
+    assert counted.relationships == kg.relationship_counts(ConceptFilter(vocabularies=("SNOMED",)))
+    assert counted.synonyms == kg.synonym_counts(ConceptFilter(vocabularies=("SNOMED",)))
+
+
+def test_a_single_group_is_read_from_the_counts_of_every_group_when_asked(kg) -> None:
+    scope = ConceptFilter(domains=("Condition",))
+    alone = kg.scope_statistics(scope)
+
+    with patch.object(kg, "relationship_counts") as counted:
+        grouped = kg.scope_statistics(scope, by_group=True)
+
+    counted.assert_not_called()
+    assert grouped == alone
+
+
+def test_a_scope_that_is_not_a_single_group_is_counted_on_its_own_even_when_grouped(kg) -> None:
+    scope = ConceptFilter(vocabularies=("SNOMED",), domains=("Condition",))
+
+    assert kg.scope_statistics(scope, by_group=True) == kg.scope_statistics(scope)
+    assert kg.scope_statistics(ConceptFilter(vocabularies=("Nope",)), by_group=True) == (
+        kg.scope_statistics(ConceptFilter(vocabularies=("Nope",)))
+    )

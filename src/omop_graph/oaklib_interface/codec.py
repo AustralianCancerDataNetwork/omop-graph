@@ -14,7 +14,6 @@ from urllib.parse import quote, unquote
 from oaklib.datamodels.vocabulary import IS_A
 from oaklib.interfaces.basic_ontology_interface import get_default_prefix_map
 from oaklib.types import CURIE, PRED_CURIE
-from prefixmaps import load_context
 
 from omop_graph.graph import KnowledgeGraph
 from omop_graph.graph.edges import IS_A_RELATIONSHIP_ID
@@ -116,24 +115,12 @@ class OMOPCodec:
         """
         The prefixes of the CURIEs the adapter emits and the URI each stands for.
 
-        These are the oaklib defaults, then each vocabulary whose prefix is a canonical
-        Bioregistry prefix, then ``OMOP`` and ``OMOP_REL``. A vocabulary outside the
-        Bioregistry has no URI.
+        These are the oaklib defaults, ``OMOP`` and ``OMOP_REL``. A vocabulary has no URI,
+        since its name does not say whether it means what a registry prefix of the same
+        name means.
         """
-        registry = {
-            prefix.lower(): namespace
-            for prefix, namespace in load_context("bioregistry").as_dict().items()
-        }
-        vocabularies = {
-            prefix: registry[prefix.lower()]
-            for prefix in self._vocabulary_ids_by_prefix
-            if prefix.lower() in registry
-        }
-        unmapped = sorted(set(self._vocabulary_ids_by_prefix) - vocabularies.keys())
-        logger.debug("No Bioregistry URI for the vocabulary prefixes %s.", ", ".join(unmapped))
         return {
             **get_default_prefix_map(),
-            **vocabularies,
             OMOP_PREFIX: "https://athena.ohdsi.org/search-terms/terms/",
             OMOP_REL_PREFIX: "https://athena.ohdsi.org/relationship/",
         }

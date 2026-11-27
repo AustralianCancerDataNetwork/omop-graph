@@ -73,6 +73,16 @@ def test_information_content_is_the_log_of_the_share_of_concepts_below(adapter) 
     assert adapter.get_information_content(curie(DISEASE)) == pytest.approx(scores[curie(DISEASE)])
 
 
+def test_owl_thing_has_no_information_and_is_its_own_only_ancestor(adapter) -> None:
+    assert adapter.get_information_content(OWL_THING) == 0.0
+    assert dict(adapter.information_content_scores([OWL_THING, curie(DISEASE)])).keys() == {
+        OWL_THING,
+        curie(DISEASE),
+    }
+    assert list(adapter.ancestors(OWL_THING)) == [OWL_THING]
+    assert list(adapter.ancestors(OWL_THING, reflexive=False)) == []
+
+
 def test_the_information_content_method_names_the_hierarchy(adapter) -> None:
     method = adapter.information_content_method()
 

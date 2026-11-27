@@ -530,6 +530,30 @@ def q_closure(
     return select(closure.c.origin, closure.c.reached).where(closure.c.origin != closure.c.reached)
 
 
+def _sharing(end: InstrumentedAttribute) -> ColumnElement[int]:
+    """
+    Count the valid relationships of the same id that have the same concept at one end.
+
+    Self relationships are not counted, since they are not mappings. The count is of the
+    row that is correlated, so it is read for each row of the query it is used in.
+    """
+    Other = aliased(Concept_Relationship)
+    other_end = (
+        Other.concept_id_1 if end is Concept_Relationship.concept_id_1 else Other.concept_id_2
+    )
+    return (
+        select(func.count())
+        .select_from(Other)
+        .where(
+            other_end == end,
+            Other.relationship_id == Concept_Relationship.relationship_id,
+            Other.concept_id_1 != Other.concept_id_2,
+            normalised_flag_expr(Other.invalid_reason).is_(None),
+        )
+        .scalar_subquery()
+    )
+
+
 def q_mappings(
     concept_ids: tuple[int, ...] | None, edge_filter: EdgeFilter, source: str | None = None
 ) -> Select | CompoundSelect:
@@ -559,6 +583,8 @@ def q_mappings(
                 Concept_Relationship.valid_start_date,
                 Subject.vocabulary_id.label("subject_source"),
                 Object.vocabulary_id.label("object_source"),
+                _sharing(Concept_Relationship.concept_id_2).label("subjects_of_object"),
+                _sharing(Concept_Relationship.concept_id_1).label("objects_of_subject"),
             )
             .join(Subject, Subject.concept_id == Concept_Relationship.concept_id_1)
             .join(Object, Object.concept_id == Concept_Relationship.concept_id_2)

@@ -16,7 +16,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum, unique
+from enum import Enum, StrEnum, unique
 from html import escape
 from itertools import chain
 from typing import Self
@@ -71,6 +71,34 @@ class SynonymView:
     language_concept_id: int
 
 
+class MappingCardinality(StrEnum):
+    """
+    How many subjects and objects a mapping connects, with the values of the SSSOM
+    ``mapping_cardinality``.
+
+    The first number is the subjects of the object, the second the objects of the subject.
+    Most subjects mapped to one object is ``n:1``, and one subject mapped to most objects
+    ``1:n``.
+    """
+
+    ONE_TO_ONE = "1:1"
+    ONE_TO_MANY = "1:n"
+    MANY_TO_ONE = "n:1"
+    MANY_TO_MANY = "n:n"
+    ONE_TO_NONE = "1:0"
+    NONE_TO_ONE = "0:1"
+    NONE_TO_NONE = "0:0"
+
+    @classmethod
+    def of(cls, subjects_of_object: int, objects_of_subject: int) -> MappingCardinality:
+        """The cardinality of a mapping whose ends are shared with that many others."""
+
+        def side(count: int) -> str:
+            return "n" if count > 1 else str(count)
+
+        return cls(f"{side(subjects_of_object)}:{side(objects_of_subject)}")
+
+
 @dataclass(frozen=True)
 class MappingView:
     """
@@ -90,6 +118,9 @@ class MappingView:
         The vocabulary of the subject concept.
     object_source : str
         The vocabulary of the object concept.
+    cardinality : MappingCardinality
+        Counted from the valid relationships of the same id in the connected database, so
+        on a subset of the CDM it is relative to the rows that subset holds.
     """
 
     subject_id: int
@@ -98,6 +129,7 @@ class MappingView:
     valid_start_date: date
     subject_source: str
     object_source: str
+    cardinality: MappingCardinality
 
 
 class Standardness(Enum):

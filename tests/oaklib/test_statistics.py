@@ -34,8 +34,8 @@ def test_the_global_statistics_count_the_concepts_edges_and_synonyms(adapter) ->
 
     assert statistics.deprecated_class_count == 1
     assert statistics.non_deprecated_class_count == statistics.class_count - 1
-    assert statistics.edge_count_by_predicate[MAPS_TO].filtered_count == 4
-    assert statistics.edge_count == 14
+    assert statistics.edge_count_by_predicate[MAPS_TO].filtered_count == 8
+    assert statistics.edge_count == 22
     assert statistics.class_count_with_text_definitions == 0
     assert statistics.synonym_statement_count == 0
 
@@ -59,7 +59,7 @@ def test_a_vocabulary_has_only_the_edges_of_its_concepts(adapter) -> None:
         property_values={OMOPMetadataKey.VOCABULARY: "ICD10CM"}
     )
 
-    assert statistics.edge_count_by_predicate[MAPS_TO].filtered_count == 1
+    assert statistics.edge_count_by_predicate[MAPS_TO].filtered_count == 5
 
 
 def test_a_group_has_the_counts_of_its_scope(adapter) -> None:
@@ -78,7 +78,7 @@ def test_a_group_has_the_counts_of_its_scope(adapter) -> None:
 def test_the_prefixes_narrow_the_vocabularies(adapter) -> None:
     narrowed = adapter.branch_summary_statistics(prefixes=["ICD10CM"])
 
-    assert narrowed.edge_count_by_predicate[MAPS_TO].filtered_count == 1
+    assert narrowed.edge_count_by_predicate[MAPS_TO].filtered_count == 5
 
 
 def test_the_omop_prefix_names_every_concept_and_narrows_nothing(adapter) -> None:

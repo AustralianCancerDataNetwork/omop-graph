@@ -33,6 +33,12 @@ _NO_CLOSURE_SCAN = (
     "compare against every concept. Pass candidates, or search the omop-emb model."
 )
 
+_NO_CLOSURE_TEXT = (
+    "The closure models embed a concept from its ancestors, so they cannot embed a text, "
+    "which nearest_entities_to_text needs. Use the omop-emb model, or no model when the "
+    "graph has an embedding store."
+)
+
 _NO_ALL_PATHS = (
     "Listing every path between two concepts is unbounded in the Is a hierarchy. "
     "Ask for the shortest paths, which is the default."
@@ -54,7 +60,7 @@ UNSUPPORTED: dict[str, str] = {
     "BasicOntologyInterface.edge_index": _NO_EDGE_INDEX,
     "BasicOntologyInterface.entailed_edge_index": _NO_EDGE_INDEX,
     "MappingProviderInterface.get_mapping_clusters": _NO_CLUSTERS,
-    "TextAnnotatorInterface.annotate_text": _NO_SPANS,
+    "TextAnnotatorInterface.annotate_text(matches_whole_text=False)": _NO_SPANS,
     "SubsetterInterface.extract_subset_ontology": (
         "Extracting a subset ontology needs an in-memory ontology. "
         "Use gap_fill_relationships, or extract_gap_filled_graph for a graph."
@@ -64,8 +70,11 @@ UNSUPPORTED: dict[str, str] = {
     ),
     "SemanticSimilarityInterface.load_information_content_scores": _IC_COMPUTED,
     "SemanticSimilarityInterface.set_information_content_scores": _IC_COMPUTED,
-    "EmbeddingProviderInterface.nearest_entities": _NO_CLOSURE_SCAN,
-    "EmbeddingProviderInterface.nearest_entities_to_vector": _NO_CLOSURE_SCAN,
+    "EmbeddingProviderInterface.nearest_entities(model=closure, candidates=None)": _NO_CLOSURE_SCAN,
+    "EmbeddingProviderInterface.nearest_entities_to_vector(model=closure, candidates=None)": (
+        _NO_CLOSURE_SCAN
+    ),
+    "EmbeddingProviderInterface.text_embedding(model=closure)": _NO_CLOSURE_TEXT,
 }
 """
 Reason for each unsupported oaklib method, keyed by ``Interface.method``.

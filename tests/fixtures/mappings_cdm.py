@@ -1,4 +1,9 @@
-"""A small CDM with every kind of mapping edge: exact, near, associated and version lineage."""
+"""
+A small CDM with every kind of mapping edge: exact, near, associated and version lineage.
+
+The exact edges are of every cardinality: one source to one standard concept, three sources
+to the STANDARD concept, and a source that splits into two with one of them shared.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ from omop_graph.extensions.omop_alchemy import (
 )
 
 STANDARD, SOURCE_ICD, SOURCE_READ, BRAND, INGREDIENT, REPLACED, ICDO, SPACED = range(300, 308)
+UNIQUE_SOURCE, UNIQUE_STANDARD, SPLIT_SOURCE, SPLIT_A, SPLIT_B, OTHER_SOURCE = range(308, 314)
 PAIRS = (
     ("Maps to", "Mapped from", PredicateKind.IDENTITY, "Exact equivalence"),
     ("Brand name of", "Has brand name", PredicateKind.IDENTITY, "Near equivalence"),
@@ -48,6 +54,12 @@ def mappings_cdm() -> Generator[sessionmaker[Session]]:
         concept(REPLACED, standard_concept=None, invalid_reason="U"),
         concept(ICDO, vocabulary_id="ICDO3", standard_concept=None),
         concept(SPACED, vocabulary_id="Nebraska Lexicon", standard_concept=None),
+        concept(UNIQUE_SOURCE, vocabulary_id="ICD10CM", standard_concept=None),
+        concept(UNIQUE_STANDARD),
+        concept(SPLIT_SOURCE, vocabulary_id="ICD10CM", standard_concept=None),
+        concept(SPLIT_A),
+        concept(SPLIT_B),
+        concept(OTHER_SOURCE, vocabulary_id="ICD10CM", standard_concept=None),
         *(
             Vocabulary(vocabulary_id=v, vocabulary_name=v, vocabulary_concept_id=i)
             for i, v in enumerate(vocabularies)
@@ -71,6 +83,10 @@ def mappings_cdm() -> Generator[sessionmaker[Session]]:
         *edge_pair(ICDO, "ICDO - SNOMED", "SNOMED - ICDO", STANDARD),
         *edge_pair(REPLACED, "Concept replaced by", "Concept replaces", STANDARD),
         *edge_pair(SPACED, "Maps to", "Mapped from", STANDARD),
+        *edge_pair(UNIQUE_SOURCE, "Maps to", "Mapped from", UNIQUE_STANDARD),
+        *edge_pair(SPLIT_SOURCE, "Maps to", "Mapped from", SPLIT_A),
+        *edge_pair(SPLIT_SOURCE, "Maps to", "Mapped from", SPLIT_B),
+        *edge_pair(OTHER_SOURCE, "Maps to", "Mapped from", SPLIT_A),
     ]
     models = (
         Concept,

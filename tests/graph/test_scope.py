@@ -56,6 +56,7 @@ SCOPED_CALLS: dict[str, Callable[[KnowledgeGraph, ConceptFilter], object]] = {
     ),
     "relationship_counts": lambda kg, scope: kg.relationship_counts(scope),
     "roots": lambda kg, scope: kg.roots(scope),
+    "scope_statistics": lambda kg, scope: kg.scope_statistics(scope),
     "search": lambda kg, scope: kg.search("cancer", concept_filter=scope),
     "singletons": lambda kg, scope: kg.singletons(scope),
     "synonym_counts": lambda kg, scope: kg.synonym_counts(scope),

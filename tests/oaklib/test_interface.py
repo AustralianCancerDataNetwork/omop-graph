@@ -58,7 +58,7 @@ def test_annotate_text_rejects_a_vocabulary_that_does_not_exist(
     annotations = {AnnotationKey.VOCABS.value: Annotation(tag="vocabs", value="NoSuchVocabulary")}
 
     with pytest.raises(ValueError, match="NoSuchVocabulary"):
-        list(interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT, annotations=annotations))
+        interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT, annotations=annotations)
 
 
 def test_annotate_text_rejects_a_parent_id_that_names_no_concept(
@@ -70,7 +70,7 @@ def test_annotate_text_rejects_a_parent_id_that_names_no_concept(
     }
 
     with pytest.raises(ValueError, match="names no concept"):
-        list(interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT, annotations=annotations))
+        interface.annotate_text("Kidney carcinoma term", WHOLE_TEXT, annotations=annotations)
 
 
 def test_annotate_text_stops_at_the_limit(mock_cdm_kg: KnowledgeGraph) -> None:

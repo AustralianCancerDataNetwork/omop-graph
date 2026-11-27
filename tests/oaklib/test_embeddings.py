@@ -104,8 +104,15 @@ def test_a_concept_is_as_similar_to_itself_as_it_can_be_in_the_closure_model(pla
 
 
 def test_the_closure_models_cannot_embed_text(plain) -> None:
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(OMOPUnsupportedError, match=r"text_embedding\(model=closure\)"):
         plain.text_embedding("lung cancer", model=CLOSURE_MODEL)
+    with pytest.raises(OMOPUnsupportedError, match="nearest_entities_to_text"):
+        list(plain.nearest_entities_to_text("lung cancer", model=CLOSURE_MODEL))
+
+
+def test_a_graph_without_a_store_cannot_embed_text(plain) -> None:
+    with pytest.raises(OMOPUnsupportedError, match="text_embedding"):
+        plain.text_embedding("lung cancer")
 
 
 def test_the_closure_models_are_not_searched_without_candidates(plain) -> None:

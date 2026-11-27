@@ -8,12 +8,11 @@ from oaklib.types import CURIE, PRED_CURIE
 from omop_alchemy.cdm.query import ConceptFilter
 
 from omop_graph.graph.scope import (
-    ALL_CONCEPTS,
     every_concept,
     narrowed_to_domains,
     narrowed_to_vocabularies,
 )
-from omop_graph.graph.statistics import ConceptCounts, Grouping, SynonymCounts
+from omop_graph.graph.statistics import ConceptCounts, SynonymCounts
 from omop_graph.oaklib_interface.basic_ontology import OMOPBasicOntologyInterface
 from omop_graph.oaklib_interface.codec import OMOPMetadataKey
 from omop_graph.oaklib_interface.unsupported import OMOPUnsupportedError
@@ -68,41 +67,21 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         return {}
 
     def _edge_and_synonym_counts(
-        self,
-        concept_filter: ConceptFilter,
-        property_values: dict[CURIE, Any] | None,
-        prefixes: list[CURIE] | None,
+        self, concept_filter: ConceptFilter, property_values: dict[CURIE, Any] | None
     ) -> tuple[dict[str, int], SynonymCounts]:
         """
         The counts of the exposed relationships and of the synonyms of the concepts in scope.
 
-        A single vocabulary or domain is read from the counts of every group when the
-        adapter does not restrict its vocabularies and domains, see
-        :meth:`omop_graph.graph.kg.KnowledgeGraph.group_statistics`.
+        A group is asked for with ``property_values``, which is done for each group of a
+        report, so its counts are read from those of every group, see
+        :meth:`omop_graph.graph.kg.KnowledgeGraph.scope_statistics`.
         """
-        groups = {
-            OMOPMetadataKey.VOCABULARY: Grouping.VOCABULARY,
-            OMOPMetadataKey.DOMAIN: Grouping.DOMAIN,
-        }
-        if (
-            property_values
-            and len(property_values) == 1
-            and not prefixes
-            and every_concept(self._population) == ALL_CONCEPTS
-        ):
-            [(key, value)] = property_values.items()
-            group = self.kg.group_statistics(groups[OMOPMetadataKey(key)]).get(value)
-            counts = group.relationships if group else {}
-            synonyms = group.synonyms if group else SynonymCounts(0, 0)
-        else:
-            every = every_concept(concept_filter)
-            counts = self.kg.relationship_counts(every)
-            synonyms = self.kg.synonym_counts(every)
+        counts = self.kg.scope_statistics(concept_filter, by_group=bool(property_values))
         return {
             relationship_id: count
-            for relationship_id, count in counts.items()
+            for relationship_id, count in counts.relationships.items()
             if relationship_id in self.kg.default_relationship_ids
-        }, synonyms
+        }, counts.synonyms
 
     def branch_summary_statistics(
         self,
@@ -151,7 +130,7 @@ class OMOPSummaryStatisticsInterface(OMOPBasicOntologyInterface, SummaryStatisti
         statistics.object_property_count = len(self.predicates_by_curie)
         statistics.deprecated_object_property_count = 0
         statistics.ontology_count = len(counts.by_vocabulary())
-        edges, synonyms = self._edge_and_synonym_counts(concept_filter, property_values, prefixes)
+        edges, synonyms = self._edge_and_synonym_counts(concept_filter, property_values)
         statistics.edge_count_by_predicate = {
             self.codec.predicate_curie(relationship_id): FacetedCount(
                 self.codec.predicate_curie(relationship_id), filtered_count=count

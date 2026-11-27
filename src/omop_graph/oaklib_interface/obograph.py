@@ -18,6 +18,7 @@ from oaklib.datamodels.vocabulary import (
     HAS_DBXREF,
     HAS_EXACT_SYNONYM,
     IS_A,
+    OWL_THING,
     TERM_REPLACED_BY,
 )
 from oaklib.interfaces.obograph_interface import GraphTraversalMethod, OboGraphInterface
@@ -135,6 +136,25 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
                     )
         return nodes
 
+    def edges(self, expand_curies=False) -> Iterator[Edge]:
+        """
+        Yield the relationships between the concepts that :meth:`nodes` yields.
+
+        An OBO graph is closed, so a relationship with an end outside the adapter's scope,
+        such as a deprecated concept, is left out.
+        """
+        members = set(self.entities())
+        for subject, predicate, object_ in self.relationships():
+            if subject not in members or object_ not in members:
+                continue
+            is_a = predicate == IS_A
+            if expand_curies:
+                subject = self.curie_to_uri(subject)
+                predicate = self.curie_to_uri(predicate) or predicate
+                object_ = self.curie_to_uri(object_)
+            if subject is not None and object_ is not None:
+                yield Edge(sub=subject, pred="is_a" if is_a else predicate, obj=object_)
+
     def synonym_property_values(
         self, subject: CURIE | Iterable[CURIE]
     ) -> Iterator[tuple[CURIE, SynonymPropertyValue]]:
@@ -208,6 +228,8 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
         if not reflexive:
             for curie in reached:
                 found.pop(curie, None)
+        elif OWL_THING in starts and direction is HierarchyDirection.UP:
+            found[OWL_THING] = None
         yield from found
 
     def ancestors(
@@ -228,8 +250,9 @@ class OMOPOboGraphInterface(OMOPBasicOntologyInterface, OboGraphInterface):
             The predicates to follow. Defaults to ``rdfs:subClassOf``, the strict ``Is a``
             hierarchy, where oaklib follows every predicate.
         reflexive : bool
-            If True, include the starting concepts. If False, no starting concept is
-            yielded, also one that is an ancestor of another, as oaklib does.
+            If True, include the starting concepts, and ``owl:Thing`` when it is one,
+            which has no other ancestor. If False, no starting concept is yielded, also
+            one that is an ancestor of another, as oaklib does.
         method : GraphTraversalMethod | None
             ``ENTAILMENT`` reads the entailed relationships instead of walking.
 

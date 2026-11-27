@@ -20,14 +20,18 @@ from fixtures.mappings_cdm import (
     SOURCE_ICD,
     SOURCE_READ,
     SPACED,
+    SPLIT_A,
+    SPLIT_B,
+    SPLIT_SOURCE,
     STANDARD,
     mappings_cdm,
 )
 
 from omop_graph.extensions.omop_alchemy import PredicateKind, PredicateSubkind
 from omop_graph.graph.capabilities.concepts import UnknownConceptError
-from omop_graph.graph.edges import MappingStrength
+from omop_graph.graph.edges import EdgeFilter, MappingStrength
 from omop_graph.graph.kg import KnowledgeGraph
+from omop_graph.graph.nodes import MappingCardinality
 
 
 @pytest.fixture(scope="module")
@@ -54,6 +58,41 @@ def hierarchy_kg() -> Iterator[KnowledgeGraph]:
 )
 def test_a_subkind_is_a_mapping_of_one_strength_or_none(kind, name, strength) -> None:
     assert MappingStrength.of(PredicateSubkind(kind, name)) is strength
+
+
+@pytest.mark.parametrize(
+    ("subjects_of_object", "objects_of_subject", "expected"),
+    [
+        (1, 1, MappingCardinality.ONE_TO_ONE),
+        (1, 2, MappingCardinality.ONE_TO_MANY),
+        (3, 1, MappingCardinality.MANY_TO_ONE),
+        (2, 2, MappingCardinality.MANY_TO_MANY),
+        (1, 0, MappingCardinality.ONE_TO_NONE),
+        (0, 1, MappingCardinality.NONE_TO_ONE),
+        (0, 0, MappingCardinality.NONE_TO_NONE),
+    ],
+)
+def test_the_cardinality_counts_the_subjects_of_the_object_and_the_objects_of_the_subject(
+    subjects_of_object, objects_of_subject, expected
+) -> None:
+    assert MappingCardinality.of(subjects_of_object, objects_of_subject) is expected
+
+
+def test_a_mapping_has_the_cardinality_of_its_valid_relationships(kg) -> None:
+    found = {
+        (edge.subject_id, edge.object_id): edge.cardinality
+        for edge in kg.mappings(
+            [SPLIT_SOURCE, SOURCE_ICD, SOURCE_READ, STANDARD],
+            EdgeFilter(predicate_ids=frozenset({"Maps to"})),
+        )
+    }
+
+    assert found == {
+        (SPLIT_SOURCE, SPLIT_A): MappingCardinality.MANY_TO_MANY,
+        (SPLIT_SOURCE, SPLIT_B): MappingCardinality.ONE_TO_MANY,
+        (SOURCE_ICD, STANDARD): MappingCardinality.MANY_TO_ONE,
+        (SOURCE_READ, STANDARD): MappingCardinality.MANY_TO_ONE,
+    }
 
 
 def test_the_predicate_reports_its_mapping_strength(kg) -> None:

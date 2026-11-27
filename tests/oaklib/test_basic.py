@@ -252,10 +252,105 @@ def test_omop_has_no_definitions_comments_or_subsets(adapter) -> None:
     assert list(adapter.subset_members("OMOP:100")) == []
 
 
-def test_hierarchical_parents_come_from_is_a_edges_or_the_closure(adapter) -> None:
+def test_hierarchical_parents_are_the_is_a_targets(adapter) -> None:
     assert adapter.hierarchical_parents("OMOP:101", isa_only=True) == ["OMOP:100"]
     assert adapter.hierarchical_parents("OMOP:101") == ["OMOP:100"]
     assert adapter.hierarchical_parents("OMOP:100", isa_only=True) == []
+
+
+def test_metadata_relationships_are_read_only_when_named() -> None:
+    concept_id, module = 300, 301
+    rows = [
+        Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=3),
+        Vocabulary(
+            vocabulary_id="SNOMED",
+            vocabulary_name="SNOMED CT",
+            vocabulary_concept_id=SNOMED_ONTOLOGY,
+        ),
+        concept(concept_id, "Concept"),
+        concept(module, "Module"),
+        relationship("Has Module", "Module of"),
+        relationship("Module of", "Has Module"),
+        relationship_class(PredicateKind.METADATA, "Module membership"),
+        classified("Has Module", PredicateKind.METADATA, "Module membership"),
+        classified("Module of", PredicateKind.METADATA, "Module membership"),
+        edge(concept_id, "Has Module", module),
+        edge(module, "Module of", concept_id),
+    ]
+    models = (
+        Concept,
+        Domain,
+        Vocabulary,
+        Relationship,
+        Concept_Ancestor,
+        Concept_Relationship,
+        RelationshipClass,
+        RelationshipMapping,
+    )
+    with sqlite_cdm(models, rows) as sessions:
+        adapter = OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
+
+        assert list(adapter.relationships(subjects=[f"OMOP:{concept_id}"])) == []
+        assert list(
+            adapter.relationships(
+                subjects=[f"OMOP:{concept_id}"], predicates=["OMOP_REL:Has%20Module"]
+            )
+        ) == [(f"OMOP:{concept_id}", "OMOP_REL:Has%20Module", f"OMOP:{module}")]
+
+
+def test_the_obograph_has_no_edge_to_a_concept_that_is_not_a_node(adapter) -> None:
+    graph = adapter.as_obograph()
+
+    nodes = {node.id for node in graph.nodes}
+    assert "OMOP:103" not in nodes
+    assert all(edge.sub in nodes and edge.obj in nodes for edge in graph.edges)
+    assert any(
+        (edge.sub, edge.pred, edge.obj) == ("OMOP:101", "is_a", "OMOP:100") for edge in graph.edges
+    )
+    assert not any("OMOP:103" in (edge.sub, edge.obj) for edge in graph.edges)
+
+
+def test_a_concept_ancestor_link_without_an_is_a_edge_is_no_hierarchical_parent() -> None:
+    ingredient, classification = 200, 201
+    rows = [
+        Domain(domain_id="Condition", domain_name="Condition", domain_concept_id=3),
+        Vocabulary(
+            vocabulary_id="SNOMED",
+            vocabulary_name="SNOMED CT",
+            vocabulary_concept_id=SNOMED_ONTOLOGY,
+        ),
+        concept(ingredient, "Ingredient"),
+        concept(classification, "Classification"),
+        relationship("Is a", "Subsumes"),
+        relationship_class(PredicateKind.HIERARCHY, "Taxonomic - up"),
+        classified(
+            "Is a",
+            PredicateKind.HIERARCHY,
+            "Taxonomic - up",
+            generalises=True,
+            direction=HierarchyDirection.UP,
+        ),
+        ancestor(ingredient, ingredient, 0),
+        ancestor(classification, classification, 0),
+        ancestor(classification, ingredient, 1),
+    ]
+    models = (
+        Concept,
+        Domain,
+        Vocabulary,
+        Relationship,
+        Concept_Ancestor,
+        Concept_Relationship,
+        RelationshipClass,
+        RelationshipMapping,
+    )
+    with sqlite_cdm(models, rows) as sessions:
+        adapter = OMOPAlchemyImplementation(kg=KnowledgeGraph(sessions))
+
+        assert adapter.hierarchical_parents(f"OMOP:{ingredient}") == []
+        assert adapter.hierarchical_parents(f"OMOP:{ingredient}", isa_only=True) == []
+        assert list(adapter.ancestors(f"OMOP:{ingredient}", reflexive=False)) == []
+        assert adapter.kg.parents(ingredient) == (classification,)
 
 
 def test_roots_leafs_and_singletons_use_the_closure_without_predicates(adapter) -> None:
@@ -290,9 +385,15 @@ def test_enumerators_honour_filter_obsoletes_and_id_prefixes(adapter) -> None:
     assert set(adapter.roots(id_prefixes=["OMOP"])) == {"OMOP:100", "OMOP:105"}
 
 
-def test_an_empty_subject_list_selects_no_relationship(adapter) -> None:
+def test_an_empty_list_selects_no_relationship(adapter) -> None:
     assert list(adapter.relationships(subjects=[])) == []
     assert list(adapter.relationships(objects=[])) == []
+    assert list(adapter.relationships(predicates=[])) == []
+    assert list(adapter.relationships()) != []
+
+
+def test_no_predicate_leaves_every_concept_a_root(adapter) -> None:
+    assert set(adapter.roots(predicates=[])) == set(adapter.entities())
 
 
 def test_relationship_metadata_is_the_validity_of_the_edge(adapter) -> None:

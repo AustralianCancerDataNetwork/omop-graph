@@ -22,7 +22,7 @@ While the OMOP CDM is stored in a Relational Database Management System (RDBMS),
 * **Flexible Search:** Supports exact matches, fuzzy `ILIKE` searches, and full-text search (bag-of-words) across concept names and synonyms. See [documentation for more information](../reasoning/resolvers.md)
 * **Graph Traversal:** Methods to retrieve `edges`, `relationships`, `parents`, `children`, `roots`, `leaves` and `singletons`, and the `Is a` `closure` and `entailed_relationships` described below.
 * **Large inputs and results:** Methods that take concept ids split them into batches of `KnowledgeGraph.LOOKUP_BATCH_SIZE`, so any number of ids works. `entities`, `roots`, `leaves`, `singletons` and `relationships` without subjects or objects read through a server-side cursor and return generators, so they never hold the whole table in memory.
-* **Standardisation and Mappings:** `standardise` finds the standard concepts a concept stands for, and `mappings` lists the mappings of concepts with their vocabularies.
+* **Standardisation and Mappings:** `standardise` finds the standard concepts a concept stands for, and `mappings` lists the mappings of concepts with their vocabularies and their cardinality, counted from the valid relationships of the same id.
 * **Structural similarity and statistics:** Common ancestors, information content, pairwise similarity and counts, see [Capabilities](#capabilities).
 * **Embeddings:** Nearest concepts, stored vectors and cosine similarity over `omop-emb`, which is optional - see [Embedding Configuration](#embedding-configuration) and the [installation instructions](../usage/installation.md#embedding-rag).
 
@@ -67,7 +67,7 @@ if matches:
 | Vocabulary | core | `vocabularies`, `domain_concept_ids`, `synonyms`, `translations`, `synonym_languages` |
 | Search | enumeration | `search`, `concept_lookup`, `concept_ids_by_label`, `check_concept_filter` |
 | Structural similarity | hierarchy | `common_ancestors`, `most_recent_common_ancestors`, `common_descendants`, `jaccard_similarity`, `information_content`, `pairwise_similarity` |
-| Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, their `_by` forms for relationships and synonyms, and `group_statistics` |
+| Statistics | core | `concept_counts`, `relationship_counts`, `synonym_counts`, their `_by` forms for relationships and synonyms, `group_statistics` and `scope_statistics` |
 | Embeddings | concepts | `nearest_concepts`, `concept_embeddings`, `embedding_similarity`, `embedding_models`, `concepts_without_embedding`, `embed_text`, `embed_concepts` |
 
 * A scope is a `ConceptFilter` that decides which concepts a method reports or counts, see [Scopes](#scopes).

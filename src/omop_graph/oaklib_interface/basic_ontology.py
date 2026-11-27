@@ -16,6 +16,7 @@ from oaklib.datamodels.vocabulary import (
     OWL_CLASS,
     OWL_META_CLASSES,
     OWL_OBJECT_PROPERTY,
+    OWL_THING,
     OWL_VERSION_INFO,
     TERM_REPLACED_BY,
 )
@@ -145,7 +146,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         Concept ids of the CURIEs that name a concept, each CURIE once, others left out.
 
         A CURIE that names no concept, or an ``OMOP`` CURIE of a concept that does not
-        exist, is left out and one info message names them. Verifying costs one query.
+        exist, is left out and one info message names them, except the CURIEs of
+        relationships and ``owl:Thing``, which name no concept by design. Verifying costs one
+        query.
         A caller that reads the concepts anyway passes ``verify=False`` and takes the
         absent ones from what it reads.
         """
@@ -162,8 +165,12 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
                 for curie, concept_id in resolved.items()
                 if concept_id not in missing
             }
-        if len(resolved) < len(curies):
-            left_out = [curie for curie in curies if curie not in resolved]
+        left_out = [
+            curie
+            for curie in curies
+            if curie not in resolved and curie != OWL_THING and self.predicate(curie) is None
+        ]
+        if left_out:
             logger.info("%d CURIEs name no concept, such as %s.", len(left_out), left_out[:3])
         return resolved
 
@@ -184,16 +191,11 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         """
         The ids of the CURIEs that name a concept, or None for no restriction.
 
-        An info message names the CURIEs when none of them names a concept, since nothing
-        then matches.
+        No id is left when none of the CURIEs names a concept, so nothing then matches.
         """
         if curies is None:
             return None
-        curies = list(curies)
-        ids = tuple(dict.fromkeys(self._resolve_concepts(curies).values()))
-        if curies and not ids:
-            logger.info("No CURIE names a concept, so nothing matches: %s", curies[:3])
-        return ids
+        return tuple(dict.fromkeys(self._resolve_concepts(curies).values()))
 
     def _concept_views(self, curies: Iterable[CURIE]) -> dict[CURIE, ConceptView]:
         """The concept views of the CURIEs that name an existing concept, others left out."""
@@ -406,9 +408,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
     ) -> Iterator[CURIE]:
         """Yield the concepts build selects, over the closure or over the named predicates."""
         edge_filter = (
-            EdgeFilter(predicate_ids=self.codec.relationship_ids(predicates))
-            if predicates
-            else None
+            None
+            if predicates is None
+            else EdgeFilter(predicate_ids=self.codec.relationship_ids(predicates))
         )
         for cid in build(concept_filter, edge_filter):
             yield self.codec.concept_curie(cid)
@@ -426,8 +428,8 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
         Without predicates the parents come from the ``concept_ancestor`` closure, which
         is OMOP's own ancestry. With them, a parent is the target of an edge of one of the
-        predicates. If no concept has an edge for a predicate, then no concept has a parent
-        through it, so every concept is a root. ``ignore_owl_thing`` and
+        predicates. If no concept has an edge for a predicate, or no predicate is named, then
+        no concept has a parent through it, so every concept is a root. ``ignore_owl_thing`` and
         ``annotated_roots`` have no effect.
         ``id_prefixes`` are vocabulary ids or CURIE prefixes.
         """
@@ -551,7 +553,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         subjects : Iterable[CURIE] | None
             Subject CURIEs to filter on.
         predicates : Iterable[PRED_CURIE] | None
-            Predicate (relationship) IDs to filter on.
+            Predicate (relationship) IDs to filter on. None selects the exposed
+            relationships and an empty collection selects nothing, as for subjects and
+            objects.
         objects : Iterable[CURIE] | None
             Object CURIEs to filter on.
         include_tbox : bool
@@ -581,9 +585,9 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
         subject_ids = self._concept_ids(subjects)
         object_ids = self._concept_ids(objects)
         predicate_ids = (
-            self.codec.relationship_ids(predicates)
-            if predicates
-            else self.kg.default_relationship_ids
+            self.kg.default_relationship_ids
+            if predicates is None
+            else self.codec.relationship_ids(predicates)
         )
         if not predicate_ids:
             return
@@ -671,16 +675,17 @@ class OMOPBasicOntologyInterface(OMOPBaseInterface, BasicOntologyInterface):
 
     def hierarchical_parents(self, curie: CURIE, isa_only: bool = False) -> list[CURIE]:
         """
-        Get hierarchical parents.
+        The targets of the active ``Is a`` edges of a concept, one step up.
 
-        With ``isa_only`` the parents are the targets of ``Is a`` edges. Otherwise they are
-        the level 1 ancestors of ``concept_ancestor``, OMOP's own ancestry.
+        ``ancestors`` follows the same edges to the top, so the parents are always among the
+        ancestors. ``isa_only`` has no effect, since ``Is a`` is the only hierarchical
+        relationship. The level 1 ancestors of ``concept_ancestor``, which hold
+        classification and cohort ancestry too, are :meth:`KnowledgeGraph.parents`.
         """
         cid = self._resolve_concepts([curie]).get(curie)
         if cid is None:
             return []
-        parents = self.kg.parents(cid, isa_only)
-        return [self.codec.concept_curie(p) for p in parents]
+        return [self.codec.concept_curie(p) for p in self.kg.parents(cid, isa_only=True)]
 
     def entity_alias_map(self, curie: CURIE) -> ALIAS_MAP:
         """

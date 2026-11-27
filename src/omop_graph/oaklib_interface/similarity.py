@@ -176,7 +176,7 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
 
         The descendants include the concept and the concepts are those in scope. Without
         curies every concept in scope is scored, which counts the descendants of each.
-        Associations are not supported.
+        ``owl:Thing`` has an information content of 0.0. Associations are not supported.
 
         Raises
         ------
@@ -193,12 +193,12 @@ class OMOPSemanticSimilarityInterface(OMOPBasicOntologyInterface, SemanticSimila
     def _information_content_scores(
         self, curies: Iterable[CURIE] | None
     ) -> Iterator[tuple[CURIE, float]]:
-        """Yield each concept with its information content."""
-        batches = (
-            self.kg.batches(self.entities())
-            if curies is None
-            else self.kg.batches(dict.fromkeys(curies))
-        )
+        """Yield each concept with its information content, and ``owl:Thing`` when named."""
+        requested = None if curies is None else dict.fromkeys(curies)
+        if requested is not None and OWL_THING in requested:
+            del requested[OWL_THING]
+            yield OWL_THING, 0.0
+        batches = self.kg.batches(self.entities() if requested is None else requested)
         for batch in batches:
             ids = self._resolve_concepts(batch)
             scores = self.kg.information_content(
